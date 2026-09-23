@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type APIRequestContext, expect } from "@playwright/test";
 import { SESSION_HEADER } from "../packages/core/src/constants.ts";
@@ -27,7 +27,7 @@ export async function sessionToken(request: APIRequestContext): Promise<string> 
 export async function api<T>(
   request: APIRequestContext,
   token: string,
-  method: "GET" | "PUT" | "POST",
+  method: "GET" | "PUT" | "POST" | "PATCH" | "DELETE",
   path: string,
   data?: unknown,
 ): Promise<T> {
@@ -47,6 +47,26 @@ const queryScript = fileURLToPath(new URL("./query-db.ts", import.meta.url));
 export function queryDb<T>(home: string, sql: string, ...params: (string | number)[]): T[] {
   const out = execFileSync("bun", [queryScript, join(home, "openfield.db"), sql, JSON.stringify(params)]);
   return JSON.parse(out.toString()) as T[];
+}
+
+/**
+ * Restarts the suite's server on the same library and port (e2e/serve.ts), and waits until the new
+ * one answers. Each server mints its own session token, so the new token is how we know. Returns it.
+ */
+export async function restartServer(request: APIRequestContext, home: string): Promise<string> {
+  const before = await sessionToken(request);
+  process.kill(Number(readFileSync(join(dirname(home), "serve.pid"), "utf8")), "SIGUSR2");
+  let token = before;
+  await expect
+    .poll(
+      async () => {
+        token = await sessionToken(request).catch(() => before);
+        return token !== before;
+      },
+      { timeout: 30_000 },
+    )
+    .toBe(true);
+  return token;
 }
 
 export const sha256File = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");

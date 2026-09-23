@@ -19,10 +19,18 @@ function portFor(suite: string): number {
   return Number(process.env[key]);
 }
 
-const suites = [
+const suites: { name: string; testMatch: string; env?: Record<string, string> }[] = [
   { name: "first-run", testMatch: "m0-first-run.e2e.ts" },
   { name: "guards", testMatch: "guards.e2e.ts" },
-].map((suite) => ({ ...suite, origin: `http://127.0.0.1:${portFor(suite.name)}` }));
+  { name: "provider-settings", testMatch: "provider-settings.e2e.ts" },
+  // A key set in the environment, in Google's newer "AQ." shape.
+  {
+    name: "key-outside",
+    testMatch: "key-outside.e2e.ts",
+    env: { OPENFIELD_GOOGLE_API_KEY: "AQ.Xy7FakeTfakeEnvKey0123456789abcdefWXYZ" },
+  },
+];
+const servers = suites.map((suite) => ({ ...suite, origin: `http://127.0.0.1:${portFor(suite.name)}` }));
 
 export default defineConfig({
   testDir: "e2e",
@@ -35,12 +43,12 @@ export default defineConfig({
     locale: "en-US",
     trace: "retain-on-failure",
   },
-  projects: suites.map(({ name, testMatch, origin }) => ({ name, testMatch, use: { baseURL: origin } })),
+  projects: servers.map(({ name, testMatch, origin }) => ({ name, testMatch, use: { baseURL: origin } })),
   // Playwright starts these one after another, so only the first needs to build the web app.
-  webServer: suites.map(({ origin }, i) => ({
+  webServer: servers.map(({ origin, env }, i) => ({
     command: `bun e2e/serve.ts${i === 0 ? " --build" : ""}`,
     url: `${origin}/`,
-    env: { OPENFIELD_PORT: new URL(origin).port },
+    env: { ...env, OPENFIELD_PORT: new URL(origin).port },
     reuseExistingServer: false,
     timeout: 120_000,
     stdout: "pipe" as const,
