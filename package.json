@@ -12,11 +12,11 @@
     "dev": "bun run scripts/dev.ts",
     "build": "bun run typecheck && bun --filter @openfield/web build",
     "start": "bun --filter @openfield/server start",
-    "typecheck": "bun --filter '*' typecheck",
+    "typecheck": "bun --filter '*' typecheck && tsc -p e2e/tsconfig.json && tsc -p scripts/tsconfig.json",
     "db:generate": "bun --filter @openfield/db generate",
     "test": "bun test",
     "lint": "biome check .",
-    "format": "biome format --write .",
+    "format": "biome check --write .",
     "e2e": "playwright test",
     "check:bundle": "bun run scripts/check-bundle.ts"
   },

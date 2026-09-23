@@ -1,24 +1,54 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
-  "files": {
-    "includes": ["**", "!**/node_modules", "!**/dist", "!**/migrations/meta", "!design.pen", "!docs/**"]
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
   },
-  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 110 },
-  "javascript": { "formatter": { "quoteStyle": "double", "semicolons": "always", "trailingCommas": "all" } },
-  "css": { "parser": { "tailwindDirectives": true } },
-  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "files": {
+    "includes": ["**", "!**/node_modules", "!**/dist", "!**/migrations/meta", "!design.pen", "!docs"]
+  },
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 110
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    }
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    }
+  },
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
-      "style": { "noNonNullAssertion": "off" },
-      "a11y": { "useKeyWithClickEvents": "warn", "noStaticElementInteractions": "warn" }
+      "preset": "recommended",
+      "style": {
+        "noNonNullAssertion": "off"
+      },
+      "a11y": {
+        "useKeyWithClickEvents": "warn",
+        "noStaticElementInteractions": "warn"
+      }
     }
   },
   "overrides": [
     {
-      "includes": ["apps/web/**", "packages/ui/**"],
+      "includes": ["apps/web/**"],
       "linter": {
         "rules": {
           "style": {
@@ -31,10 +61,36 @@
                   "sharp": "Server-only."
                 },
                 "patterns": [
-                  { "group": ["bun:*", "node:*"], "message": "The browser can't load Bun or Node modules." },
+                  {
+                    "group": ["bun:*", "node:*"],
+                    "message": "The browser can't load Bun or Node modules."
+                  },
                   {
                     "group": ["**/providers/src/*/**", "!**/providers/src/manifest/**"],
-                    "message": "Adapters are server-only."
+                    "message": "Adapters are server-only. Use @openfield/providers/manifest."
+                  },
+                  {
+                    "group": [
+                      "**/providers/src/*",
+                      "!**/providers/src/manifest",
+                      "!**/providers/src/manifest.ts"
+                    ],
+                    "message": "Only @openfield/providers/manifest may reach the browser."
+                  },
+                  {
+                    "group": [
+                      "**/packages/db",
+                      "**/packages/db/**",
+                      "**/db/src/**",
+                      "**/apps/server",
+                      "**/apps/server/**",
+                      "**/server/src/**"
+                    ],
+                    "message": "Server code never reaches the browser. Call the API instead."
+                  },
+                  {
+                    "group": ["@openfield/server", "@openfield/server/**", "!@openfield/server/app-type"],
+                    "message": "The web app only takes the AppType type from the server."
                   }
                 ]
               }
@@ -57,10 +113,50 @@
                   "@openfield/providers/manifest": "Pass data in as props instead.",
                   "@tanstack/react-query": "UI components take props; fetching lives in apps/web.",
                   "react-router": "UI components take props; routing lives in apps/web.",
-                  "@xyflow/react": "Canvas code lives in apps/web."
+                  "@xyflow/react": "Canvas code lives in apps/web.",
+                  "sharp": "Server-only."
                 },
                 "patterns": [
-                  { "group": ["bun:*", "node:*"], "message": "The browser can't load Bun or Node modules." }
+                  {
+                    "group": ["bun:*", "node:*"],
+                    "message": "The browser can't load Bun or Node modules."
+                  },
+                  {
+                    "group": ["**/providers/src/*/**", "!**/providers/src/manifest/**"],
+                    "message": "Adapters are server-only. Use @openfield/providers/manifest."
+                  },
+                  {
+                    "group": [
+                      "**/providers/src/*",
+                      "!**/providers/src/manifest",
+                      "!**/providers/src/manifest.ts"
+                    ],
+                    "message": "Only @openfield/providers/manifest may reach the browser."
+                  },
+                  {
+                    "group": [
+                      "**/packages/db",
+                      "**/packages/db/**",
+                      "**/db/src/**",
+                      "**/apps/server",
+                      "**/apps/server/**",
+                      "**/server/src/**"
+                    ],
+                    "message": "Server code never reaches the browser. Call the API instead."
+                  },
+                  {
+                    "group": [
+                      "@openfield/server",
+                      "@openfield/server/**",
+                      "@openfield/web",
+                      "@openfield/web/**"
+                    ],
+                    "message": "Packages never import apps."
+                  },
+                  {
+                    "group": ["**/apps/web", "**/apps/web/**", "**/web/src/**"],
+                    "message": "Packages never import apps."
+                  }
                 ]
               }
             }
@@ -77,8 +173,26 @@
               "level": "error",
               "options": {
                 "patterns": [
-                  { "group": ["@openfield/*"], "message": "core is a leaf: it imports only zod and ulid." },
-                  { "group": ["bun:*", "node:*"], "message": "core runs in the browser too." }
+                  {
+                    "group": ["@openfield/*", "@openfield/**"],
+                    "message": "core is a leaf: it imports only zod and ulid."
+                  },
+                  {
+                    "group": ["bun:*", "node:*"],
+                    "message": "core runs in the browser too."
+                  },
+                  {
+                    "group": [
+                      "**/packages/*/**",
+                      "**/apps/**",
+                      "**/providers/src/**",
+                      "**/db/src/**",
+                      "**/ui/src/**",
+                      "**/server/src/**",
+                      "**/web/src/**"
+                    ],
+                    "message": "core is a leaf: it imports only zod and ulid."
+                  }
                 ]
               }
             }
@@ -94,11 +208,187 @@
             "noRestrictedImports": {
               "level": "error",
               "options": {
-                "paths": { "@openfield/db": "Adapters don't touch the database." },
                 "patterns": [
                   {
-                    "group": ["@openfield/ui", "@openfield/server*"],
-                    "message": "Packages never import apps or UI."
+                    "group": [
+                      "@openfield/db",
+                      "@openfield/db/**",
+                      "@openfield/ui",
+                      "@openfield/ui/**",
+                      "@openfield/server",
+                      "@openfield/server/**",
+                      "@openfield/web",
+                      "@openfield/web/**"
+                    ],
+                    "message": "Adapters import only @openfield/core: no database, UI or app."
+                  },
+                  {
+                    "group": [
+                      "**/packages/db/**",
+                      "**/db/src/**",
+                      "**/ui/src/**",
+                      "**/apps/**",
+                      "**/server/src/**",
+                      "**/web/src/**"
+                    ],
+                    "message": "Adapters import only @openfield/core: no database, UI or app."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/providers/src/manifest.ts"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@openfield/db",
+                      "@openfield/db/**",
+                      "@openfield/ui",
+                      "@openfield/ui/**",
+                      "@openfield/server",
+                      "@openfield/server/**",
+                      "@openfield/web",
+                      "@openfield/web/**"
+                    ],
+                    "message": "Adapters import only @openfield/core: no database, UI or app."
+                  },
+                  {
+                    "group": [
+                      "**/packages/db/**",
+                      "**/db/src/**",
+                      "**/ui/src/**",
+                      "**/apps/**",
+                      "**/server/src/**",
+                      "**/web/src/**"
+                    ],
+                    "message": "Adapters import only @openfield/core: no database, UI or app."
+                  },
+                  {
+                    "group": ["@openfield/providers", "@openfield/providers/**"],
+                    "message": "The browser-safe entry imports only @openfield/core and files under src/manifest/ (\u00a70.16 rule 3)."
+                  },
+                  {
+                    "group": ["bun:*", "node:*"],
+                    "message": "The manifest entry runs in the browser."
+                  },
+                  {
+                    "group": ["./*", "!./manifest/**"],
+                    "message": "The browser-safe entry imports only @openfield/core and files under src/manifest/ (\u00a70.16 rule 3)."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/providers/src/manifest/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@openfield/db",
+                      "@openfield/db/**",
+                      "@openfield/ui",
+                      "@openfield/ui/**",
+                      "@openfield/server",
+                      "@openfield/server/**",
+                      "@openfield/web",
+                      "@openfield/web/**"
+                    ],
+                    "message": "Adapters import only @openfield/core: no database, UI or app."
+                  },
+                  {
+                    "group": [
+                      "**/packages/db/**",
+                      "**/db/src/**",
+                      "**/ui/src/**",
+                      "**/apps/**",
+                      "**/server/src/**",
+                      "**/web/src/**"
+                    ],
+                    "message": "Adapters import only @openfield/core: no database, UI or app."
+                  },
+                  {
+                    "group": ["@openfield/providers", "@openfield/providers/**"],
+                    "message": "The browser-safe entry imports only @openfield/core and files under src/manifest/ (\u00a70.16 rule 3)."
+                  },
+                  {
+                    "group": ["bun:*", "node:*"],
+                    "message": "The manifest entry runs in the browser."
+                  },
+                  {
+                    "group": ["../*", "../**"],
+                    "message": "The browser-safe entry imports only @openfield/core and files under src/manifest/ (\u00a70.16 rule 3)."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": [
+        "packages/providers/src/*/**",
+        "!packages/providers/src/types/**",
+        "!packages/providers/src/manifest/**",
+        "!packages/providers/src/testing/**"
+      ],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": [
+                      "@openfield/db",
+                      "@openfield/db/**",
+                      "@openfield/ui",
+                      "@openfield/ui/**",
+                      "@openfield/server",
+                      "@openfield/server/**",
+                      "@openfield/web",
+                      "@openfield/web/**"
+                    ],
+                    "message": "Adapters import only @openfield/core: no database, UI or app."
+                  },
+                  {
+                    "group": [
+                      "**/packages/db/**",
+                      "**/db/src/**",
+                      "**/ui/src/**",
+                      "**/apps/**",
+                      "**/server/src/**",
+                      "**/web/src/**"
+                    ],
+                    "message": "Adapters import only @openfield/core: no database, UI or app."
+                  },
+                  {
+                    "group": ["@openfield/providers", "@openfield/providers/**"],
+                    "message": "An adapter imports only ../types, its own folder and @openfield/core, never another adapter (\u00a70.16 rule 3)."
+                  },
+                  {
+                    "group": ["../*", "../*/**", "!../types", "!../types/**"],
+                    "message": "An adapter imports only ../types, its own folder and @openfield/core, never another adapter (\u00a70.16 rule 3)."
                   }
                 ]
               }
@@ -117,8 +407,51 @@
               "options": {
                 "patterns": [
                   {
-                    "group": ["@openfield/providers*", "@openfield/ui", "@openfield/server*"],
+                    "group": [
+                      "@openfield/providers",
+                      "@openfield/providers/**",
+                      "@openfield/ui",
+                      "@openfield/ui/**",
+                      "@openfield/server",
+                      "@openfield/server/**",
+                      "@openfield/web",
+                      "@openfield/web/**"
+                    ],
                     "message": "db imports only core."
+                  },
+                  {
+                    "group": [
+                      "**/providers/src/**",
+                      "**/ui/src/**",
+                      "**/apps/**",
+                      "**/server/src/**",
+                      "**/web/src/**"
+                    ],
+                    "message": "db imports only core."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["apps/server/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@openfield/ui", "@openfield/ui/**", "@openfield/web", "@openfield/web/**"],
+                    "message": "The server never imports the web app or UI components."
+                  },
+                  {
+                    "group": ["**/apps/web/**", "**/web/src/**", "**/packages/ui/**", "**/ui/src/**"],
+                    "message": "The server never imports the web app or UI components."
                   }
                 ]
               }
