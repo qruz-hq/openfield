@@ -1,0 +1,89 @@
+name: New provider
+description: Propose support for another company's image models.
+labels: ["provider"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Openfield adds a company through an adapter, built into the repo. Read docs/adding-a-provider.md first.
+  - type: input
+    id: company
+    attributes:
+      label: Company
+      placeholder: Acme
+    validations:
+      required: true
+  - type: input
+    id: docs
+    attributes:
+      label: API documentation
+      description: A link to the official, public API docs.
+    validations:
+      required: true
+  - type: input
+    id: pricing
+    attributes:
+      label: Pricing page
+      description: A link to the official prices.
+  - type: textarea
+    id: models
+    attributes:
+      label: Models
+      description: The image models you want, with their API ids.
+    validations:
+      required: true
+  - type: dropdown
+    id: auth
+    attributes:
+      label: How keys work
+      options:
+        - One API key
+        - A key id and a secret
+        - Something else (explain below)
+    validations:
+      required: true
+  - type: dropdown
+    id: delivery
+    attributes:
+      label: How images come back
+      options:
+        - In the response
+        - As a download link
+        - Through a job you check on until it finishes
+        - Not sure
+    validations:
+      required: true
+  - type: checkboxes
+    id: capabilities
+    attributes:
+      label: What the API supports, according to its docs
+      options:
+        - label: Text to image
+        - label: Editing an image with an instruction
+        - label: Editing an area with a mask
+        - label: Reference images
+        - label: Several images per call
+        - label: Seeds
+        - label: Canceling a job
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else
+      description: Limits, gaps, watermarks, moderation, or anything the docs leave unclear.
+  - type: dropdown
+    id: help
+    attributes:
+      label: Will you write the adapter?
+      options:
+        - "Yes"
+        - "Yes, with some help"
+        - "No"
+    validations:
+      required: true
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Fit
+      options:
+        - label: The API is public, works with a key the person owns, and its terms allow this use.
+          required: true

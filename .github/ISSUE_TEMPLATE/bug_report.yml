@@ -1,0 +1,70 @@
+name: Bug report
+description: Something doesn't work the way it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Security problems go through private reporting instead, see SECURITY.md.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Pick Nano Banana 2
+        2. Set the aspect ratio to 9:16
+        3. Generate
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: The release, or the output of `git rev-parse --short HEAD`.
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS
+        - Windows
+        - Linux
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser
+      placeholder: Chrome 140
+  - type: input
+    id: bun
+    attributes:
+      label: Bun version
+      description: The output of `bun --version`.
+  - type: input
+    id: model
+    attributes:
+      label: Model
+      description: Which model you were using, if it matters.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or error details
+      description: The terminal output, or the openfield.log file in the logs folder of your library (~/.openfield/logs by default). Openfield removes keys from both, but check before you paste.
+      render: text
+  - type: checkboxes
+    id: no-keys
+    attributes:
+      label: Before you submit
+      options:
+        - label: I checked that nothing I pasted contains an API key.
+          required: true

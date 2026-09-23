@@ -1,0 +1,37 @@
+name: Feature request
+description: Suggest a change or something new.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The task or problem, in your own words. Start here rather than with a solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would help
+      description: How you imagine it working. Sketches and screenshots are welcome.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you do today instead
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Image generation and the feed
+        - Composer and model settings
+        - Detail view and editing
+        - Presets, references and characters
+        - Assets library
+        - Canvas
+        - Settings, keys and costs
+        - Something else
+    validations:
+      required: true
