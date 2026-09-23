@@ -1,0 +1,20 @@
+{
+  "name": "@openfield/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./constants": "./src/constants.ts",
+    "./schemas": "./src/schemas/index.ts",
+    "./canvas": "./src/canvas/index.ts",
+    "./i18n": "./src/i18n/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "ulid": "3.0.2",
+    "zod": "4.6.5"
+  }
+}

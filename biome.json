@@ -1,0 +1,131 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
+  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "files": {
+    "includes": ["**", "!**/node_modules", "!**/dist", "!**/migrations/meta", "!design.pen", "!docs/**"]
+  },
+  "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 110 },
+  "javascript": { "formatter": { "quoteStyle": "double", "semicolons": "always", "trailingCommas": "all" } },
+  "css": { "parser": { "tailwindDirectives": true } },
+  "assist": { "actions": { "source": { "organizeImports": "on" } } },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": true,
+      "style": { "noNonNullAssertion": "off" },
+      "a11y": { "useKeyWithClickEvents": "warn", "noStaticElementInteractions": "warn" }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/web/**", "packages/ui/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@openfield/db": "The browser never loads the database. Call the API instead.",
+                  "@openfield/providers/server": "Server-only. Use @openfield/providers/manifest in the browser.",
+                  "sharp": "Server-only."
+                },
+                "patterns": [
+                  { "group": ["bun:*", "node:*"], "message": "The browser can't load Bun or Node modules." },
+                  {
+                    "group": ["**/providers/src/*/**", "!**/providers/src/manifest/**"],
+                    "message": "Adapters are server-only."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/ui/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": {
+                  "@openfield/db": "UI components never touch the database.",
+                  "@openfield/providers/server": "UI components never touch adapters.",
+                  "@openfield/providers/manifest": "Pass data in as props instead.",
+                  "@tanstack/react-query": "UI components take props; fetching lives in apps/web.",
+                  "react-router": "UI components take props; routing lives in apps/web.",
+                  "@xyflow/react": "Canvas code lives in apps/web."
+                },
+                "patterns": [
+                  { "group": ["bun:*", "node:*"], "message": "The browser can't load Bun or Node modules." }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/core/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  { "group": ["@openfield/*"], "message": "core is a leaf: it imports only zod and ulid." },
+                  { "group": ["bun:*", "node:*"], "message": "core runs in the browser too." }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/providers/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "paths": { "@openfield/db": "Adapters don't touch the database." },
+                "patterns": [
+                  {
+                    "group": ["@openfield/ui", "@openfield/server*"],
+                    "message": "Packages never import apps or UI."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "includes": ["packages/db/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@openfield/providers*", "@openfield/ui", "@openfield/server*"],
+                    "message": "db imports only core."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

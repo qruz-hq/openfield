@@ -1,0 +1,23 @@
+{
+  "name": "@openfield/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./app-type": "./src/app-type.ts"
+  },
+  "scripts": {
+    "dev": "bun --watch src/index.ts",
+    "start": "NODE_ENV=production bun src/index.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@hono/zod-validator": "0.9.1",
+    "@openfield/core": "workspace:*",
+    "@openfield/db": "workspace:*",
+    "@openfield/providers": "workspace:*",
+    "hono": "4.13.8",
+    "sharp": "0.35.4",
+    "zod": "4.6.5"
+  }
+}

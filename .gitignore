@@ -1,8 +1,4 @@
-# dependencies
 node_modules/
-bun.lockb
-
-# build output
 dist/
 build/
 .vite/
@@ -13,6 +9,11 @@ build/
 *.sqlite-*
 .env
 .env.*
+!.env.example
+
+# test output
+test-results/
+playwright-report/
 
 # research/scratch artifacts
 .playwright-mcp/
