@@ -8,7 +8,7 @@ Openfield is an open-source, local-first, **bring-your-own-key** image generatio
 
 | § | Section | For |
 |---|---|---|
-| 0 | [Canonical contracts](#0-canonical-contracts) | **Binding.** The shared vocabulary, types, routes, enums and defaults every other section obeys |
+| 0 | [Canonical contracts](#0-canonical-contracts) | **Binding.** The shared vocabulary, types, routes, enums, defaults and codebase layout every other section obeys |
 | 1 | [Overview, goals and users](#1-overview-goals-and-users) | Why this exists, who it is for, what is in and out of scope |
 | 2 | [App shell, generation feed and library grid](#2-app-shell-generation-feed-and-library-grid) | The main screen: navigation, the feed, the asset library |
 | 3 | [The prompt bar and per-model controls](#3-the-prompt-bar-and-per-model-controls) | The composer and capability-driven settings |
@@ -19,7 +19,7 @@ Openfield is an open-source, local-first, **bring-your-own-key** image generatio
 | 8 | [Data model, local API, queue and delivery plan](#8-data-model-local-api-queue-and-delivery-plan) | Storage, SQLite schema, HTTP API, queue, milestones, parity checklist, risks |
 | A | [Consolidated open questions](#appendix-a-consolidated-open-questions) | What is still undecided or unverified, and which task closes it |
 
-**Reading paths.** Building the first vertical slice: §0 → §6 → §8 → §3. Designing a screen: §0.1 → §2 → §3 → §4. Adding a provider: §0.3 → §6.12. Scoping the work: §0.14 → §8's milestones and parity checklist.
+**Reading paths.** Building the first vertical slice: §0 → §6 → §8 → §3. Designing a screen: §0.1 → §2 → §3 → §4. Adding a provider: §0.3 → §6.12. Scoping the work: §0.14 → §8's milestones and parity checklist. Setting up the repo: §0.16 → §8.2 → §8.7 M0.
 
 §0 was written last, after three adversarial reviews found the eight sections specifying the same contracts in incompatible ways. It is the reconciliation: where §0 and any other section disagree, §0 wins.
 
@@ -31,9 +31,9 @@ These were settled with the product owner before drafting and are treated as con
 |---|---|
 | Fidelity | Reproduce Higgsfield's Image tab **1:1 in layout, controls, flows and interactions**; ship our own branding, names, icons and copy. Never their marks, assets or marketing text. |
 | Form factor | Local web app: `git clone` + `bun`, server bound to `127.0.0.1`, single user, no auth |
-| Stack | React + Vite + Tailwind + shadcn/ui; Bun/Hono API server; React Flow for the canvas |
+| Stack | Bun workspaces monorepo (§0.16): `apps/web` (Vite + React SPA, Tailwind + shadcn/ui, React Flow for the canvas, TanStack Query) and `apps/server` (Hono on Bun), plus `packages/core`, `packages/providers`, `packages/db` and `packages/ui`. The browser calls the server through a Hono RPC typed client, and every route validates with `@hono/zod-validator` against zod schemas shared from `packages/core`. Data lives in SQLite through Drizzle ORM on `bun:sqlite`: the Drizzle schema is the single source of truth, and drizzle-kit migrations apply on boot |
 | Storage | SQLite for metadata and lineage; plain image files under `~/.openfield` |
-| Keys | Settings UI → `~/.openfield` config at `0600`; env vars override; provider calls server-side only, so keys never reach browser JS |
+| API keys | Settings UI → `~/.openfield` config at `0600`; env vars override; provider calls server-side only, so keys never reach browser JS |
 | Adapters | Built-in TypeScript modules implementing a typed `Provider` interface plus a per-model **capability manifest**; UI adapts per model |
 | Launch providers | Google Gemini image (Nano Banana family) and OpenAI GPT Image; Higgsfield adapter only if its public API exposes Soul/presets/characters to a user key |
 | v1.1 providers | fal.ai and Replicate (schema-driven), designed for in v1 |
@@ -51,10 +51,9 @@ These were settled with the product owner before drafting and are treated as con
 > **Treat every provider-specific fact as configuration, not as settled truth.** Model IDs, prices, size and aspect-ratio lists, quality tiers and capability flags in §6 were researched on 2026-09-23, and some rest on third-party write-ups rather than official documentation — the Higgsfield API surface in particular. They must be re-verified against official docs before implementation, and they live in the model registry and capability manifests so they can change without touching UI code. Where the research was uncertain or silent, this document says so rather than guessing.
 
 ---
-
 ## 0. Canonical contracts
 
-This section is binding. Where any other section of this document disagrees with §0 — on a name, an enum value, a field, a route, a default, a polarity or a scope decision — §0 wins and the other section is wrong until edited. Each numbered section still owns its own surface: §2 owns the feed's layout, §3 owns the composer's geometry, §4 owns the editor's interaction, §5 owns the picker sheet, §6 owns the adapter interface, §7 owns the canvas, §8 owns storage and delivery. §0 owns only what more than one of them touches: the vocabulary, the identifiers, the capability manifest, the job state machine, the error taxonomy, the HTTP and SSE surface, the lineage model, the preset objects, the mask and version conventions, the image pipeline, determinism, concurrency, cost, and the v1 scope list. Sections must reference §0 rather than restate it; a restatement that drifts is a defect.
+This section is binding. Where any other section of this document disagrees with §0 — on a name, an enum value, a field, a route, a default, a polarity or a scope decision — §0 wins and the other section is wrong until edited. Each numbered section still owns its own surface: §2 owns the feed's layout, §3 owns the composer's geometry, §4 owns the editor's interaction, §5 owns the picker sheet, §6 owns the adapter interface, §7 owns the canvas, §8 owns storage and delivery. §0 owns only what more than one of them touches: the vocabulary, the identifiers, the capability manifest, the job state machine, the error taxonomy, the HTTP and SSE surface, the lineage model, the preset objects, the mask and version conventions, the image pipeline, determinism, concurrency, cost, the v1 scope list, and the codebase layout and stack (§0.16). Sections must reference §0 rather than restate it; a restatement that drifts is a defect.
 
 ---
 
@@ -84,7 +83,7 @@ One word per concept. These are the only spellings, in code, in the schema and i
 
 | Action | Behaviour | Where it appears |
 |---|---|---|
-| **Recreate** | Replays the **frozen `NormalizedRequest`** stored on the job set — same model, same params, same recorded seed — without touching the composer. Prepends placeholders like any run. On a model with `seed.supported: false` the button carries a `~` badge and the tooltip reads "This model has no seed control — the result will differ." | Tile hover stack; detail action row (primary pair); bulk selection toolbar; `POST /api/job-sets/:id/recreate` |
+| **Recreate** | Replays the **frozen `NormalizedRequest`** stored on the job set — same model, same params, same recorded seed — without touching the composer. Prepends placeholders like any run. On a model with `seed.supported: false` the button carries a `~` badge and the tooltip reads "This model can't make an exact copy. Expect changes." | Tile hover stack; detail action row (primary pair); bulk selection toolbar; `POST /api/job-sets/:id/recreate` |
 | **Reuse** | Loads prompt, references, model and every setting into the composer and does **not** run. Settings the current model cannot accept are dropped with one toast listing them. | Tile More menu ("Reuse"); detail More menu; failed-tile "Edit settings" |
 | **Use as reference** | Attaches the image to the composer's reference strip only; nothing else is loaded. | Tile bottom-right pill; detail action row (primary pair, second slot) |
 
@@ -105,7 +104,7 @@ The detail action row's primary pair is **`Recreate | Use as reference`** (2 × 
 | Deep link | `/image?model=<providerId>:<modelId>` | Unknown key → default model + toast |
 | File path in the DB | Relative to `OPENFIELD_HOME` | `assets/2026/09/23/<ulid>.png`. No absolute path, drive letter or username ever enters SQLite |
 | Idempotency key | Client ULID, one per job set | Per-attempt provider header is `` `${idempotencyKey}:${jobIdx}` ``, stable across retries. Persisted on `job_sets.idempotency_key` (UNIQUE) and `jobs.idempotency_key` |
-| Canvas asset provenance | `assets.op_params.source = "canvas:<canvasId>:<nodeId>"` | Drives "Open in canvas" |
+| Canvas asset provenance | `assets.op_params.source = "canvas:<canvasId>:<nodeId>"` | Drives "Open in Canvas" |
 | Thumb cache key | `<sha256>@h<rung>[@2x].webp` | §0.10 |
 
 **Section numbering.** The final outline is fixed: **§1** overview · **§2** app shell, feed, library · **§3** composer · **§4** detail view and editor · **§5** presets, references, characters, palettes · **§6** providers and adapters · **§7** canvas · **§8** data model, API, queue, delivery. Every `see §N` in every section is repointed to this outline in one mechanical pass, and the three open questions that say "numbering is assumed and may need re-pointing" (§2 Open questions, Appendix A §2 and §8 bullets) are deleted.
@@ -223,15 +222,15 @@ resolveControl(caps: Capabilities, id: ControlId): { state: ControlState; option
 |---|---|
 | `supported` | Control renders; the popover lists **the model's own options**, never a house list |
 | `partial` | Control renders; unavailable options greyed with `reason` as subtitle; info dot on the chip |
-| `emulated` | Control renders with a `≈` glyph; popover header explains the emulation and its cost consequence |
+| `emulated` | Control renders with a `~` glyph; popover header explains the emulation and its cost consequence |
 | `unsupported` | **Core set → renders disabled with a tooltip naming the model.** Non-core → hidden |
 | `absent` | Not in the DOM |
 
-**Core set:** Model · Aspect · Resolution/Quality · Batch · Seed. Everything else is hidden when `unsupported` or `absent`. §6.3's sentence "A control is **hidden**, never greyed, when the capability is absent" is deleted, and the `negativePrompt` row's "Hidden when false" becomes "Hidden when absent; disabled with a reason when explicitly `unsupported`." Seed is deliberately core-and-disabled: hiding it would hide the reason reproducibility is unavailable.
+**Core set:** Model · Aspect · Resolution/Quality · Images · Seed. Everything else is hidden when `unsupported` or `absent`. §6.3's sentence "A control is **hidden**, never greyed, when the capability is absent" is deleted, and the `negativePrompt` row's "Hidden when false" becomes "Hidden when absent; disabled with a reason when explicitly `unsupported`." Seed is deliberately core-and-disabled: hiding it would hide the reason reproducibility is unavailable.
 
-**Parity acceptance criterion** (replaces §6.3's): *for the models observed in the reference product, the manifest must render the observed chips, in the observed order, with no observed chip missing and no model-capability chip added. Openfield-only controls (Advanced, Negative, Seed, Reference strength, Palette) are excluded from the comparison and asserted separately.* Where the observed chip set and the provider API disagree, **the API wins** and the note reads: "the reference product's chip set reflects its own proxy, not the public API."
+**Parity acceptance criterion** (replaces §6.3's): *for the models observed in the reference product, the manifest must render the observed chips, in the observed order, with no observed chip missing and no model-capability chip added. Openfield-only controls (Advanced, Avoid, Seed, Reference strength, Palette) are excluded from the comparison and asserted separately.* Where the observed chip set and the provider API disagree, **the API wins** and the note reads: "the reference product's chip set reflects its own proxy, not the public API."
 
-**Discovery is allow-listed, not additive.** `Provider.listModels()` is required only to return the adapter's static catalog; network discovery is optional. A discovered id is added to the picker **only if the adapter's own `recognise(id)` predicate accepts it**; unrecognised ids are recorded in the refresh report and listed under Settings → Models → *Unrecognised*, never added. There is no conservative-default path for discovered ids — the conservative manifest is reserved for entries the user added deliberately in `~/.openfield/models.json`. (Research: Gemini publishes no image-model `models.list`, and OpenAI's `/v1/models` does not flag image capability.)
+**Discovery is allow-listed, not additive.** `Provider.listModels()` is required only to return the adapter's static catalog; network discovery is optional. A discovered id is added to the picker **only if the adapter's own `recognise(id)` predicate accepts it**; unrecognised ids are recorded in the refresh report and listed under Settings → Models → *Not supported*, never added. There is no conservative-default path for discovered ids — the conservative manifest is reserved for entries the user added deliberately in `~/.openfield/models.json`. (Research: Gemini publishes no image-model `models.list`, and OpenAI's `/v1/models` does not flag image capability.)
 
 ---
 
@@ -257,7 +256,7 @@ pending → submitting → (queued)* → running → succeeded | failed
         interrupted (restart, non-resumable adapter)
 ```
 
-A job whose adapter cannot resume after a restart is marked **`interrupted`**, shown as "Interrupted — restart the run?", and is **never auto-resubmitted** (double-billing risk). §6.7's "marked `failed` with `provider_error`" is deleted.
+A job whose adapter cannot resume after a restart is marked **`interrupted`**, shown as "Interrupted. Run again?", and is **never auto-resubmitted** (double-billing risk). §6.7's "marked `failed` with `provider_error`" is deleted.
 
 **Operations.** One snake_case union, used byte-identically by `job_sets.op`, `assets.op`, `usage_log.operation` and §4.9's operation record:
 
@@ -318,20 +317,20 @@ export type ErrorCode =
 
 | `ErrorCode` | Tile reason (our copy) | Primary action |
 |---|---|---|
-| `auth_missing` | "No key for this provider" | Open Settings |
-| `auth_invalid` / `auth_forbidden` | "Provider rejected this key" | Open Settings |
-| `billing_required` / `quota_exceeded` | "No credit available on this key" | Open provider console |
-| `rate_limited` | "Provider rate limit — retrying" | Retry (with backoff hint) |
-| `content_refused` / `content_flagged_input` | "The provider declined this request" | Reuse (edit the prompt) |
+| `auth_missing` | "No key for this model" | Open Settings |
+| `auth_invalid` / `auth_forbidden` | "This key was rejected" | Change key |
+| `billing_required` / `quota_exceeded` | "This key is out of credit" | Open billing page |
+| `rate_limited` | "Too many requests. Retrying" | Retry (with backoff hint) |
+| `content_refused` / `content_flagged_input` | "The model wouldn't make this" | Reuse (edit the prompt) |
 | `unsupported_param` / `capability_unsupported` | "This model can't do that" | Reuse |
-| `invalid_request` / `payload_too_large` | "The request was rejected as invalid" | Details |
-| `provider_unavailable` / `provider_error` | "The provider returned an error" | Details |
-| `network` | "Couldn't reach the provider" | Retry |
-| `timeout` | "Timed out waiting for the provider" | Retry |
-| `disk_full` | "Couldn't write the image to disk" | Settings → Storage |
-| `canceled` | "Canceled — the provider may still charge for work already started." (§0.12, verbatim) | Recreate |
+| `invalid_request` / `payload_too_large` | "These settings didn't work" | Details |
+| `provider_unavailable` / `provider_error` | "The model ran into a problem" | Details |
+| `network` | "Couldn't connect" | Retry |
+| `timeout` | "This took too long" | Retry |
+| `disk_full` | "Couldn't save. Your disk is full" | Free up space |
+| `canceled` | "Canceled. You may still be charged for work that already started." (§0.12, verbatim) | Recreate |
 
-Every failure card links to the **Debug drawer** (Settings → Diagnostics): redacted request payload, HTTP status, `providerCode`, redacted response. `mapError` has one signature everywhere: `mapError(res: Response, body?: unknown): Promise<ProviderError>`, always `throw await mapError(res, body)` / `error: await mapError(res, body)`.
+Every failure card links to the **Error log** (Settings → Help): redacted request payload, HTTP status, `providerCode`, redacted response. `mapError` has one signature everywhere: `mapError(res: Response, body?: unknown): Promise<ProviderError>`, always `throw await mapError(res, body)` / `error: await mapError(res, body)`.
 
 ---
 
@@ -399,11 +398,13 @@ export interface GenerateRequest {
 
   source: "composer" | "detail_editor" | "canvas" | "api" | "recreate";
   canvas?: { canvasId: string; nodeId: string };
-  providerOptions?: Record<string, unknown>;   // Advanced → Raw only
+  providerOptions?: Record<string, unknown>;   // Advanced → Custom only
 }
 ```
 
 Response is 202 with the job set and its N jobs carrying resolved `width`/`height`, exactly as §8.3.1 documents, so placeholders reserve the correct aspect ratio before any provider call.
+
+In code, `GenerateRequest` and `NormalizedRequest` are zod schemas in `packages/core/src/schemas/request.ts`, and their TypeScript types are inferred from them. Both `/api/generate` and `/api/edit` validate their body with `@hono/zod-validator` against those schemas (§0.16, §8.3.3).
 
 **`NormalizedRequest`** — declared once in §6.5, because `estimate`, `submit` and the whole of §6.5 step 6 take it and no draft defines it:
 
@@ -448,7 +449,7 @@ Partial frames are written to `tmp/`, served from a volatile thumb path, **never
 
 Acceptance: *a cross-origin page cannot list assets, read key status, or cause a thumbnail to be generated.* R11's mitigation text is rewritten to match.
 
-**Outbound network posture.** Outbound connections are restricted to `meta.networkHosts ∪ meta.assetHosts` of enabled adapters. `assetHosts: string[]` is a **new required field on `ProviderMeta`** (e.g. `cdn.higgsfield.ai`) and is listed in Settings → Privacy beside `networkHosts`. A download URL whose host is in neither list is refused with `provider_error`, logged with the host, and surfaced as "This provider returned an image on an unexpected host." Redirects are not followed across hosts; only `https:` is permitted. Conformance test 19 becomes "Only hosts in `meta.networkHosts ∪ meta.assetHosts` are contacted."
+**Outbound network posture.** Outbound connections are restricted to `meta.networkHosts ∪ meta.assetHosts` of enabled adapters. `assetHosts: string[]` is a **new required field on `ProviderMeta`** (e.g. `cdn.higgsfield.ai`) and is listed in Settings → Privacy beside `networkHosts`. A download URL whose host is in neither list is refused with `provider_error`, logged with the host, and surfaced as "Image blocked. It came from an unknown site." Redirects are not followed across hosts; only `https:` is permitted. Conformance test 19 becomes "Only hosts in `meta.networkHosts ∪ meta.assetHosts` are contacted."
 
 ---
 
@@ -456,21 +457,18 @@ Acceptance: *a cross-origin page cannot list assets, read key status, or cause a
 
 **Storage tree** is §8.1's, canonical. `~/.openfield/thumbs/` (not `cache/thumbs/`), `uploads/YYYY/MM/DD/<ulid>.<ext>`, `canvases/previews/<id>.png`. **`refs/` does not exist** — reference images are ordinary uploads.
 
-**`assets` gains the columns §4.9 declares mandatory:**
+**`assets` carries the columns §4.9 declares mandatory.** They are declared in `packages/db/src/schema/assets.ts` (§8.2, the source of truth):
+- `parent_asset_id`: `TEXT`, no FK (tombstone pointer)
+- `root_asset_id`: `TEXT NOT NULL` (denormalised lineage root)
+- `op`: §0.4 `Op`, typed by `OPS`, no CHECK
+- `op_params`: JSON
+- `mask_asset_id`: references `assets(id)` `ON DELETE SET NULL`
+- `generative`: `NOT NULL DEFAULT 1`
+- `approximate`: `NOT NULL DEFAULT 0`
+- `approximate_reason`
+- the partial index `idx_assets_root ON assets(root_asset_id, created_at) WHERE deleted_at IS NULL`
 
-```sql
-ALTER TABLE assets ADD parent_asset_id     TEXT;          -- tombstone pointer, no FK
-ALTER TABLE assets ADD root_asset_id       TEXT NOT NULL; -- denormalised lineage root
-ALTER TABLE assets ADD op                  TEXT;          -- §0.4 Op
-ALTER TABLE assets ADD op_params           TEXT;          -- JSON, re-opens the tool with its settings
-ALTER TABLE assets ADD mask_asset_id       TEXT REFERENCES assets(id) ON DELETE SET NULL;
-ALTER TABLE assets ADD generative          INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE assets ADD approximate         INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE assets ADD approximate_reason  TEXT;
-CREATE INDEX idx_assets_root ON assets(root_asset_id, created_at) WHERE deleted_at IS NULL;
-```
-
-`assets.kind` CHECK becomes `('generated','uploaded','imported','edited','mask')`.
+`assets.kind` CHECK is built from `ASSET_KINDS`: `('generated','uploaded','imported','edited','mask')`.
 
 `parent_asset_id` deliberately carries **no foreign key**: a hard-deleted parent must leave the child's chain intact (§4.9 requirement 7, §8.6's "the edge points at a tombstone"). `asset_edges` keeps `ON DELETE CASCADE` on `child_asset_id` only, drops the FK on `parent_asset_id`, and its `relation` CHECK becomes `('derived','reference','import')`.
 
@@ -478,7 +476,7 @@ CREATE INDEX idx_assets_root ON assets(root_asset_id, created_at) WHERE deleted_
 
 **Ingest is non-destructive and single-pathed.** Every byte that enters Openfield — provider output or user upload — goes through §8.5.1: stream to `tmp/<ulid>.part`, hash while streaming, probe dimensions and real MIME from magic bytes (never the declared type), dedupe on `assets.sha256`, atomic `rename()` into place, insert the row in the same transaction that flips the job. **Originals are stored exactly as returned — no re-encode, no strip, no EXIF removal.** Google's SynthID watermark survives untouched; `safety.notices` is therefore an honest claim. A 2048px-long-edge WebP working copy for the editor lives in the thumb cache, never in place. §5.6's sha256-named `refs/` tree and its q85 re-encode are deleted; reference sets hold **asset ids**, never paths or hashes.
 
-Consequently **§6.13's Gemini `output.format` row becomes "not exposed ⇒ `output.formats: ["png"]`, chip hidden."** Format conversion happens only on export (§8.5.4), where the dialog warns: *"Re-encoding may not preserve the provider's invisible watermark."*
+Consequently **§6.13's Gemini `output.format` row becomes "not exposed ⇒ `output.formats: ["png"]`, chip hidden."** Format conversion happens only on export (§8.5.4), where the dialog warns: *"Changing the format may remove the hidden AI watermark."*
 
 **Deletes.** Soft delete sets `deleted_at`; the asset leaves every feed and every query filters `deleted_at IS NULL`. **The FTS row is retained on soft delete** (no trigger fires on `deleted_at`, and none is added); hard delete removes it via the `assets_ad` trigger. §8.6's claim "FTS row is removed" is deleted.
 
@@ -492,44 +490,14 @@ Consequently **§6.13's Gemini `output.format` row becomes "not exposed ⇒ `out
 
 **The §5.3 object is the canonical JSON wire and file shape**, for all four entity kinds. §3.6's `{name, promptTemplate, negativeAdditions?, referenceImages[]?, strength, defaults?}` and §6.10's `{name, promptTemplate, fragments, references[], defaults{}}` are deleted and replaced with "see §5.3". Envelope `kind` is `"style" | "reference-set" | "character" | "palette"`.
 
-**Storage of record is SQLite.** `~/.openfield/presets/` holds only `exported/` and `imported/` material; the folder form is an **import/export format, not a live store**. §5.5's "the folder form is the canonical write format" is corrected. §5.11's acceptance criterion becomes: *deleting the `presets` rows and restarting re-seeds the 12 bundled presets and 8 bundled palettes from `app/presets/`.*
+**Storage of record is SQLite.** `~/.openfield/presets/` holds only `exported/` and `imported/` material; the folder form is an **import/export format, not a live store**. §5.5's "the folder form is the canonical write format" is corrected. §5.11's acceptance criterion becomes: *deleting the `presets` rows and restarting re-seeds the 12 bundled presets and 8 bundled palettes from `apps/server/seed/presets/` and `apps/server/seed/palettes/`.*
 
-**Four entities, four tables.** The `presets` table holds style presets only; the `kind` column and `GET /api/presets?kind=` are **removed** (the import endpoint routes by envelope `kind`). Migration 001 adds:
-
-```sql
-CREATE TABLE presets (                -- style presets only
-  id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT,
-  payload_json TEXT NOT NULL,         -- the §5.3 object, the single source
-  thumb_asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
-  builtin INTEGER NOT NULL DEFAULT 0, origin TEXT, sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-
-CREATE TABLE reference_sets (id TEXT PRIMARY KEY, name TEXT NOT NULL,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-CREATE TABLE reference_set_items (
-  set_id TEXT NOT NULL REFERENCES reference_sets(id) ON DELETE CASCADE,
-  asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,   -- asset id, never sha256
-  position INTEGER NOT NULL, weight REAL NOT NULL DEFAULT 1.0,
-  role TEXT NOT NULL CHECK (role IN ('style','subject','composition','palette')),
-  PRIMARY KEY (set_id, asset_id));
-
-CREATE TABLE palettes (id TEXT PRIMARY KEY, name TEXT NOT NULL,
-  hex_json TEXT NOT NULL, populations_json TEXT NOT NULL,
-  source_asset_id TEXT REFERENCES assets(id) ON DELETE SET NULL,
-  k INTEGER NOT NULL, mode TEXT NOT NULL CHECK (mode IN ('prompt','reference','both')),
-  builtin INTEGER NOT NULL DEFAULT 0, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-
-CREATE TABLE saved_prompts (id TEXT PRIMARY KEY, name TEXT NOT NULL, text TEXT NOT NULL,
-  tags_json TEXT, preset_id TEXT REFERENCES presets(id) ON DELETE SET NULL,
-  created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
-
-ALTER TABLE characters ADD reference_set_id TEXT REFERENCES reference_sets(id);
-ALTER TABLE characters ADD seed INTEGER;
-ALTER TABLE characters ADD lock_seed INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE characters ADD injection TEXT CHECK (injection IN ('prefix','suffix','replace-token'));
-ALTER TABLE characters ADD token TEXT;
-ALTER TABLE characters ADD provider_identity_json TEXT;
-```
+**Four entities, four tables.** The `presets` table holds style presets only. The `kind` column and `GET /api/presets?kind=` are **removed**, and the import endpoint routes by envelope `kind`. The tables are declared in `packages/db/src/schema/library.ts` (§8.2, the source of truth) and created by the initial generated migration. §5.10 lists their columns. These constraints matter across sections:
+- `presets.payload_json` is the §5.3 object and the single source.
+- `reference_set_items` is keyed on `(set_id, asset_id)`, holds **asset ids, never sha256**, and checks `role IN ('style','subject','composition','palette')`.
+- `palettes.mode IN ('prompt','reference','both')`.
+- `saved_prompts.preset_id` references `presets(id)` `ON DELETE SET NULL`.
+- `characters` carries `reference_set_id` (references `reference_sets(id)`), `seed`, `lock_seed` (default 0), `injection IN ('prefix','suffix','replace-token')`, `token` and `provider_identity_json`.
 
 **Resolution order** (server-side, in `normalize()` step 1, logged verbatim onto the job set so Reuse and Recreate reproduce it even after the preset is edited): variables and snippets → `basePrompt`; template variant by `strength`; `{prompt}` substitution; palette clause; negative prompt (native where `negativePrompt`, else appended as `Avoid: …` with a visible note); `params` merge minus anything the manifest does not declare; `providerOverrides["<provider>:<modelId>"]` then `["<provider>:*"]`; references, preset-first in weight order, truncated to `references.max`. `presetStrength` maps to a native parameter when `styleStrength` is true, otherwise selects the `light` variant, otherwise disables the slider with a reason.
 
@@ -551,18 +519,18 @@ This is §4.6's convention, it matches the OpenAI edits convention as generally 
 
 **Versions.** No operation ever overwrites an image file. Every commit — generative or local — writes a new file and a new `assets` row with `parent_asset_id`, `root_asset_id`, `op`, `op_params`, `generative`, and `mask_asset_id` where one was used. Local ops write `generative = 0`, `cost_usd = 0`, `provider_id = 'local'`. In-session undo/redo covers uncommitted work only; a commit becomes a version, not an undo step.
 
-**Editor tools and shortcut precedence.** The observed toolbar binds **Shapes to `R`** — §4.6 and §4.5's key list are corrected to `V H M A D E R T`, and §7.9's canvas Shape stays `R`. Regional edit (`M`) and Lasso (`A`) are our own assignments; no shortcut was observed for them.
+**Editor tools and shortcut precedence.** The observed toolbar binds **Shapes to `R`** — §4.6 and §4.5's key list are corrected to `V H M A D E R T`, and §7.9's canvas Shape stays `R`. Edit area (`M`) and Lasso (`A`) are our own assignments; no shortcut was observed for them.
 
 §2.6 publishes the one global shortcut table; §4.5 and §7.9 cross-reference it and add only their own surface's tools. Collisions are resolved as:
 
 | Key | Binding | Was |
 |---|---|---|
 | `⌘K` | Command palette, everywhere | §3.2 also claimed it for the model chip |
-| `⌘M` | Focus the model chip | (new; replaces §3.2's `⌘K`) |
+| `⌘M` | Choose model | (new; replaces §3.2's `⌘K`) |
 | `R` | **Recreate**, on feed and detail | §4.4/§4.5 claimed it for Use as reference |
 | `U` | **Use as reference**, on feed and detail | §4.4's "the two surfaces agree" was false |
 | `F` | Favourite, on feed and detail | §4.5 used `F` for fullscreen and `L` for favourite |
-| `⇧F` | Expand media view | replaces §4.5's `F`; `L` is deleted |
+| `⇧F` | Expand image | replaces §4.5's `F`; `L` is deleted |
 | `D` | Download — **except on the Edit tab**, where tool letters win and Download moves to `⌘⇧S` | §4.5 listed `D` with no tab qualifier |
 
 On the Edit tab, tool letters take precedence over surface actions. That precedence rule is stated explicitly in §2.6 and §4.5.
@@ -607,18 +575,18 @@ On the Edit tab, tool letters take precedence over surface actions. That precede
 | Locked, `seed.supported` | The entered seed is sent; for batch > 1 the server derives `seed, seed+1, … seed+n−1` |
 | `seed.supported: false` | `jobs.seed` stays NULL. The Seed chip renders **disabled with a reason** (core set, §0.3). **No launch adapter declares seed support** (§6.13, §6.14), so on every v1 model Recreate is an exact *replay of the request*, not a reproduction of the image, and the `~` badge says so |
 
-**Frozen request.** `normalize()` ends by hashing `NormalizedRequest + {modelKey, manifestVersion, promptAfterPreset}` into `paramsHash`, and writes the whole normalized object to `job_sets.request_json`. **Recreate replays that object, never the current UI state or the current manifest**, so a manifest change can never silently alter a re-run.
+**Frozen request.** `normalize()` ends by hashing `NormalizedRequest + {modelKey, manifestVersion, promptAfterPreset}` into `paramsHash` with `hashCanonical()`, and writes the whole normalized object to `job_sets.request_json`. **Recreate replays that object, never the current UI state or the current manifest**, so a manifest change can never silently alter a re-run.
 
-**Canvas fingerprints reuse the same hash function:**
+**Canvas fingerprints reuse the same hash function**, `hashCanonical()` from `@openfield/core` (canonical JSON, then SHA-256), so the browser and the server compute identical values:
 
 ```
 fingerprint = sha256(typeId, typeVersion, normalizedParams, modelKey,
                      manifestVersion, [upstream fingerprints in port order])
 ```
 
-A node is `cached` when `fingerprint === result.fingerprint` and every referenced asset still exists. Seed modes `pinned` and `from input` are offered **only when `seed.supported`**; on models without seeds the node always caches on unchanged inputs and the run pill reads "Re-run produces a new variation." §7.7's "a node whose seed mode is `random` can never cache" would otherwise make every launch-model node uncacheable.
+A node is `cached` when `fingerprint === result.fingerprint` and every referenced asset still exists. Seed modes `Fixed` and `From input` are offered **only when `seed.supported`**; on models without seeds the node always caches on unchanged inputs and the run pill reads "Each run gives a new result." §7.7's "a node whose seed mode is `random` can never cache" would otherwise make every launch-model node uncacheable.
 
-**Results that arrive late.** A result carries the fingerprint it was **submitted** with. On arrival the runner compares it to the node's current fingerprint: on a match the node goes `done`; on a mismatch **the asset is still filed in the library** and the node renders `stale` with the chip "Result is from earlier settings — Open · Re-run". Undo and redo never cancel an in-flight run; a node with a run in flight refuses reparenting and deletion, with the toast "Wait for this node to finish, or cancel it."
+**Results that arrive late.** A result carries the fingerprint it was **submitted** with. On arrival the runner compares it to the node's current fingerprint: on a match the node goes `done`; on a mismatch **the asset is still filed in the library** and the node renders `stale` with the chip "Made with older settings · Open · Re-run". Undo and redo never cancel an in-flight run; a node with a run in flight refuses reparenting and deletion, with the toast "Wait for this node to finish, or cancel it."
 
 ---
 
@@ -648,7 +616,7 @@ OpenAI's `limits.requestTimeoutMs` is raised to **180 000** in §6.14: the resea
 3. Adapter implements `cancel()` → call it, mark `canceled` on acknowledgement.
 4. Adapter does not → mark `canceled`, stop polling, discard any late result, and write a `usage_log` row at **full estimate with `discarded = 1`**.
 
-**Neither launch adapter implements provider-side cancel**, so (4) is the path every v1 cancellation takes: the provider may complete and bill the work, and **no asset is produced**. Copy, verbatim, on the tile, the node band and the toast: *"Canceled — the provider may still charge for work already started."* §7.12's criterion becomes "…and keeps every asset already **written to the library**; runs canceled after submit are recorded in the usage log as billed-but-discarded."
+**Neither launch adapter implements provider-side cancel**, so (4) is the path every v1 cancellation takes: the provider may complete and bill the work, and **no asset is produced**. Copy, verbatim, on the tile, the node band and the toast: *"Canceled. You may still be charged for work that already started."* §7.12's criterion becomes "…and keeps every asset already **written to the library**; runs canceled after submit are recorded in the usage log as billed-but-discarded."
 
 **Crash recovery** (§8.4.5) is unchanged in shape and uses §0.4's states: `queued` → re-enqueue; `submitting`/`running` with a `provider_job_id` and a pollable adapter → resume the watcher (not re-billed); otherwise → `interrupted`, never auto-resubmitted.
 
@@ -663,8 +631,9 @@ OpenAI's `limits.requestTimeoutMs` is raised to **180 000** in §6.14: the resea
 **Pricing is pure data, and the estimate is a pure function.** `estimate()` is removed from the `ImageModel` interface, because the browser cannot call a method and an HTTP round-trip per batch-stepper click is not acceptable. Instead:
 
 ```ts
-/** Pure. Touches manifest.price only — never credentials. Exported from packages/providers,
- *  imported by apps/web, which already holds the manifest in memory. */
+/** Pure. Touches manifest.price only, never credentials. Exported from the browser-safe
+ *  entry @openfield/providers/manifest and imported by apps/web, which already holds the
+ *  manifest in memory (§0.16). */
 export function estimate(manifest: ModelManifest, req: NormalizedRequest): CostEstimate;
 
 /** Optional, on ImageModel. One network round-trip for providers with a cost endpoint.
@@ -688,11 +657,11 @@ export interface CostActual { currency: "USD"; amount: number;
 **Unverified endpoints never produce an exact number.**
 
 - Higgsfield: `price.kind = "unknown"` at launch. The only evidence for an estimate endpoint is a third-party blog with no path, request or response shape recorded, and the product's private `/fnf/job-sets/costs` is out of bounds (§1.11). The Generate button reads "Cost unknown". Upgrade to `provider_estimate` + `confidence: "estimated"` only after a live probe confirms the path and response shape; `"exact"` requires a documented public endpoint.
-- OpenAI: whether `POST /v1/images/generations` returns a `usage` block is **unconfirmed** and is part of the same live probe as mask polarity. Until then the adapter ships `confidence: "estimated"` and the Usage screen marks those rows `≈`.
+- OpenAI: whether `POST /v1/images/generations` returns a `usage` block is **unconfirmed** and is part of the same live probe as mask polarity. Until then the adapter ships `confidence: "estimated"` and the Usage screen marks those rows `~`.
 
 **`usage_log` — one row per terminal outcome, success, failure and cancel alike.** §8.2's table gains the columns §6.9's row spec needs: `estimate_min REAL, estimate_max REAL, price_as_of TEXT, discarded INTEGER NOT NULL DEFAULT 0, batch_index INTEGER, size TEXT, quality TEXT`, and `cost_source` values become `'reconciled' | 'estimated' | 'unknown'`.
 
-§2.4's "Cost is never logged for a failed job" and §8.4.3's "every terminal outcome writes a row" are reconciled as: **a failed job writes a `usage_log` row with `cost_usd = 0` and `cost_source = 'unknown'`; no cost is ever added to a spend total for a failure.** A canceled-after-submit job writes a row at full estimate with `discarded = 1`, which is what the Usage screen's "billed but discarded" line sums.
+§2.4's "Cost is never logged for a failed job" and §8.4.3's "every terminal outcome writes a row" are reconciled as: **a failed job writes a `usage_log` row with `cost_usd = 0` and `cost_source = 'unknown'`; no cost is ever added to a spend total for a failure.** A canceled-after-submit job writes a row at full estimate with `discarded = 1`, which is what the Usage screen's "Canceled but charged" line sums.
 
 Prices always carry `pricedAt` and `sourceUrl`, are never presented as authoritative, are overridable in `~/.openfield/prices.json`, and are never changed silently — `refreshPricing()` proposes a diff the user accepts or rejects.
 
@@ -708,18 +677,18 @@ Prices always carry `pricedAt` and `sourceUrl`, are never presented as authorita
 |---|---|---|
 | Justified-row feed, 5-step zoom, 2 px gaps, multi-select, hover actions | M1 | §0.10 ladder |
 | Local tips card in the first placeholder | M1 | Static local JSON, dismissible, Settings switch, no network. Queue position renders in the same slot when a run is waiting |
-| Model picker: search, **Recent / per-provider / Unavailable**, capability badges | M1 | **Not Featured/All** — that is the reference product's editorial grouping (§1.11). M1-04 and §8.8 row 19 are corrected |
-| **Local prompt enhance** | M1 | Per §3.4.3: enhancer-model select over the user's own text models, rewrite styles, preview/automatic modes, diff sheet, 8 s Undo, `prompt_original` persisted, separate usage-log line. Off by default; chip **disabled with "Add a key for a provider with a text model in Settings"** when no text-capable key exists. `promptEnhance: "openfield"` on both launch adapters is therefore honest |
+| Model picker: search, **Recent / by company / Needs a key**, capability badges | M1 | **Not Featured/All** — that is the reference product's editorial grouping (§1.11). M1-04 and §8.8 row 19 are corrected |
+| **Local prompt enhance** | M1 | Per §3.4.3: enhancer-model select over the user's own text models, rewrite styles, preview/automatic modes, diff sheet, 8 s Undo, `prompt_original` persisted, separate usage-log line. Off by default; chip **disabled with "Add an OpenAI or Google key to use this"** when no text-capable key exists. `promptEnhance: "openfield"` on both launch adapters is therefore honest |
 | **`@`-mention typeahead** | M1 | Resolves Openfield presets, characters, reference sets and saved references (§3.2, §5.7). `/` snippets alongside (§5.9). The reference product's server-side "Elements" entity is not reproduced |
 | Detail view: Info · **Edit · History** tabs | M2 | Comments dropped (single user); History replaces it |
 | **Layers panel** | M2 | Base + mask + local overlay layers (text, shapes, grade), with visibility, reorder, rename, merge. Generative *layer decomposition* stays a disabled plugin slot |
 | Presets, reference sets, characters, palettes, saved prompts, JSON import/export | M3 | §0.8 |
 | Cost estimate + usage log + CSV | M3 | §0.13 |
 | Canvas | M4 | §7, minus the rows below |
-| **Settings surface — new §6.17** | M0→M3 | Left-rail IA: Providers · Models · Generation defaults · Appearance · Storage · Usage & budget · Privacy · Diagnostics · Experimental, with one table listing every setting, its `settings` key, its default and the section that specifies it. Eleven sections currently write requirements into a screen no section owns |
-| **First run — new §2.10** | M0 | launch → no-key empty state → Providers → paste key → Test connection → default model auto-selected → composer focused. G5/S1 gate on exactly this path |
+| **Settings surface — new §6.17** | M0→M3 | Left-rail IA: API keys · Models · Defaults · Appearance · Storage · Spending · Privacy · Help · Experimental, with one table listing every setting, its `settings` key, its default and the section that specifies it. Eleven sections currently write requirements into a screen no section owns |
+| **First run — new §2.10** | M0 | launch → no-key empty state → Keys → paste key → Check key → default model auto-selected → composer focused. G5/S1 gate on exactly this path |
 | **Accessibility — new §2.11** | all | WCAG 2.2 AA contrast as a release gate with a CI check over the §2.2 token pairs; a keyboard path to every action on every surface including canvas (`Tab` cycles nodes in topological order, `⌥↑/↓` cycles ports, `Enter` connects); `aria-live="polite"` announcements for job start/complete/fail; reduced-motion coverage for the canvas and the §2.4 crossfade; an explicit, reasoned statement that the editor and canvas panes are out of scope for screen-reader parity |
-| **i18n readiness (English only in v1) — new §2.12** | M1 | All user-facing strings in one `en.json` with no concatenation; dates and numbers through `Intl.DateTimeFormat`/`Intl.NumberFormat`; `currency` widened from the literal `"USD"` to `string`, with USD the only v1 value |
+| **i18n readiness (English only in v1) — new §2.12** | M1 | All user-facing strings in one catalogue, `packages/core/src/i18n/en.json` (§0.16), with no concatenation; dates and numbers through `Intl.DateTimeFormat`/`Intl.NumberFormat`; `currency` widened from the literal `"USD"` to `string`, with USD the only v1 value |
 
 #### The nine edit tools — binding dispositions
 
@@ -728,9 +697,9 @@ Prices always carry `pricedAt` and `sourceUrl`, are never presented as authorita
 | 1 | Layer decomposition | **Disabled plugin slot** | Row visible, disabled, `Plugin` badge, "How to add this" link. Settings UI built. No launch adapter declares `ops.decomposeLayers` |
 | 2 | **Edit text** | **Ships, M2** | `ops.detectText` on a configured multimodal model returns `{id,text,bbox}[]` under a strict JSON schema; editing a line issues an `edit`/`inpaint`. Disabled with a reason when no multimodal model is configured |
 | 3 | **Expand & crop** | **Ships, M2** | Crop is local and lossless. Expand pads locally; *Fill with AI* needs `ops.outpaint` (OpenAI, mask-synthesised) or falls back to the regional path with the Approximate badge |
-| 4 | **Upscale** | **Ships partially, M2** | **Local Lanczos ×2/×4 in v1**, labelled *"Resample — adds no detail."* ×8/×16 and detail-adding upscale are a plugin/v1.1 adapter slot. No launch adapter declares `ops.upscale` |
+| 4 | **Upscale** | **Ships partially, M2** | **Local Lanczos ×2/×4 in v1**, labelled *"Resizes, adds no detail."* ×8/×16 and detail-adding upscale are a plugin/v1.1 adapter slot. No launch adapter declares `ops.upscale` |
 | 5 | Remove background | **Disabled slot** | No launch adapter declares `ops.removeBackground`; a local ONNX (BiRefNet/rembg-class) plugin is documented as the reference implementation. **A disabled row with correct copy is the pass condition for M2-09** |
-| 6 | **Colour grading** | **Ships, M2** | Local non-generative WebGL stack (exposure, contrast, temp/tint, saturation/vibrance, lift/gamma/gain, grain, bloom, halation, vignette), `.cube` import/export, Match-reference by local 3D histogram matching. Cost $0.00, offline, every model. **Preset names must be Openfield's own** — the drafted list is the observed catalogue minus two entries and violates §1.11/R12 |
+| 6 | **Colour grading** | **Ships, M2** | Local non-generative WebGL stack (exposure, contrast, temp/tint, saturation/vibrance, lift/gamma/gain, grain, bloom, halation, vignette), `.cube` import/export, Match reference by local 3D histogram matching. Cost $0.00, offline, every model. **Preset names must be Openfield's own** — the drafted list is the observed catalogue minus two entries and violates §1.11/R12 |
 | 7 | **Enhancer** | **Ships, M2** | Instruction-edit presets compiled from widgets, best-effort label. Original preset names |
 | 8 | **Relight** | **Ships, M2** | Direction sphere + quick-select + soft/hard + brightness + colour, compiled to a structured instruction edit, best-effort label |
 | 9 | **Angles** | **Ships, M2** | Camera widget → instruction edit; the panel states plainly this is a re-render, not a 3D reprojection |
@@ -741,7 +710,7 @@ Prices always carry `pricedAt` and `sourceUrl`, are never presented as authorita
 
 | Item | Why |
 |---|---|
-| Canvas **Text (LLM) `text.llm`** and **Table** nodes | A runnable LLM node makes a text-model key a *canvas* dependency; §1.10 and the locked "image-only v1" say no. Both move to the add-node menu's `Video / Audio / v1.1` group and are marked v1.1 in the §7.5 catalogue. The `Text (LLM) ~$0.01` line is deleted from §7.7's cost-preview example. **The fan-out mechanism itself stays in v1** — Variations needs it |
+| Canvas **AI text `text.llm`** and **Table** nodes | A runnable LLM node makes a text-model key a *canvas* dependency; §1.10 and the locked "image-only v1" say no. Both are hidden from the add-node menu in v1 and marked v1.1 in the §7.5 catalogue table. The `AI text ~$0.01` line is deleted from §7.7's cost-preview example. **The fan-out mechanism itself stays in v1** — Variations needs it |
 | Canvas **Upscale node** | Latent: appears only when an adapter advertises `ops.upscale`; none does at launch. Out of M4's DoD |
 | Video / Voice / Page nodes, Ask Agent, comments, chat, multiplayer | §1.5, §7.11 |
 | fal.ai and Replicate adapters | Locked decision |
@@ -754,14 +723,178 @@ Explore/publish/social, Share-to-network, comments on assets, credits and free-g
 
 #### Consequent corrections to §8.7 and §8.8
 
-- **§8.8 rows rewritten:** 6 (Recreate/Reuse/Use as reference per §0.1) · 13 (✅ M1 local enhancer) · 18 (⚠️ substituted — local tips card) · 19 (Recent/per-provider/Unavailable) · 36 (✅ M2) · 37 (✅ M2, local WebGL) · 38 (✅ M2, widget-compiled) · 39 (✅ M2, LAYERS) · 42 (✅ M1, `@` over Openfield objects) · 43 (four starter templates) · 50 (❌ Video/Voice/Page; Table and Text (LLM) v1.1).
-- **Templates:** four, authored by us — **Reference → Generate**, **Image edit**, **Storyboard (4 panels)**, **Style A/B compare**. *Upscale pass* is dropped until an adapter advertises `ops.upscale`. M4-14 and row 43 are corrected from "Three templates".
-- **M2 DoD is rewritten to be falsifiable:** *"Edit performs whole-image instruction edit on both launch providers; masked inpaint and mask-synthesised outpaint on OpenAI GPT Image once the live mask probe confirms polarity; the regional fallback on Gemini with the Approximate badge; Upscale ships as local Lanczos resample only, labelled 'Resample — adds no detail'; Remove background renders disabled with its reason. No launch adapter declares `ops.upscale` or `ops.removeBackground`, so a disabled row with correct copy is the pass condition for M2-08 and M2-09."*
+- **§8.8 rows rewritten:** 6 (Recreate/Reuse/Use as reference per §0.1) · 13 (✅ M1 local enhancer) · 18 (⚠️ substituted — local tips card) · 19 (Recent/by company/Needs a key) · 36 (✅ M2) · 37 (✅ M2, local WebGL) · 38 (✅ M2, widget-compiled) · 39 (✅ M2, LAYERS) · 42 (✅ M1, `@` over Openfield objects) · 43 (four starter templates) · 50 (❌ Video/Voice/Page; Table and AI text v1.1).
+- **Templates:** four, authored by us — **From a reference**, **Image edit**, **Storyboard (4 panels)**, **Compare styles**, bundled in `apps/server/seed/templates/`. *Upscale pass* is dropped until an adapter advertises `ops.upscale`. M4-14 and row 43 are corrected from "Three templates".
+- **M2 DoD is rewritten to be falsifiable:** *"Edit performs whole-image instruction edit on both launch providers; masked inpaint and mask-synthesised outpaint on OpenAI GPT Image once the live mask probe confirms polarity; the regional fallback on Gemini with the Approximate badge; Upscale ships as local Lanczos resample only, labelled 'Resizes, adds no detail'; Remove background renders disabled with its reason. No launch adapter declares `ops.upscale` or `ops.removeBackground`, so a disabled row with correct copy is the pass condition for M2-08 and M2-09."*
 - **Tasks added:** `M1-16` prompt-enhance service (text-model registry entry, server-side rewrite endpoint, diff sheet, preview/auto modes, `prompt_original` persistence, usage-log line) · `M1-17` `@`-mention typeahead + server-side token resolution · `M2-13a` metadata-writer spike (blocking) · `M2-15` live probe of OpenAI `/v1/images/edits` mask polarity, dimensions and format, fixture recorded, §6.14 note updated (**blocking prerequisite for M2-05/M2-06**) · `M2-16` colour-grading WebGL stage · `M2-17` layers panel · `M2-18` text-detect edit · `M2-19` relight/angles/enhancer widgets · `M4-16` fingerprint + dirty propagation + result cache + `⌥`-click bypass · `M4-17` fan-out map semantics, `×k` badge, labelled result grid, 32-job confirmation rail · `M4-18` run-all cost-preview popover · `M4-19` Edit/Inpaint node + mask editor modal · `M4-20` Preset node + merge precedence and lock glyphs · `M4-21` Variations node (seed-jitter / prompt-list / model-list).
 - **Resolved open questions are deleted, not restated:** every "Recreate vs Reuse vs Regenerate" bullet (§1.12, §2.10, §3.9, §4.11, §6.17, §8.10, Appendix A ×5), every "section numbering is assumed" bullet (§2.10, Appendix A §2 and §8), the zoom-step bullets in §2.10/§8.10/Appendix A, the "feed page size 60" half of §8.10's paging bullet, and §8.10's "is their Colour Grading generative or local" bullet (we ship local regardless, so the question does not gate anything). Genuinely open items — OpenAI mask polarity, OpenAI `usage` block, OpenAI reference cap, Gemini seed support, Higgsfield public API reach, output-token counts — stay, and each names the milestone task that closes it.
 
 ---
 
+### 0.15 Voice and UI copy
+
+Every word a person sees in Openfield follows this section, including every quoted UI string in this document. If an older string anywhere else disagrees, this section wins.
+
+**Voice.** Write for someone making images, not for someone reading the code. Say what happened, then what they can do. Keep it short, plain and human. Use active voice and sentence case, and no exclamation marks. One idea per sentence. If a sentence runs long, split it.
+
+**Hard rules**
+- No em dashes in UI text. Use a period, a comma or a colon, or write two sentences. An empty value shows "None", not a dash.
+- No internal terms (see the word list). If a word only makes sense to someone who has read the code, rewrite it.
+- No filler ("simply", "just", "to get started", "here"), no stacked hedges, no marketing tone. No roadmap talk ("coming soon", "Soon", "v1.1"). Anything that hasn't shipped is hidden, not teased.
+- Keep every fact that protects the person, and say it like a person: "Canceled. You may still be charged for work that already started."
+- Buttons are verbs or short noun phrases: "Retry", "Add a key", "Change key", "Free up space".
+- Small caps labels are written in sentence case in the source and uppercased with CSS.
+
+**Words.** One word per concept.
+
+| We say | We never say |
+|---|---|
+| image (Assets stays as the nav and library name) | output, generation, gen |
+| model, or the company's name (OpenAI, Google) | provider, provider API, adapter, endpoint |
+| key | token, credential |
+| run (one press of Generate or Run) | job, job set, request batch, fan-out |
+| settings | params, parameters, config, manifest, schema, capability |
+| Avoid (the field for things to leave out) | negative prompt, polarity |
+| edit an area, mask | inpaint, regional fallback |
+| on your computer | ~/.openfield, 0600, env vars in prose, any file path |
+| preset, character, folder, reference | fingerprint, idempotency, normalize, seed jitter |
+
+"Company" appears only where the person has to pick or identify who holds a key (Settings, the Info row, model picker groups). "Seed" appears only as the label of the Seed control itself.
+
+**Errors** say what happened, then what to do, in at most two short sentences. The button carries the fix: "This key was rejected." with **Change key**. "Couldn't save. Your disk is full." with **Free up space**. Never blame the person, and never put a raw error code in the message. Codes live in the Error log (Settings → Help).
+
+**Costs.** Estimates read "About $0.16", and ranges read "About $0.12–0.19". Where space is tight (chips, node pills, table cells), use "~$0.16". Never use "est.", "≈" or "estimate". Billed amounts show plainly ("$0.134"). An unknown price reads "Cost unknown", and local tools that cost nothing say "Free". Only the raw numbers (prices, counts, sizes, durations) use the mono font. The words around them don't. Dates follow the person's locale ("Sep 23, 2026"), never ISO.
+
+| Do | Don't |
+|---|---|
+| This key is out of credit. | No credit available on this key |
+| Too many requests. Retrying in 8s | Provider rate limit, retrying |
+| Couldn't connect. | Couldn't reach the provider |
+| Each image is made and billed separately. | Sent as 4 separate requests, cost scales linearly |
+| About $0.27 · 2 images | ≈ $0.27 · 2 images |
+| Limited controls. Couldn't load this model's settings. | This model's manifest could not be read |
+
+---
+
+### 0.16 Codebase and stack
+
+This subsection is binding like the rest of §0. The paths, package names and import rules below are the only ones. A section that names a different path is wrong until someone edits it.
+
+**Decision.** Openfield is one Bun workspaces monorepo with two apps and four packages. The web app is a Vite + React SPA. The server is Hono on the Bun runtime. The database is SQLite through Drizzle ORM on `bun:sqlite`. The browser calls the server through Hono RPC. Next.js, tRPC and Prisma were considered and rejected. Openfield is a local, single-user app with a long-running server (queue, crash recovery, SSE, filesystem, SQLite). That fits Hono on Bun, gets nothing from server rendering, and should ship as one fast process that a desktop wrapper can later host. Hono RPC gives end-to-end types over plain JSON routes that curl can still call, where tRPC would add its own procedure protocol. Drizzle keeps the schema in TypeScript and the migrations as reviewable SQL on `bun:sqlite`, where Prisma would add a separate schema language and a code-generation step.
+
+```
+openfield/
+├── apps/
+│   ├── web/            @openfield/web
+│   └── server/         @openfield/server
+├── packages/
+│   ├── core/           @openfield/core
+│   ├── providers/      @openfield/providers
+│   ├── db/             @openfield/db
+│   └── ui/             @openfield/ui
+├── e2e/                Playwright suites (M0-15, M1-15)
+├── package.json        workspaces ["apps/*", "packages/*"] and the root scripts
+├── tsconfig.base.json  strict, extended by every workspace
+└── biome.json          format, lint and the import rules below
+```
+
+Internal packages are consumed as TypeScript source. Each `package.json` `exports` map points at `.ts` files, Vite and Bun compile them, and no package has a build step. The entries are: `@openfield/core` (root) plus `/constants`, `/schemas`, `/canvas` and `/i18n`; `@openfield/providers/manifest` and `/server` (no root, rule 3); `@openfield/db` (root); `@openfield/ui` (root); and `@openfield/server/app-type` (type only, rule 1). Workspace dependencies use `"workspace:*"`. Turborepo is added only if builds get slow, and nothing below depends on it.
+
+#### Packages
+
+| Workspace | Owns | May import (workspace) | Main external deps |
+|---|---|---|---|
+| `apps/web` | The SPA: routing (React Router), every screen in §2 to §5, the canvas (§7: React Flow nodes, `<NodeShell>`, DAG compiler, fingerprints, dirty propagation), server state through TanStack Query, the `hc` client, the SSE consumer | `@openfield/core`, `@openfield/ui`, `@openfield/providers/manifest`, and `import type { AppType } from "@openfield/server/app-type"` | `react`, `react-router`, `@tanstack/react-query`, `@xyflow/react`, `zustand` (canvas stores, §7.10), `hono/client`, `vite`, `tailwindcss` |
+| `apps/server` | The Hono app on Bun: the four guards (§0.6), every route in §8.3, the job runner and scheduler (§8.4), crash recovery, the SSE hub, ingest, thumbnails and export (§8.5), the file store under `OPENFIELD_HOME` (§8.1), `config.json` and keys (§6.11), seeding, serving the built SPA | `@openfield/core`, `@openfield/db`, `@openfield/providers/server`, `@openfield/providers/manifest` | `hono`, `@hono/zod-validator`, `sharp` or the WASM chain (§8.5.2) |
+| `packages/providers` | The `Provider`, `ImageModel` and other behaviour interfaces (§6.2), the registry, request normalization (`normalize()`), the pure `estimate()` and `resolveControl()`, one folder per adapter, the conformance suite | `@openfield/core` | none (global `fetch`) |
+| `packages/core` | Every zod schema, and the type inferred from it, for data that crosses a boundary: HTTP request and response bodies, SSE event payloads, the error envelope, manifest data (`Capabilities`, `ModelManifest`, `PriceModel`), `GenerateRequest` and `NormalizedRequest`, settings (§6.17 keys and defaults), preset envelopes (§5.3), the canvas document (§7.8) and its document migrations. Also the enum constants (§0.4, §0.5 and every CHECK list), ULIDs, `hashCanonical()` (§0.11), and the i18n catalogue with `t()` | none | `zod` (v4), `ulid` |
+| `packages/db` | The Drizzle schema, the single source of truth for every table (§8.2), drizzle-kit migrations, drizzle-zod row schemas, `openDb()` with migrate-on-boot, typed query helpers (§8.2.2) | `@openfield/core` | `drizzle-orm`, `drizzle-zod`, `drizzle-kit` (dev) |
+| `packages/ui` | Design tokens (`--of-*`, §2.2) and the Tailwind theme, shadcn/ui primitives restyled to the tokens, and the presentational components shared across surfaces (chips, popovers, stepper, tiles, badges, `<PickerSheet>`, icons). Props in, events out: no data fetching, no routing, no API client, no React Flow | `@openfield/core` (types and `t()` only) | `react`, `tailwindcss`, Radix primitives via shadcn/ui |
+
+#### Dependency rules
+
+1. **No package imports an app.** The only edge between apps is the type-only import of `AppType` by `apps/web` from `@openfield/server/app-type`. That entry file exports the type and nothing else, and the import is erased at build. `apps/web/tsconfig.json` adds `bun-types` so the server's type graph checks. Rule 2's bundle check proves none of it ships.
+2. **The browser never loads server code.** `apps/web` and `packages/ui` never import `@openfield/db`, `@openfield/providers/server`, an adapter folder, a `bun:` or `node:` module, or anything that reads `config.json`, env vars or keys.
+3. **`packages/providers` splits at its exports.** It has no root export.
+   - `@openfield/providers/manifest` (`src/manifest.ts`) is the browser-safe entry. It holds the manifest types re-exported from core, `estimate()` and `resolveControl()`, and imports only `@openfield/core` and files under `src/manifest/`.
+   - `@openfield/providers/server` (`src/server.ts`) is the server entry. It holds the registry and `builtinProviders`, `normalize()`, the adapters, the `mapError` helpers and the behaviour interfaces.
+   - An adapter imports only `../types`, its own folder and `@openfield/core`, and never another adapter.
+4. **`packages/db` is server-only.** Only `apps/server` imports it. SQL lives only inside `packages/db` (schema, migrations, `src/queries/`), and routes call query helpers.
+5. **`packages/core` is a leaf.** It depends only on `zod` and `ulid`, and uses no DOM API and no Bun API, so the same file runs in the browser, in the server and under `bun test`.
+
+Enforcement has three parts:
+- Each `package.json` declares exactly the workspace dependencies in the table.
+- `biome.json` encodes rules 1 to 5 as per-folder `noRestrictedImports` overrides.
+- CI builds `apps/web` and fails if the bundle contains a module from `packages/db`, `packages/providers/src/server.ts` or an adapter folder, or any `bun:` specifier. The S5 secret scan runs over the same bundle.
+
+#### Type flow
+
+```
+packages/db     src/schema/*.ts (Drizzle) ── drizzle-kit generate ──▶ migrations/*.sql
+                      │ drizzle-zod
+                      ▼
+                src/rows.ts: row schemas and types (AssetRow, NewJobSetRow, …)
+                      │ apps/server/src/mappers/: row → wire shape, one mapper per resource
+                      ▼
+packages/core   src/schemas/: request and response bodies, SSE payloads, settings, manifest, canvas
+                      │ @hono/zod-validator (json, query, param, form)
+                      ▼
+apps/server     src/routes/*.ts ─▶ src/app.ts: export type AppType
+                      │ import type
+                      ▼
+apps/web        src/api/client.ts: hc<AppType>() ─▶ TanStack Query hooks
+```
+
+- **One declaration per shape.** A type that crosses a boundary as data (HTTP, SSE, a JSON column, a file on disk, the browser bundle) is declared once, as a zod schema in `packages/core/src/schemas/`. Its TypeScript type is `z.infer` of that schema. A type that carries behaviour (functions, `AbortSignal`, streams) is a hand-written interface in the package that owns the behaviour. §6's code blocks stay the normative shapes, and §6 names the file each type lives in.
+- **Rows are not wire shapes.** Core never imports db. Each resource maps rows to core shapes with a mapper typed like `(row: AssetRow) => Asset`, so renaming a column breaks the build at the mapper, not in the browser. Handlers return `c.json(value satisfies <CoreType>, status)`, and that return type is what `hc` infers.
+- **Manifests** are validated by `modelManifestSchema` from core in three places: adapter static catalogs (conformance test 1), `~/.openfield/models.json` and `prices.json` when they load, and the `models.capabilities` column through a drizzle-zod override.
+- **Canvas documents** are validated by `canvasDocumentSchema` from core:
+  - in the browser: edit, import, save as template;
+  - in the server: `PATCH /api/canvases/:id`, template seeding;
+  - in a unit test over the bundled templates.
+  The §7.11 node catalogue manifest and JSON Schema are generated from the same schema.
+- **Enums** are `as const` arrays in `packages/core/src/constants.ts`. The zod enums, the Drizzle `text({ enum })` column types and the SQL CHECK lists (§8.2) are all built from them, so a value can't exist in one and be missing from another.
+- **Settings** use `settingsSchema`, which lists every §6.17 key with its default. `GET` and `PATCH /api/settings` validate against it, and the `settings` table stores each key's JSON value.
+
+#### Where things live
+
+| Thing | Path |
+|---|---|
+| Drizzle schema, one file per domain | `packages/db/src/schema/` (`providers.ts`, `jobs.ts`, `assets.ts`, `organisation.ts`, `library.ts`, `canvas.ts`, `usage.ts`) |
+| Migrations, generated and custom, with drizzle-kit's journal | `packages/db/migrations/` (config: `packages/db/drizzle.config.ts`) |
+| Row schemas · query helpers · schema check | `packages/db/src/rows.ts` · `packages/db/src/queries/` · `packages/db/test/schema.test.ts` |
+| Wire schemas (API, SSE, errors, settings, manifest, request, cost, preset envelopes) | `packages/core/src/schemas/` |
+| Enum constants | `packages/core/src/constants.ts` |
+| Canvas document schema and document migrations (R14) | `packages/core/src/canvas/` |
+| i18n catalogue and `t()` (§2.12) | `packages/core/src/i18n/en.json`, `packages/core/src/i18n/index.ts` |
+| Behaviour interfaces · registry | `packages/providers/src/types/` · `packages/providers/src/registry.ts` |
+| One adapter (§6.12) | `packages/providers/src/<name>/` (the names `types` and `manifest` are reserved) |
+| Recorded fixtures | `packages/providers/src/<name>/__fixtures__/` |
+| Conformance suite | `packages/providers/conformance/` |
+| Routes · app composition and `AppType` · the type-only `@openfield/server/app-type` entry · boot | `apps/server/src/routes/<resource>.ts` · `apps/server/src/app.ts` · `apps/server/src/app-type.ts` · `apps/server/src/index.ts` |
+| Runner and scheduler · SSE hub · ingest, thumbnails, export | `apps/server/src/runner/` · `apps/server/src/events/` · `apps/server/src/files/` |
+| Bundled presets (12) and palettes (8) | `apps/server/seed/presets/`, `apps/server/seed/palettes/` |
+| Bundled canvas templates (4) | `apps/server/seed/templates/*.ofcanvas.json` |
+| User-saved canvas templates | `~/.openfield/canvases/templates/` |
+| Typed client · query hooks · raw-HTTP and SSE helpers | `apps/web/src/api/client.ts` · `apps/web/src/api/hooks/` · `apps/web/src/api/raw.ts` |
+| Canvas UI and engine | `apps/web/src/canvas/` |
+| Tokens, Tailwind theme, primitives | `packages/ui/src/` |
+
+#### Root scripts
+
+| Command | Does |
+|---|---|
+| `bun install` | Installs every workspace. There is no postinstall build, and a `sharp` binary that fails to load never fails the install (§8.5.2) |
+| `bun dev` | Starts `apps/server` (watch mode, `127.0.0.1:4317`) and `apps/web` (Vite, `127.0.0.1:5173`, `strictPort`) together, and stops both on exit. Open `http://127.0.0.1:4317`. In dev the server proxies every path outside `/api` and `/files` to Vite and injects the session token into `index.html`, and Vite's HMR socket connects to 5173 directly. The app has one origin, so the four guards (§0.6) behave the same in dev and production |
+| `bun run build` | Type-checks every workspace (`tsc -b`) and builds `apps/web` to `apps/web/dist` |
+| `bun start` | Runs `apps/server` in production mode. It serves `apps/web/dist` and injects the token into `index.html` |
+| `bun run db:generate` | Runs `drizzle-kit generate` in `packages/db` after a schema edit. The new SQL file is committed together with the schema change. `bun run db:generate --custom --name=<name>` creates an empty hand-written migration |
+| `bun test` | Runs Bun's test runner across all workspaces: unit tests, the db schema check (§8.2.1) and the conformance suite in offline mode |
+| `bun run lint` · `bun run e2e` | Biome over the repo · the Playwright suites in `e2e/` |
+
+S1's three commands (`bun install`, `bun dev`, open the URL) are exactly the first two rows plus the URL `bun dev` prints.
+
+---
 ## 1. Overview, goals and users
 
 ### 1.1 Product summary
@@ -800,7 +933,7 @@ The workflow Higgsfield built for image work is genuinely good — measured in d
 
 **G2 — Keys and files stay yours.** All provider calls are server-side. Keys are never returned to the browser, never logged, never sent anywhere but the provider. Every generated pixel lands on local disk before it is shown.
 
-**G3 — Real cost, always visible.** Wherever Higgsfield prints a credit number, Openfield prints an estimated USD number computed locally from the model manifest, labelled an estimate; every terminal job — success, failure or cancel — appends a row to a usage log the user can inspect and export (§6.9).
+**G3 — Real cost, always visible.** Wherever Higgsfield prints a credit number, Openfield prints an estimated USD number computed locally from the model manifest, shown with an *About* prefix; every terminal job — success, failure or cancel — appends a row to a usage log the user can inspect and export (§6.9).
 
 **G4 — Capability-driven UI, not per-model branching.** The renderer reads the manifest through one resolver (§0.3); adding a model never means editing a component.
 
@@ -834,7 +967,7 @@ Stated here at product level. The objects and their pickers are specified in §5
 | Topaz upscale, Remove background, Relight, Angles, Enhancer, Layer decomposition, Edit text | **Capability slots** keyed to `ops.upscale`, `ops.removeBackground`, `ops.imageEdit`, `ops.inpaint`, `ops.detectText`, `ops.decomposeLayers` (§0.3, bound to controls by §6.3). A slot no installed adapter declares renders disabled with a reason and a "How to add this" link, never silently absent. Which of them ship in v1, and in what form, is §0.14's table — mirrored in §1.10. |
 | Moodboard builder | A folder of references promoted to a **reference set** (§5); no separate trainer. |
 | Cinematic Cameras / camera + lens wheels | A preset category with camera/lens prompt fragments, under our own names; no proprietary model. |
-| Credit cost labels | USD estimate computed locally from the manifest price table (§6.9), labelled *estimate* with a `~` prefix and a tooltip naming the `pricedAt` snapshot date; "Cost unknown" where a provider publishes no per-image price. |
+| Credit cost labels | USD estimate computed locally from the manifest price table (§6.9), labelled with an *About* prefix (`~` where space is tight) and a tooltip naming the `pricedAt` snapshot date; "Cost unknown" where a provider publishes no per-image price. |
 | "Ask Agent" canvas assistant | Optional, BYOK text model, v1.1. The canvas itself is fully in v1 (§7). |
 
 ### 1.7 Target users
@@ -854,8 +987,8 @@ Stated here at product level. The objects and their pickers are specified in §5
 5. **Organise.** As a creator, I favourite a tile, add it to a folder from the tile's More menu or by multi-select, and browse a Library grouped by date with per-group select — so that finished work is separable from experiments.
 6. **Reuse presets.** As a creator, I save the current prompt + settings + references as a named preset, apply it later in one click from the picker sheet, and export/import presets as JSON to share them.
 7. **Switch models mid-flow.** As a power user, I change the model chip and my prompt and references survive; settings the new model supports carry over, settings it does not are dropped with a visible note, and the controls re-render from the new model's manifest.
-8. **Track spend.** As a power user, I see a `~$` estimate on the Generate button and on every run action before I click, and a usage log afterwards showing per-job model, parameters, images produced and estimated cost, with CSV export (§6.9).
-9. **Compose a repeatable workflow on canvas.** As a power user, I open a canvas, drop Prompt / Image Generation / Upload / Asset nodes, wire a text output into a prompt input and an image output into an image input, run a node or the graph, and reopen the canvas later with everything persisted — so that a workflow I invented once becomes a workflow I rerun with new inputs (§7).
+8. **Track spend.** As a power user, I see an *About $* estimate on the Generate button and on every run action before I click, and a usage log afterwards showing per-job model, parameters, images produced and estimated cost, with CSV export (§6.9).
+9. **Compose a repeatable workflow on canvas.** As a power user, I open a canvas, drop Prompt / Image Generator / Upload / Assets nodes, wire a text output into a prompt input and an image output into an image input, run a node or the graph, and reopen the canvas later with everything persisted — so that a workflow I invented once becomes a workflow I rerun with new inputs (§7).
 10. **Set up in minutes.** As a new user, I clone, run one command, paste one key into Settings, and generate — without creating an account or editing a config file by hand.
 11. **Add a provider.** As a contributor, I add an adapter directory implementing the typed interface plus a capability manifest, register it in one place, and both the model picker and the whole settings UI pick it up with no other code change.
 
@@ -867,11 +1000,11 @@ Openfield is an OSS project, not a funnel; the metrics are about the artifact, n
 |---|---|---|---|
 | S1 | **Time to first image** after `git clone` on a clean machine with one provider key in hand | ≤ 5 minutes, ≤ 3 commands (`bun install`, `bun dev`, open the URL), zero manual file editing | Timed fresh-machine run over the §2.10 first-run path, scripted in CI on macOS + Linux, recorded in the README |
 | S2 | **Parity checklist coverage** against the observed Image tab + Canvas inventory | 100% of rows marked *must*, ≥ 70% of rows marked *should*, every *won't* row annotated with the reason (social / proprietary / team) | The checklist file in the repo (§8.8), derived one-for-one from the walkthrough notes. It records parity; it is subordinate to the §0.14 scope contract and cannot cancel a feature a feature section specifies |
-| S3 | **Contributor-added adapter with no core changes** | A new provider PR touches only `adapters/<name>/**` plus one line in the registry index; 0 files changed under `apps/web/src/components/**` | CI path-check on PRs labelled `adapter`, plus the shared adapter conformance suite passing against recorded fixtures |
-| S4 | **Capability honesty** | 0 controls rendered that the selected model cannot honour, **except the core set** (Model, Aspect, Resolution/Quality, Batch, Seed), which renders disabled with a tooltip naming the model when a capability is explicitly unsupported — a disabled Seed chip is a deliberate pass, not a failure (§0.3) | Automated check: resolve every registered manifest through `resolveControl`, assert the rendered control set ⊆ manifest capabilities ∪ the disabled core set, and that every disabled control carries a reason string |
+| S3 | **Contributor-added adapter with no core changes** | A new provider PR touches only `packages/providers/src/<name>/**` plus one line in `packages/providers/src/registry.ts`; 0 files changed under `apps/**`, `packages/core/**`, `packages/db/**` or `packages/ui/**` | CI path-check on PRs labelled `adapter`, plus the shared adapter conformance suite passing against recorded fixtures |
+| S4 | **Capability honesty** | 0 controls rendered that the selected model cannot honour, **except the core set** (Model, Aspect, Resolution/Quality, Images, Seed), which renders disabled with a tooltip naming the model when a capability is explicitly unsupported — a disabled Seed chip is a deliberate pass, not a failure (§0.3) | Automated check: resolve every registered manifest through `resolveControl`, assert the rendered control set ⊆ manifest capabilities ∪ the disabled core set, and that every disabled control carries a reason string |
 | S5 | **Key containment** | 0 occurrences of any provider key in the client bundle, in any HTTP response body, or in logs | Automated secret-scan over the built bundle and over a captured full-session HAR in CI |
 | S6 | **Local performance** | Feed first paint ≤ 500 ms and smooth scrolling with 5,000 assets; server cold start ≤ 2 s | Seeded benchmark fixture, run in CI |
-| S7 | **Cost accuracy** | Estimated vs. actual provider spend within ±10% over a 50-generation sample | Manual reconciliation against a provider invoice at each release; deviations update the price snapshot. Reconciliation needs a provider usage block, which is **unconfirmed for OpenAI** (§0.13), so S7 is measured only against providers that publish per-image prices and report usage; everything else is reported `≈` and excluded from the gate |
+| S7 | **Cost accuracy** | Estimated vs. actual provider spend within ±10% over a 50-generation sample | Manual reconciliation against a provider invoice at each release; deviations update the price snapshot. Reconciliation needs a provider usage block, which is **unconfirmed for OpenAI** (§0.13), so S7 is measured only against providers that publish per-image prices and report usage; everything else is reported `~` and excluded from the gate |
 | S8 | **Data portability** | A user can delete Openfield and still have every image, with prompts recoverable | `~/.openfield` contains original files plus a sidecar/DB export; verified by an export-and-reimport test |
 
 ### 1.10 Scope
@@ -880,12 +1013,12 @@ This table is the product-level view of the §0.14 scope contract and agrees wit
 
 | Area | v1 | v1.1 | Later |
 |---|---|---|---|
-| **Image generation** | Composer + chip row, batch 1–4, aspect / resolution / quality / background per manifest, negative prompt, references, seed (core chip — rendered disabled with a reason on models declaring no seed support, §0.11), Advanced chip rendering the manifest's `extraSchema`, **local prompt enhance** (M1, off by default, disabled with "Add a key for a provider with a text model in Settings" when no text-capable key exists) | Queue management (reorder, pause) | — |
+| **Image generation** | Composer + chip row, batch 1–4, aspect / resolution / quality / background per manifest, negative prompt, references, seed (core chip — rendered disabled with a reason on models declaring no seed support, §0.11), Advanced chip rendering the manifest's `extraSchema`, **local prompt enhance** (M1, off by default, disabled with "Add an OpenAI or Google key to use this" when no text-capable key exists) | Queue management (reorder, pause) | — |
 | **Providers** | Google Gemini image, OpenAI GPT Image, Higgsfield (conditional on its public API exposing presets/characters to a user key) | fal.ai, Replicate (schema-discovered), OpenRouter-style aggregators | Local inference bridge (ComfyUI/InvokeAI/Diffusers), on-device models |
 | **History & library** | Unified justified-row feed with the 5-step zoom ladder (§0.10), multi-select, hover actions, folders, favourites, prompt search/filter, date-grouped Library view | Saved smart filters; bulk export; tags | Semantic / image-similarity search |
-| **Detail & editing** | Detail view (Info · Edit · History tabs, keyboard next/prev), version strip, model-native instruction edit, regional/masked edit with the Approximate badge on the emulated path (§0.9), expand & crop (crop local; Fill with AI via `ops.outpaint` or the regional fallback), **local colour grading** (non-generative WebGL stack, `.cube` import/export, our own preset names), **Edit text** (vision text-detect → instruction/masked edit), relight / angles / enhancer widgets compiled to instruction edits, layers panel, **upscale = local Lanczos ×2/×4** labelled "Resample — adds no detail". **Remove background** and **layer decomposition** ship as visible disabled slots with a `Plugin` badge | Detail-adding upscale (×8/×16) and background removal filled by an adapter or plugin | Generative layer decomposition |
+| **Detail & editing** | Detail view (Info · Edit · History tabs, keyboard next/prev), version strip, model-native instruction edit, regional/masked edit with the Approximate badge on the emulated path (§0.9), expand & crop (crop local; Fill with AI via `ops.outpaint` or the regional fallback), **local colour grading** (non-generative WebGL stack, `.cube` import/export, our own preset names), **Edit text** (vision text-detect → instruction/masked edit), relight / angles / enhancer widgets compiled to instruction edits, layers panel, **upscale = local Lanczos ×2/×4** labelled "Resizes, adds no detail". **Remove background** and **layer decomposition** ship as visible disabled slots with a `Plugin` badge | Detail-adding upscale (×8/×16) and background removal filled by an adapter or plugin | Generative layer decomposition |
 | **Presets** | Preset library (12 bundled), reference sets, characters, palettes (8 bundled), saved prompts, `@`-mention typeahead and `/` snippets over Openfield objects, JSON import/export (§5) | Preset sharing index; per-model preset mapping | Identity fine-tuning (LoRA) via provider adapters |
-| **Canvas** | Full spec in v1 (§7): infinite canvas, Prompt / Image Generation / Edit-Inpaint / Variations / Preset / Upload / Asset / Note / Frame nodes, plus Shape and Text annotations from the toolbar (§7.4), typed ports, compatibility-filtered connect menu, per-node run, autosave, zoom & minimap, toolbar, four starter templates. **Note, Frame, Shape and Text are annotation-only; a runnable Text (LLM) node is v1.1** | Text (LLM) and Table nodes, Upscale node (latent until an adapter declares `ops.upscale`), video/audio nodes, shared template index, agent-authored graphs (BYOK text model), group/frame operations | Scheduled or batch graph runs; parameter sweeps |
+| **Canvas** | Full spec in v1 (§7): infinite canvas, Prompt / Image Generator / Edit image / Variations / Preset / Upload / Assets / Note / Frame nodes, plus Shape and Text annotations from the toolbar (§7.4), typed ports, compatibility-filtered connect menu, per-node run, autosave, zoom & minimap, toolbar, four starter templates. **Note, Frame, Shape and Text are annotation-only; a runnable AI text node is v1.1** | AI text and Table nodes, Upscale node (latent until an adapter declares `ops.upscale`), video/audio nodes, shared template index, agent-authored graphs (BYOK text model), group/frame operations | Scheduled or batch graph runs; parameter sweeps |
 | **Cost** | Per-run USD estimate computed locally from the manifest, usage log over every terminal outcome, CSV export (§6.9) | Budget ceilings and warnings; per-folder/project cost roll-up | — |
 | **Modality** | Image only (schema modality-agnostic) | Video generation tab reusing the same job/asset model | Audio, 3D |
 | **Platform** | Local bun server on 127.0.0.1, SQLite + files, first-run key flow (§2.10), Settings surface (§6.17), WCAG 2.2 AA contrast gate (§2.11), English-only i18n readiness — one `en.json`, `Intl` formatting (§2.12) | Optional packaged desktop build | Optional encrypted sync between the user's own machines |
@@ -896,7 +1029,7 @@ This table is the product-level view of the §0.14 scope contract and agrees wit
 Openfield reproduces **user experience and workflow** — layout, control inventory, interaction patterns, flows — which is the functional design of an application, not its expressive content. It does not reproduce Higgsfield's identity or its technology:
 
 - **No brand assets.** No Higgsfield name, wordmark, logo, icons, illustrations, screenshots or images in our branding or copy. The name appears only nominatively and factually: in comparisons in this document, as the optional adapter's id and provider display name, as the provider's own model and endpoint identifiers in the registry and host allow-lists, and in the config filenames that adapter owns — never as an Openfield label, headline or asset. Openfield ships its own name, logo, icon set and palette; the lime accent observed in the reference product is Higgsfield's brand colour and is **not** adopted — our accent is the `--of-accent` token of §2.2, which inverts for light mode.
-- **No copied copy.** All UI strings, headlines, descriptions and tooltips are written for Openfield. **Preset names, colour-grading preset names and enhancer preset names are Openfield's own; the observed product's names are recorded in the research notes only and are never shipped.** Where the reference product's copy was recorded during research, it is used to identify *what a control does*, never as text to paste. Observed headline copy such as the moodboard/character/colour hero text is replaced with our own wording, and its editorial model grouping is replaced by Recent / per-provider / Unavailable (§0.14).
+- **No copied copy.** All UI strings, headlines, descriptions and tooltips are written for Openfield. **Preset names, colour-grading preset names and enhancer preset names are Openfield's own; the observed product's names are recorded in the research notes only and are never shipped.** Where the reference product's copy was recorded during research, it is used to identify *what a control does*, never as text to paste. Observed headline copy such as the moodboard/character/colour hero text is replaced with our own wording, and its editorial model grouping is replaced by Recent / by company / Needs a key (§0.14).
 - **No proprietary models or services.** Soul, Soul Cinema, Soul ID, Soul HEX, Higgsfield's curated style catalogue and the Topaz upscaler are not reimplemented, redistributed or emulated as models. Each has a declared open substitute or a capability slot (§1.6).
 - **No private API use.** Openfield does not call Higgsfield's application endpoints (`/fnf/*`), does not use scraped session credentials, and does not circumvent authentication or rate limits. The optional Higgsfield adapter is opt-in, uses the **documented public API** at `api.higgsfield.ai` with the user's own API key and their own billing relationship, and is disabled and hidden when no key is configured.
 - **No confidential material.** The research behind this PRD was a logged-in walkthrough of a publicly available product using the researcher's own paid account, recording layout measurements and observable behaviour. No source code, internal documentation or non-public material was obtained or used.
@@ -910,10 +1043,9 @@ Openfield reproduces **user experience and workflow** — layout, control invent
 - **Model catalogue refresh cadence.** Google publishes no `models.list` for image models and OpenAI's `/v1/models` does not flag image capability — both stand. §0.3 settles the consequence: `listModels()` need only return the adapter's static, version-stamped catalogue, network discovery is optional and **allow-listed by the adapter's own `recognise(id)`** (unrecognised ids are reported, never added), and the snapshot date is surfaced in Settings → Models. What remains open is the refresh cadence and who runs the maintainer script.
 - **Migration.** Whether existing Higgsfield users want to import their cloud library, and whether any supported export path exists, is unknown; no export API was observed.
 - **Parity ownership.** Who signs off the S2 parity checklist (§8.8), and what counts as a *must* row versus a *should* row, needs fixing before the checklist is written. §0.14 remains the scope contract either way.
-- **Canvas gaps.** Several behaviours of the v1 node set were not captured (inner UI of the Upload and Asset nodes, multi-select and group operations, delete/duplicate shortcuts). §7 decides these from first principles rather than from observation; node types §0.14 defers to v1.1 or drops outright are not open questions.
+- **Canvas gaps.** Several behaviours of the v1 node set were not captured (inner UI of the Upload and Assets nodes, multi-select and group operations, delete/duplicate shortcuts). §7 decides these from first principles rather than from observation; node types §0.14 defers to v1.1 or drops outright are not open questions.
 
 ---
-
 ## 2. App shell, generation feed and library grid
 
 This section specifies the main screen of Openfield: the persistent application shell, the generation feed that fills the `/image` route, the `/assets` library, first run, accessibility and i18n readiness. Layout numbers are the measured values from the walkthrough (2026-09-23, 1440×900 viewport) re-expressed in our own design language.
@@ -934,7 +1066,7 @@ This section specifies the main screen of Openfield: the persistent application 
 | `/assets/folder/:folderId` | Single folder | |
 | `/canvas` | Canvas index (§7) | |
 | `/canvas/:canvasId` | Canvas editor (§7) | |
-| `/settings` | Provider keys, models, storage, appearance, usage log (§6.17) | |
+| `/settings` | Your keys, models, storage, appearance, usage log (§6.17) | |
 | `/presets` | Preset library (§5) | Reachable from the nav app menu and the style picker |
 
 Routing is client-side (React Router), state in the URL wherever it is user-meaningful: model, folder filter, zoom step (`?z=0..4`), and the open asset (`?asset=<id>`, §4). The feed's scroll offset is preserved per route in memory and restored when returning from the detail view or from `/canvas`.
@@ -943,14 +1075,14 @@ Routing is client-side (React Router), state in the URL wherever it is user-mean
 
 Fixed, full width, **44px tall**, `background: var(--of-surface)`, `border-bottom: 1px solid var(--of-border)`, `z-index: 60`. Content is a single flex row, 16px side padding, 8px gaps.
 
-- **Left**: Openfield wordmark (our own logo, 20px glyph + 14px/600 wordmark) followed by a 12px chevron that opens the app menu: *New canvas · Open library · Preset library · Settings · Documentation · About*.
+- **Left**: Openfield wordmark (our own logo, 20px glyph + 14px/600 wordmark) followed by a 12px chevron that opens the app menu: *New canvas · Open library · Preset library · Settings · Help · About*.
 - **Centre-left**: primary nav items, 14px/500, 8px/10px padding, radius 8, `--of-text-secondary` idle / `--of-text-primary` + `--of-elevated` background when the route is active: **Create · Assets · Canvas**.
-- **Right**: search button (16px icon, opens the command palette — §2.6), **usage pill** (running spend for the current period, e.g. `$1.24 · 38 gens`, 12px, mono numerals, links to the usage log in §6.9), theme toggle (sun/moon), Settings gear. Nothing else — no account, upgrade, notification or social affordances, since Openfield is single-user and local.
+- **Right**: search button (16px icon, opens the command palette — §2.6), **usage pill** (running spend for the current period, e.g. `$1.24 · 38 images`, 12px, mono numerals, links to the usage log in §6.9), theme toggle (sun/moon), Settings gear. Nothing else — no account, upgrade, notification or social affordances, since Openfield is single-user and local.
 
 **"Create" mega-menu.** Hovering or clicking **Create** opens a two-column panel (560px wide, radius 16, 16px padding, 8px below the nav, 150ms fade + 2px rise), the same shape as the reference product's Image menu with our own inventory:
 
 - **Tools** column: *Create image* (`/image`), *Canvas* (`/canvas`), *Preset library* (`/presets`), *Library* (`/assets`). Each row: 32px rounded icon tile, 14px/500 name, 12px `--of-text-secondary` description.
-- **Models** column: rows fed **live from the model registry** (§6.4) — never a hardcoded list. Each row shows the provider glyph, model name, a capability hint derived from the manifest (§0.3), and navigates to `/image?model=<providerId>:<modelId>`. Models whose provider has no configured key render at 50% opacity with an "Add key" affordance that deep-links to `/settings`. If the registry returns nothing (no keys yet), the column shows a single "Connect a provider" row (§2.10).
+- **Models** column: rows fed **live from the model registry** (§6.4) — never a hardcoded list. Each row shows the provider glyph, model name, a capability hint derived from the manifest (§0.3), and navigates to `/image?model=<providerId>:<modelId>`. Models whose provider has no configured key render at 50% opacity with an "Add a key" affordance that deep-links to `/settings`. If the registry returns nothing (no keys yet), the column shows a single "Add a key" row (§2.10).
 
 > **AC-2.1.1** Every model listed in the menu resolves to a working `/image?model=<providerId>:<modelId>` deep link, and a cold load of that URL selects the model and its capability-correct control set before first paint of the composer.
 
@@ -976,15 +1108,16 @@ All design tokens carry the `--of-` prefix (§0.1). This table is the only place
 | `--of-text-primary` | `#F5F6F7` | `#101214` | Body, titles |
 | `--of-text-secondary` | `rgba(245,246,247,0.62)` | `rgba(16,18,20,0.60)` | Captions, descriptions, muted values |
 | `--of-text-tertiary` | `rgba(245,246,247,0.38)` | `rgba(16,18,20,0.40)` | Placeholders, disabled |
-| `--of-accent` | `#19E3C1` | `#0B8F7A` | Primary action, selection, progress, active state |
-| `--of-accent-fg` | `#04211C` | `#FFFFFF` | Text/icon on accent fills |
+| `--of-accent` | `#E9E3D8` | `#1B1D21` | Primary action, selection, progress, active state |
+| `--of-accent-fg` | `#14161A` | `#FFFFFF` | Text/icon on accent fills |
 | `--of-on-accent` | = `--of-accent-fg` | = `--of-accent-fg` | Alias consumed by §4.1 |
-| `--of-accent-soft` | `rgba(25,227,193,0.12)` | `rgba(11,143,122,0.10)` | Accent tints, selected-row backgrounds |
+| `--of-accent-soft` | `rgba(233,227,216,0.08)` | `rgba(27,29,33,0.06)` | Accent tints, selected-row backgrounds |
+| `--of-accent-line` | `rgba(233,227,216,0.25)` | `rgba(27,29,33,0.18)` | Borders of selected or active controls |
 | `--of-danger` | `#F2545B` | `#D23540` | Destructive actions, failed jobs |
 | `--of-danger-soft` | `rgba(242,84,91,0.14)` | `rgba(210,53,64,0.10)` | Error tile fill |
 | `--of-scrim` | `rgba(0,0,0,0.55)` | `rgba(0,0,0,0.45)` | Tile hover gradient, modal backdrop |
 
-The three aliases exist because other sections consume them by name; they resolve to their base token and are never given an independent value. Openfield's accent is a teal `#19E3C1`, deliberately unlike the reference product's lime, used exactly where that product uses its accent: the Generate action, selection rings, progress indicators, the checkmark on a selected option row, and the active-state tint on toggled chips. Every pair in this table is a contrast-gate input (§2.11).
+The three aliases exist because other sections consume them by name; they resolve to their base token and are never given an independent value. Openfield's accent is a warm bone `#E9E3D8` on dark (near-black `#1B1D21` on light), chosen for a quiet, premium feel and deliberately unlike the reference product's lime. It is used exactly where that product uses its accent: the Generate action, selection rings, progress indicators, the checkmark on a selected option row, and the active-state tint on toggled chips. Every pair in this table is a contrast-gate input (§2.11).
 
 #### Radii, spacing, elevation
 
@@ -1059,7 +1192,7 @@ The five target row heights and their thumb rungs are **§0.10's ladder, owned b
 - The scroll container is `position: relative` with an explicit computed total height; visible tiles are **absolutely positioned** (`transform: translate3d(x, y, 0)`), with an overscan of 2 rows above and below the viewport. Tiles carry `contain: layout paint style`.
 - Row geometry is computed incrementally and memoised per `(zoomStep, containerWidth, assetListVersion)`; a resize re-solves from the first row intersecting the viewport so the user's scroll anchor does not jump.
 - Images come from the local thumbnail service (`GET /files/thumb/:id?h=&dpr=`, §8.3), WebP, generated on first request and cached under **`~/.openfield/thumbs`**. `srcset` spans the height ladder `@h200, @h280, @h360, @h456, @h640` plus their `dpr=2` variants; `sizes` is derived from the solved tile width. Rung resolution, the cache key and the encoder are §0.10/§8.5.2 and are not restated here. Full-resolution originals load only in the detail view (§4). `loading="lazy"`, `decoding="async"`, and an `--of-elevated` placeholder box at the exact aspect ratio so nothing reflows.
-- **Paging**: cursor pagination, page size **50** — the measured feed page size — ordered `created_at DESC, id DESC`, over §8.3's asset list endpoint. An IntersectionObserver sentinel 1200px before the end requests the next page; a failed page shows an inline "Couldn't load more — Retry" row rather than an empty void.
+- **Paging**: cursor pagination, page size **50** — the measured feed page size — ordered `created_at DESC, id DESC`, over §8.3's asset list endpoint. An IntersectionObserver sentinel 1200px before the end requests the next page; a failed page shows an inline "Couldn't load more. Retry" row rather than an empty void.
 - **Prepending** (new jobs, see below) inserts at the head and compensates `scrollTop` by the inserted block height whenever `scrollTop > 0`, so the user's view never jumps.
 - Job state changes arrive on the single SSE stream `GET /api/events` (§0.6, §8.3) with a polling fallback; the feed never full-refetches on a job update, it patches the single asset in its store. Partial frames (`job.partial`) render into the placeholder and are superseded by the final output.
 
@@ -1077,23 +1210,23 @@ Every tile is a single focusable element (`role="gridcell"`, roving `tabindex`) 
 
 - A **top scrim** (`linear-gradient(to bottom, var(--of-scrim), transparent)`, 96px tall) and a **bottom scrim** (same, inverted, 96px).
 - **Selection checkbox**: 16px box in a 32px hit target, inset **left 8px / top 12px**, `--of-elevated` fill at 72% with `--of-blur-chip`, 1px `--of-border`. Always present in the DOM (for hit-testing and screen readers), visually revealed on hover/focus or whenever selection mode is active.
-- **Top-right action stack**: vertical, **4px apart**, inset top 8 / right 8; each button **32×32**, radius `--of-r-sm`, `background: color-mix(in srgb, var(--of-elevated) 72%, transparent)`, `--of-blur-chip`, 1px `--of-border`, 16px icon. In order: **Favourite** (heart, filled `--of-accent` when on) · **Download** · **Recreate** (replays the stored request, same seed where the model supports one; a `~` badge when it does not — §0.1) · **More…**.
-- **Bottom-right pill group**: horizontal, height 32, radius `--of-r-pill`, 4px gaps, inset bottom 8 / right 8. In order: **Use as reference** (attaches the image to the composer's reference strip and nothing else, §0.1) · **Edit ⌄** (opens the detail view on its Edit tab, §4; the chevron offers *Regional edit*, *Expand & crop*, *Upscale*, *Remove background*, each capability-gated by `resolveControl` per §0.3) · **Send to Canvas ⌄** (*New canvas with this image* / *Add to recent canvas*, §7). The slot the reference product gives to "Animate" is reserved for **Animate** when video ships; in v1 it is absent, not disabled.
+- **Top-right action stack**: vertical, **4px apart**, inset top 8 / right 8; each button **32×32**, radius `--of-r-sm`, `background: color-mix(in srgb, var(--of-elevated) 72%, transparent)`, `--of-blur-chip`, 1px `--of-border`, 16px icon. In order: **Favourite** (heart, filled `--of-accent` when on) · **Download** · **Recreate** (replays the stored request, same seed where the model supports one; a `~` badge when it does not — §0.1) · **More**.
+- **Bottom-right pill group**: horizontal, height 32, radius `--of-r-pill`, 4px gaps, inset bottom 8 / right 8. In order: **Use as reference** (attaches the image to the composer's reference strip and nothing else, §0.1) · **Edit ⌄** (opens the detail view on its Edit tab, §4; the chevron offers *Edit area*, *Expand & crop*, *Upscale*, *Remove background*, each capability-gated by `resolveControl` per §0.3) · **Send to Canvas ⌄** (*New canvas with this image* / *Add to recent canvas*, §7). The slot the reference product gives to "Animate" is reserved for **Animate** when video ships; in v1 it is absent, not disabled.
 
-**More… menu** (our inventory, our copy): *Open* · **Recreate** · **Reuse** (loads prompt, references, model and settings into the composer without running, §0.1) · *Use as reference* · *Copy prompt* · *Copy image* · *Add to folder ▸* · *Favourite* · *Save as preset…* · *Reveal in Finder* · *Export…* · **Delete** (`--of-danger`). Share/publish/social entries have no counterpart — Openfield ships no network sharing.
+**More menu** (our inventory, our copy): *Open* · **Recreate** · **Reuse** (loads prompt, references, model and settings into the composer without running, §0.1) · *Use as reference* · *Copy prompt* · *Copy image* · *Add to folder ▸* · *Favourite* · *Save as preset…* · *Show in Finder* · *Export…* · **Delete** (`--of-danger`). Share/publish/social entries have no counterpart — Openfield ships no network sharing.
 
 **Selected.** `outline: 2px solid var(--of-accent); outline-offset: -2px`, an `--of-accent-soft` overlay at 12%, checkbox filled `--of-accent` with an `--of-accent-fg` check. Selected tiles keep their overlays hidden unless hovered, so a large selection stays legible.
 
-**Processing.** On submit, **N placeholder tiles** (one per batch image, N ≤ 4 per §0.10) are prepended immediately — before the server responds — each reserving the **exact requested aspect ratio** so the row solve is correct and nothing reflows when the real image lands. Contents:
+**Generating.** On submit, **N placeholder tiles** (one per batch image, N ≤ 4 per §0.10) are prepended immediately — before the server responds — each reserving the **exact requested aspect ratio** so the row solve is correct and nothing reflows when the real image lands. Contents:
 
 - Top-left **"Generating" pill**: 24px tall, radius `--of-r-pill`, `--of-elevated` at 72%, 12px/500, 12px spinner.
-- Top-right **"Cancel" pill**: same geometry, `--of-danger` text on hover; cancels through §8.3's job-cancel route. Cancellation is honest per §0.12: neither launch adapter implements provider-side cancel, so the tile and the toast carry, verbatim, *"Canceled — the provider may still charge for work already started."*
-- Body: an indeterminate shimmer sweep; where the manifest declares `streaming.progressPercent` (§0.3) it becomes a 3px determinate bar pinned to the tile's bottom edge, and `streaming.partialImages` renders `job.partial` frames in place. An elapsed-time counter (`0:14`) appears after 10s, and a "Still working — some models take up to 2 minutes" line after 45s.
-- The **first** placeholder of a batch may host a **tip card** — our own rotating local tips, shipped as a static JSON file, dismissible, switchable off in Settings (§6.17); no network request and no telemetry. **Queue position renders in the same slot when a run is waiting** ("2nd in queue", from the scheduler's ordering in §0.12).
+- Top-right **"Cancel" pill**: same geometry, `--of-danger` text on hover; cancels through §8.3's job-cancel route. Cancellation is honest per §0.12: neither launch adapter implements provider-side cancel, so the tile and the toast carry, verbatim, *"Canceled. You may still be charged for work that already started."*
+- Body: an indeterminate shimmer sweep; where the manifest declares `streaming.progressPercent` (§0.3) it becomes a 3px determinate bar pinned to the tile's bottom edge, and `streaming.partialImages` renders `job.partial` frames in place. An elapsed-time counter (`0:14`) appears after 10s, and a "Still working. Some models take up to 2 minutes" line after 45s.
+- The **first** placeholder of a batch may host a **tip card** — our own rotating local tips, shipped as a static JSON file, dismissible, switchable off in Settings (§6.17); no network request and no telemetry. **Queue position renders in the same slot when a run is waiting** ("2nd in line", from the scheduler's ordering in §0.12).
 - On completion the real image **swaps in place** with a 150ms crossfade (dropped to an instant swap under reduced motion, §2.11); the row is not re-solved unless the returned aspect ratio differs from the request, in which case only that row re-solves. Observed completion for a batch of 2 was ~15–20s.
 - Multiple queued runs stack: each new job set prepends above the previous, newest first. Prompt and settings are never cleared by submitting (§3).
 
-**Failed.** The reference product never surfaced a failure to us, so the failed tile is Openfield's own design. A failed job keeps its tile at the requested aspect ratio: `--of-danger-soft` fill, 1px `--of-danger` at 40%, centred 20px alert glyph, a one-line plain-language reason in `--of-t-body`, the provider's message truncated to two lines in `--of-t-caption` / `--of-text-secondary`, and a button row: **Retry** (accent ghost) · **Reuse** (loads the job's settings into the composer, §0.1) · **Details** (opens the Debug drawer with the redacted payload, HTTP status and provider code) · dismiss ×.
+**Failed.** The reference product never surfaced a failure to us, so the failed tile is Openfield's own design. A failed job keeps its tile at the requested aspect ratio: `--of-danger-soft` fill, 1px `--of-danger` at 40%, centred 20px alert glyph, a one-line plain-language reason in `--of-t-body` (§0.5's copy; the provider's own message is never shown on the tile and lives in the Error log), and a button row: **Retry** (accent ghost) · **Reuse** (loads the job's settings into the composer, §0.1) · **Details** (opens the Error log with the redacted payload, HTTP status and provider code) · dismiss ×.
 
 The reason line and the primary action for every failure are **§0.5's failed-tile copy table**, keyed on §0.5's `ErrorCode`; §2 does not restate them. The spelling is **`canceled`** everywhere — enum, column and UI copy alike.
 
@@ -1107,7 +1240,7 @@ Failed tiles persist (`jobs.status = 'failed'`, §0.4) and stay in the feed unti
 
 - **Entering selection**: click any tile's checkbox, `⌘/Ctrl+click` a tile, `Shift+click` to select a range from the last-selected tile, or press `X` / `Space` on the focused tile. Plain click still opens the detail view — selection never hijacks the primary gesture.
 - **Selection model** lives in a store keyed by asset id; it survives zoom changes, filter changes and paging (a selected asset scrolled out of the window stays selected and is counted).
-- **Floating selection toolbar**: appears with a 160ms rise+fade, centred horizontally, `height 56`, radius `--of-r-lg`, `--of-elevated` at 92% with `--of-blur-panel`, 1px `--of-border`, `--of-shadow-popover`, 12px internal gaps. On `/image` it sits at **bottom: 170px** (16px composer offset + 142px composer height + 12px clearance) so it never collides with the composer; on `/assets` it sits at **bottom: 16px**. Contents, left to right: **"N selected"** (`--of-t-body-strong`) · *Select all loaded* · divider · **Download .zip** · **Add to folder ▸** · **Favourite** · **Recreate** · **Export…** · **Delete** (`--of-danger`) · divider · **Clear** (×).
+- **Floating selection toolbar**: appears with a 160ms rise+fade, centred horizontally, `height 56`, radius `--of-r-lg`, `--of-elevated` at 92% with `--of-blur-panel`, 1px `--of-border`, `--of-shadow-popover`, 12px internal gaps. On `/image` it sits at **bottom: 170px** (16px composer offset + 142px composer height + 12px clearance) so it never collides with the composer; on `/assets` it sits at **bottom: 16px**. Contents, left to right: **"N selected"** (`--of-t-body-strong`) · *Select all shown* · divider · **Download .zip** · **Add to folder ▸** · **Favourite** · **Recreate** · **Export…** · **Delete** (`--of-danger`) · divider · **Clear** (×).
 
 | Bulk action | Behaviour |
 |---|---|
@@ -1116,7 +1249,7 @@ Failed tiles persist (`jobs.status = 'failed'`, §0.4) and stay in the feed unti
 | Favourite | Optimistic toggle, single batched write; flips to *Unfavourite* when all selected are already favourited |
 | Recreate | Replays each selected asset's frozen `NormalizedRequest` through §8.3's recreate route (§0.1). A confirmation shows the **total estimated cost** (§0.13) when more than 4 job sets are involved or the estimate exceeds the warn threshold, and states plainly when any selected model has `seed.supported: false` so its results will differ. Placeholders prepend as usual |
 | Export… | Opens the export sheet: format (PNG/JPEG/WebP), max dimension, whether to write a sidecar `.json` with prompt/model/settings, destination folder. A format that differs from the stored MIME carries §0.7's re-encode warning |
-| Delete | Confirmation dialog: "Delete N images? The image files are removed from ~/.openfield and this can't be undone." with a "Also removes them from folders and Canvas nodes" note; destructive button `--of-danger`; a single undo toast (8s) restores from a trash staging area, after which deletion is final |
+| Delete | Confirmation dialog: "Delete N images?" with the body "They move to the trash for 30 days. They're also removed from folders and canvases." (the number of days is the Storage setting `trashRetentionDays`, §8.6); destructive button `--of-danger`; a single undo toast (8s) restores them straight away, and until the trash is emptied they can be restored from the Trash view |
 
 > **AC-2.5.1** Selecting 200 assets, applying *Add to folder*, and clearing selection performs one HTTP request and one SQLite transaction, and the folder count in the library sidebar updates without a refetch of the grid.
 
@@ -1128,29 +1261,29 @@ Failed tiles persist (`jobs.status = 'failed'`, §0.4) and stay in the feed unti
 
 | Key | Action |
 |---|---|
-| `↑ ↓ ← →` | Move focus between tiles (row/column aware) |
-| `Home` / `End` | First / last loaded tile |
-| `PageUp` / `PageDown` | Scroll one viewport, focus follows |
-| `Enter` | Open the focused tile in the detail view (§4) |
-| `Space` / `X` | Toggle selection of the focused tile |
+| `↑ ↓ ← →` | Move between images |
+| `Home` / `End` | First / last image |
+| `PageUp` / `PageDown` | Scroll one screen |
+| `Enter` | Open image |
+| `Space` / `X` | Select or deselect |
 | `Shift + ↑↓←→` | Extend selection |
-| `⌘/Ctrl + A` | Select all loaded assets |
-| `Esc` | Clear selection; if none, blur the feed |
-| `F` | Favourite / unfavourite focused (or selected) |
-| `⇧F` | Expand media view |
-| `D` | Download focused (or selected) |
-| `R` | **Recreate** focused (or selected) — §0.1 |
-| `U` | **Use as reference** — attach the focused image to the composer's reference strip |
-| `E` | Open focused in the editor (§4) |
-| `Delete` / `Backspace` | Delete focused (or selected), with confirm |
-| `1`–`5` | Jump to zoom step 0–4 |
-| `−` / `=` | Step zoom down / up |
-| `⌘/Ctrl + K` | Command palette (search prompts, models, folders, actions, settings) |
-| `⌘/Ctrl + M` | Focus the model chip (§3.2) |
-| `⌘/Ctrl + F` | Focus the feed/library search field |
-| `⌘/Ctrl + Enter` | Generate (from anywhere, §3) |
-| `G` then `I / A / C / S` | Go to Image / Assets / Canvas / Settings |
-| `?` | Shortcut cheat sheet |
+| `⌘/Ctrl + A` | Select all shown images |
+| `Esc` | Clear selection |
+| `F` | Favourite or unfavourite |
+| `⇧F` | Expand image |
+| `D` | Download |
+| `R` | Recreate |
+| `U` | Use as reference |
+| `E` | Open in editor |
+| `Delete` / `Backspace` | Delete |
+| `1`–`5` | Set zoom level |
+| `−` / `=` | Zoom out / in |
+| `⌘/Ctrl + K` | Search everything |
+| `⌘/Ctrl + M` | Choose model |
+| `⌘/Ctrl + F` | Search images |
+| `⌘/Ctrl + Enter` | Generate |
+| `G` then `I / A / C / S` | Go to Create / Assets / Canvas / Settings |
+| `?` | Keyboard shortcuts |
 
 On the detail view's Edit tab, editor tool letters take precedence over surface actions; Download is `⌘⇧S` there.
 
@@ -1162,12 +1295,12 @@ Typing a printable character while the feed has focus and no modifier moves focu
 
 | Condition | Presentation |
 |---|---|
-| **Fresh install, no provider key** | Centred column, max-width 520: `--of-t-display` headline "Nothing generated yet", `--of-t-body` / `--of-text-secondary` line "Openfield runs on your own API keys. Add one and everything below fills up.", primary button **Add a provider key** → `/settings`, secondary link *How keys are stored* (explains `~/.openfield/config.json`, `0600`, server-side only). No sample images, no stock art. This is step 2 of §2.10. |
+| **Fresh install, no provider key** | Centred column, max-width 520: `--of-t-display` headline "Nothing generated yet", `--of-t-body` / `--of-text-secondary` line "Openfield uses your own API keys. Add one to start making images.", primary button **Add a key** → `/settings`, secondary link *How keys are stored* (says, in plain words, that the key stays on your computer, only your user account can read it, and it is only ever sent to the company it belongs to; the file path and permissions live in the README, not in the UI). No sample images, no stock art. This is step 2 of §2.10. |
 | **Key configured, no generations** | Same frame, headline "Your first image", three example prompt cards (our own copy) that populate the composer on click, and a link to the **Preset library** (§5). The composer is focused on mount. |
-| **Folder filter with no members** | "Nothing in *Client work* yet" + "Add images from the feed with the ⋯ menu or by selecting several" + *Clear filter*. |
+| **Folder filter with no members** | "Nothing in *Client work* yet" + "Add images from an image's ⋯ menu, or select several and choose Add to folder." + *Clear filter*. |
 | **Search with no results** | "No matches for “`<query>`”" + *Clear search*; suggests searching in All assets if a folder filter is active. |
-| **All items hidden by *Hide failed*** | Inline row: "N failed generations hidden — Show". |
-| **Offline / provider unreachable** | A dismissible banner under the toolbar, `--of-danger-soft`: "Can't reach `<provider>`. Generations will fail until it's back." Existing assets remain fully browsable — the library is local files. |
+| **All items hidden by *Hide failed*** | Inline row: "N failed runs hidden. Show". |
+| **Offline / provider unreachable** | A dismissible banner under the toolbar, `--of-danger-soft`: "Couldn't connect to `<company>`. Runs will fail until it's back." Existing assets remain fully browsable — the library is local files. |
 
 ---
 
@@ -1179,9 +1312,9 @@ The library is the same data as the feed viewed differently: the feed is the *hi
 
 1. **Search field** at the top (32px, radius `--of-r-sm`, `--of-elevated`, magnifier glyph, placeholder "Search assets"). Queries prompt text, model name, folder name and filename; debounced 200ms; full-text search over the SQLite FTS index (§8.2).
 2. **All assets** (active by default) and **Favourites (N)** — counts in `--of-text-tertiary`, right-aligned, mono numerals.
-3. Group **Type**: *Images (N)* · *References (N)* · *Edits (N)*, with *Video* and *Audio* rows present but disabled and tagged "Soon" (the asset model is modality-agnostic, §1, §8.2).
+3. Group **Type**: *Images (N)* · *References (N)* · *Edits (N)*, with no *Video* or *Audio* rows in v1: they appear only once those types exist, and the asset model is already modality-agnostic (§1, §8.2), so adding them needs no migration.
 4. Group **Library** — collapsible, with a `+` button that creates a folder inline. Folder rows: 16px folder glyph, name (14px/400, truncated with a tooltip), item count. Drag a selection onto a folder row to file it; drag a folder onto another to nest it one level. Right-click: *Rename · Set colour · Export folder… · Delete folder*.
-5. Bottom: disk-usage line ("4.2 GB in ~/.openfield") linking to Settings → Storage (§6.17).
+5. Bottom: disk-usage line ("4.2 GB used") linking to Settings → Storage (§6.17).
 
 #### Main area
 
@@ -1194,8 +1327,8 @@ The library is the same data as the feed viewed differently: the feed is the *hi
 
 #### How folders relate to the feed
 
-- A **folder is a named collection**, not a location on disk: `folders(id, name, color, parent_id, created_at)` plus `asset_folders(asset_id, folder_id, added_at)` — DDL in §8.2. The column is `color`; the British spelling survives only in the menu item **Set colour**. An asset can belong to several folders; files never move, so nothing breaks in Canvas or in a lineage chain when filing changes.
-- **Adding** happens from either surface: the tile *More… → Add to folder*, the bulk selection toolbar, or drag-and-drop onto a sidebar row.
+- A **folder is a named collection**, not a location on disk: `folders(id, name, color, parent_id, created_at)` plus `asset_folders(asset_id, folder_id, added_at)` — declared in the Drizzle schema (§8.2). The column is `color`; the British spelling survives only in the menu item **Set colour**. An asset can belong to several folders; files never move, so nothing breaks in Canvas or in a lineage chain when filing changes.
+- **Adding** happens from either surface: the tile *More → Add to folder*, the bulk selection toolbar, or drag-and-drop onto a sidebar row.
 - **Filtering the feed**: choosing a folder in the feed toolbar's folder dropdown sets `/image?folder=<id>`, and the justified feed then shows only that folder's generations, still newest-first and still across all models. The dropdown also offers *Favourites*.
 - **Deleting a folder** removes memberships only; the confirm dialog states "The images stay in your library." Deleting *assets* is the only destructive path, and it is the same dialog in both surfaces; a soft delete keeps the row and its FTS entry (§0.7).
 - Counts are derived (`COUNT` over the join, cached in the store) and update optimistically on add/remove.
@@ -1211,8 +1344,8 @@ The library is the same data as the feed viewed differently: the feed is the *hi
 | Reference-product surface | Openfield equivalent |
 |---|---|
 | Top-nav Explore / Upgrade / Enterprise / avatar / bell / team workspaces | Removed. Single-user, local, no account. Nav right side is search, usage pill, theme, settings. |
-| Image mega-menu "Models" list (hardcoded catalogue of proprietary models) | Same two-column shape, but rows are generated from the runtime **model registry** (§6.4); unconfigured providers render dimmed with an "Add key" link. |
-| Tile "Create 3D scene", "Multishot", "Skin Enhancer", "Extract Hex", "Publish", "Share to X/WhatsApp/…" | Not shipped. Their slots are taken by *Send to Canvas*, *Save as preset*, *Reveal in Finder* and *Export…*. |
+| Image mega-menu "Models" list (hardcoded catalogue of proprietary models) | Same two-column shape, but rows are generated from the runtime **model registry** (§6.4); unconfigured providers render dimmed with an "Add a key" link. |
+| Tile "Create 3D scene", "Multishot", "Skin Enhancer", "Extract Hex", "Publish", "Share to X/WhatsApp/…" | Not shipped. Their slots are taken by *Send to Canvas*, *Save as preset*, *Show in Finder* and *Export…*. |
 | Tile "Animate" → video generation | Reserved slot; absent in v1, enabled when the video modality ships against the same job/asset model. |
 | Promo/tips card inside the first processing tile (CMS-fed) | A local, static, dismissible tips file; no network request, no telemetry, and a Settings switch to turn it off. **Queue position renders in the same slot when a run is waiting.** |
 | Credit counts on every action ("free gens left", "✦ 6.5") | **Cost estimate in your own currency** from the adapter's price manifest, shown on the Generate button and in bulk-action confirmations, with a running usage log (§0.13, §6.9). |
@@ -1228,17 +1361,17 @@ Openfield has no account, no licence check and no sample content, so first run i
 | # | Step | Where |
 |---|---|---|
 | 1 | `bun install`, `bun dev`; the server prints its `127.0.0.1` URL and opens `/image` | terminal |
-| 2 | No provider holds a usable key → the feed renders the **no-key empty state** (§2.7 row 1). The composer is visible but Generate is disabled with the sub-label "Add a provider key to generate" | `/image` |
-| 3 | **Add a provider key** navigates to `/settings` → **Providers** (§6.17) with the first provider row expanded and the key field focused | `/settings` |
-| 4 | Paste the key → **Test connection** (§6.2's `testConnection()`): one cheap round-trip, result inline — a ✓ with the number of models the adapter recognised, or the §0.5 failure copy with the field still populated and the key never discarded | `/settings` |
+| 2 | No provider holds a usable key → the feed renders the **no-key empty state** (§2.7 row 1). The composer is visible but Generate is disabled with the sub-label "Add a key to start" | `/image` |
+| 3 | **Add a key** navigates to `/settings` → **Keys** (§6.17) with the first provider row expanded and the key field focused | `/settings` |
+| 4 | Paste the key → **Check key** (§6.2's `testConnection()`): one cheap round-trip, result inline — a ✓ with the number of models the adapter recognised, or the §0.5 failure copy with the field still populated and the key never discarded | `/settings` |
 | 5 | On success the server writes the key to `~/.openfield/config.json` at `0600` (§6.11), loads the adapter's static catalogue, and sets `settings.defaultModel` to that adapter's default model if it is unset | server |
-| 6 | One toast, "Ready — `<provider>` connected", with a **Start creating** action back to `/image`. The model chip shows the auto-selected model with its capability-correct control set (§0.3), and the composer's prompt editor takes focus | `/image` |
+| 6 | One toast, "Connected to `<company>`", with a **Start creating** action back to `/image`. The model chip shows the auto-selected model with its capability-correct control set (§0.3), and the composer's prompt editor takes focus | `/image` |
 | 7 | Type a prompt, `⌘/Ctrl+Enter`. Placeholder tiles prepend (§2.4) | `/image` |
 
 Rules that make the path hold:
 
 - **No manual file editing at any step.** The config file is written by the server, never hand-edited to get started.
-- **Env override.** A key supplied by environment variable renders its provider row read-only — "Set by `OPENFIELD_GOOGLE_API_KEY`" — with **Test connection** still available and no editable field. This path skips steps 3–5 and lands the user on step 6 at launch.
+- **Env override.** A key supplied by environment variable renders its provider row read-only — "Set by `OPENFIELD_GOOGLE_API_KEY`" — with **Check key** still available and no editable field. This path skips steps 3–5 and lands the user on step 6 at launch.
 - **Re-entry.** The no-key state returns whenever zero providers hold a usable key. Adding a second provider later never re-triggers first run, and a key that stops working surfaces as `auth_invalid` on the tile (§0.5), not as a re-onboarding.
 
 > **AC-2.10.1** On a clean machine with one provider key in hand, `git clone` to first generated image takes **≤ 5 minutes and ≤ 3 commands** (`bun install`, `bun dev`, open the URL) with **zero manual file editing** (S1). Scripted in CI on macOS and Linux and recorded in the README.
@@ -1249,7 +1382,7 @@ Rules that make the path hold:
 
 Accessibility is a release gate, not a backlog. Scope and limits are stated plainly rather than implied.
 
-**Contrast — WCAG 2.2 AA, enforced in CI.** Body text ≥ 4.5:1, large text and the boundaries of interactive components ≥ 3:1, in **both themes**. A CI job enumerates every foreground/background pair in §2.2's token table (including the composed cases: text on `--of-elevated` over `--of-surface`, scrim-backed overlay buttons, accent fills) and fails the build on any pair under threshold. Two pairs are **unverified today** and must be resolved before M1 closes: `--of-accent` `#19E3C1` against `--of-accent-fg` `#04211C`, and `--of-text-tertiary` at 0.38 alpha over `--of-surface`. If a pair fails, the token value moves — the gate does not.
+**Contrast — WCAG 2.2 AA, enforced in CI.** Body text ≥ 4.5:1, large text and the boundaries of interactive components ≥ 3:1, in **both themes**. A CI job enumerates every foreground/background pair in §2.2's token table (including the composed cases: text on `--of-elevated` over `--of-surface`, scrim-backed overlay buttons, accent fills) and fails the build on any pair under threshold. Two pairs are **unverified today** and must be resolved before M1 closes: `--of-accent` `#E9E3D8` against `--of-accent-fg` `#14161A`, and `--of-text-tertiary` at 0.38 alpha over `--of-surface`. If a pair fails, the token value moves — the gate does not.
 
 **A keyboard path to every action, on every surface.** Everything in §2.6 is reachable by keyboard with a visible `:focus-visible` ring. Surfaces that are not naturally focusable get an explicit model:
 
@@ -1275,8 +1408,8 @@ Accessibility is a release gate, not a backlog. Scope and limits are stated plai
 
 v1 ships English only. The requirement is narrower than translation: nothing in the codebase may make a second locale a rewrite, and nothing user-facing may be locale-hostile on day one.
 
-- **One string catalogue.** Every user-facing string lives in `apps/web/src/i18n/en.json`, keyed by dotted path. A lint rule forbids bare text nodes in JSX outside the i18n helper, so a literal cannot reach a screen by accident.
-- **No concatenation.** Plurals, counts and interpolations use ICU message syntax — `"{count, plural, one {# image} other {# images}}"`, `"{count} selected"`, `"{size} in {path}"`. The strings "3 images failed", "N selected", "N failed generations hidden" and "4.2 GB in ~/.openfield" are each **one** message with arguments, never assembled from fragments.
+- **One string catalogue.** Every user-facing string lives in `packages/core/src/i18n/en.json`, keyed by dotted path. Code reads it through the `t()` helper from `@openfield/core/i18n`, so `apps/web`, `packages/ui` and any message the server composes share one catalogue (§0.16). A lint rule forbids bare text nodes in JSX in `apps/web` and `packages/ui` outside the helper, so a literal can't reach a screen by accident.
+- **No concatenation.** Plurals, counts and interpolations use ICU message syntax — `"{count, plural, one {# image} other {# images}}"`, `"{count} selected"`, `"{size} used"`. The strings "3 images failed", "N selected", "N failed runs hidden" and "4.2 GB used" are each **one** message with arguments, never assembled from fragments.
 - **Dates and times through `Intl.DateTimeFormat`** with the system locale and timezone. This covers the library's date group headers, the detail view's asset timestamp and the canvas's saved-at line — all three of which are currently written as hardcoded US forms (§4.3's "September 23, 2026 at 12:44 AM", §7.3's "7/23/2026") and must resolve through the formatter instead. "Today" and "Yesterday" come from `Intl.RelativeTimeFormat`.
 - **Numbers, sizes and currency through `Intl.NumberFormat`.** Cost figures render with `style: "currency"` and the estimate's own currency code; percentages, file sizes and durations use the same path. Mono numerals are kept wherever a number changes in place.
 - **Currency is a `string`, not a literal.** `CostEstimate.currency` and `CostActual.currency` (§0.13) are widened from `"USD"` to `string`; **USD is the only value any v1 adapter emits**, and the usage log stores the code beside the amount so a non-USD price table is additive rather than a schema change.
@@ -1339,16 +1472,16 @@ Geometry measured 1:1 from the reference product at 1440×900. **Colours are Ope
 
 The **model chip is pinned** as the first item and does not scroll; every other chip lives in the scrolling track, ordered by `capabilities.controlOrder` (§0.3). Chips are a `role="toolbar"`: ←/→ move focus, `Enter`/`Space` opens the popover, `Esc` closes and restores focus. Every popover is anchored **above** its chip, bottom-aligned to the chip's top edge, `background: var(--of-surface-sheet)`, `radius: 16`, rows of *title + muted 12px subtitle*, accent check on the selected row — matching the observed popover pattern.
 
-Chip visual states: **default** (value = model default), **set** (value differs from default → label in full-opacity text), **active** (popover open → `color-mix(in srgb, var(--of-accent) 20%, transparent)` border), **emulated** (small `≈` glyph before the label, explained in the popover), **disabled** (40% opacity, `aria-disabled`, tooltip explains why), **invalid** (destructive border + tooltip; blocks submit).
+Chip visual states: **default** (value = model default), **set** (value differs from default → label in full-opacity text), **active** (popover open → `color-mix(in srgb, var(--of-accent) 20%, transparent)` border), **emulated** (small `~` glyph before the label, explained in the popover), **disabled** (40% opacity, `aria-disabled`, tooltip explains why), **invalid** (destructive border + tooltip; blocks submit).
 
 | Chip | `ControlId` | Trigger label | Control | Notes |
 |---|---|---|---|---|
 | Model | `model` | provider icon + model name + chevron, ~129px | Searchable popover, 402×642 | 3.4.1 |
 | Aspect ratio | `aspect` | ratio glyph + value, e.g. `3:4`, ~72px | Radio list from the manifest | Proportional rectangle glyph per row |
 | Resolution / Quality | `resolution` · `quality` | `2K`, `High`, ~62px | Radio list from the manifest | Separate chips when a model exposes both (e.g. OpenAI: Quality + Resolution) |
-| Batch | `batch` | `− 1/4 +`, ~106px | Stepper 1–4 | 3.4.2 |
+| Images | `batch` | `− 1/4 +`, ~106px | Stepper 1–4 | 3.4.2 |
 | Enhance | `promptEnhance` | wand icon + `Off`/`On`, ~65px | Toggle + settings popover | 3.4.3 |
-| Negative | `negativePrompt` | `Negative` (+ dot when set) | Popover with 3-line textarea | 3.4.4 |
+| Avoid | `negativePrompt` | `Avoid` (+ dot when set) | Popover with 3-line textarea | 3.4.4 |
 | Seed | `seed` | `Seed 469445` + dice + lock | Number field + randomise + lock | 3.4.5 |
 | Background | `background` | `Auto` / `Opaque` / `Transparent` | Radio list | 3.4.6 |
 | Reference strength | `referenceStrength` | `Ref 1.0` | 0–1 slider | Only when `references.strengthMode === "global"` |
@@ -1360,29 +1493,29 @@ Chip visual states: **default** (value = model default), **set** (value differs 
 
 Popover 402×642, anchored above the chip, top-aligned search input ("Search models…", magnifier icon, filters on model name, provider and description). Rows are 56px: 32px rounded provider icon tile, name 14px + badges, description 12px muted, accent check on the right of the selected row.
 
-Our version does **not** hardcode a catalog. Rows come from the model registry (§6), which merges (a) allow-listed runtime discovery where the provider exposes it and (b) the adapter's static catalog (§0.3). Grouping differs from the reference product's editorial "Featured / All": we show **Recent** (last 5 used, session-persistent), then one section **per provider** in registry order, then **Unavailable** (models whose provider has no API key — rows greyed, subtitle "Add an OpenAI key in Settings", clicking jumps to Settings). This is the grouping §8.8 row 19 and task M1-04 build; **badges are capability-derived, never marketing**: `EDIT` (`ops.imageEdit`), `REF ×14` (`references.max`), `TRANSPARENT` (`background.values` includes `transparent`), the top tier of `resolution.tiers` (e.g. `2K`), `NEW` (registry `releaseDate` within 60 days), plus a right-aligned price hint (`≈ $0.13/img`) when the manifest carries a pricing snapshot.
+Our version does **not** hardcode a catalog. Rows come from the model registry (§6), which merges (a) allow-listed runtime discovery where the provider exposes it and (b) the adapter's static catalog (§0.3). Grouping differs from the reference product's editorial "Featured / All": we show **Recent** (last 5 used, session-persistent), then one section **per provider** in registry order, then **Needs a key** (models whose provider has no API key — rows greyed, subtitle "Add an OpenAI key in Settings", clicking jumps to Settings). This is the grouping §8.8 row 19 and task M1-04 build; **badges are capability-derived, never marketing**: `Edit` (`ops.imageEdit`), `14 refs` (`references.max`), `Transparent` (`background.values` includes `transparent`), the top tier of `resolution.tiers` (e.g. `2K`), `New` (registry `releaseDate` within 60 days), written in sentence case and uppercased by CSS (§0.15), plus a right-aligned price hint (`~$0.13 each`) when the manifest carries a pricing snapshot.
 
 Selecting a model writes `?model=<providerId>:<modelId>` to the URL (deep-linkable, matching the observed behaviour — §0.2), swaps the chip row per §3.5, and closes the popover. Keyboard: type-to-filter, ↑/↓ to move, `Enter` to select.
 
 #### 3.4.2 Batch stepper
 
-`−  n/4  +`, 106px, range 1–4, default 1. The `−` button is disabled at 1 and `+` at `capabilities.batch.max` (≤ 4 in v1 everywhere — §0.10). Where `capabilities.batch.native === false` the adapter emulates the batch as N sequential/parallel calls and the chip shows the `≈` emulated glyph with tooltip "Sent as 4 separate requests — cost scales linearly." The batch count multiplies the cost estimate (§3.6) and produces N placeholder tiles in the feed.
+`−  n/4  +`, 106px, range 1–4, default 1. The `−` button is disabled at 1 and `+` at `capabilities.batch.max` (≤ 4 in v1 everywhere — §0.10). Where `capabilities.batch.native === false` the adapter emulates the batch as N sequential/parallel calls and the chip shows the `~` emulated glyph with tooltip "Each image is made and billed separately." The batch count multiplies the cost estimate (§3.6) and produces N placeholder tiles in the feed.
 
 #### 3.4.3 Prompt enhance (our local implementation)
 
-Ships in v1 (M1, task **M1-16**). §8.8 row 13 reads **✅ M1 — local rewrite through a user-configured text model; chip disabled with "Add a key for a provider with a text model in Settings" when none is configured** (§0.14). Off by default. The chip is a toggle showing `Off`/`On`; clicking the chevron area opens its settings popover:
+Ships in v1 (M1, task **M1-16**). §8.8 row 13 reads **✅ M1 — local rewrite through a user-configured text model; chip disabled with "Add an OpenAI or Google key to use this" when none is configured** (§0.14). Off by default. The chip is a toggle showing `Off`/`On`; clicking the chevron area opens its settings popover:
 
 - **Enhancer model**: a select over the registry's *text* models (user's own key — the same Settings-stored keys; no Openfield-hosted service, no third key).
-- **Rewrite style**: `Detailed` (default) · `Cinematic` · `Literal clean-up`.
-- **Mode**: `Preview before generating` (default) · `Apply automatically`.
+- **Rewrite style**: `Detailed` (default) · `Cinematic` · `Clean up only`.
+- **Mode**: `Preview first` (default) · `Apply automatically`.
 
 Flow in preview mode: pressing Generate first calls the enhancer server-side, then shows a **diff sheet** above the bar (the 1120×540 hero sheet of §3.6) with the original prompt on the left, the rewrite on the right, changed spans highlighted, and actions `Use & generate` · `Edit` (loads the rewrite into the editor, cancels the run) · `Cancel`. In automatic mode the run proceeds immediately and a toast offers **Undo** for 8 s; Undo cancels queued jobs from that submit and restores the original prompt. Either way the job set stores both the sent `prompt` and `prompt_original` (§8.2), so Reuse restores what the user actually typed and the detail view shows both. The enhancer call is priced as its own line in the estimate tooltip and written to the usage log. If no text-capable key exists the chip is disabled with the copy above.
 
-Models whose manifest declares `promptEnhance: "native"` send the provider's own flag instead of calling our enhancer — the popover then reads "Enhanced by the provider" and hides the enhancer-model select. `"openfield"` uses the local path above; `"none"` hides the chip.
+Models whose manifest declares `promptEnhance: "native"` send the provider's own flag instead of calling our enhancer — the popover then reads "Enhanced by the model" and hides the enhancer-model select. `"openfield"` uses the local path above; `"none"` hides the chip.
 
 #### 3.4.4 Negative prompt
 
-Popover with a 3-line textarea, placeholder "What should not appear", 400-char soft cap, `⌘/Ctrl+Enter` closes. Non-empty → chip shows a dot and the first 18 characters. Resolution follows §0.3: `negativePrompt: true` → sent as the provider's own field; `"negativePrompt"` in `capabilities.emulated` → appended to the prompt as a single trailing `Avoid: …` sentence (§0.8), the chip carries the `≈` glyph and the popover says so; absent or `unsupported` → chip hidden (it is not in the core set).
+Popover with a 3-line textarea, placeholder "What to leave out", 400-char soft cap, `⌘/Ctrl+Enter` closes. Non-empty → chip shows a dot and the first 18 characters. Resolution follows §0.3: `negativePrompt: true` → sent as the provider's own field; `"negativePrompt"` in `capabilities.emulated` → appended to the prompt as a single trailing `Avoid: …` sentence (§0.8), the chip carries the `~` glyph and the popover says so; absent or `unsupported` → chip hidden (it is not in the core set).
 
 #### 3.4.5 Seed
 
@@ -1391,11 +1524,11 @@ Chip contains a numeric field (0–2147483647), a **dice** button (randomise now
 - **Unlocked (default)**: the field shows the seed of the last completed run, greyed; the composer sends `seed: null` and the server generates one 32-bit seed per output and records it (§6.5 step 4).
 - **Locked**: the entered seed is sent; for batch > 1 the server derives `seed, seed+1, … seed+n−1`.
 - When the model supports seeds, the seed used is recorded per job and Recreate is exact. **No launch adapter declares seed support (§6.13, §6.14), so on every v1 model the Seed chip is disabled with a reason and Recreate is an exact replay of the request, not a reproduction of the image.**
-- `capabilities.unsupported.seed.reason` is the tooltip — "Not documented for this model (checked 2026-09-23)" on the launch adapters — and the chip renders disabled rather than hidden. This is deliberate: hiding it would hide the reason reproducibility is unavailable.
+- `capabilities.unsupported.seed.reason` is the tooltip, naming the model on the launch adapters ("Gemini 3 Pro Image doesn't support seeds.", §3.5), and the chip renders disabled rather than hidden. This is deliberate: hiding it would hide the reason reproducibility is unavailable.
 
 #### 3.4.6 Background transparency
 
-Radio list `Auto` · `Opaque` · `Transparent`, from `capabilities.background.values` (as observed on GPT Image 2). Choosing `Transparent` clamps the output format to PNG or WebP; if the Output format control is set to JPEG the value is clamped and an inline note appears — "Format set to PNG for transparency." Hidden entirely when absent or `unsupported`.
+Radio list `Auto` · `Opaque` · `Transparent`, from `capabilities.background.values` (as observed on GPT Image 2). Choosing `Transparent` clamps the output format to PNG or WebP; if the Output format control is set to JPEG the value is clamped and an inline note appears — "Saving as PNG to keep transparency." Hidden entirely when absent or `unsupported`.
 
 #### 3.4.7 Advanced (schema-driven)
 
@@ -1409,13 +1542,13 @@ Every control on every surface resolves through the single function of §0.3 —
 |---|---|---|
 | `supported` | the capability's own `options[]` + `default` | Chip renders; the popover lists **the model's own option list**, never a house list; the model's default is preselected unless a carried value applies (3.5.1) |
 | `partial` | `Capabilities.partial[controlId]` (`unavailable[]` + `reason`) | Chip renders; unavailable options are shown greyed with `reason` as subtitle and cannot be selected; the chip carries an info dot |
-| `emulated` | `controlId` listed in `Capabilities.emulated[]` | Chip renders with the `≈` glyph; popover header states how it is emulated and any cost consequence |
-| `unsupported` | `Capabilities.unsupported[controlId].reason` | **Core set → chip renders disabled** with a tooltip naming the model, e.g. "Gemini 3 Pro Image does not expose a seed parameter." Non-core → hidden |
+| `emulated` | `controlId` listed in `Capabilities.emulated[]` | Chip renders with the `~` glyph; popover header states how it is emulated and any cost consequence |
+| `unsupported` | `Capabilities.unsupported[controlId].reason` | **Core set → chip renders disabled** with a tooltip naming the model, e.g. "Gemini 3 Pro Image doesn't support seeds." Non-core → hidden |
 | `absent` | key omitted from the manifest | Chip is not in the DOM |
 
-**Core set** (always present so the bar never visually jumps between models): **Model · Aspect · Resolution/Quality · Batch · Seed** — §0.3's set, unchanged. Everything else is hidden when `unsupported` or `absent`.
+**Core set** (always present so the bar never visually jumps between models): **Model · Aspect · Resolution/Quality · Images · Seed** — §0.3's set, unchanged. Everything else is hidden when `unsupported` or `absent`.
 
-Rendering is pure: `renderChips(manifest, composerState)` returns the chip list from `controlOrder`; there is no per-model `if` in the UI. A model whose manifest is missing or fails validation renders as *prompt + batch + Generate* only, with an inline warning "Limited controls — this model's manifest could not be read."
+Rendering is pure: `renderChips(manifest, composerState)` returns the chip list from `controlOrder`; there is no per-model `if` in the UI. A model whose manifest is missing or fails validation renders as *prompt + batch + Generate* only, with an inline warning "Limited controls. Couldn't load this model's settings."
 
 #### 3.5.1 Switching model mid-composition
 
@@ -1425,16 +1558,16 @@ Prompt, reference images and mention tokens are **never** dropped on a model swi
 |---|---|
 | Aspect ratio | **Carry** if the exact ratio exists in the new list. Else **clamp** to the numerically nearest ratio (compare `w/h`; tie → the wider one). If the old value was absent and the new model offers `Auto`, pick `Auto` |
 | Resolution / Quality | **Clamp ordinally**: map the old value to its normalised index in the old ordered list and pick the nearest index in the new list, never exceeding the new maximum (so a 4K choice clamps down rather than silently costing more) |
-| Batch | **Clamp** into `[1, min(4, capabilities.batch.max)]` |
+| Images | **Clamp** into `[1, min(4, capabilities.batch.max)]` |
 | Seed (locked) | **Carry** if `seed.supported`; if not, keep the value in the stash and disable the chip — the number is not lost |
 | Enhance | **Carry** the on/off state; switch between `native` and `openfield` implementations silently |
-| Negative prompt | **Carry** the text; if the new model lists `negativePrompt` in `emulated`, the chip gains `≈`; if absent or `unsupported`, the text goes to the stash and the chip disappears |
+| Avoid | **Carry** the text; if the new model lists `negativePrompt` in `emulated`, the chip gains `~`; if absent or `unsupported`, the text goes to the stash and the chip disappears |
 | Background | **Carry** if the value exists in `background.values`, else **drop** to stash |
 | Reference strength | **Carry** the number when the new model's `references.strengthMode` is also `global`/`per-image`, else stash |
 | Advanced / provider options | **Drop** on a provider change. On a same-provider change, carry any key that still exists in the new `extraSchema` with a still-valid value; drop the rest |
-| Preset / Character (aside) | **Carry**. Presets are ours and model-agnostic (§0.8); a Character carried onto a model without `identity.nativeCharacterRefs` switches to reference-bundle emulation and the tile shows `≈` |
+| Preset / Character (aside) | **Carry**. Presets are ours and model-agnostic (§0.8); a Character carried onto a model without `identity.nativeCharacterRefs` switches to reference-bundle emulation and the tile shows `~` |
 
-**Stash + notification.** Dropped and clamped values are kept in a per-model `carriedSettings` stash for the session; switching back to the earlier model restores them exactly. Any switch that changed ≥1 value raises one toast: "Adjusted 2 settings for GPT Image 2.5 Flare — 4:5 → 4:3, 2K → 1K · **Undo**" (8 s; Undo reverts the whole model switch). Nothing is silently changed and nothing is silently lost.
+**Stash + notification.** Dropped and clamped values are kept in a per-model `carriedSettings` stash for the session; switching back to the earlier model restores them exactly. Any switch that changed ≥1 value raises one toast: "Adjusted 2 settings for GPT Image 2.5 Flare: 4:5 → 4:3, 2K → 1K · **Undo**" (8 s; Undo reverts the whole model switch). Nothing is silently changed and nothing is silently lost.
 
 ### 3.6 The aside: preset tile, character tile, and the primary action
 
@@ -1442,28 +1575,28 @@ Prompt, reference images and mention tokens are **never** dropped on a model swi
 
 A preset is the object specified in §5.3. `presetStrength` maps to a native parameter when `capabilities.styleStrength` is true, otherwise selects the preset's `light` template variant, otherwise the slider is disabled with a reason (§0.8).
 
-**Character tile (84×84)** — "+" icon over a caps label, our open substitute for proprietary character IDs: a named bundle of 3–8 reference images plus an identity phrase (§0.8). Where `identity.nativeCharacterRefs` is true the adapter passes the native identifier; otherwise the bundle is injected as reference images, the seed is locked for the run where the model supports one, and the tile shows the `≈` emulated glyph. Opens the same hero-sheet pattern with tabs **All | Mine** and a search field. The tile is hidden for models that declare neither native character support nor `references.supported`.
+**Character tile (84×84)** — "+" icon over a caps label, our open substitute for proprietary character IDs: a named bundle of 3–8 reference images plus an identity phrase (§0.8). Where `identity.nativeCharacterRefs` is true the adapter passes the native identifier; otherwise the bundle is injected as reference images, the seed is locked for the run where the model supports one, and the tile shows the `~` emulated glyph. Opens the same hero-sheet pattern with tabs **All | Mine** and a search field. The tile is hidden for models that declare neither native character support nor `references.supported`.
 
 **Generate button (144×84, `radius: 12`, accent fill, `var(--of-on-accent)` text)**
 
-- Label `Generate` (14–16px/600) with a **sub-label**: our replacement for the credit counter is a **cost estimate** — `≈ $0.27 · 2 images`. The composer computes it locally with the pure `estimate(manifest, req)` function (§0.13, §6.3) from the manifest already in memory — no HTTP round-trip on a chip change — and an optional `estimateRemote()` result upgrades the label in place; failing both, the literal text `Cost unknown` (never a guess presented as fact). Token-priced models (OpenAI) show a range: `≈ $0.12–0.19 · 2 images`, with the basis in the tooltip and the note "prices as recorded 2026-09-23". Prompt-enhance adds its own line in the tooltip. Clicking the sub-label opens the usage log.
-- **Disabled** only when the run cannot be sent: no model selected; the selected model's provider has no key (button becomes a secondary **"Add API key"** that deep-links to Settings); prompt empty *and* no reference images and the model is not reference-only; references over `references.max`; an Advanced field invalid. Each disabled reason has a tooltip.
+- Label `Generate` (14–16px/600) with a **sub-label**: our replacement for the credit counter is a **cost estimate** — `About $0.27 · 2 images`. The composer computes it locally with the pure `estimate(manifest, req)` function (§0.13, §6.3) from the manifest already in memory — no HTTP round-trip on a chip change — and an optional `estimateRemote()` result upgrades the label in place; failing both, the literal text `Cost unknown` (never a guess presented as fact). Token-priced models (OpenAI) show a range: `About $0.12–0.19 · 2 images`, with the basis in the tooltip and the note "Prices as of Sep 23, 2026". Prompt-enhance adds its own line in the tooltip. Clicking the sub-label opens the usage log.
+- **Disabled** only when the run cannot be sent: no model selected; the selected model's provider has no key (button becomes a secondary **"Add a key"** that deep-links to Settings); prompt empty *and* no reference images and the model is not reference-only; references over `references.max`; an Advanced field invalid. Each disabled reason has a tooltip.
 - **Submitting**: an inline spinner replaces the sub-label **for the duration of the submit request only**. The button is *not* disabled and the form is *not* locked.
 - **Not cleared, queueable** (explicitly matching the observed behaviour): after a successful submit the prompt, references and every setting stay exactly as they were, and the user can immediately press Generate again to queue another run. Concurrency is the server's: `globalConcurrency` 4, further clamped per provider by `min(providers.concurrency_cap, capabilities.limits.maxConcurrent)` (§8.4.2, §0.12). Beyond that, runs are queued and the button sub-label shows `2 queued` until they drain. `n` placeholder tiles are prepended to the feed on submit with the correct aspect ratio reserved (§2.4).
 
 ### 3.7 Per-model control matrix — launch adapters
 
-**Which chips render**, per launch model, as researched 2026-09-23. **Option lists are the adapter static catalogs in §6.13–§6.15; this table shows only which chips render.** Registry ids are `ModelKey` (§0.2). `≈` = emulated by the adapter.
+**Which chips render**, per launch model, as researched 2026-09-23. **Option lists are the adapter static catalogs in §6.13–§6.15; this table shows only which chips render.** Registry ids are `ModelKey` (§0.2). `~` = emulated by the adapter.
 
-| Model (`ModelKey`) | Chips, in order after Model | Batch | Seed | Negative | Background | References (`references.max`, `strengthMode`) | Aside |
+| Model (`ModelKey`) | Chips, in order after Model | Images | Seed | Avoid | Background | References (`references.max`, `strengthMode`) | Aside |
 |---|---|---|---|---|---|---|---|
-| **Gemini 3 Pro Image** `google:gemini-3-pro-image` | Aspect · Resolution · Advanced · 1/4 | 1–4 `≈` | disabled (undocumented) | `≈` | hidden | 14, `none` | Preset · Character `≈` |
-| **Gemini 3.1 Flash Image** `google:gemini-3.1-flash-image` | Aspect · Resolution · Advanced · 1/4 | 1–4 `≈` | disabled (undocumented) | `≈` | hidden | 14, `none` | Preset · Character `≈` |
-| **Gemini 3.1 Flash Lite Image** `google:gemini-3.1-flash-lite-image` | Aspect *(partial)* · Resolution *(single tier in §6.13 → rendered disabled)* · 1/4 | 1–4 `≈` | disabled (undocumented) | `≈` | hidden | 14, `none` | Preset · Character `≈` |
-| **GPT Image 2.5 Sunburst** `openai:gpt-image-2.5-sunburst` | Aspect · Quality · Resolution · Background · Advanced · 1/4 | 1–4 native `n` | disabled (unconfirmed) | `≈` | Auto/Opaque/Transparent | 4 (cap; provider limit unconfirmed), `none` | Preset · Character `≈` |
-| **GPT Image 2.5 Flare** `openai:gpt-image-2.5-flare` | Aspect · Quality · Resolution · Background · Advanced · 1/4 | 1–4 native `n` | disabled (unconfirmed) | `≈` | Auto/Opaque/Transparent | 4 (cap; provider limit unconfirmed), `none` | Preset · Character `≈` |
-| **GPT Image 2** `openai:gpt-image-2` | Aspect · Quality · Resolution · Background · Advanced · 1/4 | 1–4 native `n` | disabled (unconfirmed) | `≈` | Auto/Opaque/Transparent | 4 (cap; provider limit unconfirmed), `none` | Preset · Character `≈` |
-| **Soul 2.0** `higgsfield:soul-v2-standard` *(only if the public API exposes it to a user key)* | Aspect · Quality · Enhance · Negative · Seed · Ref strength · Advanced · 1/4 | 1–4 native `batch_size` | editable (native) | native | hidden | native `medias[]`, `global` (`custom_reference_strength` 0–1) | Preset (maps to native `style_id` + `style_strength`) · Character (native character id if exposed, else `≈`) |
+| **Gemini 3 Pro Image** `google:gemini-3-pro-image` | Aspect · Resolution · Advanced · 1/4 | 1–4 `~` | disabled (undocumented) | `~` | hidden | 14, `none` | Preset · Character `~` |
+| **Gemini 3.1 Flash Image** `google:gemini-3.1-flash-image` | Aspect · Resolution · Advanced · 1/4 | 1–4 `~` | disabled (undocumented) | `~` | hidden | 14, `none` | Preset · Character `~` |
+| **Gemini 3.1 Flash Lite Image** `google:gemini-3.1-flash-lite-image` | Aspect *(partial)* · Resolution *(single tier in §6.13 → rendered disabled)* · 1/4 | 1–4 `~` | disabled (undocumented) | `~` | hidden | 14, `none` | Preset · Character `~` |
+| **GPT Image 2.5 Sunburst** `openai:gpt-image-2.5-sunburst` | Aspect · Quality · Resolution · Background · Advanced · 1/4 | 1–4 native `n` | disabled (unconfirmed) | `~` | Auto/Opaque/Transparent | 4 (cap; provider limit unconfirmed), `none` | Preset · Character `~` |
+| **GPT Image 2.5 Flare** `openai:gpt-image-2.5-flare` | Aspect · Quality · Resolution · Background · Advanced · 1/4 | 1–4 native `n` | disabled (unconfirmed) | `~` | Auto/Opaque/Transparent | 4 (cap; provider limit unconfirmed), `none` | Preset · Character `~` |
+| **GPT Image 2** `openai:gpt-image-2` | Aspect · Quality · Resolution · Background · Advanced · 1/4 | 1–4 native `n` | disabled (unconfirmed) | `~` | Auto/Opaque/Transparent | 4 (cap; provider limit unconfirmed), `none` | Preset · Character `~` |
+| **Soul 2.0** `higgsfield:soul-v2-standard` *(only if the public API exposes it to a user key)* | Aspect · Quality · Enhance · Avoid · Seed · Ref strength · Advanced · 1/4 | 1–4 native `batch_size` | editable (native) | native | hidden | native `medias[]`, `global` (`custom_reference_strength` 0–1) | Preset (maps to native `style_id` + `style_strength`) · Character (native character id if exposed, else `~`) |
 
 **Display names come from the provider's own naming, not from the reference product's catalogue** (§6.13). The Resolution chip on all three OpenAI models offers **1K · 1.5K** only: the Images API documents 1024×1024 / 1536×1024 / 1024×1536 plus custom dimensions in multiples of 16, with no 2K and no 4K (§6.14, researched 2026-09-23). The reference product's chip set reflects its own proxy, not the OpenAI API; where they disagree the API wins.
 
@@ -1480,8 +1613,8 @@ As in the captured payload, the quality label and the aspect ratio resolve to ex
 7. On a model whose manifest declares `seed.supported`, two consecutive identical submits with the seed unlocked record two **different** `jobs.seed` values; with the seed locked, batch 3 records `s, s+1, s+2`. The assertion is over the recorded `jobs.seed` rows, not the request body — the composer sends `seed: null`. On every v1 launch model the chip is disabled and `jobs.seed` stays NULL.
 8. Prompt enhance is off on first run; turning it on in preview mode shows the diff sheet before any provider call, and Undo after an automatic enhance cancels queued jobs and restores the typed prompt.
 9. After submit, prompt, references and all settings are unchanged, the button is enabled within the same frame the request resolves, and a second submit queues a second run.
-10. The Generate sub-label shows a `≈ $` estimate that scales with the batch count, or the literal text "Cost unknown" — never a fabricated number — and changing a chip fires **no** network request to compute it.
-11. With no key for the selected model's provider, the primary button reads "Add API key" and routes to Settings; no request is attempted.
+10. The Generate sub-label shows an `About $` estimate that scales with the batch count, or the literal text "Cost unknown" — never a fabricated number — and changing a chip fires **no** network request to compute it.
+11. With no key for the selected model's provider, the primary button reads "Add a key" and routes to Settings; no request is attempted.
 12. Every chip is reachable and operable by keyboard alone, and each popover returns focus to its chip on close.
 
 ### 3.9 Open questions
@@ -1509,7 +1642,7 @@ Radix `Dialog` rendered into a portal, `position: fixed; inset: 0`, above the co
 | --- | --- |
 | Backdrop | The asset itself, `object-fit: cover`, scaled to 110%, `filter: blur(48px) saturate(1.15) brightness(0.45)`, with a `var(--of-scrim)` layer above it. The blurred copy is the `@h360` thumb rung (§0.10), not the full file, so the overlay paints in one frame. |
 | Media area | The viewport minus the panel gutter: `left: 0; right: 368px` (352 panel + 8 inset + 8 gap). The image is centred in that box and fit to height with a 15px inset on all sides, never upscaled past 100% of its natural size at zoom 1. At 1440w this reproduces the observed ≈x190–890 placement for a 3:4 asset. |
-| Media-area overlay buttons | Bottom-right of the media box, two 32px round buttons, 8px apart: **Add note** (our replacement for the reference product's "Add comment") and **Expand media view** (fullscreen). |
+| Media-area overlay buttons | Bottom-right of the media box, two 32px round buttons, 8px apart: **Add note** (our replacement for the reference product's "Add comment") and **Expand image** (fullscreen). |
 | Right panel | `top/right/bottom: 8px`, width **352**, height `calc(100vh - 16px)` (884 at 900), `border-radius: 20`, `background: color-mix(in srgb, var(--of-elevated) 75%, transparent)` + `backdrop-filter: blur(20px)`, `padding: 8`, `border: 1px solid var(--of-border)`. |
 | Panel header | 32px round asset badge + asset title line + caption underneath; **Close** button 32px round, `background: var(--of-elevated-2)`, right-aligned. Since Openfield is single-user, the header shows the **source model badge** (provider glyph + model name) and the relative created time as the caption, instead of an author row. |
 | Tabs | Segmented control, three items **106w × 32h**, 12px/500, `border-radius: 8`, container inset 8px below the header. |
@@ -1539,17 +1672,17 @@ Tab state is remembered per session, not per asset: opening the next image with 
 | Row | Value | Notes |
 | --- | --- | --- |
 | Model | e.g. `Gemini 3 Pro Image` | resolved `displayName` from the model registry (§6.13) |
-| Provider | e.g. `Google` | provider glyph + name |
+| Company | e.g. `Google` | provider glyph + name |
 | Quality / Resolution | e.g. `2K` | whichever axis the model exposes; both rows if it exposes both |
-| Size | e.g. `1856x2304` | actual pixel size of the stored file |
-| Aspect | e.g. `3:4` | requested ratio, marked `≈` if the model returned something else |
-| Seed | integer, or `—` with tooltip "this model does not expose a seed" | §0.11; no launch adapter declares seed support |
-| Cost | e.g. `$0.134 est.` | from the usage log (§0.13); `est.` suffix when the provider gave no billed figure |
+| Size | e.g. `1856×2304` | actual pixel size of the stored file |
+| Aspect | e.g. `3:4` | requested ratio, marked `~` if the model returned something else |
+| Seed | integer, or `None` with tooltip "This model doesn't support seeds" | §0.11; no launch adapter declares seed support |
+| Cost | e.g. `About $0.134` | from the usage log (§0.13); `About` prefix when the provider gave no billed figure |
 | Duration | e.g. `18.4s` | submit → file on disk |
 | Created | long local date-time | rendered through `Intl.DateTimeFormat` with the system locale (§2.12) — never a hardcoded US format |
 | File | filename + size, click to copy path | |
 
-Every row supports click-to-copy. A footer link **Copy all parameters as JSON** yields the frozen `NormalizedRequest` stored on the job set (§0.11), which is what makes a run reproducible outside the app.
+Every row supports click-to-copy. A footer link **Copy settings as JSON** yields the frozen `NormalizedRequest` stored on the job set (§0.11), which is what makes a run reproducible outside the app.
 
 ### 4.4 Action row
 
@@ -1557,25 +1690,25 @@ Pinned to the bottom of the panel, 8px gap between rows, 318px content width. Th
 
 1. **Send to… — 318×40**, primary/accent, `border-radius: 10`. Opens a menu: **Canvas** (creates an Image node on a new or chosen canvas, pre-wired with this asset as its image input, §7), **Editor** (switches to the Edit tab). **Video is absent, not disabled** (§0.14): the job and asset model is modality-agnostic, so the entry appears when video lands, without a migration. Any item we do disable states its reason inline; we never show a dead control with no explanation.
 2. **Recreate | Use as reference — 2 × 155×40**, `background: var(--of-elevated-2)`, `border: 1px solid var(--of-border-strong)`. This matches the observed `[Recreate | Reference]` slot.
-   - **Recreate** replays the frozen `NormalizedRequest` stored on the job set — same model, same params, same recorded seed — without touching the composer, and prepends placeholder tiles to the feed exactly as a normal run does. When the model has no seed support the button carries a small `~` badge and the tooltip reads "This model has no seed control — the result will differ."
+   - **Recreate** replays the frozen `NormalizedRequest` stored on the job set — same model, same params, same recorded seed — without touching the composer, and prepends placeholder tiles to the feed exactly as a normal run does. When the model has no seed support the button carries a small `~` badge and the tooltip reads "This model can't make an exact copy. Expect changes."
    - **Use as reference** attaches the image to the composer's reference strip and loads nothing else.
 3. **Download 155 | Favourite 46 | Share 46 | More 46**, all 40h, same secondary treatment, 8px gaps.
    - **Download** saves a copy through the OS save dialog; default filename `openfield_{created:yyyymmdd-hhmm}_{model}_{shortid}.{ext}`. Holding ⌥ downloads with a `.json` sidecar containing the full parameter set.
    - **Favourite** is a filled/outline heart, optimistic, written straight to SQLite.
-   - **Share** is local-only — no social targets: **Copy file path**, **Reveal in Finder** (label follows the platform: "Show in Explorer" / "Show in file manager"), **Copy image to clipboard**, **Copy prompt**, **Export with JSON sidecar…**.
-   - **More**: *Reuse* (loads prompt, references, model and every setting into the composer without running; settings the current model cannot accept are dropped with one toast listing them), *Save as preset…* (opens the preset editor pre-filled with prompt + settings), *Duplicate as draft*, *Add to folder ▸*, *Open containing folder*, *Copy parameters as JSON*, *Delete* (destructive, `--of-danger`, confirm dialog, lineage-safe per §4.9).
+   - **Share** is local-only — no social targets: **Copy file path**, **Show in Finder** (label follows the platform: "Show in Explorer" / "Show in file manager"), **Copy image**, **Copy prompt**, **Export with settings…**.
+   - **More**: *Reuse* (loads prompt, references, model and every setting into the composer without running; settings the current model cannot accept are dropped with one toast listing them), *Save as preset…* (opens the preset editor pre-filled with prompt + settings), *Duplicate as draft*, *Add to folder ▸*, *Open folder*, *Copy settings as JSON*, *Delete* (destructive, `--of-danger`, confirm dialog, lineage-safe per §4.9).
 
 Keyboard: `R` = Recreate, `U` = Use as reference, on this surface and on the feed tile alike (§2.6).
 
 ### 4.5 Keyboard, zoom and fullscreen
 
-**§2.6 publishes the one global shortcut table** — `R` Recreate, `U` Use as reference, `F` Favourite, `⇧F` Expand media view, `D` Download, `⌘K` command palette. This section adds only the keys that exist because the overlay exists, plus the Edit-tab tool letters.
+**§2.6 publishes the one global shortcut table** — `R` Recreate, `U` Use as reference, `F` Favourite, `⇧F` Expand image, `D` Download, `⌘K` command palette. This section adds only the keys that exist because the overlay exists, plus the Edit-tab tool letters.
 
 | Key | Action |
 | --- | --- |
 | `→` / `←` | next / previous asset **in the feed's current order and filters**; the feed scrolls the corresponding tile into view behind the overlay; at either end the action is a no-op with a 120ms nudge animation |
 | `Esc` | Info/History: close. Edit: first press cancels the active selection or tool back to Select, second press closes (with an unsaved-edit confirm if a mask or local adjustment is pending) |
-| `⇧F` | toggle Expand media view (panel hides, image fits the full viewport, a single floating Close button remains) |
+| `⇧F` | toggle Expand image (panel hides, image fits the full viewport, a single floating Close button remains) |
 | `+` / `-` / `0` | zoom in / out / fit-to-view |
 | `Space` (hold) | temporary Hand/pan, in both tabs |
 | `1` / `2` / `3` | Info / Edit / History |
@@ -1601,14 +1734,14 @@ The Edit tab turns the media area into a canvas-style edit surface. Nothing here
 | --- | --- | --- | --- | --- |
 | Select | `V` | bounding box with resize + rotate handles, and the inline regional prompt (§4.7) | `ops.inpaint`, or the regional fallback (§0.9) | falls back to whole-image instruction edit, box hidden |
 | Hand | `H` / hold Space | viewport pan | none (local) | always enabled |
-| Regional edit | `M` | rectangular mask region | `ops.inpaint` | regional fallback, **Approximate** badge |
+| Edit area | `M` | rectangular mask region | `ops.inpaint` | regional fallback, **Approximate** badge |
 | Lasso | `A` | freeform polygon mask | `ops.inpaint` | regional fallback, **Approximate** badge |
 | Brush | `D` | painted raster mask, size 1–512px, hardness 0–100 | `ops.inpaint` | disabled, tooltip names the model |
 | Eraser | `E` | unpaints mask | `ops.inpaint` | disabled with the same tooltip |
 | Shapes | `R` | rectangle / ellipse / line; **Mask** mode fills the mask, **Overlay** mode composites locally | Mask mode: `ops.inpaint`; Overlay mode: local | Overlay mode always available |
 | Text | `T` | local text overlay layer (font, size, colour, alignment) rasterised on Apply | local | always enabled |
 
-`V`, `H`, `D`, `E` and `R` are the shortcuts the reference toolbar was observed to use, and `R` for Shapes matches the canvas Shape tool (§7.9) so the same tool has one key in both workspaces. **Regional edit (`M`) and Lasso (`A`) are our own assignments; no shortcut was observed for them.** The observed image toolbar has no Text tool (Text lives in their canvas toolbar); we add it here because a local, non-generative text overlay is cheap, deterministic and something no BYOK model does reliably.
+`V`, `H`, `D`, `E` and `R` are the shortcuts the reference toolbar was observed to use, and `R` for Shapes matches the canvas Shape tool (§7.9) so the same tool has one key in both workspaces. **Edit area (`M`) and Lasso (`A`) are our own assignments; no shortcut was observed for them.** The observed image toolbar has no Text tool (Text lives in their canvas toolbar); we add it here because a local, non-generative text overlay is cheap, deterministic and something no BYOK model does reliably.
 
 **Capability mapping.** The editor reads only §0.3's manifest keys: `ops.imageEdit`, `ops.inpaint`, `ops.outpaint`, `ops.upscale`, `ops.removeBackground`, `ops.detectText`, `ops.decomposeLayers`, `references.supported`, `seed.supported`, and `background.values` containing `"transparent"`. Every control on this surface is resolved through §0.3's single `resolveControl()` rule, so a tool row, a composer chip and a canvas node footer disable for the same reason and with the same copy. Which launch adapter declares what is stated once, in §6.13 (Google) and §6.14 (OpenAI); nothing here hardcodes a model name.
 
@@ -1618,11 +1751,11 @@ The Edit tab turns the media area into a canvas-style edit surface. Nothing here
 
 ### 4.7 Edit prompt bar and the on-selection prompt
 
-- **Edit prompt bar** — floating, bottom-centred in the media area, **≈590 × 60**, pill radius 30, `background: color-mix(in srgb, var(--of-surface) 96%, transparent)`, `backdrop-filter: blur(10.45px)`, 1px `var(--of-border)` hairline. Contents: **+** add reference image (28px round), a single-line-growing text field with placeholder **"Describe how to edit this image…"**, and a 40px round accent **Generate** button. To its right (outside the pill, 8px gap) sits the **cost estimate chip** — e.g. `~$0.04` — computed locally from the manifest per §0.13 and recomputed as settings change; it reads `—` when the provider publishes no per-call price.
+- **Edit prompt bar** — floating, bottom-centred in the media area, **≈590 × 60**, pill radius 30, `background: color-mix(in srgb, var(--of-surface) 96%, transparent)`, `backdrop-filter: blur(10.45px)`, 1px `var(--of-border)` hairline. Contents: **+** add reference image (28px round), a single-line-growing text field with placeholder **"Describe how to edit this image…"**, and a 40px round accent **Generate** button. To its right (outside the pill, 8px gap) sits the **cost estimate chip** — e.g. `~$0.04` — computed locally from the manifest per §0.13 and recomputed as settings change; it reads `Cost unknown` when the provider publishes no per-call price (§0.15).
 - With no mask painted, Generate runs a whole-image instruction edit. With a mask or selection present, the same button runs a masked edit and the placeholder switches to **"Describe the change inside the selection…"**.
-- **On-selection prompt.** Drawing or selecting a region shows a small floating prompt directly on the selection — placeholder "Type your prompt here…" plus a round accent sparkle button — anchored below the selection box and flipped above when it would fall off-screen. Submitting it is identical to submitting the bar with that mask; the bar dims to show which one is active.
+- **On-selection prompt.** Drawing or selecting a region shows a small floating prompt directly on the selection — placeholder "Describe the change…" plus a round accent sparkle button — anchored below the selection box and flipped above when it would fall off-screen. Submitting it is identical to submitting the bar with that mask; the bar dims to show which one is active.
 - **While an edit runs:** the version strip appends a skeleton thumbnail with a spinner, the surface stays interactive, tools are not locked, and a **Cancel** pill sits over the skeleton. Cancellation semantics and the copy that goes with them are §0.12's, including the warning that a provider may still charge for work already started.
-- **When the model lacks `ops.imageEdit` entirely**, the whole bar is replaced by a single inline notice: *"{Model} cannot edit images. Pick an editing model to continue."* with a model picker inline — the same picker as the composer, filtered to models whose manifest declares `ops.imageEdit`. Choosing one does **not** change the composer's model.
+- **When the model lacks `ops.imageEdit` entirely**, the whole bar is replaced by a single inline notice: *"{Model} can't edit images. Pick a model that can."* with a model picker inline — the same picker as the composer, filtered to models whose manifest declares `ops.imageEdit`. Choosing one does **not** change the composer's model.
 
 ### 4.8 The EDIT IMAGE tool list (right panel)
 
@@ -1639,11 +1772,11 @@ The dispositions below are §0.14's binding list. §6.10's "what replaces the cl
 | 1 | **Layer decomposition** | **Visible disabled plugin slot** | No BYOK provider in the launch set declares `ops.decomposeLayers`. The row renders with a **Plugin** badge and a "How to add this" link; the settings UI is built and disabled. Interface: `decomposeLayers(image, { resolution: "1K"\|"1.5K"\|"2K", mode: "standard"\|"fast", layers: number }) → { png, bbox, name, z }[]`. Layers returned by a plugin land in the LAYERS section as real layers. |
 | 2 | **Edit text** | **Ships, M2** | Two-step: `ops.detectText` on any configured multimodal model (Gemini `generateContent` or OpenAI chat with image input) returns `{id, text, bbox}[]` under a strict JSON schema and lists every text run; editing a line and hitting Apply issues an `edit` — or an `inpaint` using the bbox, where `ops.inpaint` exists — asking for the new wording in the original typography. Disabled with a reason when no multimodal model is configured. |
 | 3 | **Expand & crop** | **Ships, M2 — split local + provider** | Drag edges/corners on the canvas. **Crop is local** (pure pixel op, zero cost, instant) and keeps local layers intact. **Expand** pads the canvas to the new bounds; with **Fill with AI** off it leaves transparency, with it on it needs `ops.outpaint` — the padded region becomes the mask. Instruction-only models get the regional fallback (§0.9) with the Approximate badge. Toggle disabled with a reason when neither exists. |
-| 4 | **Upscale** | **Ships partially, M2 — local resample + plugin slot** | v1 ships a **local Lanczos resample at ×2 and ×4**, labelled honestly: *"Resample — adds no detail."* Higher factors (×8, ×16) and any detail-adding upscaler are the plugin slot: `upscale(image, { scale, denoise?, sharpen?, faceEnhance? }) → image`, satisfied by a local Real-ESRGAN binary or a v1.1 fal/Replicate adapter. Settings mirror the observed panel (scale ×1 ×2 ×4 ×8 ×16, sharpness, denoise, face enhancement) with everything the installed plugin does not support disabled per its manifest. No launch adapter declares `ops.upscale`. |
+| 4 | **Upscale** | **Ships partially, M2 — local resample + plugin slot** | v1 ships a **local Lanczos resample at ×2 and ×4**, labelled honestly: *"Resizes, adds no detail."* Higher factors (×8, ×16) and any detail-adding upscaler are the plugin slot: `upscale(image, { scale, denoise?, sharpen?, faceEnhance? }) → image`, satisfied by a local Real-ESRGAN binary or a v1.1 fal/Replicate adapter. Settings mirror the observed panel (scale ×1 ×2 ×4 ×8 ×16, sharpness, denoise, face enhancement) with everything the installed plugin does not support disabled per its manifest. No launch adapter declares `ops.upscale`. |
 | 5 | **Remove background** | **Visible disabled slot** | Needs a segmentation model; `background: "transparent"` on the OpenAI API applies to generation, not to an arbitrary existing image, and Gemini gives no alpha guarantee, so no launch adapter declares `ops.removeBackground`. Interface: `segmentSubject(image) → maskPng`. The repo documents a local ONNX (BiRefNet/rembg-class) plugin as the reference implementation. The row is visible and disabled with that reason — **that copy is the M2-09 pass condition** — and once a plugin is installed the produced mask feeds the mask layer, so the cut-out is immediately editable. |
-| 6 | **Colour grading** | **Ships, M2 — local, non-generative** | A WebGL filter stack: exposure, contrast, temperature/tint, saturation/vibrance, lift/gamma/gain, grain, bloom, halation, vignette — applied live at 60fps on the GPU, committed on Apply by re-rendering server-side at full resolution. Ships **Openfield's own presets**: Neutral, Mono, Duotone Split, Skin Soften, Filmic, Super-16, Vintage Glass, Balance, Detail Soften, Glow, Halo, Exposure Trim, Grain. **Match reference** extracts a grade from a dropped reference image by local 3D histogram matching. `.cube` LUT import and export. Cost `$0.00`, works offline, works on every model. |
+| 6 | **Colour grading** | **Ships, M2 — local, non-generative** | A WebGL filter stack: exposure, contrast, temperature/tint, saturation/vibrance, lift/gamma/gain, grain, bloom, halation, vignette — applied live at 60fps on the GPU, committed on Apply by re-rendering server-side at full resolution. Ships **Openfield's own presets**: Neutral, Mono, Duotone Split, Skin Soften, Filmic, Super-16, Vintage Glass, Balance, Detail Soften, Glow, Halo, Exposure Trim, Grain. **Match reference** extracts a grade from a dropped reference image by local 3D histogram matching. `.cube` LUT import and export. Cost shows `Free`, works offline, works on every model. |
 | 7 | **Enhancer** | **Ships, M2 — via provider capability** | Instruction-edit presets, no bespoke model: *Smooth skin*, *Natural skin*, *Textured skin*. Each is a stored, user-editable prompt template in the preset library (§5) applied as a whole-image or masked edit. Needs `ops.imageEdit`. |
-| 8 | **Relight** | **Ships, M2 — via provider capability, best-effort** | Draggable light-direction sphere ("hold and drag to change the light direction") plus quick-select Top / Front / Right / Left / Back / Bottom; Soft/Hard; Brightness 0–100 (default 50); Colour `#FFFFFF`. The widget compiles a structured instruction ("key light from the upper-left, hard-edged, bright, neutral white; preserve subject, framing and identity") and submits it as an instruction edit. Labelled best-effort in the UI — no provider exposes a true relighting model under BYOK. |
+| 8 | **Relight** | **Ships, M2 — via provider capability, best-effort** | Draggable light-direction sphere ("Drag to change the light direction") plus quick-select Top / Front / Right / Left / Back / Bottom; Soft/Hard; Brightness 0–100 (default 50); Colour `#FFFFFF`. The widget compiles a structured instruction ("key light from the upper-left, hard-edged, bright, neutral white; preserve subject, framing and identity") and submits it as an instruction edit. The panel carries the note "Results vary by model." because no provider exposes a true relighting model under BYOK. |
 | 9 | **Angles** | **Ships, M2 — via provider capability, best-effort** | Draggable camera widget; Rotation 0°, Tilt 0°, Zoom 0. Compiles to an instruction edit ("rotate the camera 30° to the right, tilt 10° down, move slightly closer; keep subject, lighting and style"). The panel states plainly that this is a re-render, not a 3D reprojection, and that identity drift is expected. |
 
 **Preset names in rows 6–7 are Openfield's own; the observed product's names are recorded in the research notes only, never shipped** (§1.11, R12).
@@ -1663,13 +1796,13 @@ Requirements the editor places on the data model (the schema itself is specified
 3. **Provenance.** `provider_id`, `model_id`, resolved model display name, seed, cost, duration, and a `generative` flag. **Local ops (`crop`, `grade`, `overlay`) write `generative = 0`, `cost_usd = 0` and `provider_id = 'local'`.**
 4. **Approximation flag.** Assets produced through the regional fallback (§0.9) carry `approximate = 1` plus `approximate_reason`, so the badge survives restarts and export.
 5. **Branching.** Siblings sharing a `parent_asset_id` are branches. The strip shows the linear path to the current asset and a fork glyph where branches exist; the History tab shows the full tree.
-6. **Batch identity.** Assets from one submit share a `job_set_id`, which is how the feed groups them and how "other outputs from this run" renders in History.
-7. **Deletion is lineage-safe.** Deleting an asset tombstones the row (keeps id, op record and parent pointer, drops the file) so descendants never lose their chain — which is why `parent_asset_id` carries no foreign key (§0.7). The strip renders a tombstone slot labelled "deleted". A "Delete this version and everything derived from it" option exists in the confirm dialog and is never the default.
+6. **Batch identity.** Assets from one submit share a `job_set_id`, which is how the feed groups them and how "Other images from this run" renders in History.
+7. **Deletion is lineage-safe.** Deleting an asset tombstones the row (keeps id, op record and parent pointer, drops the file) so descendants never lose their chain — which is why `parent_asset_id` carries no foreign key (§0.7). The strip renders a tombstone slot labelled "deleted". A "Delete this version and every edit made from it" option exists in the confirm dialog and is never the default.
 8. **Modality-agnostic.** Nothing in the lineage model is image-specific: `modality` sits on the asset, and every field above applies unchanged when video lands.
 
 In-session undo/redo (⌘Z / ⇧⌘Z, depth 50) covers uncommitted work only — brush strokes, selections, slider moves, text placement. Once Generate or Apply commits, the previous state is a version in the strip, not an undo step; the app says so with a one-time hint the first time a user commits.
 
-**Acceptance criteria.** Applying a colour grade, then an inpaint, then an upscale yields four files on disk and a four-item version strip; deleting the second version leaves the third and fourth openable with their parameters intact; "Copy parameters as JSON" on the fourth returns a payload that, replayed against the same provider, reproduces the fourth from the third.
+**Acceptance criteria.** Applying a colour grade, then an inpaint, then an upscale yields four files on disk and a four-item version strip; deleting the second version leaves the third and fourth openable with their parameters intact; "Copy settings as JSON" on the fourth returns a payload that, replayed against the same provider, reproduces the fourth from the third.
 
 ### 4.10 Responsive behaviour
 
@@ -1680,7 +1813,7 @@ At ≥1280px the layout above is exact. From 1100–1280px the panel keeps 352px
 - The detail-view **zoom/pan affordances inside the Info tab** were not measured — only the Edit-tab zoom cluster was. Our `+ / − / 0` and wheel-zoom on the Info tab is our own addition.
 - **Version-strip thumbnail spacing, scroll behaviour and branch representation** were not observed; the 8px gap, the pinning and the fork glyph are our design.
 - **Mask encoding expected by the OpenAI edits endpoint** (which alpha polarity, whether the mask must match the input's exact dimensions and format) is undocumented in the research. Task **M2-15** is a live probe with a recorded fixture, and it is a blocking prerequisite for M2-05/M2-06.
-- **Seed support on the Gemini image models** is not documented; until confirmed, Recreate on those models shows the "no seed control" badge (§0.11).
+- **Seed support on the Gemini image models** is not documented; until confirmed, Recreate on those models carries the `~` badge and its tooltip (§0.1, §0.11).
 - Whether the **Higgsfield public API exposes inpaint / upscale / relight job types** at all (only the Soul v2 standard endpoint is confirmed) — this decides whether a Higgsfield adapter can light up rows 2–9 or only whole-image instruction editing.
 - Exact behaviour of the reference product's **Expand & Crop with layers present** ("crop keeps pixels on layers") was read from the panel copy, not exercised; our local crop preserves layers, but the AI-fill interaction with layers is unspecified.
 - The **"Add comment" button's** anchoring was not exercised; we did not observe whether comments pin to a point on the image. Our notes are asset-level only in v1.
@@ -1722,7 +1855,7 @@ The reference product uses a single non-popover pattern for Style, Character and
 
 **Anatomy, top to bottom**
 
-1. **Hero band** — uppercase headline (24px/700, tracking `0.02em`), 2-line description (14px/400, muted, max-width 520px), one accent CTA pill (height 40, radius 20, 14px/600) that starts the *create* flow for this entity, and a right-aligned art slot (collage of the user's own recent items; a neutral generated gradient when the library is empty).
+1. **Hero band** — headline written in sentence case and uppercased by CSS (24px/700, tracking `0.02em`), 2-line description (14px/400, muted, max-width 520px), one accent CTA pill (height 40, radius 20, 14px/600) that starts the *create* flow for this entity, and a right-aligned art slot (collage of the user's own recent items; a neutral generated gradient when the library is empty).
 2. **Tab row + search** — tabs left (segmented, 32px tall, radius 8, 12px/500, optional count badge), search input right-aligned (32px tall, radius 8, leading magnifier icon, 240px wide). Search is debounced 150ms and matches `name`, `tags` and template text.
 3. **Card grid** — 6 columns, column gap 12, row gap 16, card width 167, thumbnail 16:9 (167×94, radius 10, `object-fit: cover`), name beneath at 12px/500 clamped to 2 lines. Virtualised above 200 items.
 4. **Empty state** — centred icon, title, one line of body, and the same CTA as the hero.
@@ -1731,7 +1864,7 @@ The reference product uses a single non-popover pattern for Style, Character and
 
 **Card states**: default; hover (thumb scales to 1.02, name brightens, a `⋯` overflow button fades in top-right); selected (2px `--of-accent` border + accent check badge bottom-right); disabled (40% opacity + tooltip, used when the item is incompatible with the current model — e.g. a reference set on a model with `capabilities.references.max === 0`).
 
-**Card overflow menu**: Edit · Duplicate · Export JSON · Delete (destructive, `--of-danger`). Curated/bundled items show Duplicate · Export only. There is no "Reveal files" item: presets live in SQLite, and only exports have a path (§5.5).
+**Card overflow menu**: Edit · Duplicate · Export · Delete (destructive, `--of-danger`). Curated/bundled items show Duplicate · Export only. There is no "Reveal files" item: presets live in SQLite, and only exports have a path (§5.5).
 
 **Keyboard**: `Esc` closes · `/` focuses search · `↑↓←→` moves the grid cursor · `Enter` selects and closes · `⌘⌫` deletes the focused user item (with confirm). Focus is trapped in the sheet and restored to the invoking chip/tile on close.
 
@@ -1757,10 +1890,10 @@ type PickerSheetProps<T extends { id: string; name: string; thumbnailUrl?: strin
 
 | Instance | Opened from | Tabs | Hero headline / CTA | Empty state |
 |---|---|---|---|---|
-| Presets | Style tile (144×84, preview + "Change" pill) in the composer | `Curated` · `Mine` | "MAKE A LOOK YOU CAN REUSE" · "New preset" | "No presets of your own yet." |
-| Reference sets | "Reference set" chip / the reference tray's *Manage* action | `Curated` (empty by default) · `Mine` | "GROUP YOUR REFERENCES" · "New reference set" | "No reference sets yet. Group a few images to start." |
-| Characters | CHARACTER tile (84×84, `+` icon, caps label) | `All` + one tab per provider present in the registry | "KEEP A FACE CONSISTENT" · "New character" | "No characters yet. Add one to get started." |
-| Palettes | Palette chip (composer settings row, 40px tall, radius 12; tinted with `--of-accent` when active) | `Curated` · `Mine` | "PULL COLOURS FROM AN IMAGE" · "Extract palette" | "No palettes yet. Extract one from any image." |
+| Presets | Style tile (144×84, preview + "Change" pill) in the composer | `Curated` · `Mine` | "Make a look you can reuse" · "New preset" | "No presets of your own yet." |
+| Reference sets | "Reference set" chip / the reference tray's *Manage* action | `Curated` (empty by default) · `Mine` | "Group your references" · "New reference set" | "No reference sets yet. Group a few images to start." |
+| Characters | CHARACTER tile (84×84, `+` icon, caps label) | `All` + one tab per provider present in the registry | "Keep a face consistent" · "New character" | "No characters yet." |
+| Palettes | Palette chip (composer settings row, 40px tall, radius 12; tinted with `--of-accent` when active) | `Curated` · `Mine` | "Pull colours from an image" · "Extract palette" | "No palettes yet. Extract one from any image." |
 
 Palette cards render the thumbnail plus a swatch strip (N equal bands, 8px tall, sitting under the thumb) and the name — matching the observed Color Transfer grid.
 
@@ -1776,7 +1909,7 @@ A preset is a pure-data recipe. It never contains a model name as a requirement 
   "id": "of_preset_35mm_grain",
   "kind": "style",                      // "style" | "reference-set" | "character" | "palette"
   "name": "35mm Grain",
-  "description": "Analogue film look with visible grain and soft highlight roll-off.",
+  "description": "Film look with visible grain and soft highlights.",
   "thumbnail": "thumb.webp",            // export-envelope path, relative to the bundle root
   "template": "{prompt}, shot on 35mm colour film, fine visible grain, soft highlight roll-off, natural skin tones",
   "variants": { "light": "{prompt}, subtle 35mm film grain" },
@@ -1802,17 +1935,17 @@ A preset is a pure-data recipe. It never contains a model name as a requirement 
 
 **References travel as ids in the store, as paths in a bundle.** In a row, each entry is `{assetId, weight, role}`. In an exported bundle the same entry is `{file, weight, role}` relative to the bundle root; import converts one to the other by ingesting each file as an ordinary upload (§5.5 step 5, §5.6).
 
-**Template semantics.** `template` MUST contain the literal `{prompt}` — single brace, reserved exclusively for presets — exactly once. That is the whole contract, and it lets a preset be a prefix, a suffix, or a sandwich without three separate fields. A template with no `{prompt}` fails validation with "Template must contain {prompt} once." Prefix/suffix shorthand in the editor writes the template for the user. `{{name}}` is the user-variable syntax (§5.9) and resolves *before* templates, so a variable may itself contain text the preset wraps (§0.8).
+**Template semantics.** `template` MUST contain the literal `{prompt}` — single brace, reserved exclusively for presets — exactly once. That is the whole contract, and it lets a preset be a prefix, a suffix, or a sandwich without three separate fields. A template with no `{prompt}` fails validation with "Include {prompt} exactly once." Prefix/suffix shorthand in the editor writes the template for the user. `{{name}}` is the user-variable syntax (§5.9) and resolves *before* templates, so a variable may itself contain text the preset wraps (§0.8).
 
-**Compile.** The resolution order is §0.8's, run server-side in `normalize()` step 1 and frozen onto the job set (§0.11) so Reuse and Recreate reproduce it even after the preset has been edited. Two pieces of copy belong to this section rather than to §0: when a model has no native negative-prompt field, the appended `Avoid: …` form carries the inline note "This model has no negative-prompt input; Openfield appends it as an instruction."; and a `params` key the manifest does not declare is dropped silently from the request but visibly in the UI — the corresponding chip is hidden or disabled by `resolveControl` (§0.3).
+**Compile.** The resolution order is §0.8's, run server-side in `normalize()` step 1 and frozen onto the job set (§0.11) so Reuse and Recreate reproduce it even after the preset has been edited. Two pieces of copy belong to this section rather than to §0: when a model has no native negative-prompt field, the appended `Avoid: …` form carries the inline note "This model has no Avoid field. Openfield adds it to the prompt instead."; and a `params` key the manifest does not declare is dropped silently from the request but visibly in the UI — the corresponding chip is hidden or disabled by `resolveControl` (§0.3).
 
-**Strength.** `strength` maps to a native parameter when `capabilities.styleStrength` is true (their `style_strength`, Recraft's `Precise/Flexible`). Otherwise it selects the `light`/`full` variant and the slider is labelled "Strength (approximate on this model)". When neither a native param nor a `light` variant exists, the slider is disabled with the tooltip "This preset has no light variant and *Model* has no strength control."
+**Strength.** `strength` maps to a native parameter when `capabilities.styleStrength` is true (their `style_strength`, Recraft's `Precise/Flexible`). Otherwise it selects the `light`/`full` variant and the slider is labelled "Strength (approximate on this model)". When neither a native param nor a `light` variant exists, the slider is disabled with the tooltip "Strength can't be changed for this preset on *Model*."
 
-**Editor.** Every field above is editable in a right-hand drawer opened from the picker sheet: name, thumbnail (pick from any generated asset or upload), template with a live "compiled prompt" preview against the currently selected model, negative prompt, reference thumbnails with weight sliders, a raw-JSON tab for `providerOverrides`, and tags. "Save as preset" also appears in the composer overflow and in the image detail Info tab, pre-filled from that generation's parameters.
+**Editor.** Every field above is editable in a right-hand drawer opened from the picker sheet: name, thumbnail (pick from any generated asset or upload), template with a live "Final prompt" preview against the currently selected model, negative prompt, reference thumbnails with weight sliders, a raw-JSON tab for `providerOverrides`, and tags. "Save as preset" also appears in the composer overflow and in the image detail Info tab, pre-filled from that generation's parameters.
 
 ### 5.4 Bundled starter presets
 
-Twelve presets ship in `app/presets/` (read-only, `Curated` tab, seeded into `presets` with `builtin = 1`), chosen to span the useful range rather than to be fashionable. Names are ours.
+Twelve presets ship in `apps/server/seed/presets/` (read-only, `Curated` tab, seeded into `presets` with `builtin = 1`), chosen to span the useful range rather than to be fashionable. Names are ours.
 
 | # | Name | Intent | Template sketch (`{prompt}` = user text) | Tags |
 |---|---|---|---|---|
@@ -1852,9 +1985,9 @@ Both forms are accepted on import. The single-file form is what "Export" produce
 
 **Import**: drag a `.json` onto the picker sheet, or *Import* in the hero overflow. Openfield then:
 
-1. Validates against a Zod schema for `schemaVersion`; unknown future versions are rejected with "This preset was made with a newer version of Openfield."
+1. Validates against `presetEnvelopeSchema` or `presetBundleSchema` from `@openfield/core` (zod), keyed on `schemaVersion`; unknown future versions are rejected with "This preset needs a newer version of Openfield."
 2. Strips every unknown top-level key (forward-compat, no silent execution surface).
-3. Rejects any `references[].file` that escapes the bundle root, any absolute path, and — by default — any `http(s)` image URL (a checkbox "Also download remote images" enables it explicitly; the app makes no network call on import otherwise).
+3. Rejects any `references[].file` that escapes the bundle root, any absolute path, and — by default — any `http(s)` image URL (a checkbox "Also download linked images" enables it explicitly; the app makes no network call on import otherwise).
 4. Enforces limits: ≤ 64 references, ≤ 8 MB per image, ≤ 64 MB per bundle, template ≤ 4000 chars.
 5. Ingests every image through `POST /api/uploads` (§5.6), rewrites `references[].file` and `thumbnail` to asset ids, and inserts the row into the table the envelope `kind` names (§5.3, §5.10).
 6. On an `id` collision, offers **Keep both** (new id, name suffixed " (2)") / **Replace** / **Skip**, per item, in a review list that shows name, thumbnail, reference count and source file.
@@ -1872,10 +2005,10 @@ A **reference set** is an ordered, named group of images with per-image `weight`
 - The composer reference tray shows a live counter `3 / 14`, using the current model's cap.
 - At the cap, the `+` attach button is disabled with the tooltip "*Model name* accepts N reference images."
 - When the user switches to a model with a lower cap, **nothing is deleted**. References beyond the cap are dimmed with a "won't be sent" badge and an inline bar appears: "3 of 6 references will be sent to *Model*. Drag to choose which." Order is the selection.
-- If `capabilities.references.max === 0`, the tray collapses to a single line: "*Model* does not take reference images" with a "Switch model" affordance.
+- If `capabilities.references.max === 0`, the tray collapses to a single line: "*Model* doesn't take reference images" with a "Switch model" affordance.
 - Known caps as researched on 2026-09-23 — Gemini 3 family up to 14, OpenAI GPT Image "2+" (unconfirmed) — are **manifest defaults only**. If a provider returns a reference-count error, the adapter records the real cap in the registry and the UI updates.
 
-**Weights, honestly.** Neither launch provider accepts per-image weights. So `weight` does three things, in order of how real they are: (1) it is passed natively when `capabilities.references.weights` is true (aggregator models in v1.1); (2) it sorts the reference array, which measurably matters on models that privilege the first image; (3) it emits a short ordered clause — `Primary reference (style): image 1. Secondary: image 2.` — only when `capabilities.references.weights` is false. The weight slider is labelled "Influence (ordering hint on this model)" in that case. We do not pretend it is a strength knob.
+**Weights, honestly.** Neither launch provider accepts per-image weights. So `weight` does three things, in order of how real they are: (1) it is passed natively when `capabilities.references.weights` is true (aggregator models in v1.1); (2) it sorts the reference array, which measurably matters on models that privilege the first image; (3) it emits a short ordered clause — `Primary reference (style): image 1. Secondary: image 2.` — only when `capabilities.references.weights` is false. The weight slider is labelled "Influence (only changes the order on this model)" in that case. We do not pretend it is a strength knob.
 
 **Acceptance criteria.** Adding 20 images to a set and selecting a 14-reference model sends exactly 14, in weight order, and the UI states which 6 were dropped before Generate is pressed.
 
@@ -1903,13 +2036,13 @@ At compile time the descriptor is injected (prefix by default, or substituted wh
 | Reference-image identity | `capabilities.references.max ≥ 3` | Good likeness on edit-capable models; drifts on pose/lighting changes. The best single lever we have. |
 | Descriptor injection | Nothing | Keeps hair/age/build stable across runs where references drift. Cheap, always on. |
 | Locked seed | `capabilities.seed.supported` | Reproduces a *run*, not an *identity*. Inert on every v1 model — see below. |
-| Provider-native character id | A provider that exposes one (Soul ID, if its public API surfaces it with a user key) | Best result where available; adapter-specific; shown as a "Native identity" badge on the character card. Unverified — see Open questions. |
+| Provider-native character id | A provider that exposes one (Soul ID, if its public API surfaces it with a user key) | Best result where available; adapter-specific; shown as a "Saved by model" badge on the character card. Unverified — see Open questions. |
 | LoRA / fine-tune | fal.ai or Replicate training endpoints | **v1.1**, via the aggregator adapters. The character record already carries `providerIdentity` so a trained LoRA slots in without a schema change. |
 | Local training | A GPU we do not assume | **Never in v1.** Openfield is a thin local client around remote APIs; it ships no training loop, no CUDA dependency, and no local weights. |
 
-**The seed lever is inert at launch, and the UI says so.** No launch adapter declares `capabilities.seed.supported` (§0.11, §6.13, §6.14), so on every v1 model the character drawer's **Lock seed** row renders disabled with the reason "*Model* has no seed control" — Seed is a core control and is disabled rather than hidden (§0.3) — and a character relies on references + descriptor alone. When an adapter that supports seeds arrives, the stored `lockSeed`/`seed` become live with no schema change.
+**The seed lever is inert at launch, and the UI says so.** No launch adapter declares `capabilities.seed.supported` (§0.11, §6.13, §6.14), so on every v1 model the character drawer's **Lock seed** row renders disabled with the reason "*Model* doesn't support seeds" — Seed is a core control and is disabled rather than hidden (§0.3) — and a character relies on references + descriptor alone. When an adapter that supports seeds arrives, the stored `lockSeed`/`seed` become live with no schema change.
 
-The character editor states this plainly at the top of the drawer: "Openfield does not train a model. It reuses your reference photos, your description and — where the model supports one — a fixed seed. Results vary by model." The picker sheet's card shows which levers are active as small badges (`refs 6` · `text` · `seed`), and greys the card on models that take no references, with the tooltip "*Model* takes no reference images — only the description will be used."
+The character editor states this plainly at the top of the drawer: "Openfield doesn't train anything. It reuses your photos and your description, and keeps the same Seed when the model allows it. Results vary by model." The picker sheet's card shows which levers are active as small badges (`6 photos` · `Description` · `Seed`), and greys the card on models that take no references, with the tooltip "*Model* doesn't take reference images. Only the description is used."
 
 Characters, presets and reference sets are all `@`-mentionable in the composer's prompt editor (typeahead on `@`), shipping in v1 as M1-17 (§0.14, §3.2). The typeahead resolves **Openfield objects only** — presets, characters, reference sets, saved references; the reference product's server-side "Elements" entity is not reproduced.
 
@@ -1933,9 +2066,9 @@ Deterministic by construction: the same file always yields the same palette. Bud
 | `reference` | Renders a 1024×1024 **palette card** (N vertical bands, area proportional to population) and attaches it as a reference image with `role: "palette"`, costing one reference slot — the counter in §5.6 accounts for it. | Models with reference support |
 | `both` | Both of the above | Models that ignore hex alone |
 
-**The fallback, because models do ignore this.** An `Apply palette to result` toggle (default off) runs a local, non-generative colour transfer on the returned image: mean/standard-deviation matching in OKLab (Reinhard) against the palette's distribution, with a `Strength 0–100%` slider and luminance preserved by default. It is a **local op** — `op = 'grade'`, `provider_id = 'local'`, `generative = 0`, `cost_usd = 0` (§0.4) — and it writes a **new asset version** with lineage back to the original, so the ungraded generation is never lost (§0.9, §8). After a generation where a palette was active, the detail view shows a one-line nudge: "Colours off? Apply this palette locally →". This is a deliberate echo of the observed non-generative Color Grading panel, and it is the only part of Openfield's colour handling guaranteed to work on every model.
+**The fallback, because models do ignore this.** An `Apply palette to result` toggle (default off) runs a local, non-generative colour transfer on the returned image: mean/standard-deviation matching in OKLab (Reinhard) against the palette's distribution, with a `Strength 0–100%` slider and luminance preserved by default. It is a **local op** — `op = 'grade'`, `provider_id = 'local'`, `generative = 0`, `cost_usd = 0` (§0.4) — and it writes a **new asset version** with lineage back to the original, so the ungraded generation is never lost (§0.9, §8). After a generation where a palette was active, the detail view shows a one-line nudge: "Colours off? Apply this palette →". This is a deliberate echo of the observed non-generative Color Grading panel, and it is the only part of Openfield's colour handling guaranteed to work on every model.
 
-**Bundled palettes** (8, `Curated` tab, our own names, each with a hand-picked hex list and a generated thumbnail, seeded with `builtin = 1`): Muted Earth · Cold Steel · Warm Sand · Deep Teal · Ink & Bone · Sun Bleach · Neon Midnight · Faded Pastel.
+**Bundled palettes** (8, `Curated` tab, our own names, each with a hand-picked hex list and a generated thumbnail, seeded from `apps/server/seed/palettes/` with `builtin = 1`): Muted Earth · Cold Steel · Warm Sand · Deep Teal · Ink & Bone · Sun Bleach · Neon Midnight · Faded Pastel.
 
 The palette chip in the composer settings row follows the observed behaviour: it tints with `--of-accent` while a palette is active, and shows the palette name plus a 3-swatch mini strip in place of the default label.
 
@@ -1955,7 +2088,7 @@ Three tiers, all reachable from the prompt editor without leaving the keyboard.
 
 ### 5.10 Storage summary
 
-Entities owned by this section. The DDL is §0.8's, in migration 001, and lives in §8.2; the routes are §8.3's. Neither is restated here.
+Entities owned by this section. The tables are declared in `packages/db/src/schema/library.ts` (§8.2) and created by the initial migration; the routes are §8.3's. Neither is restated here.
 
 | Entity | Table | Columns | Endpoints |
 |---|---|---|---|
@@ -1970,14 +2103,14 @@ Three consequences worth stating once. `presets` has **no `kind` column** — th
 ### 5.11 Acceptance criteria
 
 - The same `<PickerSheet>` component renders all four libraries; a visual diff of the Presets and Characters sheets differs only in hero copy, tabs, cards and empty state.
-- Importing a preset bundle from an untrusted source makes zero network requests unless "Also download remote images" is ticked, and writes nothing to disk or the database until the user confirms the dry-run list.
+- Importing a preset bundle from an untrusted source makes zero network requests unless "Also download linked images" is ticked, and writes nothing to disk or the database until the user confirms the dry-run list.
 - Selecting a preset updates the Style tile label and, on the next Generate, the frozen request's compiled prompt shows the template applied with `{prompt}` replaced exactly once.
 - Switching from a 14-reference model to a 2-reference model never deletes an attached reference and always states, before Generate, how many will be sent.
 - A character on a model with `capabilities.references.max === 0` still generates, using the descriptor alone, and the card says so.
 - Extracting a palette twice from the same file returns byte-identical hex values.
 - "Apply palette to result" produces a new asset version with `generative = 0` whose parent is the original, and the original remains openable.
 - Every preset, reference set, character, palette and saved prompt round-trips through export → delete → import with no data loss other than timestamps.
-- **Deleting the `presets` and `palettes` rows and restarting re-seeds** the 12 bundled presets and 8 bundled palettes from `app/presets/`, with thumbnails, without any API key configured.
+- **Deleting the `presets` and `palettes` rows and restarting re-seeds** the 12 bundled presets and 8 bundled palettes from `apps/server/seed/presets/` and `apps/server/seed/palettes/`, with thumbnails, without any API key configured.
 
 ### 5.12 Open questions
 
@@ -1991,12 +2124,27 @@ Three consequences worth stating once. `presets` has **no `kind` column** — th
 - Per-reference weighting on fal.ai / Replicate models (v1.1): whether enough models accept per-image weights to make `capabilities.references.weights` worth surfacing as a first-class control rather than an ordering hint.
 
 ---
-
 ## 6. Provider adapter architecture and BYOK
 
 Openfield has no models of its own. Everything the Image tab and the Canvas can do is the union of what the installed **adapters** declare they can do, using **the user's own API keys**. This section defines that layer: the interfaces, the capability manifest that drives the UI, request/response normalisation, the job model, the error taxonomy, cost accounting, key security, the adapter authoring contract, the three launch adapters and the Settings surface.
 
 §0 is binding over this section on every shared contract. §6 is the **declaration site** for the TypeScript types §0 fixes — `Capabilities`, `ControlId`, `Op`/`AdapterOp`, `GenerateRequest`, `NormalizedRequest`, `JobState`, `ErrorCode`, the cost types — which is why they appear here in full. Where a value in §6 and a value in §0 ever disagree, §0 wins and §6 is the defect.
+
+**Where these types live in code (§0.16).** Every data type in this section is declared once as a zod schema in `packages/core/src/schemas/`, and its TypeScript type is `z.infer` of that schema:
+- `provider.ts`: `ProviderId`, `ModelKey`, `ProviderMeta`, `CredentialField`, `CredentialSchema`, `PriceTable` and `RefreshReport` (§6.2)
+- `manifest.ts`: `AspectRatio` through `ModelManifest`, plus `ControlState` (§6.3)
+- `request.ts`: `SizeSpec`, `ReferenceInput`, `MaskInput`, `Op`, `AdapterOp`, `GenerateRequest`, `NormalizedRequest`, `PixelSize`, `PerImagePrice` and `Diagnostic` (§6.5)
+- `job.ts`: `JobState`, `JobSetState`, `JobHandle` and `JobUpdate` (§6.7)
+- `errors.ts`: `ErrorCode` (§6.8)
+- `cost.ts`: `PriceModel`, `CostEstimate` and `CostActual` (§6.9)
+
+Types that carry behaviour stay hand-written in `packages/providers/src/types/`:
+- `provider.ts`: `Provider`, `CallContext`, `AssetSink`, `RedactingLogger`
+- `model.ts`: `ImageModel`
+- `registry.ts`: `ModelRegistry`
+- `result.ts`: the in-process result types `GeneratedImage`, `ProviderUsage`, `SafetyVerdict` and `JobResult`
+
+The code blocks below stay the normative shapes, and the zod schemas must match them field for field. The enum unions (`Op`, `JobState`, `ErrorCode`) are built from the `as const` arrays in `packages/core/src/constants.ts`.
 
 Two rules govern the whole layer:
 
@@ -2011,16 +2159,17 @@ browser (React)  ──HTTP/SSE──▶  Bun + Hono server  ──▶  registry
                                  usage log, SQLite
 ```
 
-- `packages/providers` — the interfaces, the registry, the pure `estimate()` function, the conformance suite, and one folder per adapter. Zero imports from the UI package; zero DOM APIs; runnable under plain `bun test`.
-- `apps/server` — owns the job runner, the SQLite tables (§8.2), the asset store under `~/.openfield/assets` (§8.1), and the HTTP/SSE surface (§8.3). It is the only caller of adapter *methods*.
-- `apps/web` — receives manifests as JSON, renders controls from them, and imports the pure `estimate()` function.
+- `packages/core`: the zod schemas, and the types inferred from them, for every data shape in this section, plus the enum constants. Every workspace imports it.
+- `packages/providers`: the behaviour interfaces, the registry, `normalize()`, the pure `estimate()` and `resolveControl()`, the conformance suite, and one folder per adapter. It has two entries. `@openfield/providers/manifest` is browser-safe (manifest types, `estimate()`, `resolveControl()`). `@openfield/providers/server` holds the registry, `normalize()` and the adapters. No DOM APIs, no imports from `packages/ui`; it runs under plain `bun test`.
+- `apps/server`: owns the job runner, the SQLite tables through `packages/db` (§8.2), the asset store under `~/.openfield/assets` (§8.1), and the HTTP/SSE surface (§8.3). It is the only importer of `@openfield/providers/server`, so it is the only caller of adapter *methods*.
+- `apps/web`: receives manifests as JSON through the typed client (§8.3.3), renders controls with `resolveControl()`, and computes costs with `estimate()`, both from `@openfield/providers/manifest`. It never imports `@openfield/providers/server` (§0.16 rule 2).
 
 The job/asset records are modality-agnostic (§8.2): `modality: "image" | "video" | "audio"` is present from v1 even though only `"image"` is produced, so the v1.1 video work is an adapter + a renderer, not a schema migration.
 
 ### 6.2 Provider interface
 
 ```ts
-// packages/providers/src/types/provider.ts
+// packages/providers/src/types/provider.ts (behaviour); data types in this block: packages/core/src/schemas/provider.ts
 
 /** Stable slug: "openai" | "google" | "higgsfield" | "fal" | "replicate" | … */
 export type ProviderId = string;
@@ -2032,7 +2181,7 @@ export type ModelKey = `${ProviderId}:${string}`;
 export interface ProviderMeta {
   id: ProviderId;
   displayName: string;          // our own label, e.g. "OpenAI"
-  docsUrl: string;              // linked from Settings → Providers
+  docsUrl: string;              // linked from Settings → Keys
   consoleUrl: string;           // where the user creates a key
   /** Every API hostname this adapter may contact. Shown verbatim in Settings → Privacy. */
   networkHosts: string[];
@@ -2068,7 +2217,7 @@ export interface Provider {
   /** Shape-only check. Pure, no network. Drives inline Settings validation. */
   validateCredentials(values: CredentialValues): Diagnostic[];
 
-  /** One cheap round-trip that proves the key works. Settings → "Test connection". */
+  /** One cheap round-trip that proves the key works. Settings → "Check key". */
   verifyCredentials(ctx: CallContext): Promise<{ ok: true; note?: string }>;
 
   /**
@@ -2115,7 +2264,7 @@ export interface PriceTable { models: Record<ModelKey, PriceModel>; fetchedAt: s
 export interface RefreshReport {
   providerId: ProviderId;
   added: ModelKey[]; updated: ModelKey[]; removed: ModelKey[];
-  /** Discovered ids recognise() rejected. Listed in Settings → Models → Unrecognised. */
+  /** Discovered ids recognise() rejected. Listed in Settings → Models → Not supported. */
   unrecognised: { modelId: string; seenAt: string }[];
   error?: ProviderError;
   checkedAt: string;
@@ -2128,7 +2277,7 @@ export class UnknownModelError extends Error { constructor(public key: ModelKey)
 `ModelManifest` is pure data (serialisable, cacheable, shippable to the browser). `ImageModel` is the manifest plus behaviour. The pair *is* the capability manifest the rest of the PRD refers to, and this type is the **only** manifest vocabulary in the document (§0.3).
 
 ```ts
-// packages/providers/src/types/model.ts
+// packages/core/src/schemas/manifest.ts (zod, types inferred); ImageModel: packages/providers/src/types/model.ts
 
 export type AspectRatio =
   | "auto"
@@ -2142,7 +2291,7 @@ export type ResolutionTier = "512" | "1K" | "1.5K" | "2K" | "4K";
 export interface QualityLevel {
   id: string;        // provider-native value sent on the wire ("low", "high", "max", "auto")
   label: string;     // our copy, e.g. "High"
-  hint?: string;     // our copy, e.g. "High visual fidelity"
+  hint?: string;     // our copy, e.g. "Sharpest detail"
 }
 
 export type OutputFormat = "png" | "jpeg" | "webp";
@@ -2239,7 +2388,7 @@ export interface ModelManifest {
   price: PriceModel;
   source: "static" | "discovered" | "user";
   manifestVersion: string;     // bumped on any capability change; frozen onto the job set
-  fetchedAt: string;           // ISO; the UI shows "prices as of …"
+  fetchedAt: string;           // ISO; the UI shows "Prices as of …"
 }
 
 export interface ImageModel extends ModelManifest {
@@ -2261,7 +2410,7 @@ export interface ImageModel extends ModelManifest {
 }
 ```
 
-**`estimate()` is not a method.** Cost before the run is the pure function `estimate(manifest, req)` exported from `packages/providers` (§6.9), because the browser cannot call a method on an `ImageModel` and an HTTP round-trip per batch-stepper click is unacceptable.
+**`estimate()` is not a method.** Cost before the run is the pure function `estimate(manifest, req)` exported from `@openfield/providers/manifest` (§6.9, §0.16), because the browser cannot call a method on an `ImageModel` and an HTTP round-trip per batch-stepper click is unacceptable.
 
 **Legacy manifest names.** Four other naming schemes appear in the drafts. The mechanical rename table is §0.3's and is not restated here; `Capabilities` above is the only manifest vocabulary.
 
@@ -2275,13 +2424,13 @@ export function resolveControl(caps: Capabilities, id: ControlId):
   { state: ControlState; options?: unknown[]; default?: unknown; reason?: string };
 ```
 
-**The rendering rule (§3.5, verbatim).** *Core set (Model, Aspect, Resolution/Quality, Batch, Seed) renders disabled with a reason when explicitly unsupported; every non-core control is hidden when unsupported or absent.* Seed is deliberately core-and-disabled: hiding it would hide the reason reproducibility is unavailable.
+**The rendering rule (§3.5, verbatim).** *Core set (Model, Aspect, Resolution/Quality, Images, Seed) renders disabled with a reason when explicitly unsupported; every non-core control is hidden when unsupported or absent.* Seed is deliberately core-and-disabled: hiding it would hide the reason reproducibility is unavailable.
 
 | State | Composer / node UI |
 |---|---|
 | `supported` | Control renders; the popover lists **the model's own options**, never a house list |
 | `partial` | Control renders; unavailable options greyed with `reason` as subtitle; info dot on the chip |
-| `emulated` | Control renders with a `≈` glyph; the popover header explains the emulation and its cost consequence |
+| `emulated` | Control renders with a `~` glyph; the popover header explains the emulation and its cost consequence |
 | `unsupported` | Core set → disabled with a tooltip naming the model. Non-core → hidden |
 | `absent` | Not in the DOM |
 
@@ -2294,16 +2443,16 @@ export function resolveControl(caps: Capabilities, id: ControlId):
 | `background` | Background chip | Auto / Opaque / Transparent |
 | `batch.max` | Stepper `− n/max +` | `−` disabled at 1, `+` disabled at `max` |
 | `seed.supported` | Seed field | Dice = randomise; blank = server-generated per image (§0.11) |
-| `negativePrompt` | Negative prompt field | Hidden when absent; disabled with a reason when explicitly `unsupported` |
-| `promptEnhance !== "none"` | Enhance toggle chip | `"openfield"` shows a "runs a text model" note (§3.4.3) |
+| `negativePrompt` | Avoid field | Hidden when absent; disabled with a reason when explicitly `unsupported` |
+| `promptEnhance !== "none"` | Enhance toggle chip | `"openfield"` shows a "Uses a text model" note (§3.4.3) |
 | `references.supported` | `+` attach button, reference strip | `max` enforced client- and server-side |
 | `references.strengthMode` | Reference strength slider | `"none"` ⇒ hidden |
 | `styleStrength` | Preset strength slider | Otherwise the slider selects the preset's `light` variant, or is disabled with a reason (§0.8) |
 | `ops.inpaint` / `ops.outpaint` | Edit-view tools (§4.8) | The row renders **disabled with its reason**, never hidden (§4.8) |
 | `extraSchema` | Advanced chip | Rendered mechanically (§3.4.7) |
-| `price` | Generate button sub-label | `≈ $0.27 · 2 images` (§6.9) |
+| `price` | Generate button sub-label | `About $0.27 · 2 images` (§6.9) |
 
-**Acceptance criterion.** For the models observed in the reference product, the manifest must render the observed chips, **in the observed order, with no observed chip missing and no model-capability chip added**. Openfield-only controls (Advanced, Negative, Seed, Reference strength, Palette) are excluded from the comparison and asserted separately.
+**Acceptance criterion.** For the models observed in the reference product, the manifest must render the observed chips, **in the observed order, with no observed chip missing and no model-capability chip added**. Openfield-only controls (Advanced, Avoid, Seed, Reference strength, Palette) are excluded from the comparison and asserted separately.
 
 | Observed model | Expected chip set |
 |---|---|
@@ -2331,14 +2480,14 @@ Resolution order for a model list, last wins:
 2. **Discovered** — `provider.listModels()` at server start (if credentials exist), on demand from Settings → Models → *Refresh*, and at most once per 24 h in the background.
 3. **User overlay** — `~/.openfield/models.json`, hand-edited, merged last. This is how a user enables a model that shipped after this build: they paste an id and, optionally, capability overrides.
 
-**Discovery is allow-listed, not additive (§0.3).** A discovered id is added to the picker **only if the adapter's own `recognise(id)` predicate accepts it**; a recognised id merges over the static catalog (static capabilities win, the discovered id and its version do not). Unrecognised ids are recorded in `RefreshReport.unrecognised`, shown under **Settings → Models → Unrecognised**, and never added to the picker. **There is no conservative-default path for discovered ids** — the conservative manifest (text-to-image only, `size.mode:"aspect"` with `["auto","1:1"]`, batch 1, price `unknown`) is reserved for `~/.openfield/models.json` entries the user added deliberately. The reason is concrete: neither launch provider documents an image-capability flag on its model list (§6.13, §6.14), so an additive rule fills the picker with text-only models that each fail on first use.
+**Discovery is allow-listed, not additive (§0.3).** A discovered id is added to the picker **only if the adapter's own `recognise(id)` predicate accepts it**; a recognised id merges over the static catalog (static capabilities win, the discovered id and its version do not). Unrecognised ids are recorded in `RefreshReport.unrecognised`, shown under **Settings → Models → Not supported**, and never added to the picker. **There is no conservative-default path for discovered ids** — the conservative manifest (text-to-image only, `size.mode:"aspect"` with `["auto","1:1"]`, batch 1, price `unknown`) is reserved for `~/.openfield/models.json` entries the user added deliberately. The reason is concrete: neither launch provider documents an image-capability flag on its model list (§6.13, §6.14), so an additive rule fills the picker with text-only models that each fail on first use.
 
-Discovery failures are non-fatal: the registry keeps the static catalog, records the error on the report, and Settings shows *"Could not refresh models — using the built-in list (last checked …)."* Model ids are **never** hardcoded in the UI; deep links use `?model=<providerId>:<modelId>` (§0.2) and fall back to the default model with a toast when the key is unknown.
+Discovery failures are non-fatal: the registry keeps the static catalog, records the error on the report, and Settings shows *"Couldn't update the model list. Showing the saved one (last checked …)."* Model ids are **never** hardcoded in the UI; deep links use `?model=<providerId>:<modelId>` (§0.2) and fall back to the default model with a toast when the key is unknown.
 
 ### 6.5 Canonical request and request normalisation
 
 ```ts
-// packages/providers/src/types/request.ts
+// packages/core/src/schemas/request.ts (zod, types inferred)
 
 export type SizeSpec =
   | { kind: "auto" }
@@ -2420,7 +2569,7 @@ export interface GenerateRequest {
   source: "composer" | "detail_editor" | "canvas" | "api" | "recreate";
   canvas?: { canvasId: string; nodeId: string };
 
-  /** Escape hatch. Never populated by first-party UI; surfaced only in Advanced → Raw. */
+  /** Escape hatch. Never populated by first-party UI; surfaced only in Advanced → Custom. */
   providerOptions?: Record<string, unknown>;
 }
 
@@ -2448,7 +2597,7 @@ export interface Diagnostic { level: "error" | "warning"; field?: string; code: 
 Normalisation happens in core, once, before any adapter code runs. `normalize(model, req) → { request: NormalizedRequest; diagnostics: Diagnostic[] }`:
 
 1. **Resolve the preset, character, reference set and palette.** The full resolution order is §0.8's and is logged verbatim onto the job set. The template placeholder is **`{prompt}`, single brace, exactly once** (§0.8); `{{name}}` is §5.9's user-variable syntax and resolves first. After this step `presetId`, `characterId`, `referenceSetId` and `paletteId` are gone and the adapter sees only plain prompt text and plain references. *This is our open substitute for provider-hosted style catalogues and colour-transfer presets — §6.10.*
-2. **Validate against the manifest.** Unknown quality id, ratio not in `ratios`, `batch > max`, `references.length > max`, mask without `ops.inpaint` → a `Diagnostic`. A negative prompt on a model with `negativePrompt: false` is **never** a diagnostic: core appends it as a single trailing `Avoid: …` sentence per §0.8 and records the emulation on the job row, so the Info panel shows *"This model has no negative-prompt input; Openfield appended it as an instruction."* `unsupportedParamPolicy: "reject"` turns a diagnostic into an `unsupported_param` error before submit; `"drop-with-warning"` strips the field and records the warning on the job row.
+2. **Validate against the manifest.** Unknown quality id, ratio not in `ratios`, `batch > max`, `references.length > max`, mask without `ops.inpaint` → a `Diagnostic`. A negative prompt on a model with `negativePrompt: false` is **never** a diagnostic: core appends it as a single trailing `Avoid: …` sentence per §0.8 and records the emulation on the job row, so the Info panel shows *"This model has no Avoid field. Openfield added it to the prompt instead."* `unsupportedParamPolicy: "reject"` turns a diagnostic into an `unsupported_param` error before submit; `"drop-with-warning"` strips the field and records the warning on the job row.
 3. **Resolve size to pixels** where the provider wants pixels. `resolveSize(ratio, tier)`: long edge = tier px (512 / 1K 1024 / 1.5K 1536 / 2K 2048 / 4K 4096), short edge = `round(long × min/max)` snapped down to `multipleOf`, then clamped to `[minEdge, maxEdge]` in `size.mode: "free"`. In `size.mode: "aspect"` the long edge can never exceed the largest declared `resolution.tier` — which is exactly what bounds the OpenAI models at 1536 (§6.14). `3:4 @ 2K → 1536×2048`. The resolved pair is stored on the job so the Info panel can show `Size 1536×2048` alongside `Resolution 2K`.
 4. **Fill seeds.** **Seeds are generated server-side here, one per output, only when `capabilities.seed.supported`; otherwise `jobs.seed` stays NULL.** This is the single source for seed generation (§0.11) — the composer always sends `seed: null` unless the user locked one, and a locked seed with `batch > 1` derives `seed, seed+1, … seed+n−1`.
 5. **Plan the fan-out.** `batch.native ? one call with n : batch × single-image calls`, each with its own seed and its own per-attempt idempotency key (§6.7).
@@ -2491,7 +2640,7 @@ export interface JobResult {
   usage?: ProviderUsage;
   cost?: CostActual;
   safety?: SafetyVerdict[];
-  /** Redacted provider payload minus image bytes. Kept for the Debug drawer. */
+  /** Redacted provider payload minus image bytes. Kept for the Error log. */
   providerRaw?: unknown;
   timings: { submittedAt: number; firstOutputAt?: number; completedAt: number };
 }
@@ -2546,11 +2695,11 @@ export interface JobUpdate {
 | Poll schedule | 800 ms first poll, ×1.6 backoff, cap 5 s, ±20 % jitter; `nextPollAfterMs` and `Retry-After` win over the schedule |
 | Retry | Only `retryable` codes (§6.8): `network`, `timeout`, `rate_limited`, `provider_unavailable`. `maxAttempts` 3 (1 + 2 retries), full-jitter backoff 1 s / 4 s / 15 s ±20 %; `Retry-After` always wins. Non-retryable errors fail immediately |
 | Timeout | Per-attempt timeout = `limits.requestTimeoutMs` (default 120 000 generate, 300 000 upscale); whole-job deadline `jobDeadlineMs` 900 000, then `timeout` + cancel. These two values are canonical; §8.4.2's `jobTimeoutMs` is deleted |
-| Cancellation | §0.12. Neither launch adapter implements provider-side cancel, so every v1 cancellation aborts the fetch, marks `canceled`, discards any late result and writes a `usage_log` row at full estimate with `discarded = 1`. The copy is verbatim: *"Canceled — the provider may still charge for work already started."* |
+| Cancellation | §0.12. Neither launch adapter implements provider-side cancel, so every v1 cancellation aborts the fetch, marks `canceled`, discards any late result and writes a `usage_log` row at full estimate with `discarded = 1`. The copy is verbatim: *"Canceled. You may still be charged for work that already started."* |
 | Durability | Handles live in SQLite. On restart the runner re-attaches to every resumable non-terminal job and resumes polling; **jobs whose adapter cannot resume are marked `interrupted` (§8.4.5); they are never auto-resubmitted** (double-billing risk) |
 | Idempotency | `idempotencyKey` is the **client-supplied job-set key** (§0.2); per-attempt provider headers are `` `${idempotencyKey}:${jobIdx}` ``, stable across retries, so a retried timeout cannot double-bill on providers that honour the header |
 
-**Events to the browser.** One SSE stream, **`GET /api/events`** (§8.3.2 owns it; `GET /api/jobs/stream` does not exist). The event types this section depends on are `job.queued`, `job.started`, `job.progress`, **`job.partial`**, `job.output`, `job.failed`, `job.canceled` and `job_set.completed`. `job.partial` is what terminates `ImageModel.stream?()` and `capabilities.streaming.partialImages` — partial frames are written to `tmp/`, served from a volatile thumb path, never inserted into `assets`, and superseded by the final `job.output` (§0.6). Placeholder tiles (Processing pill + Cancel pill, aspect-ratio-correct) subscribe to the same stream.
+**Events to the browser.** One SSE stream, **`GET /api/events`** (§8.3.2 owns it; `GET /api/jobs/stream` does not exist). The event types this section depends on are `job.queued`, `job.started`, `job.progress`, **`job.partial`**, `job.output`, `job.failed`, `job.canceled` and `job_set.completed`. `job.partial` is what terminates `ImageModel.stream?()` and `capabilities.streaming.partialImages` — partial frames are written to `tmp/`, served from a volatile thumb path, never inserted into `assets`, and superseded by the final `job.output` (§0.6). Placeholder tiles (Generating pill + Cancel pill, aspect-ratio-correct) subscribe to the same stream.
 
 ### 6.8 Error taxonomy
 
@@ -2569,7 +2718,7 @@ export class ProviderError extends Error {
   userMessage!: string;      // our copy, shown verbatim in the UI
   retryAfterMs?: number;
   httpStatus?: number;
-  providerCode?: string;     // provider's own code, shown in the Debug drawer only
+  providerCode?: string;     // provider's own code, shown in the Error log only
   field?: string;            // for unsupported_param / invalid_request
   hint?: { action: "open-settings" | "open-model-picker" | "edit-prompt" | "retry"; label: string };
 }
@@ -2585,28 +2734,28 @@ Every adapter exports **one** `mapError` signature — `mapError(res: Response, 
 
 | Code | Typical trigger | What the UI shows |
 |---|---|---|
-| `auth_missing` | No key stored for the selected provider | Generate is disabled; button sub-label "Add a key to use this model", click → Settings → Providers |
-| `auth_invalid` | 401 / bad key | Job fails; "Provider rejected this key." + *Open settings* |
-| `auth_forbidden` | Key lacks access to this model | Job fails; "Your key does not have access to `<Model>`." + *Choose another model* |
-| `billing_required` | No payment method / credits at 0 | "No credit available on this key." + link to their console |
+| `auth_missing` | No key stored for the selected provider | Generate is disabled; button sub-label "Add a key to use this model", click → Settings → Keys |
+| `auth_invalid` | 401 / bad key | Job fails; "This key was rejected." + *Change key* |
+| `auth_forbidden` | Key lacks access to this model | Job fails; "Your key can't use `<Model>`." + *Choose another model* |
+| `billing_required` | No payment method / credits at 0 | "This key is out of credit." + link to their console |
 | `quota_exceeded` | Hard monthly/org limit | Same copy as billing, plus *Retry* disabled until the user dismisses |
-| `rate_limited` | 429 | Tile stays in `running` with "Provider rate limit — retrying in Ns"; auto-retry ×2, then fail |
-| `content_refused` | Output blocked by provider safety | Muted refusal card: "The provider declined this request." + the provider's category if given + *Reuse*. Never retried |
+| `rate_limited` | 429 | Tile stays in `running` with "Too many requests. Retrying in Ns"; auto-retry ×2, then fail |
+| `content_refused` | Output blocked by provider safety | Muted refusal card: "The model wouldn't make this." + the provider's category if given + *Reuse*. Never retried |
 | `content_flagged_input` | A reference image rejected | Names the offending reference thumbnail |
-| `unsupported_param` | Manifest/reality mismatch, `reject` policy | Inline chip error before submit: "`<Model>` does not support `<field>`." Generate blocked until fixed |
+| `unsupported_param` | Manifest/reality mismatch, `reject` policy | Inline chip error before submit: "`<Model>` doesn't support `<setting label>`." (the setting's name as the UI shows it, never the wire field). Generate blocked until fixed |
 | `capability_unsupported` | The op itself is not in this model's manifest | "This model can't do that." + *Reuse* |
-| `invalid_request` | 400 we cannot attribute to one field | "The request was rejected as invalid." + Debug drawer |
+| `invalid_request` | 400 we cannot attribute to one field | "These settings didn't work." + Error log |
 | `payload_too_large` | Reference/base image over limit | "Reference image is too large (max N MB)." + offer to downscale locally |
-| `provider_unavailable` | 5xx, 503, maintenance | "The provider is not responding. Retrying…" then "Try again later." |
-| `provider_error` | Mapped 5xx with a body; also an asset host outside `meta.assetHosts` (§6.11) | Generic failure card + Debug drawer |
-| `network` | DNS/TLS/socket | "Couldn't reach the provider." |
-| `timeout` | Per-attempt or job deadline | "Timed out waiting for the provider." + *Retry* |
-| `disk_full` | Ingest could not write the file (§8.5.1) | "Couldn't write the image to disk." + Settings → Storage |
-| `canceled` | User cancel | "Canceled — the provider may still charge for work already started." + a `usage_log` row flagged `discarded` |
+| `provider_unavailable` | 5xx, 503, maintenance | "The model isn't responding. Retrying…" then "The model ran into a problem. Try again later." |
+| `provider_error` | Mapped 5xx with a body; also an asset host outside `meta.assetHosts` (§6.11) | Generic failure card + Error log |
+| `network` | DNS/TLS/socket | "Couldn't connect." |
+| `timeout` | Per-attempt or job deadline | "This took too long." + *Retry* |
+| `disk_full` | Ingest could not write the file (§8.5.1) | "Couldn't save. Your disk is full." + Free up space |
+| `canceled` | User cancel | "Canceled. You may still be charged for work that already started." + a `usage_log` row flagged `discarded` |
 
 §0.5 owns the failed-tile copy table that §2.4 renders; the column above is the same copy stated once for adapter authors.
 
-The **Debug drawer** (Settings → Diagnostics, and a link on every failure card) shows the redacted request payload, HTTP status, `providerCode` and the redacted response — enough to file a bug, with no credential material.
+The **Error log** (Settings → Help, and a link on every failure card) shows the redacted request payload, HTTP status, `providerCode` and the redacted response — enough to file a bug, with no credential material.
 
 ### 6.9 Cost estimation and usage accounting
 
@@ -2638,16 +2787,17 @@ export interface CostActual {
   basis: string;
 }
 
-/** Pure. Touches manifest.price only — never credentials. Exported from packages/providers
- *  and imported by apps/web, which already holds the manifest in memory. */
+/** Pure. Touches manifest.price only, never credentials. Exported from the browser-safe
+ *  entry @openfield/providers/manifest and imported by apps/web, which already holds the
+ *  manifest in memory (§0.16). */
 export function estimate(manifest: ModelManifest, req: NormalizedRequest): CostEstimate;
 ```
 
-- **Where prices come from.** The adapter declares them, with `pricedAt` and `sourceUrl`. The UI never presents them as authoritative: the Generate tooltip and the Usage screen both carry *"Prices as declared by the adapter, as of `<date>`. Check the provider for current rates."* A `~/.openfield/prices.json` overlay lets a user correct any number without a code change; `refreshPricing()` proposes a diff in Settings that the user accepts or rejects — prices are never changed silently.
-- **Before the run.** **The composer computes the estimate locally from the manifest already in memory**, so the Generate sub-label updates live as chips change: `≈ $0.27 · 2 images`, or `≈ $0.10–$0.34 · 2 images` when token-priced, or `Cost unknown` when `kind: "unknown"`. Canvas node run pills and edit-tool CTAs call the same function. `POST /api/models/:p/:m/estimate` exists for **server-side callers and the canvas run-all preview only** (§8.3), and returns `CostEstimate` exactly. Where an adapter implements `estimateRemote()` the sub-label renders the pure estimate first and upgrades in place when the round-trip resolves; the result is cached per `paramsHash` and never fires on the render path.
+- **Where prices come from.** The adapter declares them, with `pricedAt` and `sourceUrl`. The UI never presents them as authoritative: the Generate tooltip and the Usage screen both carry *"Prices as of `<date>`. They may have changed since."* A `~/.openfield/prices.json` overlay lets a user correct any number without a code change; `refreshPricing()` proposes a diff in Settings that the user accepts or rejects — prices are never changed silently.
+- **Before the run.** **The composer computes the estimate locally from the manifest already in memory**, so the Generate sub-label updates live as chips change: `About $0.27 · 2 images`, or `About $0.10–0.34 · 2 images` when token-priced, or `Cost unknown` when `kind: "unknown"`. Canvas node run pills and edit-tool CTAs call the same function. `POST /api/models/:p/:m/estimate` exists for **server-side callers and the canvas run-all preview only** (§8.3), and returns `CostEstimate` exactly. Where an adapter implements `estimateRemote()` the sub-label renders the pure estimate first and upgrades in place when the round-trip resolves; the result is cached per `paramsHash` and never fires on the render path.
 - **Cached input.** Where a provider reports cached input tokens they are billed at `cachedInputPerMTok`; **where the field is absent the reconciled figure is an upper bound and is labelled `≤`.**
-- **After the run.** If the provider returns usage, `reconcile(usage, price)` computes `CostActual { confidence: "reconciled" }`; otherwise the estimate is stored with `confidence: "estimated"` and the Usage screen marks those rows `≈`. A failed job writes a row with `cost_usd = 0` and `cost_source = 'unknown'`, and no cost is ever added to a spend total for a failure; a canceled-after-submit job writes a row at full estimate with `discarded = 1` (§0.13).
-- **Usage log.** One row per terminal outcome, using §8.2's column names exactly: `ts, provider_id, model_id, job_set_id, job_id, operation, batch_index, size, quality, outcome, units, estimate_min, estimate_max, cost_usd, cost_source ('reconciled'|'estimated'|'unknown'), price_as_of, discarded, latency_ms, http_status`. Settings → Usage & budget shows totals for today / 7 d / 30 d / all time, grouped by provider and model, with a "billed but discarded" line and CSV export. Optional soft **spend guard**: a monthly threshold that, when crossed, requires one extra confirm click before each run. It is local bookkeeping only — Openfield cannot see the user's real provider invoice and says so.
+- **After the run.** If the provider returns usage, `reconcile(usage, price)` computes `CostActual { confidence: "reconciled" }`; otherwise the estimate is stored with `confidence: "estimated"` and the Usage screen marks those rows `~`. A failed job writes a row with `cost_usd = 0` and `cost_source = 'unknown'`, and no cost is ever added to a spend total for a failure; a canceled-after-submit job writes a row at full estimate with `discarded = 1` (§0.13).
+- **Usage log.** One row per terminal outcome, using §8.2's column names exactly: `ts, provider_id, model_id, job_set_id, job_id, operation, batch_index, size, quality, outcome, units, estimate_min, estimate_max, cost_usd, cost_source ('reconciled'|'estimated'|'unknown'), price_as_of, discarded, latency_ms, http_status`. Settings → Spending shows totals for Today / 7 days / 30 days / All time, grouped by provider and model, with a "Canceled but charged" line and an Export CSV action. Optional soft **spend guard**: a monthly threshold that, when crossed, requires one extra confirm click before each run. It is local bookkeeping only — Openfield cannot see the user's real provider invoice and says so.
 
 ### 6.10 What replaces the closed pieces
 
@@ -2659,7 +2809,7 @@ export function estimate(manifest: ModelManifest, req: NormalizedRequest): CostE
 | Camera / Lens wheel pickers | Preset **fragment groups** (camera, lens) in the preset library — two dependent selects that append text; no provider feature required |
 | Prompt-enhance toggle | `promptEnhance: "openfield"` — the local enhancer specified in §3.4.3 and shipping in M1 (`M1-16`): a pre-pass through a user-configured text model, off by default, with the rewritten prompt stored and shown in the Info panel. `"native"` where the provider has its own flag |
 | Credits / free-gen counter | USD estimate + usage log (§6.9) |
-| Upscale tool with a named third-party engine | **Local Lanczos resample ×2/×4 in v1, labelled *Resample — adds no detail*** (§4.8 row 4). `ops.upscale` remains the slot for a detail-adding upscaler; no launch adapter declares it, so the AI-upscale row renders disabled with "No configured model can upscale — add a provider that supports it." A plugin or a v1.1 adapter fills it (§6.16). Advanced upscale controls are declared per adapter via `extraSchema`, never assumed |
+| Upscale tool with a named third-party engine | **Local Lanczos resample ×2/×4 in v1, labelled *Resizes, adds no detail*** (§4.8 row 4). `ops.upscale` remains the slot for a detail-adding upscaler; no launch adapter declares it, so the AI-upscale row renders disabled with "None of your models can upscale. Add a key for one that can." A plugin or a v1.1 adapter fills it (§6.16). Advanced upscale controls are declared per adapter via `extraSchema`, never assumed |
 | Background removal | `ops.removeBackground`. No launch adapter declares it, so the row renders disabled with its reason; a local ONNX plugin is documented as the reference implementation (§4.8 row 5) |
 | Layer decomposition, relight, angles, enhancer, colour grading | **Capability-gated ops.** Relight, Angles and Enhancer ship as widget-compiled instruction edits (§4.8 rows 7–9); colour grading ships as a local non-generative WebGL stage in the image editor (§4.8 row 6); layer decomposition ships as a **visible disabled plugin slot** (`ops.decomposeLayers`, §4.8 row 1) |
 | Per-job-set cost endpoint driving credit labels | Adapter-declared `PriceModel`, optionally `provider_estimate` via `estimateRemote()` (§6.9) |
@@ -2679,7 +2829,7 @@ export function estimate(manifest: ModelManifest, req: NormalizedRequest): CostE
 }
 ```
 
-**Precedence.** environment variable → config file → unset. Each `CredentialField` declares its `envVars` (`OPENFIELD_<PROVIDER>_<FIELD>` first, then the provider's conventional name such as `OPENAI_API_KEY`). When an env var is in effect, Settings shows the field read-only with *"Set by environment variable `OPENAI_API_KEY`"* and refuses to overwrite the file.
+**Precedence.** environment variable → config file → unset. Each `CredentialField` declares its `envVars` (`OPENFIELD_<PROVIDER>_<FIELD>` first, then the provider's conventional name such as `OPENAI_API_KEY`). When an env var is in effect, Settings shows the field read-only with *"Set by `OPENAI_API_KEY`"* and refuses to overwrite the file.
 
 **Never in the browser.**
 
@@ -2687,13 +2837,13 @@ export function estimate(manifest: ModelManifest, req: NormalizedRequest): CostE
 - `PUT /api/settings/keys/:providerId` accepts values, writes the file, and responds with status only.
 - Adapters receive credentials from `CallContext`; no credential value may appear in a `JobResult`, a manifest, an SSE frame or an error object. A conformance test asserts this by property-scanning every fixture response for the credential string.
 
-**Redaction.** All adapter logging goes through `RedactingLogger`, which (a) drops `Authorization`, `x-goog-api-key`, `api-key` and `cookie` headers, (b) replaces any substring equal to a loaded credential with `«redacted»`, and (c) applies conservative regex scrubs (`sk-[A-Za-z0-9_-]{16,}`, `AIza[0-9A-Za-z_-]{20,}`) as a second net. `providerRaw` is scrubbed with the same function before it reaches SQLite.
+**Redaction.** All adapter logging goes through `RedactingLogger`, which (a) drops `Authorization`, `x-goog-api-key`, `api-key` and `cookie` headers, (b) replaces any substring equal to a loaded credential with `[hidden]`, and (c) applies conservative regex scrubs (`sk-[A-Za-z0-9_-]{16,}`, `AIza[0-9A-Za-z_-]{20,}`) as a second net. `providerRaw` is scrubbed with the same function before it reaches SQLite.
 
-**Network posture.** The server binds `127.0.0.1` only (configurable port, never `0.0.0.0`); the four inbound guards are §0.6's and are mandatory on every method including GET. Outbound connections are restricted to the union of `meta.networkHosts` of enabled adapters **plus asset-download hosts, which must each appear in `meta.assetHosts: string[]`** — a second declared allow-list per adapter (e.g. `cdn.higgsfield.ai`). A download URL whose host is in neither list is refused with `provider_error`, logged with the host, and surfaced as *"This provider returned an image on an unexpected host."* **Redirects are not followed across hosts, and only `https:` is permitted.** Settings → Privacy lists both arrays verbatim. Without this, a provider response — or a typo-squatted proxy behind a user-supplied `baseUrl` — would be an SSRF primitive inside the one process that holds every key.
+**Network posture.** The server binds `127.0.0.1` only (configurable port, never `0.0.0.0`); the four inbound guards are §0.6's and are mandatory on every method including GET. Outbound connections are restricted to the union of `meta.networkHosts` of enabled adapters **plus asset-download hosts, which must each appear in `meta.assetHosts: string[]`** — a second declared allow-list per adapter (e.g. `cdn.higgsfield.ai`). A download URL whose host is in neither list is refused with `provider_error`, logged with the host, and surfaced as *"Image blocked. It came from an unknown site."* **Redirects are not followed across hosts, and only `https:` is permitted.** Settings → Privacy lists both arrays verbatim. Without this, a provider response — or a typo-squatted proxy behind a user-supplied `baseUrl` — would be an SSRF primitive inside the one process that holds every key.
 
 **No telemetry.** No analytics, no crash reporting, no update ping, no remote config, no bundled fonts or scripts from a CDN at runtime. The only outbound traffic is the provider calls a user's own click causes.
 
-**The disclosure we state plainly**, in Settings and in the README: *"Openfield sends your prompt, your reference images, your masks and your chosen settings to whichever provider you select, using your key. Those providers apply their own terms, retention and content policies. Openfield stores nothing remotely and sends nothing anywhere else."* Where a provider imposes something irreversible — an invisible output watermark, mandatory moderation — the adapter declares it in `safety.notices` and the model-picker row shows it.
+**The disclosure we state plainly**, in Settings and in the README: *"Openfield sends your prompt, reference images, masks and settings to the company behind the model you pick, using your key. Their terms, data retention and content rules apply. Openfield stores nothing online and sends nothing anywhere else."* Where a provider imposes something irreversible — an invisible output watermark, mandatory moderation — the adapter declares it in `safety.notices` and the model-picker row shows it.
 
 **Acceptance criteria.** (1) `grep`ing the client bundle and every HTTP/SSE response for a configured key yields nothing. (2) Starting with `config.json` at mode `0644` triggers a chmod to `0600` and a warning in the log. (3) With no keys at all the app boots, renders the model picker from static catalogs, and disables Generate with actionable copy. (4) A request to a host in neither allow-list is blocked, with a test asserting the block.
 
@@ -2715,7 +2865,9 @@ packages/providers/src/openai/
   __fixtures__/     // recorded HTTP exchanges (secrets scrubbed at capture time)
 ```
 
-**Registration** is static in v1 — `packages/providers/src/index.ts` exports `builtinProviders = [openai(), google(), higgsfield()]`. No dynamic plugin loading, no `eval`, no remote adapter fetch; adding an adapter means a PR. (Third-party loadable adapters are deliberately deferred; see §6.16.)
+Adapter folder names `types` and `manifest` are reserved (§0.16).
+
+**Registration** is static in v1: `packages/providers/src/registry.ts` exports `builtinProviders = [openai(), google(), higgsfield()]`, re-exported by `@openfield/providers/server`. No dynamic plugin loading, no `eval`, no remote adapter fetch; adding an adapter means a PR. (Third-party loadable adapters are deliberately deferred; see §6.16.)
 
 **Capability declaration rules.**
 
@@ -2732,7 +2884,7 @@ packages/providers/src/openai/
 
 | # | Test |
 |---|---|
-| 1 | Manifest validates against the `Capabilities` schema; no unknown fields |
+| 1 | Manifest parses with `modelManifestSchema` from `@openfield/core` in strict mode (no unknown fields) |
 | 2 | Every declared aspect ratio and every declared quality id maps to a valid payload (golden snapshots) |
 | 3 | `size.default`, `resolution.default` and `quality.default` are members of their own option lists |
 | 4 | The exported `estimate(manifest, req)` is pure for this manifest: no network, no clock, deterministic, returns USD |
@@ -2858,7 +3010,7 @@ Pricing lives in `pricing.ts` as data; the shared pure `estimate(manifest, req)`
 > Model ids, capability values and prices below are **as researched on 2026-09-23** and are the adapter's *static catalog*, overridden at runtime by recognised discovery and by `~/.openfield/models.json`. Treat them as a starting point to verify at implementation, not as guarantees.
 
 **Endpoints.** `POST https://generativelanguage.googleapis.com/v1beta/models/{modelId}:generateContent`, with `generationConfig.responseModalities: ["IMAGE"]` and `generationConfig.imageConfig`.
-**Discovery.** `GET /v1beta/models`, filtered through `recognise(id)` (known image-family id patterns only). **Image-model detection from `GET /v1beta/models` is not documented (researched 2026-09-23)**: no image-model `models.list` is published and `supportedGenerationMethods` is not documented to flag image output. The adapter therefore treats discovery as a way to learn about **new versions of known families, not new capabilities**; every unrecognised id goes to Settings → Models → Unrecognised (§6.4).
+**Discovery.** `GET /v1beta/models`, filtered through `recognise(id)` (known image-family id patterns only). **Image-model detection from `GET /v1beta/models` is not documented (researched 2026-09-23)**: no image-model `models.list` is published and `supportedGenerationMethods` is not documented to flag image output. The adapter therefore treats discovery as a way to learn about **new versions of known families, not new capabilities**; every unrecognised id goes to Settings → Models → Not supported (§6.4).
 **Auth.** `x-goog-api-key: <apiKey>` header (never the `?key=` query form — it would land in logs). One credential field, `apiKey`.
 **Hosts.** `networkHosts: ["generativelanguage.googleapis.com"]`, `assetHosts: []` — images arrive inline as `inlineData`.
 **Naming.** `displayName` uses Google's own canonical model naming, not the reference product's catalogue labels; the vendor nickname appears only as `family`.
@@ -2872,10 +3024,10 @@ Pricing lives in `pricing.ts` as data; the shared pure `estimate(manifest, req)`
 | `resolution` | `generationConfig.imageConfig.imageSize` (`"1K" \| "2K" \| "4K"`) |
 | `batch` | **client fan-out** — `batch.native: false`, N parallel calls. The manifest's `emulated` array is the union of every emulated row in this table: `emulated: ["batch", "negativePrompt"]` |
 | `seed` | not exposed ⇒ `seed.supported: false` (Seed chip disabled with a reason, §6.3) |
-| `negativePrompt` | no native field ⇒ `negativePrompt: false` plus `emulated: ["negativePrompt"]`; core appends it as a trailing `Avoid: …` sentence and the chip carries `≈` (§0.8, §3.4.4) |
+| `negativePrompt` | no native field ⇒ `negativePrompt: false` plus `emulated: ["negativePrompt"]`; core appends it as a trailing `Avoid: …` sentence and the chip carries `~` (§0.8, §3.4.4) |
 | `quality` | n/a — resolution is the only quality axis |
 | `background` / transparency | not exposed ⇒ chip hidden |
-| `output.format` | not exposed ⇒ `output.formats: ["png"]`, chip hidden. **Bytes are stored exactly as returned (§8.5.1)**; format conversion happens only on export (§8.5.4), where the dialog warns *"Re-encoding may not preserve the provider's invisible watermark."* |
+| `output.format` | not exposed ⇒ `output.formats: ["png"]`, chip hidden. **Bytes are stored exactly as returned (§8.5.1)**; format conversion happens only on export (§8.5.4), where the dialog warns *"Changing the format may remove the hidden AI watermark."* |
 | `moderation` | not exposed |
 
 **Manifest values (static catalog).** `"auto"` is the first ratio and the default on every Gemini model.
@@ -2889,9 +3041,9 @@ Pricing lives in `pricing.ts` as data; the shared pure `estimate(manifest, req)`
 
 > Research confirms 14 ratios for Nano Banana 2 and states Pro supports "14+ (same as Nano Banana 2)"; **the Pro list is inherited, not separately sourced — verify at implementation.**
 
-Common: `ops.textToImage: true`, `ops.imageEdit: true`, `ops.inpaint/outpaint/upscale/removeBackground/detectText/decomposeLayers: false`, `promptEnhance: "openfield"` (the local enhancer of §3.4.3), `styleStrength: false`, `streaming.partialImages: false`, `unsupportedParamPolicy: "drop-with-warning"`, `safety.notices: ["Outputs carry an invisible provider watermark."]`, `limits.typicalLatencyMs: [3000, 9000]`, `limits.requestTimeoutMs: 120000`, `limits.maxConcurrent: 4`.
+Common: `ops.textToImage: true`, `ops.imageEdit: true`, `ops.inpaint/outpaint/upscale/removeBackground/detectText/decomposeLayers: false`, `promptEnhance: "openfield"` (the local enhancer of §3.4.3), `styleStrength: false`, `streaming.partialImages: false`, `unsupportedParamPolicy: "drop-with-warning"`, `safety.notices: ["Images include a hidden AI watermark."]`, `limits.typicalLatencyMs: [3000, 9000]`, `limits.requestTimeoutMs: 120000`, `limits.maxConcurrent: 4`.
 
-**Known gaps.** No seed ⇒ Recreate replays the request, not the image, and the Info panel says *"This model does not support seeds — Recreate produces a new variation."* No native negative prompt — Openfield appends it as an `Avoid: …` instruction and the chip shows `≈` (§0.8). No transparent background. Mask-based inpainting is not exposed, so masked edits on Gemini go through the regional fallback with the **Approximate** badge (§0.9) and the canvas Inpaint node is unavailable on these models. Batch is client fan-out, so cost scales exactly linearly and a partial batch failure leaves a mixed job set (allowed: each job tile fails independently, and the job set is `partial`). Per-request image count and Batch-API pricing are not wired in v1.
+**Known gaps.** No seed ⇒ Recreate replays the request, not the image, and the Info panel says *"This model can't make an exact copy. Expect changes."* (§0.1). No native negative prompt — Openfield appends it as an `Avoid: …` instruction and the chip shows `~` (§0.8). No transparent background. Mask-based inpainting is not exposed, so masked edits on Gemini go through the regional fallback with the **Approximate** badge (§0.9) and the canvas Inpaint node is unavailable on these models. Batch is client fan-out, so cost scales exactly linearly and a partial batch failure leaves a mixed job set (allowed: each job tile fails independently, and the job set is `partial`). Per-request image count and Batch-API pricing are not wired in v1.
 
 ### 6.14 Launch adapter — OpenAI GPT Image
 
@@ -2913,7 +3065,7 @@ Common: `ops.textToImage: true`, `ops.imageEdit: true`, `ops.inpaint/outpaint/up
 | `base` + `mask` | `image` + `mask`; **the adapter converts Openfield's canonical mask (alpha 0 = edit, §0.9) to whatever polarity the live probe establishes for `/v1/images/edits`, covered by a fixture test (conformance 21). Polarity is unconfirmed in the research.** `invert` and `featherPx` are applied by core before upload; the request carries a mask **asset id** only |
 | `expand` (outpaint) | **synthesised**: pad the base onto a transparent canvas of the target size, derive a mask covering the padding, call `/v1/images/edits`. `ops.outpaint: true` with a manifest note that it is mask-synthesised |
 | `seed` | not documented ⇒ `seed.supported: false` until verified live |
-| `negativePrompt` | no native field ⇒ `negativePrompt: false` plus `emulated: ["negativePrompt"]`; core appends it as a trailing `Avoid: …` sentence and the chip carries `≈` (§0.8, §3.4.4) |
+| `negativePrompt` | no native field ⇒ `negativePrompt: false` plus `emulated: ["negativePrompt"]`; core appends it as a trailing `Avoid: …` sentence and the chip carries `~` (§0.8, §3.4.4) |
 | streaming | partial images available on the streaming path ⇒ `streaming.partialImages: true`, `maxPartials: 3`, surfaced as `job.partial` (§6.7) |
 
 **Quality ladder.** The id→label zip is exact, because an off-by-one ships a control that sends the wrong tier:
@@ -2922,8 +3074,8 @@ Common: `ops.textToImage: true`, `ops.imageEdit: true`, `ops.inpaint/outpaint/up
 |---|---|---|
 | `low` | Low | Fastest and cheapest |
 | `medium` | Medium | Balanced |
-| `high` | High | High visual fidelity |
-| `max` | Max | Maximum quality |
+| `high` | High | Sharpest detail |
+| `max` | Max | Best quality |
 | `auto` | Auto | Let the model choose |
 
 > The observed product exposes a five-tier ladder including **Extra High**; if the API confirms a matching tier, declare it as an additional `QualityLevel` — **do not fabricate one.**
@@ -2940,9 +3092,9 @@ Common: `ops.textToImage: true`, `ops.imageEdit: true`, `ops.inpaint/outpaint/up
 
 Common: `ops.textToImage/imageEdit/inpaint/outpaint: true`, `ops.upscale/removeBackground/detectText/decomposeLayers: false`, `transparency: true`, `references.max: 4` (conservative until the documented limit is confirmed), `promptEnhance: "openfield"` (§3.4.3), `styleStrength: false`, **`limits.requestTimeoutMs: 180000`** — the research records complex prompts taking up to ~2 minutes (not confirmed against official docs), and 150 s leaves no headroom — `limits.typicalLatencyMs: [8000, 120000]`, `limits.maxConcurrent: 2`, `unsupportedParamPolicy: "reject"`.
 
-**Pricing.** `kind: "per_token"` — text input $5.00/1M, image input $8.00/1M, image output $30.00/1M, with `cachedInputPerMTok` declared once the discount rate is confirmed (as researched 2026-09-23). Because there is no published per-image rate, the adapter ships an `outputTokenTable` mapping (quality × size) → output tokens, derived from measured runs and marked `estimated`; the Generate button therefore shows a **range** (`≈ $0.10–$0.34 · 2 images`). If the response carries a `usage` block, `reconcile()` computes `CostActual { confidence: "reconciled" }`. **Whether the Images API returns `usage` is unconfirmed (2026-09-23) and must be established by the same live probe as the mask polarity (`M2-15`); until then the adapter ships `confidence: "estimated"` and the Usage screen marks those rows `≈`.** Where cached input tokens are not reported, a reconciled figure is an upper bound and is labelled `≤` (§6.9).
+**Pricing.** `kind: "per_token"` — text input $5.00/1M, image input $8.00/1M, image output $30.00/1M, with `cachedInputPerMTok` declared once the discount rate is confirmed (as researched 2026-09-23). Because there is no published per-image rate, the adapter ships an `outputTokenTable` mapping (quality × size) → output tokens, derived from measured runs and marked `estimated`; the Generate button therefore shows a **range** (`About $0.10–0.34 · 2 images`). If the response carries a `usage` block, `reconcile()` computes `CostActual { confidence: "reconciled" }`. **Whether the Images API returns `usage` is unconfirmed (2026-09-23) and must be established by the same live probe as the mask polarity (`M2-15`); until then the adapter ships `confidence: "estimated"` and the Usage screen marks those rows `~`.** Where cached input tokens are not reported, a reconciled figure is an upper bound and is labelled `≤` (§6.9).
 
-**Known gaps.** Seed unconfirmed. `n` ceilings per quality/size unclear — we cap at 4 and surface any provider rejection as `invalid_request` naming the batch field. Maximum reference-image count undocumented (we declare 4). Mask polarity and the `usage` block are both unconfirmed and both close with `M2-15`. No character-identity feature. Long runs can approach two minutes; the placeholder tile switches copy at 60 s.
+**Known gaps.** Seed unconfirmed. `n` ceilings per quality/size unclear — we cap at 4 and surface any provider rejection as `invalid_request` naming the batch field. Maximum reference-image count undocumented (we declare 4). Mask polarity and the `usage` block are both unconfirmed and both close with `M2-15`. No character-identity feature. Long runs can approach two minutes; the placeholder tile shows its "Still working" line on the §2.4 schedule.
 
 ### 6.15 Launch adapter — Higgsfield (conditional, experimental)
 
@@ -2966,7 +3118,7 @@ This adapter ships **only if** its public API is reachable with a user key at bu
 | `references[]` | reference-image parameter, count unverified ⇒ declared `max: 1` until confirmed |
 | Cost | **`kind: "unknown"` at launch; the Generate button reads *Cost unknown*.** Upgrade to `provider_estimate` (via `estimateRemote()`, §6.9) only if a live probe confirms the endpoint's path and response shape, and `confidence` is then `"estimated"`, never `"exact"` |
 
-**Known gaps.** **No public per-job cost endpoint has been verified** — the only evidence is a third-party blog with no path, request or response shape recorded, and the private `/fnf/*` cost table observed in the walkthrough is out of bounds (§1.11). Endpoints for anything beyond Soul v2 standard are undocumented ⇒ one model in the static catalog. No documented style-listing endpoint, so the provider's style ids cannot be enumerated: the UI offers a free-text "provider style id" advanced field plus a user-editable `~/.openfield/higgsfield-styles.json`, and our own preset library remains the default path. Identity/character training is undocumented ⇒ `identity.nativeCharacterRefs: false`. The node-graph editing product appears to be UI-only with no public API ⇒ no canvas integration. Rate limits and concurrency policy undocumented ⇒ `limits.maxConcurrent: 2` conservatively. Retention of output media on the provider's CDN is undocumented, so the runner assumes it is time-limited and downloads every asset to `~/.openfield/assets` immediately on completion — from `cdn.higgsfield.ai` only (§6.11) — and never links to a remote URL.
+**Known gaps.** **No public per-job cost endpoint has been verified** — the only evidence is a third-party blog with no path, request or response shape recorded, and the private `/fnf/*` cost table observed in the walkthrough is out of bounds (§1.11). Endpoints for anything beyond Soul v2 standard are undocumented ⇒ one model in the static catalog. No documented style-listing endpoint, so the provider's style ids cannot be enumerated: the UI offers a free-text "Style ID" advanced field plus a user-editable `~/.openfield/higgsfield-styles.json`, and our own preset library remains the default path. Identity/character training is undocumented ⇒ `identity.nativeCharacterRefs: false`. The node-graph editing product appears to be UI-only with no public API ⇒ no canvas integration. Rate limits and concurrency policy undocumented ⇒ `limits.maxConcurrent: 2` conservatively. Retention of output media on the provider's CDN is undocumented, so the runner assumes it is time-limited and downloads every asset to `~/.openfield/assets` immediately on completion — from `cdn.higgsfield.ai` only (§6.11) — and never links to a remote URL.
 
 ### 6.16 v1.1 — queue providers and OpenAI-compatible endpoints
 
@@ -2982,45 +3134,45 @@ Both queue adapters also fill the capability slots no launch adapter declares �
 
 Eleven sections write requirements into a screen no section owned. Settings is a single route (`/settings`) with a **left rail** of nine panes, in this order:
 
-**Providers · Models · Generation defaults · Appearance · Storage · Usage & budget · Privacy · Diagnostics · Experimental**
+**API keys · Models · Defaults · Appearance · Storage · Spending · Privacy · Help · Experimental**
 
-Rules that hold across every pane: secrets are write-only (§6.11); everything that is not a secret or a boot-time value lives in the `settings` table as a JSON value keyed by the `settings` key below, reached through `GET`/`PATCH /api/settings` (§8.3); a pane never invents a default — the owning section does. Panes render in this order and each one states, in one line at the top, what it can and cannot see (e.g. Usage: *"Local bookkeeping only — Openfield cannot read your provider invoice."*).
+Rules that hold across every pane: secrets are write-only (§6.11); everything that is not a secret or a boot-time value lives in the `settings` table as a JSON value keyed by the `settings` key below, reached through `GET`/`PATCH /api/settings` (§8.3); a pane never invents a default — the owning section does. Panes render in this order and each one states, in one line at the top, what it can and cannot see (e.g. Usage: *"Tracked on this computer. Your actual bill may differ."*).
 
 | Pane | Setting | `settings` key | Default | Specified in |
 |---|---|---|---|---|
-| Providers | Provider keys (per provider, write-only; env-var badge when overridden) | *(none — `config.json`, mode 0600)* | unset | §6.11 |
-| Providers | Test connection · masked hint · last error | *(read-only, from `providers` table)* | — | §6.2, §8.2 |
-| Providers | Per-provider `baseUrl` option (OpenAI-shaped adapters) | *(none — `config.json`)* | `null` | §6.14, §6.16, §6.18 |
-| Providers | Per-provider concurrency cap | *(`providers.concurrency_cap`)* | openai 2 · google 4 · higgsfield 2 | §0.12 |
-| Models | Refresh models now · last checked | `modelRefreshedAt` | — | §6.4 |
-| Models | Background refresh interval | `modelRefreshHours` | `24` | §6.4 |
-| Models | **Unrecognised** discovered ids (read-only list) | *(from `RefreshReport`)* | — | §6.4 |
-| Models | `~/.openfield/models.json` overlay (open in editor, validate) | *(file)* | absent | §6.4 |
-| Models | `~/.openfield/prices.json` overlay + price-refresh diff | *(file)* | absent | §6.9 |
-| Generation defaults | Default model | `defaultModel` | first ready model | §8.3 |
-| Generation defaults | Default aspect ratio | `defaultAspect` | manifest default | §8.3, §6.3 |
-| Generation defaults | Default batch size | `defaultBatch` | `1` | §0.10 |
-| Generation defaults | Global concurrency | `globalConcurrency` | `4` | §0.12, §8.4.2 |
-| Generation defaults | Prompt-enhance default mode + enhancer model | `enhanceMode`, `enhancerModel` | `off`, unset | §3.4.3 |
-| Generation defaults | Regional fallback for instruction-only models (one-time explainer) | `regionalFallback` | `true` | §0.9, §4.6 |
+| API keys | Your keys (per provider, write-only; env-var badge when overridden) | *(none — `config.json`, mode 0600)* | unset | §6.11 |
+| API keys | Check key · last 4 characters · last error | *(read-only, from `providers` table)* | — | §6.2, §8.2 |
+| API keys | Custom server address (OpenAI and compatible services) | *(none — `config.json`)* | `null` | §6.14, §6.16, §6.18 |
+| API keys | Runs at once, per company | *(`providers.concurrency_cap`)* | openai 2 · google 4 · higgsfield 2 | §0.12 |
+| Models | Update model list · last checked | `modelRefreshedAt` | — | §6.4 |
+| Models | Check for new models every | `modelRefreshHours` | `24` | §6.4 |
+| Models | **Not supported**: discovered ids (read-only list) | *(from `RefreshReport`)* | — | §6.4 |
+| Models | Your own model list (open the file, check it for errors) | *(file: `~/.openfield/models.json`)* | absent | §6.4 |
+| Models | Your own prices (open the file) · price updates to review | *(file: `~/.openfield/prices.json`)* | absent | §6.9 |
+| Defaults | Default model | `defaultModel` | first ready model | §8.3 |
+| Defaults | Default aspect ratio | `defaultAspect` | manifest default | §8.3, §6.3 |
+| Defaults | Default batch size | `defaultBatch` | `1` | §0.10 |
+| Defaults | Runs at once | `globalConcurrency` | `4` | §0.12, §8.4.2 |
+| Defaults | Enhance: default mode and model | `enhanceMode`, `enhancerModel` | `off`, unset | §3.4.3 |
+| Defaults | Allow approximate area edits (one-time explainer) | `regionalFallback` | `true` | §0.9, §4.6 |
 | Appearance | Theme | `theme` | `system` | §2.2 |
-| Appearance | Feed zoom step | `feedZoom` | `3` | §0.10, §2.3 |
-| Appearance | Show tips card in the first placeholder | `tipsCard` | `true` | §2.4, §2.9 |
-| Storage | `OPENFIELD_HOME` (read-only readout) | *(none — env/`config.json`)* | `~/.openfield` | §8.1 |
-| Storage | Library stats: assets, bytes, thumb cache, db, trash | *(read-only, `GET /api/stats`)* | — | §8.6 |
-| Storage | Thumbnail encoder chain in use (probed at boot) | *(read-only)* | `sharp`, else WASM chain | §0.10, §8.5.2 |
+| Appearance | Grid size | `feedZoom` | `3` | §0.10, §2.3 |
+| Appearance | Show tips while generating | `tipsCard` | `true` | §2.4, §2.9 |
+| Storage | Library location (read-only readout) | *(none — env/`config.json`)* | `~/.openfield` | §8.1 |
+| Storage | Space used by images, thumbnails and trash | *(read-only, `GET /api/stats`)* | — | §8.6 |
+| Storage | Thumbnail format (probed at boot) | *(read-only)* | `sharp`, else WASM chain | §0.10, §8.5.2 |
 | Storage | Thumbnail quality | `thumbQuality` | `82` | §0.10, §8.5.2 |
 | Storage | Trash retention | `trashRetentionDays` | `30` (`0` = never) | §8.6 |
-| Storage | Clear thumbnail cache · Empty trash · Run GC · Back up · Rebuild search index | *(actions, `POST /api/maintenance/*`)* | — | §8.6, §0.7 |
-| Usage & budget | Totals today / 7 d / 30 d / all time, by provider and model · billed-but-discarded line · CSV export | *(read-only, `GET /api/usage`)* | — | §6.9 |
-| Usage & budget | Monthly spend guard threshold | `spendGuardUsd` | `null` (off) | §6.9 |
-| Privacy | Outbound host allow-list: `networkHosts` ∪ `assetHosts` per enabled adapter (read-only) | *(from `ProviderMeta`)* | — | §6.11 |
-| Privacy | The disclosure paragraph and "no telemetry" statement (read-only) | — | — | §6.11 |
-| Diagnostics | Debug drawer: redacted request, HTTP status, `providerCode`, redacted response | *(read-only)* | — | §6.8, §0.5 |
-| Diagnostics | Log level · Copy diagnostics bundle (redacted) | `logLevel` | `info` | §6.11 |
-| Experimental | Show experimental providers (`meta.stable: false`) | `showExperimental` | `false` | §6.2, §6.16 |
-| Experimental | Write canvas graphs through to `~/.openfield/canvases/<id>.json` | `canvasFileWriteThrough` | `false` | §7.8 |
-| Experimental | Upscale command plugin: path to an executable that takes an input path and writes an output path | `upscaleCommandPath` | `null` | §7.5, §4.8 |
+| Storage | Clear thumbnail cache · Empty trash · Clean up files · Back up · Rebuild search | *(actions, `POST /api/maintenance/*`)* | — | §8.6, §0.7 |
+| Spending | Totals for today, 7 days, 30 days, all time, by company and model · Canceled but charged · Export CSV | *(read-only, `GET /api/usage`)* | — | §6.9 |
+| Spending | Monthly spending limit | `spendGuardUsd` | `null` (off) | §6.9 |
+| Privacy | Allowed connections: `networkHosts` ∪ `assetHosts` per enabled adapter (read-only) | *(from `ProviderMeta`)* | — | §6.11 |
+| Privacy | The disclosure paragraph and "No tracking" statement (read-only) | — | — | §6.11 |
+| Help | Error log: redacted request, HTTP status, `providerCode`, redacted response | *(read-only)* | — | §6.8, §0.5 |
+| Help | Log detail · Copy report (keys removed) | `logLevel` | `info` | §6.11 |
+| Experimental | Show experimental models (`meta.stable: false`) | `showExperimental` | `false` | §6.2, §6.16 |
+| Experimental | Also save canvases as files | `canvasFileWriteThrough` | `false` | §7.8 |
+| Experimental | Upscale plugin: the program to run (it reads one image and writes a larger copy) | `upscaleCommandPath` | `null` | §7.5, §4.8 |
 
 **Acceptance criteria.** (1) Every setting the rest of the PRD references appears in exactly one row above, with the same key the API returns. (2) A pane with no configured provider still renders and tells the user what to do next (§2.10's first-run path). (3) Changing any row writes through `PATCH /api/settings` and takes effect without a restart, except `OPENFIELD_HOME` and the server port, which say so inline.
 
@@ -3029,7 +3181,7 @@ Rules that hold across every pane: secrets are write-only (§6.11); everything t
 Every item below is a **provider fact we could not verify**, and each names the milestone task that closes it. Resolved vocabulary and UI questions are decided in §0 and are not restated here.
 
 - **OpenAI mask polarity** for `/v1/images/edits` — unconfirmed in the research; the adapter converts from Openfield's canonical alpha-0-is-edit mask either way. Closed by **`M2-15`** (live probe of polarity, dimensions and format, fixture recorded, §6.14 note updated). Blocking prerequisite for `M2-05`/`M2-06`.
-- **Whether `POST /v1/images/generations` returns a `usage` block.** Until confirmed, every OpenAI cost row ships `confidence: "estimated"` and the Usage screen marks it `≈`. Closed by the same probe, **`M2-15`**.
+- **Whether `POST /v1/images/generations` returns a `usage` block.** Until confirmed, every OpenAI cost row ships `confidence: "estimated"` and the Usage screen marks it `~`. Closed by the same probe, **`M2-15`**.
 - **Exact maximum reference-image count for OpenAI image edits**, and whether it differs between Sunburst, Flare and GPT Image 2. We declare 4. Closed by **`M2-15`** (same live session).
 - **Whether Gemini exposes any multi-image-per-call parameter.** If it does, the fan-out in §6.5 step 5 becomes a cost optimisation rather than a necessity. Closed by **`M0-07`** (Google Gemini image adapter).
 - **Output-token counts per (quality × size) for OpenAI.** Must be measured before launch; until then the Generate button shows a range. Closed by **`M3-11`** (cost engine: price snapshots, estimate, reconciliation, usage log).
@@ -3038,7 +3190,6 @@ Every item below is a **provider fact we could not verify**, and each names the 
 - **Price-refresh feasibility** — whether any launch provider exposes a machine-readable price document worth wiring `refreshPricing()` to, or whether the `~/.openfield/prices.json` overlay is the whole story for v1. Closed by **`M3-11`**.
 
 ---
-
 ## 7. Canvas
 
 This section owns the node graph, the port system, the run engine's semantics and the canvas document format. Every shared contract it touches is §0's: job states and the runner's rules (§0.4), error codes (§0.5), the HTTP and SSE surface (§0.6), mask polarity (§0.9), the thumbnail ladder (§0.10), fingerprints and seeds (§0.11), concurrency, priority and cancellation defaults (§0.12), cost accounting (§0.13) and the v1 scope list (§0.14). Where §0 owns a contract, this section references it and states no numbers of its own.
@@ -3047,7 +3198,7 @@ This section owns the node graph, the port system, the run engine's semantics an
 
 Canvas is Openfield's second workspace: an infinite node graph where **references, prompts and generators compose into repeatable workflows**. Where the Image tab (feed §2, composer §3) is a single prompt bar over a feed — one prompt, one run, one row of results — Canvas is the place where a user wires an upload into a generator, a generator into an edit, and then re-runs the whole thing with a different reference or a different model.
 
-Canvas is not a parallel universe. Every node run produces the **same job sets, jobs and assets as the composer** (§8): the same queue, the same `~/.openfield` files, the same SQLite rows, the same detail view on click-through. **Canvas runs appear in the Image tab feed and the Assets library like any other run** — that is a decision, not an option. A canvas-produced asset carries `assets.op_params.source = "canvas:<canvasId>:<nodeId>"` (§0.2) and shows an "Open in canvas" action in the detail view (§4); conversely, any asset in the library can be pulled into a canvas through the Assets node. Canvas outputs are additionally auto-filed into a library folder named after the canvas — this gives us the practical behaviour the reference product gets from backing a canvas with the same entity as an asset folder, without conflating the two entities in our schema.
+Canvas is not a parallel universe. Every node run produces the **same job sets, jobs and assets as the composer** (§8): the same queue, the same `~/.openfield` files, the same SQLite rows, the same detail view on click-through. **Canvas runs appear in the Image tab feed and the Assets library like any other run** — that is a decision, not an option. A canvas-produced asset carries `assets.op_params.source = "canvas:<canvasId>:<nodeId>"` (§0.2) and shows an "Open in Canvas" action in the detail view (§4); conversely, any asset in the library can be pulled into a canvas through the Assets node. Canvas outputs are additionally auto-filed into a library folder named after the canvas — this gives us the practical behaviour the reference product gets from backing a canvas with the same entity as an asset folder, without conflating the two entities in our schema.
 
 v1 is **image-only** (§0.14), but every part of the spec below — port types, node type ids, result shape, run plan — is modality-agnostic, so video and audio nodes drop in without a schema migration.
 
@@ -3069,7 +3220,7 @@ Justification:
 | Typed port system | A port type table, a compatibility matrix, `isValidConnection` bound to it, drag-time port highlighting, and the compatibility-filtered add-node menu on drop-to-empty. |
 | Node chrome | A shared `<NodeShell>` (label above frame, port rails, body, footer strip, run pill, state overlay, collapse) so every node in the catalogue looks and behaves identically. |
 | Run engine | DAG compilation, fingerprint-based dirty tracking and caching, fan-out, cost preview, and the compiled run plan the server executes (7.7). |
-| Document layer | JSON schema (zod), autosave, undo/redo command stack, version history, import/export, templates. |
+| Document layer | JSON schema (`canvasDocumentSchema`, zod, in `packages/core/src/canvas/`), autosave, undo/redo command stack, version history, import/export, templates. |
 
 React Flow is a rendering and interaction library; it has no opinion about any of the four rows above.
 
@@ -3084,19 +3235,19 @@ The landing page for the workspace, mirroring the observed index layout.
 **Grid.** 4 columns at ≥1280px, 3 at ≥1024px, 2 at ≥768px, 18px gap (same rhythm as the library grid, §2.8).
 
 - **First cell is always "New canvas"**: a dashed card with a `+` circle. Click → `POST /api/canvases` (§8.3) → navigate to `/canvas/{id}` with the name `Untitled`.
-- **Canvas card**: 16:9 preview (radius 12), name (14px/500, single line, ellipsis), meta line `Edited 10m ago` — relative time under 7 days, absolute date (`7/23/2026`) beyond it.
+- **Canvas card**: 16:9 preview (radius 12), name (14px/500, single line, ellipsis), meta line `Edited 10m ago`: relative time under 7 days, then the date in the person's locale (e.g. `Jul 23, 2026`, §2.12).
 - **Card hover / right-click → `⋯` menu**: Open · Rename (inline edit on the card) · Duplicate · Export… · Version history · Delete. Delete is destructive-styled and opens a confirm dialog that echoes the canvas name; it removes the `canvases` row and its `canvas_versions` but **never** the assets it produced (those stay in the library).
 - Double-click opens.
 
 **Preview capture (M4-15).** On save, if the graph bounds changed materially and ≥60 s have passed, capture the preview by temporarily mounting a **second, off-screen `<ReactFlow>` instance** with `onlyRenderVisibleElements={false}` and the LOD bucket forced to full detail (7.10), fitted to the graph bounds, then rasterise it with `html-to-image` (MIT). **Graphs above 150 nodes skip the render entirely** and fall straight through to the fallback chain: newest result image in the graph → generated dot-grid placeholder showing the node count. The result is written to `canvases/previews/<id>.png` and recorded on `canvases.preview_path` (§8.2) — an **internal file, never an `assets` row**, which is what keeps previews out of the user's library.
 
-**Templates tab.** Same grid, each card badged `Template`, primary action *Use template* (duplicates the template document into a new canvas and opens it). v1 ships **four** image-only starter templates, written by us, not copied: **Reference → Generate** · **Image edit** · **Storyboard (4 panels)** · **Style A/B compare** (M4-14; §8.8 row 43). An *Upscale pass* template is deliberately absent — the Upscale node is latent in v1 (7.5, §0.14) and such a template would open `blocked`. Templates are ordinary exported canvas documents living in `app/templates/*.ofcanvas.json` — no special format, so a user can drop their own file in the same folder (or import it and hit *Save as template*).
+**Templates tab.** Same grid, each card badged `Template`, primary action *Use template* (duplicates the template document into a new canvas and opens it). v1 ships **four** image-only starter templates, written by us, not copied, and bundled as `apps/server/seed/templates/*.ofcanvas.json`: **From a reference** · **Image edit** · **Storyboard (4 panels)** · **Compare styles** (M4-14; §8.8 row 43). An *Upscale pass* template is deliberately absent — the Upscale node is latent in v1 (7.5, §0.14) and such a template would open `blocked`. Templates are ordinary exported canvas documents, no special format, so a user can drop their own file into `~/.openfield/canvases/templates/` (or import it and hit *Save as template*, 7.8).
 
 **Empty state.** Illustration + "No canvases yet" + the two primary paths (*New canvas*, *Start from a template*).
 
 ### 7.4 Editor chrome (`/canvas/{id}`)
 
-**Top bar.** Left: Openfield mark with a chevron menu (Back to canvases, Back to Image, Settings) followed by a name pill `Untitled ⌄`; the pill's menu is **Version history · Rename · Duplicate · Export… · Delete**. The name is also editable by double-clicking the pill. Right: a save-state chip (`Saved` / `Saving…` / `Offline — retrying`) and the run controls (`Run all`, and `Stop` while anything is in flight). No avatar, no bell, no Share, no Chat — single user, no auth, no telemetry.
+**Top bar.** Left: Openfield mark with a chevron menu (Back to canvases, Back to Create, Settings) followed by a name pill `Untitled ⌄`; the pill's menu is **Version history · Rename · Duplicate · Export… · Delete**. The name is also editable by double-clicking the pill. Right: a save-state chip (`Saved` / `Saving…` / `Offline. Retrying…`) and the run controls (`Run all`, and `Stop` while anything is in flight). No avatar, no bell, no Share, no Chat — single user, no auth, no telemetry.
 
 **The pane.** Infinite canvas on `var(--of-surface)`, dotted background (`<Background variant="dots" gap={24} size={1} />`) drawn in `var(--of-border)`. **Every colour in this section is a §2.2 `--of-` token; no raw hex or rgba literal appears anywhere in §7** (§0.1). Node surfaces are `var(--of-elevated)` with a `1px solid var(--of-border)` frame; selection, active ports and the run pill use `var(--of-accent)` on `var(--of-accent-fg)`. The reference product's lime accent is not reproduced.
 
@@ -3128,9 +3279,9 @@ Slots observed in the reference toolbar that v1 deliberately leaves empty: **Dra
 
 - **Quick** — a fixed starter set (Prompt, Image Generator, Upload, Assets, Preset, Note), reordered by recent use once the user has run nodes. The reference product's Quick group is a fixed curated list; MRU ordering is ours.
 - **References** — Upload, Assets.
-- **Image** — Image Generator, Edit / Inpaint, Variations, Upscale *(latent — only listed when an adapter advertises `ops.upscale`; see 7.5)*, Preset.
+- **Image** — Image Generator, Edit image, Variations, Upscale *(latent — only listed when an adapter advertises `ops.upscale`; see 7.5)*, Preset.
 - **Utilities** — Prompt, Note, Frame.
-- **Video / Audio / v1.1** — the Video and Audio headers render with a `v1.1` tag and no rows; below them sit the two deferred utility rows **Text (LLM)** and **Table**, tagged `v1.1` and not insertable (§0.14). The catalogue's shape stays stable and the roadmap is visible in-product.
+- **Video / Audio** — not rendered in v1. The group, and the deferred **AI text** and **Table** rows, are registered in the catalogue manifest but hidden until they ship (§0.14, §0.15: nothing unshipped is teased in the UI).
 
 ### 7.5 Node catalogue (v1)
 
@@ -3138,10 +3289,10 @@ Slots observed in the reference toolbar that v1 deliberately leaves empty: **Dra
 
 - **Label above the frame** — 12px/500 in `var(--of-text-secondary)`, editable on double-click (defaults to the node type name; a renamed node keeps its custom title in `title`).
 - **Selection** — 2px `var(--of-accent)` outline; resizable via 4 corner handles (`NodeResizer`) on nodes that declare `resizable`.
-- **Port rails** — inputs on the left edge, outputs on the right edge, as **24px circular icon buttons** evenly distributed vertically (observed). Hovering a port shows a tooltip with `name · type` (e.g. `input_images · image ×n`).
+- **Port rails** — inputs on the left edge, outputs on the right edge, as **24px circular icon buttons** evenly distributed vertically (observed). Hovering a port shows a tooltip with the port's name and type (e.g. `Reference images ×n`).
 - **Annotation handles** — every node additionally exposes four non-data handles (top/right/bottom/left) used only for **annotation arrows**: dashed edges with no type that are excluded from the DAG and from execution. This mirrors the `arrow-source-*` / `arrow-target-*` handles observed on the reference Prompt node.
 - **Body** — the node's result or editor area.
-- **Footer strip** — inline controls + model chip + **run pill** showing the estimated cost (e.g. `✦ $0.13`), which both runs the node and is the node's primary affordance. Chips are resolved by the one `resolveControl()` rule in §0.3 from the model's manifest, in `controlOrder` — the node footer and the composer never disagree about a control.
+- **Footer strip** — inline controls + model chip + **run pill** showing the estimated cost (e.g. `~$0.13`), which both runs the node and is the node's primary affordance. Chips are resolved by the one `resolveControl()` rule in §0.3 from the model's manifest, in `controlOrder` — the node footer and the composer never disagree about a control.
 - **Collapse** — an icon at the bottom-right collapses the node to a 56px-tall header with a thumbnail strip; collapsed state is persisted.
 
 **Default geometry** (observed, adopted for parity): Image Generator **300×300**, min 240×240. Prompt node **296×151**, min 240×96.
@@ -3150,26 +3301,26 @@ Slots observed in the reference toolbar that v1 deliberately leaves empty: **Dra
 
 | Node (`type`) | Inputs | Outputs | Inline controls | Runs? |
 |---|---|---|---|---|
-| **Prompt** `prompt` | `text` (optional, prepended) | `text` | Textarea ("Type your prompt here"), char count, `{{variable}}` chips (§0.8) resolved from a connected Table *(v1.1)* | No |
+| **Prompt** `prompt` | `text` (optional, prepended) | `text` | Textarea ("Write your prompt"), char count, `{{variable}}` chips (§0.8) resolved from a connected Table *(v1.1)* | No |
 | **Upload** `image.upload` | — | `image ×n` | Drop zone / file picker (`.jpg .jpeg .png .webp .heic`, §0.6), thumbnail strip, reorder, remove | No |
 | **Assets** `image.asset` | — | `image ×n` | *Choose…* opens the library picker; or *Folder mode* (all images in folder X, newest-first, capped by a `limit` field, re-resolved at run time) | No |
 | **Image Generator** `image.generate` | `prompt` (`text`), `input_images` (`image ×n`), `preset` (`preset`) | `image ×n` | Inline prompt field, model chip, and the manifest-resolved chip row (§0.3): aspect/size, quality or resolution, batch stepper (max `batch.max`, 4 in v1 — §0.10), seed (core, disabled with a reason when `seed.supported: false`), per-model extras | **Yes** |
-| **Edit / Inpaint** `image.edit` | `image` (required), `mask` (optional), `instruction` (`text`) | `image ×n` | *Edit mask…* (opens the mask editor), instruction field, model chip, strength (when the model exposes `styleStrength`), batch stepper | **Yes** (M4-19) |
+| **Edit image** `image.edit` | `image` (required), `mask` (optional), `instruction` (`text`) | `image ×n` | *Edit mask…* (opens the mask editor), instruction field, model chip, strength (when the model exposes `styleStrength`), batch stepper | **Yes** (M4-19) |
 | **Upscale** `image.upscale` | `image ×n` | `image ×n` | Scale factor (`×2 ×4`, clamped by the manifest), model chip, provider-specific extras | **Latent — v1.1** |
-| **Variations** `image.variations` | `image` and/or `prompt` | `image ×n` | Count (2–8), strategy (*seed jitter* / *prompt list* / *model list*), the varying axis' list editor | **Yes** (M4-21) |
-| **Preset** `preset` | — | `preset` | Preset picker (library §5), inline preview of prompt template + reference thumbnails, *Edit copy* | No (M4-20) |
+| **Variations** `image.variations` | `image` and/or `prompt` | `image ×n` | Count (2–8), strategy (*Same prompt* / *Prompt list* / *Model list*), the varying axis' list editor | **Yes** (M4-21) |
+| **Preset** `preset` | — | `preset` | Preset picker (library §5), inline preview of prompt template + reference thumbnails, *Edit a copy* | No (M4-20) |
 | **Note** `note` | — | — | Sticky text, 6 tint choices from the accent ramp, resizable | No |
 | **Frame** `frame` | — | — | Title, background tint, collapse; children attach via `parentId` + `extent: 'parent'` | No |
-| **Text (LLM)** `text.llm` | `text ×n` | `text` | System/user template with `{{input}}` placeholders, text-model chip, streamed output preview, token cost | **v1.1** (§0.14) |
+| **AI text** `text.llm` | `text ×n` | `text` | System/user template with `{{input}}` placeholders, text-model chip, streamed output preview, token cost | **v1.1** (§0.14) |
 | **Table** `table` | — | `text ×n` (one row per record, as named variables) | Spreadsheet-style grid; first row = variable names; rows fan out (7.7) | **v1.1** (§0.14) |
 
 Node-specific notes:
 
 - **Image Generator** is the centre of gravity and is capability-driven exactly like the composer: the chips shown are derived from the selected model's manifest (§6.3, resolved by §0.3), so a model with no background control simply has no background chip, and a model with `references.supported: false` disables the `input_images` port (greyed, tooltip "This model doesn't take reference images") and marks any attached edge invalid-but-preserved.
-- **Edit / Inpaint** — when the chosen model declares `ops.inpaint: false` (instruction-only editing), the `mask` port and the mask editor are hidden and the node degrades to instruction editing, with a one-line explainer in the footer; where core's regional fallback applies, the result carries the **Approximate** badge (§0.9). The **mask editor** is a modal over the node: brush, eraser, rectangle and lasso select, invert, feather (0–32px), zoom cluster, and an opacity slider over the base image. **Masks are stored as RGBA PNG alpha assets at the base image's exact pixel size (§0.9) and referenced by id**: committing a mask uploads it once via `POST /api/masks` and the run carries only its id, so a mask is reusable, survives reloads and never crosses the provider interface as base64. On the wire that id is `mask: { assetId, invert?, featherPx? }` inside §6.5's `GenerateRequest` (§0.6) — `maskAssetId` is the shorthand this section uses for that field, never a flat request property.
-- **Upscale — the open substitute, latent at launch.** The reference product's upscale is a third-party integration we cannot use. Ours is a **capability slot**: the node is listed only when at least one installed adapter advertises `ops.upscale`. **No launch adapter does (§0.14), so v1 ships the node latent and it is out of M4's definition of done.** The model-native high-resolution tiers cover the common case, and the detail editor ships local Lanczos resample labelled *"Resample — adds no detail."* (§0.14 row 4). v1.1's fal.ai/Replicate adapters light the node up automatically, and the **command plugin slot** — a user-configured executable that receives an input path and writes an output path, letting anyone wire a local ESRGAN/Topaz CLI without us shipping it — lands with them.
+- **Edit image** — when the chosen model declares `ops.inpaint: false` (instruction-only editing), the `mask` port and the mask editor are hidden and the node degrades to instruction editing, with a one-line explainer in the footer; where core's regional fallback applies, the result carries the **Approximate** badge (§0.9). The **mask editor** is a modal over the node: brush, eraser, rectangle and lasso select, invert, feather (0–32px), zoom cluster, and an opacity slider over the base image. **Masks are stored as RGBA PNG alpha assets at the base image's exact pixel size (§0.9) and referenced by id**: committing a mask uploads it once via `POST /api/masks` and the run carries only its id, so a mask is reusable, survives reloads and never crosses the provider interface as base64. On the wire that id is `mask: { assetId, invert?, featherPx? }` inside §6.5's `GenerateRequest` (§0.6) — `maskAssetId` is the shorthand this section uses for that field, never a flat request property.
+- **Upscale — the open substitute, latent at launch.** The reference product's upscale is a third-party integration we cannot use. Ours is a **capability slot**: the node is listed only when at least one installed adapter advertises `ops.upscale`. **No launch adapter does (§0.14), so v1 ships the node latent and it is out of M4's definition of done.** The model-native high-resolution tiers cover the common case, and the detail editor ships local Lanczos resample labelled *"Resizes, adds no detail."* (§0.14 row 4). v1.1's fal.ai/Replicate adapters light the node up automatically, and the **command plugin slot** — a user-configured executable that receives an input path and writes an output path, letting anyone wire a local ESRGAN/Topaz CLI without us shipping it — lands with them.
 - **Preset — our own style recipes.** The reference product's style catalogue and moodboards are proprietary; our Preset node emits a `preset` value from the user's own library (§5). The payload is the §5.3 object (§0.8): a prompt template whose `{prompt}` slot appears exactly once, optional reference images, and parameter overrides. **Merge precedence:** node defaults < preset overrides < fields the user has explicitly touched on the node. Each field the preset currently controls shows a small lock glyph in the node footer, clickable to take manual control (M4-20).
-- **Text (LLM)** and **Table** are **v1.1** (§0.14): a runnable LLM node would make a text-model key a *canvas* dependency, which the locked image-only v1 scope refuses. **The fan-out mechanism they would have used stays in v1** — Variations needs it (7.7).
+- **AI text** and **Table** are **v1.1** (§0.14): a runnable LLM node would make a text-model key a *canvas* dependency, which the locked image-only v1 scope refuses. **The fan-out mechanism they would have used stays in v1** — Variations needs it (7.7).
 
 #### Node states
 
@@ -3181,10 +3332,10 @@ Every runnable node renders exactly one of these states; the state is drawn as a
 | `queued` | `var(--of-accent-soft)` shimmer band + "Queued · 2nd in line" | Cancel |
 | `running` | Progress bar (determinate when the adapter reports progress, otherwise indeterminate) + elapsed timer; `job.partial` frames (§0.6) render as streamed previews where the model supports them | Cancel |
 | `done` | Result rendered in the body; chips over the preview show quality, aspect and `×N` batch. The asset is already in the library — there is nothing to "send" | Open · Re-run · Download |
-| `cached` | Result rendered plus a muted `cached` chip; the node was skipped during the last run | Re-run (force); `⌥`-click run bypasses the cache |
-| `stale` | Dot on the label in `var(--of-accent)`, result dimmed to 60%, chip "Inputs changed" — or "Result is from earlier settings" for a late arrival (7.7) | Re-run · Re-run downstream |
-| `failed` | `var(--of-danger-soft)` band with the §0.5 failure copy for the job's `ErrorCode`, truncated to 2 lines and expandable | The §0.5 primary action for that code · Copy error · Debug drawer |
-| `canceled` | Neutral `var(--of-elevated-2)` band reading **"Canceled — the provider may still charge for work already started."** (§0.12) | Run |
+| `cached` | Result rendered plus a muted `Reused` chip; the node was skipped during the last run | Re-run anyway; `⌥`-click run bypasses the cache |
+| `stale` | Dot on the label in `var(--of-accent)`, result dimmed to 60%, chip "Inputs changed", or "Made with older settings" for a late arrival (7.7) | Re-run · Re-run from here |
+| `failed` | `var(--of-danger-soft)` band with the §0.5 failure copy for the job's `ErrorCode`, truncated to 2 lines and expandable | The §0.5 primary action for that code · Copy error · Error log |
+| `canceled` | Neutral `var(--of-elevated-2)` band reading **"Canceled. You may still be charged for work that already started."** (§0.12) | Run |
 | `blocked` | Hatched `var(--of-border-strong)` band naming the blocker: missing API key, model unavailable with current keys, required input not connected, or an upstream node failed | The fix action for that blocker |
 
 Result rendering: one image fills the body with `object-fit: contain`; 2–4 results render as a 2×2 grid; >4 render a 2-row scrolling strip with a `×N` chip. Clicking a result opens the same detail view the feed uses (§4), with its lineage pointing back at this node.
@@ -3210,7 +3361,7 @@ Result rendering: one image fills the body with `object-fit: contain`; 2–4 res
 
 1. Pressing on a port starts a pending edge drawn as a **dashed curve** following the cursor (observed).
 2. While a drag is in flight, every **compatible** port in the graph brightens to full opacity and gains a 2px `var(--of-accent)` ring; **incompatible** ports drop to 35% opacity and refuse hover. This is the primary invalid-connection feedback — users mostly never see an error.
-3. Dropping on a compatible port connects. Dropping on an incompatible port snaps the edge away and shows a 2.5 s toast naming both sides: *"`text` output can't connect to `image` input (Image Generator · input_images)."*
+3. Dropping on a compatible port connects. Dropping on an incompatible port snaps the edge away and shows a 2.5 s toast naming both sides: *"Text can't go into an image input on Image Generator."*
 4. Connections that would create a **cycle** are rejected at drop time with *"That would create a loop."* (Kahn's algorithm run on the prospective graph.)
 5. `isValidConnection` enforces all of the above; nothing relies on post-hoc cleanup.
 
@@ -3240,46 +3391,46 @@ Choosing a node creates it positioned so that its accepting port lands at the dr
 
 | Scope | `scope` | Trigger | Behaviour |
 |---|---|---|---|
-| Run this node | `node` | Node run pill, `⌘⏎` | Runs one node. If upstream nodes are stale or have never run, a popover offers *"3 upstream nodes need to run first"* → **Run them too** / **Cancel**. |
-| Run downstream | `downstream` | `⇧⌘⏎`, node `⋯` menu | Runs this node plus every node reachable from it. |
+| Run this node | `node` | Node run pill, `⌘⏎` | Runs one node. If upstream nodes are stale or have never run, a popover offers *"3 earlier nodes need to run first"* → **Run them too** / **Cancel**. |
+| Run from here | `downstream` | `⇧⌘⏎`, node `⋯` menu | Runs this node plus every node reachable from it. |
 | Run all | `all` | Top-bar *Run all*, `⌥⌘⏎` | Runs every runnable node in topological order. |
 | Run selection | `selection` | Multi-select context toolbar | Runs the selected nodes plus whatever upstream is needed to satisfy them. |
 
 **Dirty tracking and caching (M4-16).** Each node computes the **fingerprint defined once in §0.11** — the same hash function the composer uses for `paramsHash`, over `typeId`, `typeVersion`, normalized params, `modelKey`, `manifestVersion` and the upstream fingerprints in port order. A node is `cached`, and is returned in the run response's `skipped[]`, when `fingerprint === result.fingerprint` and every referenced asset still exists. Any change to params, model or an upstream fingerprint marks the node `stale` and propagates staleness transitively downstream (visually: the stale dots cascade immediately, before any run). `⌥`-click on a run pill bypasses the cache.
 
-A result carries the fingerprint it was submitted with. On arrival the runner compares it to the node's current fingerprint: on a match the node goes `done`; on a mismatch the asset is still filed in the library and the node renders `stale` with the chip "Result is from earlier settings — Open · Re-run". Undo and redo never cancel an in-flight run; a node with a run in flight refuses reparenting and deletion (the op is rejected with the toast "Wait for this node to finish, or cancel it").
+A result carries the fingerprint it was submitted with. On arrival the runner compares it to the node's current fingerprint: on a match the node goes `done`; on a mismatch the asset is still filed in the library and the node renders `stale` with the chip "Made with older settings · Open · Re-run". Undo and redo never cancel an in-flight run; a node with a run in flight refuses reparenting and deletion (the op is rejected with the toast "Wait for this node to finish, or cancel it").
 
-**Seeds.** The seed control offers `random`, `pinned` (with the value, and a *Use last seed* action after a run) and `from input`; **`pinned` and `from input` are offered only when `capabilities.seed.supported`** (§0.11). On models without seeds — which is every launch model (§6.13, §6.14) — the node **always caches on unchanged inputs** and the run pill reads *"Re-run produces a new variation."*
+**Seeds.** The seed control offers `Random`, `Fixed` (with the value, and a *Use last seed* action after a run) and `From input`; **`Fixed` and `From input` are offered only when `capabilities.seed.supported`** (§0.11). On models without seeds — which is every launch model (§6.13, §6.14) — the node **always caches on unchanged inputs** and the run pill reads *"Each run gives a new result."*
 
 **Fan-out (M4-17).** An output carrying *k* items feeding a `single`-arity input produces an implicit **map**: the downstream node runs *k* times, once per item. The node displays a `×k` badge, its body becomes a labelled result grid, and its cost estimate is multiplied by *k*. Three uses:
 
 - **Batch compare**: a generator with `batch: 4` feeding an Edit node runs the edit four times.
-- **Multi-model compare**: the Variations node's `model list` strategy emits one run per model; results render in a labelled grid with the model name under each tile.
+- **Multi-model compare**: the Variations node's `Model list` strategy emits one run per model; results render in a labelled grid with the model name under each tile.
 - **Table fan-out** *(v1.1, with the Table node)*: a Table with *r* rows feeding prompt variables produces *r* runs, each with that row's substitutions; the result grid is labelled by the row's first column.
 
 A safety rail: any single run whose fan-out exceeds **32 jobs** requires explicit confirmation regardless of cost.
 
 **Concurrency and priority.** Canvas runs enqueue job sets into the **same queue as the composer** — one queue, one set of provider connections, one usage log. Defaults: `globalConcurrency = 4` (§8.4.2), further clamped per provider by `min(providers.concurrency_cap, capabilities.limits.maxConcurrent)`. Scheduling is `job_sets.priority DESC, job_sets.created_at, jobs.idx` with round-robin across providers: composer runs and single-node canvas runs enqueue at priority **10**, run-downstream and run-all at **5**, so a 30-node batch cannot starve a user who just hit Generate. The numbers live in §8.4.2 and §0.12; this section states none of its own. Queued nodes display their position.
 
-**Cancellation.** The node's `×` cancels that node's job set (§8.3); the top bar's *Stop* cancels the whole run via `POST /api/canvases/:id/runs/:runId/cancel`. Nodes not yet started go `canceled` synchronously, nothing spent. **Neither launch adapter implements provider-side cancel (§6.13, §6.14), so canceling a run already sent aborts our fetch only: the provider may complete and bill the work, and no asset is produced.** The usage log records it at full estimate with `discarded = 1`, and the node's `canceled` band reads *"Canceled — the provider may still charge for work already started."* (§0.12, §0.13.)
+**Cancellation.** The node's `×` cancels that node's job set (§8.3); the top bar's *Stop* cancels the whole run via `POST /api/canvases/:id/runs/:runId/cancel`. Nodes not yet started go `canceled` synchronously, nothing spent. **Neither launch adapter implements provider-side cancel (§6.13, §6.14), so canceling a run already sent aborts our fetch only: the provider may complete and bill the work, and no asset is produced.** The usage log records it at full estimate with `discarded = 1`, and the node's `canceled` band reads *"Canceled. You may still be charged for work that already started."* (§0.12, §0.13.)
 
 **Cost preview (M4-18).** Every run pill shows the estimated cost for that node at its current settings, computed locally from the manifest by the pure `estimate(manifest, req)` function (§0.13) — no round-trip per stepper click. Any multi-node run first opens a confirmation popover, populated by the same run request with `dryRun: true` (which returns `estimate` and `skipped[]` without enqueuing anything):
 
 ```
-Run all — 5 nodes, 8 images
+Run all: 5 nodes, 8 images
   Image Generator (Gemini 3 Pro Image, 2K ×4)  ~$0.54
-  Edit / Inpaint (GPT Image ×4)                ~$0.18–0.31   (token-priced, range)
-  2 nodes cached — skipped                      $0.00
-  1 node — cost unknown for this provider       —
+  Edit image (GPT Image ×4)                    ~$0.18–0.31
+  2 nodes reused                                Free
+  1 node                                        Cost unknown
   ──────────────────────────────────────────
-  Estimated total  ~$0.72–0.85            [ Cancel ]  [ Run ]
+  Total  About $0.72–0.85            [ Cancel ]  [ Run ]
 ```
 
-Estimates come from the manifest's pricing snapshot (§6, §0.13), always carry `pricedAt`, and are always rendered as estimates — a range for token-priced models and an explicit "unknown" row where a provider publishes no rate. Runs whose estimate exceeds the spend-confirmation threshold (Settings → Usage & budget, §6.17) always require this confirmation, even for a single node. Actual costs, once known, are reconciled into `usage_log` with the canvas and node ids attached (§0.13).
+Estimates come from the manifest's pricing snapshot (§6, §0.13), always carry `pricedAt`, and are always rendered as estimates — a range for token-priced models and an explicit "Cost unknown" row where a provider publishes no rate. Runs whose estimate exceeds the spend-confirmation threshold (Settings → Spending, §6.17) always require this confirmation, even for a single node. Actual costs, once known, are reconciled into `usage_log` with the canvas and node ids attached (§0.13).
 
 ### 7.8 Persistence
 
-**Document format.** One JSON document per canvas, validated by a zod schema that is the single source of truth (it also generates the catalogue manifest used by the agent extension point in 7.11).
+**Document format.** One JSON document per canvas, validated by `canvasDocumentSchema` (zod, `packages/core/src/canvas/schema.ts`), the single source of truth. The browser validates with it on edit, import and save. The server validates `PATCH /api/canvases/:id` bodies and the bundled templates with the same schema (§0.16). It also generates the catalogue manifest used by the agent extension point in 7.11. Document migrations for `canvases.schema_version` bumps (§8.2) live beside it in `packages/core/src/canvas/migrations/`.
 
 ```jsonc
 {
@@ -3333,9 +3484,9 @@ Estimates come from the manifest's pricing snapshot (§6, §0.13), always carry 
 
 `meta.previewPath` is an internal file relative to `OPENFIELD_HOME` (§0.2, §0.7), **not an asset id** — previews never enter the user's library.
 
-**Storage.** The document of record is the `graph` JSON column of the **`canvases`** row, with snapshots in **`canvas_versions`** and the card image at `preview_path`; §8.2 owns the DDL and this section restates none of it. A Settings toggle additionally write-throughs each save to `~/.openfield/canvases/{id}.json`, so a user can keep their graphs in git.
+**Storage.** The document of record is the `graph` JSON column of the **`canvases`** row, with snapshots in **`canvas_versions`** and the card image at `preview_path`; §8.2's Drizzle schema owns both tables and this section restates none of it. A Settings toggle additionally write-throughs each save to `~/.openfield/canvases/{id}.json`, so a user can keep their graphs in git.
 
-**Autosave.** Local state is the source of truth while editing; mutations flow through a single `applyOp(doc, op)` reducer. Saves are **debounced 800 ms** after the last mutation, force-flushed every 10 s while dirty, and flushed on blur, route change and `beforeunload`. The request is `PATCH /api/canvases/:id` (§8.3) carrying the full document plus `graphVersion`; if the server's version has moved (two browser tabs on the same canvas), the save is rejected with `conflict` (§0.5) and the editor shows a non-destructive banner — *"This canvas changed in another tab"* — with **Reload** / **Overwrite**. The save-state chip in the top bar always reflects reality (`Saved` / `Saving…` / `Offline — retrying`, with exponential backoff).
+**Autosave.** Local state is the source of truth while editing; mutations flow through a single `applyOp(doc, op)` reducer. Saves are **debounced 800 ms** after the last mutation, force-flushed every 10 s while dirty, and flushed on blur, route change and `beforeunload`. The request is `PATCH /api/canvases/:id` (§8.3) carrying the full document plus `graphVersion`; if the server's version has moved (two browser tabs on the same canvas), the save is rejected with `conflict` (§0.5) and the editor shows a non-destructive banner — *"This canvas changed in another tab"* — with **Reload** / **Keep mine**. The save-state chip in the top bar always reflects reality (`Saved` / `Saving…` / `Offline. Retrying…`, with exponential backoff).
 
 **Undo/redo.** Client-side command stack, **100 entries**, `⌘Z` / `⇧⌘Z`. Continuous gestures coalesce: a drag is one entry, a burst of typing coalesces on a 500 ms idle. Undo covers add/delete/move/resize/collapse, param changes, edge add/delete/reconnect, paste, group/ungroup, and template application. Undo **does not** un-generate: undoing a run clears the node's `result` pointer, but the asset it produced stays in the library (it was paid for and may be referenced elsewhere). Redo re-attaches the same asset ids without re-running. Undo and redo never cancel an in-flight run, and a node with a run in flight refuses reparenting and deletion — the full rule is in 7.7.
 
@@ -3343,10 +3494,10 @@ Estimates come from the manifest's pricing snapshot (§6, §0.13), always carry 
 
 **Import / export.**
 
-- **Export graph** → `{name}.ofcanvas.json` — the document above, with `result.assetIds` preserved.
-- **Export graph + assets** → `{name}.ofcanvas.zip` — `canvas.json`, `assets/{id}.{ext}`, and a `manifest.json` listing asset hashes, so the file is portable between machines.
-- **Import** validates against the zod schema, rejects with a precise path on failure (`nodes[3].params.batch: expected 1–4`), remaps all ids, and **reconciles models**: if a node references a model that isn't available with the user's current keys, it imports in the `blocked` state with a *"Pick a substitute"* action whose picker is filtered to models satisfying that node's required capabilities (§0.3). Missing assets import as placeholders that keep the graph runnable.
-- **Save as template** writes the same file into the templates folder and adds it to the Templates tab.
+- **Export canvas** → `{name}.ofcanvas.json` — the document above, with `result.assetIds` preserved.
+- **Export canvas + images** → `{name}.ofcanvas.zip` — `canvas.json`, `assets/{id}.{ext}`, and a `manifest.json` listing asset hashes, so the file is portable between machines.
+- **Import** validates against `canvasDocumentSchema`, rejects with a precise message on failure (`Node 3: image count must be 1–4`), remaps all ids, and **reconciles models**: if a node references a model that isn't available with the user's current keys, it imports in the `blocked` state with a *"Pick another model"* action whose picker is filtered to models satisfying that node's required capabilities (§0.3). Missing assets import as placeholders that keep the graph runnable.
+- **Save as template** writes the same file to `~/.openfield/canvases/templates/<id>.ofcanvas.json` and adds it to the Templates tab. The tab lists user templates beside the four bundled ones in `apps/server/seed/templates/`.
 
 ### 7.9 Selection and manipulation
 
@@ -3362,14 +3513,14 @@ Estimates come from the manifest's pricing snapshot (§6, §0.13), always carry 
 
 | Key | Action | Key | Action |
 |---|---|---|---|
-| `V` / `H` | Select / Pan (Space = hold-to-pan) | `⌘⏎` | Run selected node |
-| `N` / `R` / `T` / `F` | Note / Shape / Text / Frame | `⇧⌘⏎` | Run downstream |
-| `A` | Add-node menu | `⌥⌘⏎` | Run all |
-| `⌘F` | Find in canvas | `Esc` | Cancel menu / clear selection |
+| `V` / `H` | Select / Pan (hold Space to pan) | `⌘⏎` | Run selected node |
+| `N` / `R` / `T` / `F` | Note / Shape / Text / Frame | `⇧⌘⏎` | Run from here |
+| `A` | Add node | `⌥⌘⏎` | Run all |
+| `⌘F` | Find in canvas | `Esc` | Close menu / clear selection |
 | `⌘Z` / `⇧⌘Z` | Undo / Redo | `⇧1` / `⇧2` | Zoom to fit / to selection |
 | `⌘C` `⌘X` `⌘V` `⌘D` | Copy / Cut / Paste / Duplicate | `⌘0` | Zoom 100% |
 | `⌘A` | Select all | `⌘+` / `⌘-` | Zoom in / out |
-| `⌘G` / `⇧⌘G` | Group into frame / Ungroup | `⌘S` | Flush save (toast "Saved") |
+| `⌘G` / `⇧⌘G` | Group into frame / Ungroup | `⌘S` | Save |
 | `⌫` | Delete selection | `⇧⌘S` | Save named version |
 
 A `?` overlay lists these alongside the global table; every toolbar tooltip shows its own shortcut.
@@ -3398,15 +3549,15 @@ How we hit them:
 None of the following ship in v1 (§0.14). Each has a designed-for seam so it is an addition, not a rewrite.
 
 - **Multiplayer cursors and presence.** Every mutation already goes through one `applyOp(doc, op)` reducer with a closed set of op types (`addNode`, `moveNode`, `setParam`, `addEdge`, `deleteEdge`, `reparent`, …). That is the shape a CRDT needs: the v1.1 path is to back the document with a Yjs doc and replay the same ops, changing nothing above the reducer. A `<PresenceLayer/>` renders in the pane as a no-op component today and becomes the cursor/selection overlay later.
-- **Per-canvas chat.** The editor's right side is a **drawer host** that takes registered panels; v1 registers *Version history* and *Node inspector*. Chat is one more registration.
+- **Per-canvas chat.** The editor's right side is a **drawer host** that takes registered panels; v1 registers *Version history* and *Node settings*. Chat is one more registration.
 - **Comments.** The document schema already carries a `comments: []` array whose entries anchor to either a `nodeId` or a viewport point (`{x, y}`), and the toolbar's comment slot exists behind `canvas.tools.comments`. Shipping comments is a panel, a pin renderer and a table — no schema migration.
-- **Text (LLM) and Table nodes.** Both are catalogued and tagged `v1.1` (7.4, 7.5); the fan-out mechanism they need already ships for Variations.
+- **AI text and Table nodes.** Both are listed as v1.1 in the §7.5 catalogue table and hidden from the add-node menu (7.4); the fan-out mechanism they need already ships for Variations.
 - **Ask Agent (LLM graph builder).** The extension point is deliberately narrow and safe:
 
-  1. A BYOK text model (the same key store and Settings UI as the prompt enhancer, §6.11/§6.17) receives a system prompt containing **(a)** the canvas JSON Schema, **(b)** the node catalogue manifest — auto-generated from the same zod definitions that validate documents, so it can never drift — and **(c)** the current document with `result` fields elided down to asset ids and captions.
+  1. A BYOK text model (the same key store and Settings UI as the prompt enhancer, §6.11/§6.17) receives a system prompt containing **(a)** the canvas JSON Schema (generated from `canvasDocumentSchema` with zod's JSON Schema export), **(b)** the node catalogue manifest — auto-generated from the same zod definitions that validate documents, so it can never drift — and **(c)** the current document with `result` fields elided down to asset ids and captions.
   2. The user's request is sent, and the model must reply with a **graph patch**: a JSON array of the reducer's own domain ops (`[{ "op": "addNode", "node": {…} }, { "op": "addEdge", … }]`), not free-form JSON and not code.
   3. The patch is validated in three passes — zod schema, referential integrity (every `source`/`target` exists, every port type is compatible), and acyclicity — then checked against the installed manifests so it cannot propose a model the user has no key for.
-  4. A **diff preview** is shown ("Adds 3 nodes, 4 connections, changes 1 model — Apply / Discard"); applying is a **single undoable transaction**.
+  4. A **diff preview** is shown ("Adds 3 nodes and 4 connections, changes 1 model. Apply / Discard"); applying is a **single undoable transaction**.
   5. The agent **never runs anything**. It may *propose* a run, which surfaces as the ordinary cost-preview confirmation. Its own token spend is written to the usage log like any other provider call.
 
 ### 7.12 Acceptance criteria
@@ -3416,9 +3567,9 @@ None of the following ship in v1 (§0.14). Each has a designed-for seam so it is
 - Connecting a `text` output to an `image` input is impossible by hover and produces a named toast on drop; connecting a node to its own ancestor is rejected as a loop.
 - Changing a generator's prompt marks it and every downstream node `stale` within one frame, with no run triggered.
 - Running a graph twice with no changes issues **zero** provider calls the second time and marks every node `cached` — including on the launch models, which declare `seed.supported: false` and therefore cache on unchanged inputs with no seed pinned (§0.11).
-- A result that arrives after its node's params changed files its asset in the library and leaves the node `stale` with "Result is from earlier settings" — it never overwrites the newer settings and never silently disappears.
-- A canvas run's results appear in the Image tab feed and the Assets library, and the detail view offers "Open in canvas" back to the originating node.
-- *Run all* on a 5-node graph (2 runnable, 2 cached, 1 unpriced) shows a cost-preview popover whose per-node rows sum to the displayed total, with token-priced models shown as a range and unpriced providers shown as "unknown".
+- A result that arrives after its node's params changed files its asset in the library and leaves the node `stale` with "Made with older settings" — it never overwrites the newer settings and never silently disappears.
+- A canvas run's results appear in the Image tab feed and the Assets library, and the detail view offers "Open in Canvas" back to the originating node.
+- *Run all* on a 5-node graph (2 runnable, 2 cached, 1 unpriced) shows a cost-preview popover whose per-node rows sum to the displayed total, with token-priced models shown as a range and unpriced providers shown as "Cost unknown".
 - Reloading the browser mid-run does not stop it: the run resumes from `canvas_runs` and the nodes re-attach to their job sets.
 - Cancelling mid-run stops queued nodes and keeps every asset already **written to the library**; runs canceled after submit are recorded in the usage log as billed-but-discarded, and the node band says so.
 - Exporting a canvas and importing it on a machine with different API keys produces a runnable graph where unavailable models are `blocked` with a substitute picker rather than silently swapped.
@@ -3427,7 +3578,7 @@ None of the following ship in v1 (§0.14). Each has a designed-for seam so it is
 
 ### 7.13 Open questions
 
-- Inner UI of the reference product's Video, Voice, LLM Assistant, Page, Table, Upload and Assets nodes was not captured — our specs for Upload and Assets (and, at v1.1, Table and Text (LLM)) are our own design, not parity.
+- Inner UI of the reference product's Video, Voice, LLM Assistant, Page, Table, Upload and Assets nodes was not captured — our specs for Upload and Assets (and, at v1.1, Table and AI text) are our own design, not parity.
 - The reference version-history UI was not opened; our drawer design is not parity-checked.
 - Multi-select, group, align and copy/paste behaviour on the reference canvas was never exercised; no delete/duplicate shortcut was observed. Our shortcut table is ours.
 - Whether the reference canvas re-runs nodes automatically when an upstream node changes, or whether it caches unchanged nodes at all, was not observed — our dirty/cached model is a design decision.
@@ -3438,7 +3589,6 @@ None of the following ship in v1 (§0.14). Each has a designed-for seam so it is
 - Whether Higgsfield exposes any canvas/graph functionality through its public API is undocumented (the API research notes it as "appears to be UI-only") — so a Higgsfield adapter, if shipped, contributes models to canvas nodes, never a canvas backend.
 
 ---
-
 ## 8. Data model, local API, queue and delivery plan
 
 This section specifies everything behind the glass: where bytes live on disk, the SQLite schema, the loopback HTTP API the React app talks to, the job queue that drives it, the image pipeline that replaces the reference product's CDN proxy, and the milestone plan that gets us from empty repo to Canvas. UI behaviour is specified in §2 (shell, feed, library), §3 (composer), §4 (detail view & editor), §5 (presets, references, characters, palettes) and §7 (canvas); provider adapters and capability manifests in §6. Where those sections need persistence or an endpoint, it is defined here.
@@ -3475,8 +3625,9 @@ Everything Openfield owns lives in one directory, referred to internally as `OPE
 ├── presets/                    # JSON exports/imports of the user preset library (§8.3)
 │   ├── exported/
 │   └── imported/
-├── canvases/                   # canvas graph exports + auto-generated 16:9 preview PNGs
+├── canvases/                   # canvas graph exports, user templates, auto-generated 16:9 preview PNGs
 │   ├── exports/
+│   ├── templates/              # user-saved canvas templates (§7.8); bundled ones ship in apps/server/seed/templates/
 │   └── previews/01K6BR….png
 ├── logs/
 │   ├── openfield.log           # rolling, 10 MB × 5, secrets redacted
@@ -3486,7 +3637,7 @@ Everything Openfield owns lives in one directory, referred to internally as `OPE
     └── orphans/
 ```
 
-**Why date-sharded originals and content-addressed derivatives.** Originals are the user's library: they must be browsable in Finder/Explorer without the app, and "the day I made it" is the only sort a human uses, so `assets/YYYY/MM/DD/<ulid>.<ext>` wins over a `ab/cd/<sha256>` blob store. ULID filenames are lexicographically time-ordered, collision-free and carry no user text. Deduplication is not lost: `assets.sha256` is stored and indexed, so re-importing identical bytes is detected and surfaced ("you already have this") without forcing a hash-shaped tree on the user. Thumbnails are the opposite case — pure cache, never browsed by hand, regenerable at any time — so they are keyed by `sha256@height`, shared automatically between duplicate assets, and safe to delete wholesale.
+**Why date-sharded originals and content-addressed derivatives.** Originals are the user's library: they must be browsable in Finder/Explorer without the app, and "the day I made it" is the only sort a human uses, so `assets/YYYY/MM/DD/<ulid>.<ext>` wins over a `ab/cd/<sha256>` blob store. ULID filenames are lexicographically time-ordered, collision-free and carry no user text. Deduplication is not lost: `assets.sha256` is stored and indexed, so re-importing identical bytes is detected and surfaced ("You already have this") without forcing a hash-shaped tree on the user. Thumbnails are the opposite case — pure cache, never browsed by hand, regenerable at any time — so they are keyed by `sha256@height`, shared automatically between duplicate assets, and safe to delete wholesale.
 
 **There is no `refs/` tree.** Reference images are ordinary uploads under `uploads/YYYY/MM/DD/<ulid>.<ext>` with an `assets` row (`kind='uploaded'`), and reference sets hold asset ids, never paths or hashes (§0.7). Painted masks are likewise ordinary assets (`kind='mask'`). `presets/` holds only `exported/` and `imported/` material — SQLite is the store of record (§0.8). Streamed partial frames live in `tmp/` and are never filed as assets (§0.6).
 
@@ -3498,378 +3649,526 @@ Everything Openfield owns lives in one directory, referred to internally as `OPE
 
 ### 8.2 SQLite schema
 
-Single file, `openfield.db`, opened by the Bun server with `bun:sqlite`. Migrations are numbered, forward-only, applied on boot inside a transaction.
+One file, `openfield.db`, opened by the Bun server through `bun:sqlite` with the `drizzle-orm/bun-sqlite` driver. **The Drizzle schema in `packages/db/src/schema/` is the single source of truth** for every table, column, default, CHECK, index, unique constraint and foreign key (§0.16). `drizzle-kit generate` turns each schema change into a committed, reviewable SQL migration in `packages/db/migrations/`. Drizzle can't express the FTS5 index and its triggers, so they live in a hand-written migration in the same folder (8.2.3). Migrations are forward-only and applied on boot (8.2.4).
 
-```sql
-PRAGMA journal_mode = WAL;
-PRAGMA foreign_keys  = ON;
-PRAGMA synchronous   = NORMAL;
-PRAGMA busy_timeout  = 5000;
+Conventions for every table below:
+- Timestamps are ISO-8601 UTC `TEXT`.
+- Ids are ULIDs in `TEXT` primary keys (§0.2), generated in application code. `$defaultFn` hooks run in JS and add nothing to the generated SQL.
+- Flags are plain `integer()` columns with a literal `0`/`1` default, so the generated SQL is `INTEGER NOT NULL DEFAULT 1`, typed `number`. `mode: "boolean"` is not used: the schema has no 0/1 CHECK on any flag, and boolean mode would make drizzle-kit print `DEFAULT true`/`DEFAULT false` instead of `DEFAULT 1`/`DEFAULT 0`.
+- JSON columns are `text({ mode: "json" }).$type<T>()`: `TEXT` on disk, parsed and serialised by Drizzle, typed by the core schema named in `T`.
+- `text({ enum })` narrows the TypeScript type only. The database enforces the same list through a named CHECK that `oneOf()` builds from `@openfield/core/constants`. A column with no CHECK in this schema has none on purpose (`error_code`, `assets.op`, `usage_log.operation`, every `modality` except `models.modality`).
+- CHECK and partial-index SQL uses bare column names, never `${t.column}`. A drizzle-kit table rebuild (`__new_<table>`) then can't carry a stale table qualifier.
+- Drizzle emits a table-level `unique()` and a column-level `.unique()` as a named `CREATE UNIQUE INDEX` (`jobs_job_set_id_idx_unique`, `job_sets_idempotency_key_unique`) rather than an inline `UNIQUE`, and prints `REAL` defaults as `1` rather than `1.0`. Both are equivalent to the inline `UNIQUE` and the `1.0` literal.
+- `.primaryKey()` always adds `NOT NULL`, so every single-column `TEXT` primary key is `TEXT PRIMARY KEY NOT NULL`. That is stricter than the bare `TEXT PRIMARY KEY`, which SQLite (for legacy reasons) lets hold NULL. No valid row has a NULL id, and Drizzle can't express the looser form.
+- No table is `WITHOUT ROWID`. `assets` needs its implicit rowid for the FTS5 external-content index.
 
-CREATE TABLE schema_migrations (
-  version    INTEGER PRIMARY KEY,
-  name       TEXT NOT NULL,
-  applied_at TEXT NOT NULL
-);
-
--- ─────────────────────────────── providers & models ───────────────────────────────
--- No secret ever lands here. credential_ref is a POINTER into config.json / env.
-CREATE TABLE providers (
-  id                TEXT PRIMARY KEY,              -- 'openai' | 'google' | 'higgsfield' | 'fal' | 'replicate'
-  display_name      TEXT NOT NULL,
-  adapter           TEXT NOT NULL,                 -- built-in adapter module id
-  auth_kind         TEXT NOT NULL CHECK (auth_kind IN ('api_key','key_secret_pair','none')),
-  credential_ref    TEXT,                          -- e.g. 'keys.openai' — a path, never a value
-  credential_source TEXT NOT NULL DEFAULT 'unset'
-                      CHECK (credential_source IN ('env','file','unset')),
-  credential_hint   TEXT,                          -- last 4 chars only, for the Settings UI
-  base_url          TEXT,
-  enabled           INTEGER NOT NULL DEFAULT 1,
-  concurrency_cap   INTEGER NOT NULL DEFAULT 2,
-  last_ok_at        TEXT,
-  last_error        TEXT,
-  created_at        TEXT NOT NULL,
-  updated_at        TEXT NOT NULL
-);
-
--- Cache of the model registry (§6). Rows are refreshed by runtime discovery where the
--- provider allows it, otherwise seeded from the adapter's shipped manifest.
-CREATE TABLE models (
-  provider_id     TEXT NOT NULL REFERENCES providers(id) ON DELETE CASCADE,
-  model_id        TEXT NOT NULL,                   -- provider-native id, e.g. 'gemini-3-pro-image'
-  display_name    TEXT NOT NULL,
-  family          TEXT,                            -- grouping key for the picker's sections
-  modality        TEXT NOT NULL DEFAULT 'image'
-                    CHECK (modality IN ('image','video','audio')),
-  badges          TEXT,                            -- JSON array of §6.3 badges: ["new"], ["legacy"]
-  capabilities    TEXT NOT NULL,                   -- JSON capability manifest (§6)
-  pricing         TEXT,                            -- JSON pricing snapshot + as_of date
-  source          TEXT NOT NULL CHECK (source IN ('static','discovered','user')),
-  enabled         INTEGER NOT NULL DEFAULT 1,
-  sort_order      INTEGER NOT NULL DEFAULT 0,
-  discovered_at   TEXT,
-  updated_at      TEXT NOT NULL,
-  PRIMARY KEY (provider_id, model_id)
-);
-
--- ─────────────────────────────── jobs ───────────────────────────────
--- A JOB SET is one submit: one Generate click, one edit commit, or one canvas node run, with
--- N outputs. A JOB is one output and one feed tile (§0.1).
-CREATE TABLE job_sets (
-  id                 TEXT PRIMARY KEY,             -- ULID
-  idempotency_key    TEXT UNIQUE,                  -- client ULID, one per job set (§0.2)
-  op                 TEXT NOT NULL                 -- exactly §0.4 Op
-                       CHECK (op IN ('generate','edit','inpaint','outpaint','variation','upscale',
-                                     'remove_bg','text_edit','relight','angles','enhance','decompose',
-                                     'crop','grade','overlay')),
-  modality           TEXT NOT NULL DEFAULT 'image',
-  provider_id        TEXT NOT NULL REFERENCES providers(id),
-  model_id           TEXT NOT NULL,
-  prompt             TEXT NOT NULL DEFAULT '',     -- prompt as submitted (after enhance, after preset)
-  prompt_original    TEXT,                         -- pre-enhance text when §3.4.3 rewrote it
-  negative_prompt    TEXT,
-  request_json       TEXT NOT NULL,                -- the frozen NormalizedRequest (§0.11). Recreate
-                                                   -- replays THIS, never the current UI or manifest.
-  batch_size         INTEGER NOT NULL DEFAULT 1 CHECK (batch_size BETWEEN 1 AND 4),
-                                                   -- UI cap is 4 (observed parity); raising it
-                                                   -- requires a migration and a manifest change.
-  priority           INTEGER NOT NULL DEFAULT 10,  -- §0.12: composer/single-node 10, run-all 5
-  status             TEXT NOT NULL DEFAULT 'pending'   -- §0.4 JobSetState = JobState | 'partial'
-                       CHECK (status IN ('pending','submitting','queued','running','succeeded',
-                                         'failed','canceled','interrupted','partial')),
-  source             TEXT NOT NULL DEFAULT 'composer'
-                       CHECK (source IN ('composer','detail_editor','canvas','api','recreate')),
-  canvas_id          TEXT REFERENCES canvases(id) ON DELETE SET NULL,
-  canvas_node_id     TEXT,
-  canvas_run_id      TEXT REFERENCES canvas_runs(id) ON DELETE SET NULL,
-  cost_estimate_usd  REAL,
-  cost_actual_usd    REAL,
-  error_code         TEXT,                         -- one of §0.5 ErrorCode
-  error_message      TEXT,
-  created_at         TEXT NOT NULL,
-  started_at         TEXT,
-  finished_at        TEXT
-);
-
-CREATE TABLE jobs (
-  id              TEXT PRIMARY KEY,                -- ULID
-  job_set_id      TEXT NOT NULL REFERENCES job_sets(id) ON DELETE CASCADE,
-  idx             INTEGER NOT NULL,                -- 0..batch_size-1, drives placeholder ordering
-  provider_job_id TEXT,                            -- provider-side request/prediction id
-  idempotency_key TEXT,                            -- `${jobSet.idempotency_key}:${idx}` — reused on
-                                                   -- every attempt (§0.2, §0.4)
-  status          TEXT NOT NULL DEFAULT 'pending'  -- mirrors §0.4 JobState verbatim
-                    CHECK (status IN ('pending','submitting','queued','running','succeeded',
-                                      'failed','canceled','interrupted')),
-  progress        REAL,                            -- 0..1 when the provider reports it, else NULL
-  seed            INTEGER,                         -- NULL unless capabilities.seed.supported (§0.11)
-  attempt         INTEGER NOT NULL DEFAULT 0,
-  next_attempt_at TEXT,
-  error_code      TEXT,                            -- one of §0.5 ErrorCode
-  error_message   TEXT,
-  latency_ms      INTEGER,
-  created_at      TEXT NOT NULL,
-  updated_at      TEXT NOT NULL,
-  started_at      TEXT,
-  finished_at     TEXT,
-  UNIQUE (job_set_id, idx)
-);
-
--- ─────────────────────────────── assets ───────────────────────────────
-CREATE TABLE assets (
-  id                TEXT PRIMARY KEY,              -- ULID
-  kind              TEXT NOT NULL
-                      CHECK (kind IN ('generated','uploaded','imported','edited','mask')),
-  modality          TEXT NOT NULL DEFAULT 'image',
-  job_id            TEXT REFERENCES jobs(id) ON DELETE SET NULL,
-  job_set_id        TEXT REFERENCES job_sets(id) ON DELETE SET NULL,
-  path              TEXT NOT NULL,                 -- relative to OPENFIELD_HOME
-  mime              TEXT NOT NULL,                 -- image/png | image/webp | image/jpeg
-  width             INTEGER NOT NULL,
-  height            INTEGER NOT NULL,
-  bytes             INTEGER NOT NULL,
-  sha256            TEXT NOT NULL,
-  seed              INTEGER,
-  provider_id       TEXT,                          -- 'local' for crop / grade / overlay (§0.4)
-  model_id          TEXT,                          -- denormalised: the feed filters on it constantly
-  prompt            TEXT NOT NULL DEFAULT '',      -- denormalised for FTS + the Info tab
-  params            TEXT,                          -- JSON snapshot of the exact params that made it
-  tags              TEXT NOT NULL DEFAULT '',      -- space-separated user tags, indexed by FTS
-  cost_usd          REAL,
-  -- Lineage columns (§0.7). The version strip and the History tab read these, never a CTE.
-  parent_asset_id   TEXT,                          -- NO foreign key: a hard-deleted parent must leave
-                                                   -- the child's chain intact — it is a tombstone
-                                                   -- pointer (§4.9 requirement 7, §8.6)
-  root_asset_id     TEXT NOT NULL,                 -- denormalised lineage root
-  op                TEXT,                          -- §0.4 Op that produced this asset
-  op_params         TEXT,                          -- JSON; re-opens the tool with its own settings
-  mask_asset_id     TEXT REFERENCES assets(id) ON DELETE SET NULL,
-  generative        INTEGER NOT NULL DEFAULT 1,    -- 0 for local ops (crop, grade, overlay)
-  approximate       INTEGER NOT NULL DEFAULT 0,    -- 1 when produced by the §0.9 regional fallback
-  approximate_reason TEXT,
-  file_state        TEXT NOT NULL DEFAULT 'ok'
-                      CHECK (file_state IN ('ok','missing','quarantined')),
-  created_at        TEXT NOT NULL,
-  updated_at        TEXT NOT NULL,
-  deleted_at        TEXT                           -- soft delete → Trash
-);
-
--- The multi-parent REFERENCE graph only. The operation lives on assets.op, never on the edge (§0.4).
--- A child may have several parents (an edit that consumed three reference images).
-CREATE TABLE asset_edges (
-  parent_asset_id TEXT NOT NULL,                   -- no FK: survives a hard-deleted parent
-  child_asset_id  TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
-  relation        TEXT NOT NULL CHECK (relation IN ('derived','reference','import')),
-  ordinal         INTEGER NOT NULL DEFAULT 0,      -- reference order, mirrors the Info tab thumb row
-  created_at      TEXT NOT NULL,
-  PRIMARY KEY (parent_asset_id, child_asset_id, relation, ordinal)
-);
-
--- ─────────────────────────────── organisation ───────────────────────────────
-CREATE TABLE folders (
-  id         TEXT PRIMARY KEY,
-  parent_id  TEXT REFERENCES folders(id) ON DELETE CASCADE,
-  name       TEXT NOT NULL,
-  color      TEXT,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE asset_folders (
-  asset_id  TEXT NOT NULL REFERENCES assets(id)  ON DELETE CASCADE,
-  folder_id TEXT NOT NULL REFERENCES folders(id) ON DELETE CASCADE,
-  added_at  TEXT NOT NULL,
-  PRIMARY KEY (asset_id, folder_id)
-);
-
-CREATE TABLE favourites (
-  asset_id   TEXT PRIMARY KEY REFERENCES assets(id) ON DELETE CASCADE,
-  created_at TEXT NOT NULL
-);
-
--- ───────────── presets, reference sets, characters, palettes, saved prompts ─────────────
--- Four entities, four tables (§0.8). The object shape is §5.3's; it is stored whole in
--- payload_json rather than shredded into typed columns, so an exported preset and a stored
--- preset are the same bytes. There is no `kind` column: this table holds STYLE presets only.
-CREATE TABLE presets (
-  id              TEXT PRIMARY KEY,
-  name            TEXT NOT NULL,
-  description     TEXT,
-  payload_json    TEXT NOT NULL,                   -- the §5.3 object, the single source
-  thumb_asset_id  TEXT REFERENCES assets(id) ON DELETE SET NULL,
-  builtin         INTEGER NOT NULL DEFAULT 0,      -- shipped starter presets, copy-on-edit
-  origin          TEXT,                            -- 'user' | 'import:<filename>'
-  sort_order      INTEGER NOT NULL DEFAULT 0,
-  created_at      TEXT NOT NULL,
-  updated_at      TEXT NOT NULL
-);
-
-CREATE TABLE preset_assets (
-  preset_id TEXT NOT NULL REFERENCES presets(id) ON DELETE CASCADE,
-  asset_id  TEXT NOT NULL REFERENCES assets(id)  ON DELETE CASCADE,
-  role      TEXT NOT NULL CHECK (role IN ('reference','palette','thumb')),
-  weight    REAL NOT NULL DEFAULT 1.0,
-  ordinal   INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (preset_id, asset_id, role)
-);
-
-CREATE TABLE reference_sets (
-  id         TEXT PRIMARY KEY,
-  name       TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE reference_set_items (
-  set_id   TEXT NOT NULL REFERENCES reference_sets(id) ON DELETE CASCADE,
-  asset_id TEXT NOT NULL REFERENCES assets(id)         ON DELETE CASCADE,  -- asset id, never sha256
-  position INTEGER NOT NULL,
-  weight   REAL NOT NULL DEFAULT 1.0,
-  role     TEXT NOT NULL CHECK (role IN ('style','subject','composition','palette')),
-  PRIMARY KEY (set_id, asset_id)
-);
-
--- Our open substitute for a trained identity: reference set + descriptor + optional pinned seed.
-CREATE TABLE characters (
-  id                     TEXT PRIMARY KEY,
-  name                   TEXT NOT NULL,
-  descriptor             TEXT,                     -- prose injected into the prompt
-  reference_set_id       TEXT REFERENCES reference_sets(id),
-  seed                   INTEGER,
-  lock_seed              INTEGER NOT NULL DEFAULT 0,
-  injection              TEXT CHECK (injection IN ('prefix','suffix','replace-token')),
-  token                  TEXT,                     -- the @-mention token (§0.8)
-  provider_identity_json TEXT,                     -- native identity handles, per provider
-  thumb_asset_id         TEXT REFERENCES assets(id) ON DELETE SET NULL,
-  created_at             TEXT NOT NULL,
-  updated_at             TEXT NOT NULL
-);
-
-CREATE TABLE character_assets (
-  character_id TEXT NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
-  asset_id     TEXT NOT NULL REFERENCES assets(id)     ON DELETE CASCADE,
-  ordinal      INTEGER NOT NULL DEFAULT 0,
-  PRIMARY KEY (character_id, asset_id)
-);
-
-CREATE TABLE palettes (
-  id               TEXT PRIMARY KEY,
-  name             TEXT NOT NULL,
-  hex_json         TEXT NOT NULL,
-  populations_json TEXT NOT NULL,
-  source_asset_id  TEXT REFERENCES assets(id) ON DELETE SET NULL,
-  k                INTEGER NOT NULL,
-  mode             TEXT NOT NULL CHECK (mode IN ('prompt','reference','both')),
-  builtin          INTEGER NOT NULL DEFAULT 0,
-  created_at       TEXT NOT NULL,
-  updated_at       TEXT NOT NULL
-);
-
-CREATE TABLE saved_prompts (
-  id         TEXT PRIMARY KEY,
-  name       TEXT NOT NULL,
-  text       TEXT NOT NULL,                        -- {{name}} variables resolve before templates
-  tags_json  TEXT,
-  preset_id  TEXT REFERENCES presets(id) ON DELETE SET NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
--- ─────────────────────────────── canvas ───────────────────────────────
-CREATE TABLE canvases (
-  id             TEXT PRIMARY KEY,
-  name           TEXT NOT NULL DEFAULT 'Untitled',
-  graph          TEXT NOT NULL,                    -- JSON: {nodes:[], edges:[], viewport:{}}
-  graph_version  INTEGER NOT NULL DEFAULT 1,       -- optimistic concurrency token
-  schema_version INTEGER NOT NULL DEFAULT 1,       -- graph JSON shape version, for migrations
-  preview_path   TEXT,                             -- canvases/previews/<id>.png
-  created_at     TEXT NOT NULL,
-  updated_at     TEXT NOT NULL,
-  opened_at      TEXT,
-  deleted_at     TEXT
-);
-
-CREATE TABLE canvas_versions (
-  id         TEXT PRIMARY KEY,
-  canvas_id  TEXT NOT NULL REFERENCES canvases(id) ON DELETE CASCADE,
-  graph      TEXT NOT NULL,
-  label      TEXT,                                 -- 'autosave' | user-typed name
-  created_at TEXT NOT NULL
-);
-
--- One row per POST /api/canvases/:id/run, so a multi-node run survives a reload (§0.12, §7.7).
-CREATE TABLE canvas_runs (
-  id          TEXT PRIMARY KEY,                    -- ULID
-  canvas_id   TEXT NOT NULL REFERENCES canvases(id) ON DELETE CASCADE,
-  scope       TEXT NOT NULL CHECK (scope IN ('node','downstream','all','selection')),
-  status      TEXT NOT NULL DEFAULT 'running'      -- §0.4 JobSetState
-                CHECK (status IN ('pending','submitting','queued','running','succeeded',
-                                  'failed','canceled','interrupted','partial')),
-  created_at  TEXT NOT NULL,
-  finished_at TEXT
-);
-
--- ─────────────────────────────── usage & settings ───────────────────────────────
--- One row per terminal outcome — success, failure and cancel alike (§0.13).
-CREATE TABLE usage_log (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  ts           TEXT NOT NULL,
-  provider_id  TEXT NOT NULL,
-  model_id     TEXT NOT NULL,
-  job_set_id   TEXT,
-  job_id       TEXT,
-  batch_index  INTEGER,
-  operation    TEXT NOT NULL,                      -- §0.4 Op, byte-identical to job_sets.op
-  outcome      TEXT NOT NULL CHECK (outcome IN ('succeeded','failed','canceled')),
-  size         TEXT,                               -- '1536x2048'
-  quality      TEXT,
-  units        TEXT,                               -- JSON: {images, tokens_in, tokens_out, cached_in}
-  estimate_min REAL,
-  estimate_max REAL,
-  cost_usd     REAL,
-  cost_source  TEXT CHECK (cost_source IN ('reconciled','estimated','unknown')),
-  price_as_of  TEXT,
-  discarded    INTEGER NOT NULL DEFAULT 0,         -- canceled after submit: billed but no asset
-  latency_ms   INTEGER,
-  http_status  INTEGER
-);
-
-CREATE TABLE settings (
-  key        TEXT PRIMARY KEY,
-  value      TEXT NOT NULL,                        -- JSON
-  updated_at TEXT NOT NULL
-);
-
--- ─────────────────────────────── full-text search ───────────────────────────────
-CREATE VIRTUAL TABLE assets_fts USING fts5(
-  prompt,
-  model_id UNINDEXED,
-  tags,
-  content = 'assets',
-  content_rowid = 'rowid',
-  tokenize = "unicode61 remove_diacritics 2"
-);
-
-CREATE TRIGGER assets_ai AFTER INSERT ON assets BEGIN
-  INSERT INTO assets_fts(rowid, prompt, model_id, tags)
-  VALUES (new.rowid, new.prompt, new.model_id, new.tags);
-END;
-CREATE TRIGGER assets_ad AFTER DELETE ON assets BEGIN
-  INSERT INTO assets_fts(assets_fts, rowid, prompt, model_id, tags)
-  VALUES ('delete', old.rowid, old.prompt, old.model_id, old.tags);
-END;
-CREATE TRIGGER assets_au AFTER UPDATE OF prompt, model_id, tags ON assets BEGIN
-  INSERT INTO assets_fts(assets_fts, rowid, prompt, model_id, tags)
-  VALUES ('delete', old.rowid, old.prompt, old.model_id, old.tags);
-  INSERT INTO assets_fts(rowid, prompt, model_id, tags)
-  VALUES (new.rowid, new.prompt, new.model_id, new.tags);
-END;
+```ts
+// packages/core/src/constants.ts: the one list behind each zod enum, each Drizzle enum type and each CHECK
+export const MODALITIES           = ["image", "video", "audio"] as const;
+export const JOB_STATES           = ["pending", "submitting", "queued", "running",
+                                     "succeeded", "failed", "canceled", "interrupted"] as const;   // §0.4
+export const JOB_SET_STATES       = [...JOB_STATES, "partial"] as const;                         // §0.4
+export const ACTIVE_JOB_STATES    = ["pending", "submitting", "queued", "running"] as const;
+export const OPS                  = ["generate", "edit", "inpaint", "outpaint", "variation", "upscale",
+                                     "remove_bg", "text_edit", "relight", "angles", "enhance", "decompose",
+                                     "crop", "grade", "overlay"] as const;                       // §0.4
+export const JOB_SOURCES          = ["composer", "detail_editor", "canvas", "api", "recreate"] as const;
+export const AUTH_KINDS           = ["api_key", "key_secret_pair", "none"] as const;
+export const CREDENTIAL_SOURCES   = ["env", "file", "unset"] as const;
+export const MODEL_SOURCES        = ["static", "discovered", "user"] as const;
+export const ASSET_KINDS          = ["generated", "uploaded", "imported", "edited", "mask"] as const;
+export const FILE_STATES          = ["ok", "missing", "quarantined"] as const;
+export const EDGE_RELATIONS       = ["derived", "reference", "import"] as const;                 // §0.4
+export const PRESET_ASSET_ROLES   = ["reference", "palette", "thumb"] as const;
+export const REFERENCE_SET_ROLES  = ["style", "subject", "composition", "palette"] as const;
+export const CHARACTER_INJECTIONS = ["prefix", "suffix", "replace-token"] as const;
+export const PALETTE_MODES        = ["prompt", "reference", "both"] as const;
+export const CANVAS_RUN_SCOPES    = ["node", "downstream", "all", "selection"] as const;
+export const USAGE_OUTCOMES       = ["succeeded", "failed", "canceled"] as const;
+export const COST_SOURCES         = ["reconciled", "estimated", "unknown"] as const;
+// ERROR_CODES (§0.5) lives here too. error_code columns are typed with it and carry no CHECK.
 ```
 
-**Notes on the enums.** `job_sets.op` values are exactly §0.4's `Op`; `assets.op` and `usage_log.operation` use the same union byte-for-byte. The local ops — `crop`, `grade`, `overlay` — never reach an adapter: they write `provider_id = 'local'`, `cost_actual_usd = 0` and `assets.generative = 0`. `expand` is renamed `outpaint` and `removeBackground` settles as `remove_bg` throughout. The lineage `relation` union is deliberately smaller than `Op` (§0.4): the operation is a property of the asset, not of the edge.
+```ts
+// packages/db/src/schema/_helpers.ts
+import { sql, type SQL } from "drizzle-orm";
+import { integer, text } from "drizzle-orm/sqlite-core";
+
+/** `column IN ('a','b',…)` from a core constant, with a bare column name (see conventions). */
+export const oneOf = (column: string, values: readonly string[]): SQL =>
+  sql.raw(`${column} IN (${values.map((v) => `'${v}'`).join(",")})`);
+
+/** 0/1 flag: generates plain INTEGER NOT NULL DEFAULT 0|1 (no CHECK, so no boolean mode). */
+export const flag = (name: string, dflt: 0 | 1) =>
+  integer(name).notNull().default(dflt);
+
+export const json = <T>(name: string) => text(name, { mode: "json" }).$type<T>();
+```
+
+```ts
+// packages/db/src/schema/providers.ts
+import { check, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { AUTH_KINDS, CREDENTIAL_SOURCES, MODALITIES, MODEL_SOURCES } from "@openfield/core/constants";
+import type { Capabilities, PriceModel } from "@openfield/core/schemas";
+import { flag, json, oneOf } from "./_helpers";
+
+// No secret ever lands here. credential_ref is a POINTER into config.json / env.
+export const providers = sqliteTable("providers", {
+  id:               text("id").primaryKey(),                      // 'openai' | 'google' | 'higgsfield' | 'fal' | 'replicate'
+  displayName:      text("display_name").notNull(),
+  adapter:          text("adapter").notNull(),                    // built-in adapter module id
+  authKind:         text("auth_kind", { enum: AUTH_KINDS }).notNull(),
+  credentialRef:    text("credential_ref"),                       // e.g. 'keys.openai': a path, never a value
+  credentialSource: text("credential_source", { enum: CREDENTIAL_SOURCES }).notNull().default("unset"),
+  credentialHint:   text("credential_hint"),                      // last 4 chars only, for the Settings UI
+  baseUrl:          text("base_url"),
+  enabled:          flag("enabled", 1),
+  concurrencyCap:   integer("concurrency_cap").notNull().default(2),
+  lastOkAt:         text("last_ok_at"),
+  lastError:        text("last_error"),
+  createdAt:        text("created_at").notNull(),
+  updatedAt:        text("updated_at").notNull(),
+}, () => [
+  check("providers_auth_kind_check", oneOf("auth_kind", AUTH_KINDS)),
+  check("providers_credential_source_check", oneOf("credential_source", CREDENTIAL_SOURCES)),
+]);
+
+// Cache of the model registry (§6). Rows are refreshed by runtime discovery where the
+// provider allows it, otherwise seeded from the adapter's shipped manifest.
+export const models = sqliteTable("models", {
+  providerId:   text("provider_id").notNull().references(() => providers.id, { onDelete: "cascade" }),
+  modelId:      text("model_id").notNull(),                       // provider-native id, e.g. 'gemini-3-pro-image'
+  displayName:  text("display_name").notNull(),
+  family:       text("family"),                                   // grouping key for the picker's sections
+  modality:     text("modality", { enum: MODALITIES }).notNull().default("image"),
+  badges:       json<string[]>("badges"),                         // §6.3 badges: ["new"], ["legacy"]
+  capabilities: json<Capabilities>("capabilities").notNull(),     // the capability manifest (§0.3)
+  pricing:      json<PriceModel>("pricing"),                      // pricing snapshot + as_of date
+  source:       text("source", { enum: MODEL_SOURCES }).notNull(),
+  enabled:      flag("enabled", 1),
+  sortOrder:    integer("sort_order").notNull().default(0),
+  discoveredAt: text("discovered_at"),
+  updatedAt:    text("updated_at").notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.providerId, t.modelId] }),
+  check("models_modality_check", oneOf("modality", MODALITIES)),
+  check("models_source_check", oneOf("source", MODEL_SOURCES)),
+]);
+```
+
+```ts
+// packages/db/src/schema/jobs.ts
+import { sql } from "drizzle-orm";
+import { check, index, integer, real, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
+import { ACTIVE_JOB_STATES, ERROR_CODES, JOB_SET_STATES, JOB_SOURCES, JOB_STATES, OPS } from "@openfield/core/constants";
+import type { NormalizedRequest } from "@openfield/core/schemas";
+import { json, oneOf } from "./_helpers";
+import { providers } from "./providers";
+import { canvases, canvasRuns } from "./canvas";
+
+// A JOB SET is one submit: one Generate click, one edit commit, or one canvas node run, with
+// N outputs. A JOB is one output and one feed tile (§0.1).
+export const jobSets = sqliteTable("job_sets", {
+  id:              text("id").primaryKey(),                           // ULID
+  idempotencyKey:  text("idempotency_key").unique(),                  // client ULID, one per job set (§0.2)
+  op:              text("op", { enum: OPS }).notNull(),               // exactly §0.4 Op
+  modality:        text("modality").notNull().default("image"),
+  providerId:      text("provider_id").notNull().references(() => providers.id),
+  modelId:         text("model_id").notNull(),
+  prompt:          text("prompt").notNull().default(""),              // as submitted (after enhance, after preset)
+  promptOriginal:  text("prompt_original"),                           // pre-enhance text when §3.4.3 rewrote it
+  negativePrompt:  text("negative_prompt"),
+  requestJson:     json<NormalizedRequest>("request_json").notNull(), // the frozen NormalizedRequest (§0.11). Recreate
+                                                                      // replays THIS, never the current UI or manifest.
+  batchSize:       integer("batch_size").notNull().default(1),
+  priority:        integer("priority").notNull().default(10),         // §0.12: composer/single-node 10, run-all 5
+  status:          text("status", { enum: JOB_SET_STATES }).notNull().default("pending"),  // §0.4 JobSetState
+  source:          text("source", { enum: JOB_SOURCES }).notNull().default("composer"),
+  canvasId:        text("canvas_id").references(() => canvases.id, { onDelete: "set null" }),
+  canvasNodeId:    text("canvas_node_id"),
+  canvasRunId:     text("canvas_run_id").references(() => canvasRuns.id, { onDelete: "set null" }),
+  costEstimateUsd: real("cost_estimate_usd"),
+  costActualUsd:   real("cost_actual_usd"),
+  errorCode:       text("error_code", { enum: ERROR_CODES }),         // one of §0.5 ErrorCode
+  errorMessage:    text("error_message"),
+  createdAt:       text("created_at").notNull(),
+  startedAt:       text("started_at"),
+  finishedAt:      text("finished_at"),
+}, (t) => [
+  check("job_sets_op_check", oneOf("op", OPS)),
+  // UI cap is 4 (observed parity); raising it requires a migration and a manifest change.
+  check("job_sets_batch_size_check", sql`batch_size BETWEEN 1 AND 4`),
+  check("job_sets_status_check", oneOf("status", JOB_SET_STATES)),
+  check("job_sets_source_check", oneOf("source", JOB_SOURCES)),
+  index("idx_job_sets_created").on(sql`created_at DESC`),
+  // Scheduler selection order (§0.12): priority DESC, then created_at, then jobs.idx.
+  index("idx_job_sets_sched").on(sql`priority DESC`, t.createdAt).where(oneOf("status", ACTIVE_JOB_STATES)),
+  index("idx_job_sets_canvas").on(t.canvasId, t.canvasNodeId),
+  index("idx_job_sets_run").on(t.canvasRunId),
+]);
+
+export const jobs = sqliteTable("jobs", {
+  id:             text("id").primaryKey(),                            // ULID
+  jobSetId:       text("job_set_id").notNull().references(() => jobSets.id, { onDelete: "cascade" }),
+  idx:            integer("idx").notNull(),                           // 0..batch_size-1, drives placeholder ordering
+  providerJobId:  text("provider_job_id"),                            // provider-side request/prediction id
+  idempotencyKey: text("idempotency_key"),                            // `${jobSet.idempotency_key}:${idx}`, reused on
+                                                                      // every attempt (§0.2, §0.4)
+  status:         text("status", { enum: JOB_STATES }).notNull().default("pending"),  // mirrors §0.4 JobState verbatim
+  progress:       real("progress"),                                   // 0..1 when the provider reports it, else NULL
+  seed:           integer("seed"),                                    // NULL unless capabilities.seed.supported (§0.11)
+  attempt:        integer("attempt").notNull().default(0),
+  nextAttemptAt:  text("next_attempt_at"),
+  errorCode:      text("error_code", { enum: ERROR_CODES }),          // one of §0.5 ErrorCode
+  errorMessage:   text("error_message"),
+  latencyMs:      integer("latency_ms"),
+  createdAt:      text("created_at").notNull(),
+  updatedAt:      text("updated_at").notNull(),
+  startedAt:      text("started_at"),
+  finishedAt:     text("finished_at"),
+}, (t) => [
+  unique("jobs_job_set_id_idx_unique").on(t.jobSetId, t.idx),
+  check("jobs_status_check", oneOf("status", JOB_STATES)),
+  // Queue scan and crash recovery: tiny partial index, always hot.
+  index("idx_jobs_active").on(t.status, t.nextAttemptAt).where(oneOf("status", ACTIVE_JOB_STATES)),
+  index("idx_jobs_job_set").on(t.jobSetId, t.idx),
+]);
+```
+
+```ts
+// packages/db/src/schema/assets.ts
+import { sql } from "drizzle-orm";
+import { check, index, integer, primaryKey, real, sqliteTable, text, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import { ASSET_KINDS, EDGE_RELATIONS, FILE_STATES, OPS } from "@openfield/core/constants";
+import { flag, json, oneOf } from "./_helpers";
+import { jobs, jobSets } from "./jobs";
+
+export const assets = sqliteTable("assets", {
+  id:                text("id").primaryKey(),                         // ULID
+  kind:              text("kind", { enum: ASSET_KINDS }).notNull(),
+  modality:          text("modality").notNull().default("image"),
+  jobId:             text("job_id").references(() => jobs.id, { onDelete: "set null" }),
+  jobSetId:          text("job_set_id").references(() => jobSets.id, { onDelete: "set null" }),
+  path:              text("path").notNull(),                          // relative to OPENFIELD_HOME
+  mime:              text("mime").notNull(),                          // image/png | image/webp | image/jpeg
+  width:             integer("width").notNull(),
+  height:            integer("height").notNull(),
+  bytes:             integer("bytes").notNull(),
+  sha256:            text("sha256").notNull(),
+  seed:              integer("seed"),
+  providerId:        text("provider_id"),                             // 'local' for crop / grade / overlay (§0.4); no FK
+  modelId:           text("model_id"),                                // denormalised: the feed filters on it constantly
+  prompt:            text("prompt").notNull().default(""),            // denormalised for FTS + the Info tab
+  params:            json<Record<string, unknown>>("params"),         // snapshot of the exact params that made it
+  tags:              text("tags").notNull().default(""),              // space-separated user tags, indexed by FTS
+  costUsd:           real("cost_usd"),
+  // Lineage columns (§0.7). The version strip and the History tab read these, never a CTE.
+  parentAssetId:     text("parent_asset_id"),                         // NO foreign key: a hard-deleted parent must leave
+                                                                      // the child's chain intact; it is a tombstone
+                                                                      // pointer (§4.9 requirement 7, §8.6)
+  rootAssetId:       text("root_asset_id").notNull(),                 // denormalised lineage root
+  op:                text("op", { enum: OPS }),                       // §0.4 Op that produced this asset
+  opParams:          json<Record<string, unknown>>("op_params"),      // re-opens the tool with its own settings
+  maskAssetId:       text("mask_asset_id").references((): AnySQLiteColumn => assets.id, { onDelete: "set null" }),
+  generative:        flag("generative", 1),                           // 0 for local ops (crop, grade, overlay)
+  approximate:       flag("approximate", 0),                          // 1 when produced by the §0.9 regional fallback
+  approximateReason: text("approximate_reason"),
+  fileState:         text("file_state", { enum: FILE_STATES }).notNull().default("ok"),
+  createdAt:         text("created_at").notNull(),
+  updatedAt:         text("updated_at").notNull(),
+  deletedAt:         text("deleted_at"),                              // soft delete: Trash
+}, (t) => [
+  check("assets_kind_check", oneOf("kind", ASSET_KINDS)),
+  check("assets_file_state_check", oneOf("file_state", FILE_STATES)),
+  // Feed: keyset pagination over the live library, newest first.
+  index("idx_assets_feed").on(sql`created_at DESC`, sql`id DESC`).where(sql`deleted_at IS NULL`),
+  index("idx_assets_modality").on(t.modality, sql`created_at DESC`).where(sql`deleted_at IS NULL`),
+  index("idx_assets_model").on(t.modelId, sql`created_at DESC`).where(sql`deleted_at IS NULL`),
+  index("idx_assets_job_set").on(t.jobSetId),
+  index("idx_assets_sha256").on(t.sha256),
+  index("idx_assets_trash").on(t.deletedAt).where(sql`deleted_at IS NOT NULL`),
+  // Version strip and History: one index scan per lineage root, no recursion (§0.7).
+  index("idx_assets_root").on(t.rootAssetId, t.createdAt).where(sql`deleted_at IS NULL`),
+]);
+
+// The multi-parent REFERENCE graph only. The operation lives on assets.op, never on the edge (§0.4).
+// A child may have several parents (an edit that consumed three reference images).
+export const assetEdges = sqliteTable("asset_edges", {
+  parentAssetId: text("parent_asset_id").notNull(),                   // no FK: survives a hard-deleted parent
+  childAssetId:  text("child_asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
+  relation:      text("relation", { enum: EDGE_RELATIONS }).notNull(),
+  ordinal:       integer("ordinal").notNull().default(0),             // reference order, mirrors the Info tab thumb row
+  createdAt:     text("created_at").notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.parentAssetId, t.childAssetId, t.relation, t.ordinal] }),
+  check("asset_edges_relation_check", oneOf("relation", EDGE_RELATIONS)),
+  index("idx_edges_parent").on(t.parentAssetId),
+  index("idx_edges_child").on(t.childAssetId),
+]);
+```
+
+```ts
+// packages/db/src/schema/organisation.ts
+import { sql } from "drizzle-orm";
+import { index, integer, primaryKey, sqliteTable, text, type AnySQLiteColumn } from "drizzle-orm/sqlite-core";
+import { assets } from "./assets";
+
+export const folders = sqliteTable("folders", {
+  id:        text("id").primaryKey(),
+  parentId:  text("parent_id").references((): AnySQLiteColumn => folders.id, { onDelete: "cascade" }),
+  name:      text("name").notNull(),
+  color:     text("color"),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const assetFolders = sqliteTable("asset_folders", {
+  assetId:  text("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
+  folderId: text("folder_id").notNull().references(() => folders.id, { onDelete: "cascade" }),
+  addedAt:  text("added_at").notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.assetId, t.folderId] }),
+  index("idx_asset_folders_fld").on(t.folderId, sql`added_at DESC`),
+]);
+
+export const favourites = sqliteTable("favourites", {
+  assetId:   text("asset_id").primaryKey().references(() => assets.id, { onDelete: "cascade" }),
+  createdAt: text("created_at").notNull(),
+}, () => [
+  index("idx_favourites_created").on(sql`created_at DESC`),
+]);
+```
+
+```ts
+// packages/db/src/schema/library.ts
+import { check, index, integer, primaryKey, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { CHARACTER_INJECTIONS, PALETTE_MODES, PRESET_ASSET_ROLES, REFERENCE_SET_ROLES } from "@openfield/core/constants";
+import type { PresetObject } from "@openfield/core/schemas";
+import { flag, json, oneOf } from "./_helpers";
+import { assets } from "./assets";
+
+// Four entities, four tables (§0.8). The object shape is §5.3's; it is stored whole in
+// payload_json rather than shredded into typed columns, so an exported preset and a stored
+// preset are the same object. There is no `kind` column: this table holds STYLE presets only.
+export const presets = sqliteTable("presets", {
+  id:           text("id").primaryKey(),
+  name:         text("name").notNull(),
+  description:  text("description"),
+  payloadJson:  json<PresetObject>("payload_json").notNull(),         // the §5.3 object, the single source
+  thumbAssetId: text("thumb_asset_id").references(() => assets.id, { onDelete: "set null" }),
+  builtin:      flag("builtin", 0),                                   // shipped starter presets, copy-on-edit
+  origin:       text("origin"),                                       // 'user' | 'import:<filename>'
+  sortOrder:    integer("sort_order").notNull().default(0),
+  createdAt:    text("created_at").notNull(),
+  updatedAt:    text("updated_at").notNull(),
+});
+
+export const presetAssets = sqliteTable("preset_assets", {
+  presetId: text("preset_id").notNull().references(() => presets.id, { onDelete: "cascade" }),
+  assetId:  text("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
+  role:     text("role", { enum: PRESET_ASSET_ROLES }).notNull(),
+  weight:   real("weight").notNull().default(1.0),
+  ordinal:  integer("ordinal").notNull().default(0),
+}, (t) => [
+  primaryKey({ columns: [t.presetId, t.assetId, t.role] }),
+  check("preset_assets_role_check", oneOf("role", PRESET_ASSET_ROLES)),
+]);
+
+export const referenceSets = sqliteTable("reference_sets", {
+  id:        text("id").primaryKey(),
+  name:      text("name").notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const referenceSetItems = sqliteTable("reference_set_items", {
+  setId:    text("set_id").notNull().references(() => referenceSets.id, { onDelete: "cascade" }),
+  assetId:  text("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),  // asset id, never sha256
+  position: integer("position").notNull(),
+  weight:   real("weight").notNull().default(1.0),
+  role:     text("role", { enum: REFERENCE_SET_ROLES }).notNull(),
+}, (t) => [
+  primaryKey({ columns: [t.setId, t.assetId] }),
+  check("reference_set_items_role_check", oneOf("role", REFERENCE_SET_ROLES)),
+  index("idx_ref_set_items").on(t.setId, t.position),
+]);
+
+// Our open substitute for a trained identity: reference set + descriptor + optional pinned seed.
+export const characters = sqliteTable("characters", {
+  id:                   text("id").primaryKey(),
+  name:                 text("name").notNull(),
+  descriptor:           text("descriptor"),                           // prose injected into the prompt
+  referenceSetId:       text("reference_set_id").references(() => referenceSets.id),
+  seed:                 integer("seed"),
+  lockSeed:             flag("lock_seed", 0),
+  injection:            text("injection", { enum: CHARACTER_INJECTIONS }),
+  token:                text("token"),                                // the @-mention token (§0.8)
+  providerIdentityJson: json<Record<string, unknown>>("provider_identity_json"),  // native identity handles, per provider
+  thumbAssetId:         text("thumb_asset_id").references(() => assets.id, { onDelete: "set null" }),
+  createdAt:            text("created_at").notNull(),
+  updatedAt:            text("updated_at").notNull(),
+}, () => [
+  check("characters_injection_check", oneOf("injection", CHARACTER_INJECTIONS)),
+]);
+
+export const characterAssets = sqliteTable("character_assets", {
+  characterId: text("character_id").notNull().references(() => characters.id, { onDelete: "cascade" }),
+  assetId:     text("asset_id").notNull().references(() => assets.id, { onDelete: "cascade" }),
+  ordinal:     integer("ordinal").notNull().default(0),
+}, (t) => [
+  primaryKey({ columns: [t.characterId, t.assetId] }),
+]);
+
+export const palettes = sqliteTable("palettes", {
+  id:              text("id").primaryKey(),
+  name:            text("name").notNull(),
+  hexJson:         json<string[]>("hex_json").notNull(),
+  populationsJson: json<number[]>("populations_json").notNull(),
+  sourceAssetId:   text("source_asset_id").references(() => assets.id, { onDelete: "set null" }),
+  k:               integer("k").notNull(),
+  mode:            text("mode", { enum: PALETTE_MODES }).notNull(),
+  builtin:         flag("builtin", 0),
+  createdAt:       text("created_at").notNull(),
+  updatedAt:       text("updated_at").notNull(),
+}, () => [
+  check("palettes_mode_check", oneOf("mode", PALETTE_MODES)),
+]);
+
+export const savedPrompts = sqliteTable("saved_prompts", {
+  id:        text("id").primaryKey(),
+  name:      text("name").notNull(),
+  text:      text("text").notNull(),                                  // {{name}} variables resolve before templates
+  tagsJson:  json<string[]>("tags_json"),
+  presetId:  text("preset_id").references(() => presets.id, { onDelete: "set null" }),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+```
+
+```ts
+// packages/db/src/schema/canvas.ts
+import { sql } from "drizzle-orm";
+import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { CANVAS_RUN_SCOPES, JOB_SET_STATES } from "@openfield/core/constants";
+import type { CanvasGraph } from "@openfield/core/canvas";
+import { json, oneOf } from "./_helpers";
+
+export const canvases = sqliteTable("canvases", {
+  id:            text("id").primaryKey(),
+  name:          text("name").notNull().default("Untitled"),
+  graph:         json<CanvasGraph>("graph").notNull(),              // {nodes:[], edges:[], viewport:{}}, per canvasDocumentSchema
+  graphVersion:  integer("graph_version").notNull().default(1),     // optimistic concurrency token
+  schemaVersion: integer("schema_version").notNull().default(1),    // graph JSON shape version, for document migrations
+  previewPath:   text("preview_path"),                              // canvases/previews/<id>.png
+  createdAt:     text("created_at").notNull(),
+  updatedAt:     text("updated_at").notNull(),
+  openedAt:      text("opened_at"),
+  deletedAt:     text("deleted_at"),
+});
+
+export const canvasVersions = sqliteTable("canvas_versions", {
+  id:        text("id").primaryKey(),
+  canvasId:  text("canvas_id").notNull().references(() => canvases.id, { onDelete: "cascade" }),
+  graph:     json<CanvasGraph>("graph").notNull(),
+  label:     text("label"),                                         // 'autosave' | user-typed name
+  createdAt: text("created_at").notNull(),
+}, (t) => [
+  index("idx_canvas_versions").on(t.canvasId, sql`created_at DESC`),
+]);
+
+// One row per POST /api/canvases/:id/run, so a multi-node run survives a reload (§0.12, §7.7).
+export const canvasRuns = sqliteTable("canvas_runs", {
+  id:         text("id").primaryKey(),                              // ULID
+  canvasId:   text("canvas_id").notNull().references(() => canvases.id, { onDelete: "cascade" }),
+  scope:      text("scope", { enum: CANVAS_RUN_SCOPES }).notNull(),
+  status:     text("status", { enum: JOB_SET_STATES }).notNull().default("running"),  // §0.4 JobSetState
+  createdAt:  text("created_at").notNull(),
+  finishedAt: text("finished_at"),
+}, () => [
+  check("canvas_runs_scope_check", oneOf("scope", CANVAS_RUN_SCOPES)),
+  check("canvas_runs_status_check", oneOf("status", JOB_SET_STATES)),
+]);
+```
+
+```ts
+// packages/db/src/schema/usage.ts
+import { sql } from "drizzle-orm";
+import { check, index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { COST_SOURCES, OPS, USAGE_OUTCOMES } from "@openfield/core/constants";
+import type { UsageUnits } from "@openfield/core/schemas";
+import { flag, json, oneOf } from "./_helpers";
+
+// One row per terminal outcome: success, failure and cancel alike (§0.13).
+export const usageLog = sqliteTable("usage_log", {
+  id:          integer("id").primaryKey({ autoIncrement: true }),
+  ts:          text("ts").notNull(),
+  providerId:  text("provider_id").notNull(),
+  modelId:     text("model_id").notNull(),
+  jobSetId:    text("job_set_id"),
+  jobId:       text("job_id"),
+  batchIndex:  integer("batch_index"),
+  operation:   text("operation", { enum: OPS }).notNull(),            // §0.4 Op, byte-identical to job_sets.op
+  outcome:     text("outcome", { enum: USAGE_OUTCOMES }).notNull(),
+  size:        text("size"),                                          // '1536x2048'
+  quality:     text("quality"),
+  units:       json<UsageUnits>("units"),                             // {images, tokens_in, tokens_out, cached_in}
+  estimateMin: real("estimate_min"),
+  estimateMax: real("estimate_max"),
+  costUsd:     real("cost_usd"),
+  costSource:  text("cost_source", { enum: COST_SOURCES }),
+  priceAsOf:   text("price_as_of"),
+  discarded:   flag("discarded", 0),                                  // canceled after submit: billed but no asset
+  latencyMs:   integer("latency_ms"),
+  httpStatus:  integer("http_status"),
+}, (t) => [
+  check("usage_log_outcome_check", oneOf("outcome", USAGE_OUTCOMES)),
+  check("usage_log_cost_source_check", oneOf("cost_source", COST_SOURCES)),
+  index("idx_usage_ts").on(sql`ts DESC`),
+  index("idx_usage_model").on(t.providerId, t.modelId, sql`ts DESC`),
+]);
+
+export const settings = sqliteTable("settings", {
+  key:       text("key").primaryKey(),
+  value:     json<unknown>("value").notNull(),                        // JSON, validated per key by settingsSchema (§6.17)
+  updatedAt: text("updated_at").notNull(),
+});
+```
+
+```ts
+// packages/db/src/schema/index.ts
+export * from "./providers";
+export * from "./jobs";
+export * from "./assets";
+export * from "./organisation";
+export * from "./library";
+export * from "./canvas";
+export * from "./usage";
+
+// packages/db/drizzle.config.ts
+import { defineConfig } from "drizzle-kit";
+export default defineConfig({ dialect: "sqlite", schema: "./src/schema/index.ts", out: "./migrations" });
+
+// packages/db/src/rows.ts: drizzle-zod row schemas, one select/insert pair per table
+import { createInsertSchema, createSelectSchema } from "drizzle-zod";
+import { capabilitiesSchema, priceModelSchema } from "@openfield/core/schemas";
+import * as t from "./schema";
+export const modelRow    = createSelectSchema(t.models, { capabilities: capabilitiesSchema, pricing: priceModelSchema.nullable() });
+export const newModelRow = createInsertSchema(t.models, { capabilities: capabilitiesSchema });
+export const assetRow    = createSelectSchema(t.assets);
+export const newAssetRow = createInsertSchema(t.assets);
+// … and so on for every table
+export type AssetRow    = typeof t.assets.$inferSelect;
+export type NewAssetRow = typeof t.assets.$inferInsert;
+```
+
+Insert schemas guard writes whose data came from outside the process (preset bundles, imported canvases, `models.json`). Query helpers take and return the inferred row types.
+
+**Notes on the enums.** `job_sets.op` values are exactly §0.4's `Op` (the `OPS` constant). `assets.op` and `usage_log.operation` use the same union byte for byte; they are typed with it and carry no CHECK. The local ops (`crop`, `grade`, `overlay`) never reach an adapter: they write `provider_id = 'local'`, `cost_actual_usd = 0` and `assets.generative = 0`. `expand` is renamed `outpaint`, and `removeBackground` settles as `remove_bg` throughout. The lineage `relation` union is deliberately smaller than `Op` (§0.4), because the operation is a property of the asset, not of the edge.
 
 #### 8.2.1 Indices
+
+Every index is declared in its table's Drizzle definition above. The block below is the SQL those definitions must generate, with the reason for each index. `packages/db/test/schema.test.ts` applies every migration to an in-memory database and checks three things: each index's `sqlite_master.sql` (whitespace- and quote-normalised) against the statement here, each CHECK list against its core constant, and `PRAGMA foreign_key_list` for every table against §8.2's references. drizzle-kit might not emit an index exactly (it drops a `WHERE` or a `DESC`). In that case the index is removed from the Drizzle table and written verbatim into a custom migration (8.2.3), under the same name, and the test still passes.
 
 ```sql
 -- Feed: keyset pagination over the live library, newest first.
@@ -3907,6 +4206,8 @@ CREATE INDEX idx_canvas_versions    ON canvas_versions(canvas_id, created_at DES
 ```
 
 #### 8.2.2 The queries that matter
+
+Each query below is a typed helper in `packages/db/src/queries/`, and routes never write SQL themselves (§0.16). Simple reads and writes use Drizzle's query builder. The row-value cursor, the FTS `MATCH` with `snippet()` and `bm25()`, the recursive CTE and the usage rollup use Drizzle's `sql` template, stay parameterised, and return typed rows. The SQL shown is what they execute. The recovery query's status list is `ACTIVE_JOB_STATES`.
 
 **Feed page (keyset cursor, never `OFFSET`).** The feed is a justified-rows layout at a target row height, so every page must return `width`/`height` with the row — the client computes row breaks before a single byte of image data arrives, which is what makes placeholders reserve the correct aspect ratio. SQLite row-value comparison (3.15+) gives a clean two-column cursor:
 
@@ -3995,12 +4296,86 @@ GROUP BY day, provider_id, model_id
 ORDER BY day DESC, usd DESC;
 ```
 
-Failures are excluded from both sums by construction: they are written with `cost_usd = 0` and `cost_source = 'unknown'` (§0.13). `usd_discarded` is the "billed but discarded" line — work a provider may have charged for after a cancel, with no asset to show for it. It is reported beside the spend total, never folded into it silently.
+Failures are excluded from both sums by construction: they are written with `cost_usd = 0` and `cost_source = 'unknown'` (§0.13). `usd_discarded` is the "Canceled but charged" line — work a provider may have charged for after a cancel, with no asset to show for it. It is reported beside the spend total, never folded into it silently.
 
 **Library stats** (Settings → Storage): `SELECT COUNT(*), SUM(bytes) FROM assets WHERE deleted_at IS NULL;` plus a `thumbs/` directory walk cached for 60 s.
 
----
+#### 8.2.3 Custom migrations
 
+The FTS5 index can't be expressed in Drizzle, so it lives in `packages/db/migrations/0001_assets_fts.sql`. The file is created with `bun run db:generate --custom --name=assets_fts` and runs after the generated `0000_initial.sql`. Drizzle's migrator splits statements on `--> statement-breakpoint`, so each trigger is a single statement even with the semicolons inside it. drizzle-kit never diffs these objects, and that is why this project never uses `drizzle-kit push`. Push compares against the live database, would try to drop tables it doesn't know (the FTS5 shadow tables), and skips review.
+
+```sql
+CREATE VIRTUAL TABLE assets_fts USING fts5(
+  prompt,
+  model_id UNINDEXED,
+  tags,
+  content = 'assets',
+  content_rowid = 'rowid',
+  tokenize = "unicode61 remove_diacritics 2"
+);
+--> statement-breakpoint
+CREATE TRIGGER assets_ai AFTER INSERT ON assets BEGIN
+  INSERT INTO assets_fts(rowid, prompt, model_id, tags)
+  VALUES (new.rowid, new.prompt, new.model_id, new.tags);
+END;
+--> statement-breakpoint
+CREATE TRIGGER assets_ad AFTER DELETE ON assets BEGIN
+  INSERT INTO assets_fts(assets_fts, rowid, prompt, model_id, tags)
+  VALUES ('delete', old.rowid, old.prompt, old.model_id, old.tags);
+END;
+--> statement-breakpoint
+CREATE TRIGGER assets_au AFTER UPDATE OF prompt, model_id, tags ON assets BEGIN
+  INSERT INTO assets_fts(assets_fts, rowid, prompt, model_id, tags)
+  VALUES ('delete', old.rowid, old.prompt, old.model_id, old.tags);
+  INSERT INTO assets_fts(rowid, prompt, model_id, tags)
+  VALUES (new.rowid, new.prompt, new.model_id, new.tags);
+END;
+```
+
+Soft delete fires no trigger and none is added (§0.7). The rebuild after a restore (§0.7, §8.6) runs at boot, not in a migration. Any later object Drizzle can't model (an index drizzle-kit can't emit exactly, per 8.2.1) goes in a new custom migration. A committed file is never edited.
+
+#### 8.2.4 Migrations on boot
+
+```ts
+// packages/db/src/client.ts
+import { Database } from "bun:sqlite";
+import { join } from "node:path";
+import { drizzle } from "drizzle-orm/bun-sqlite";
+import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+import * as schema from "./schema";
+import { MigrationIntegrityError } from "./errors";
+
+export function openDb(file: string) {
+  const sqlite = new Database(file, { create: true });
+  sqlite.exec("PRAGMA journal_mode = WAL");
+  sqlite.exec("PRAGMA synchronous = NORMAL");
+  sqlite.exec("PRAGMA busy_timeout = 5000");
+  const db = drizzle(sqlite, { schema });
+
+  // Foreign keys stay OFF while migrations run: a drizzle-kit table rebuild drops and
+  // re-creates a table, and with enforcement on, that DROP would cascade into child rows.
+  sqlite.exec("PRAGMA foreign_keys = OFF");
+  migrate(db, { migrationsFolder: join(import.meta.dir, "../migrations") });
+  const violations = sqlite.query("PRAGMA foreign_key_check").all();
+  if (violations.length > 0) throw new MigrationIntegrityError(violations);
+  sqlite.exec("PRAGMA foreign_keys = ON");
+  return db;
+}
+```
+
+The server calls `openDb()` before anything else:
+1. It sets the PRAGMAs, then applies every pending migration listed in `migrations/meta/_journal.json`, in order, inside one transaction. Drizzle records each applied file's hash in its `__drizzle_migrations` table.
+2. If a migration fails, the whole batch rolls back and the server exits with the migration's name and the SQLite error. It never serves a half-migrated database.
+3. `PRAGMA foreign_key_check` must return no rows before enforcement is switched back on.
+
+Still before the HTTP listener accepts traffic, the server then runs the FTS rebuild if the db file was replaced (§0.7, §8.6), seeds built-in providers, presets and palettes where rows are missing, and runs crash recovery (§8.4.5). `GET /api/health` reports the tag of the newest applied migration as `schema`.
+
+Rules:
+- Every schema change is an edit under `packages/db/src/schema/` followed by `bun run db:generate`, committed together.
+- A committed migration is never edited.
+- There are no down migrations.
+
+---
 ### 8.3 Local HTTP API
 
 **§8.3 owns the HTTP surface.** Every other section references a path from this table and never restates one; where a draft named a different path (`/api/thumb/:assetId?w=`, `DELETE /api/jobs/:id`, `/api/export/zip`, `POST /api/jobs`, `/api/jobs/stream`, `/api/canvas/{id}` + `baseVersion`), this table is the correction (§0.6).
@@ -4018,7 +4393,7 @@ All provider traffic originates in this process, and outbound connections are re
 
 | Method | Path | Purpose | Request → Response |
 |---|---|---|---|
-| `GET` | `/api/health` | Liveness + version + db migration level | → `{ok, version, schema, home}` |
+| `GET` | `/api/health` | Liveness, version and the newest applied migration | → `{ok, version, schema, home}`, where `schema` is the migration tag, e.g. `0001_assets_fts` (§8.2.4) |
 | `GET` | `/api/providers` | Provider list with credential status | → `[{id, displayName, enabled, credentialSource, credentialHint, lastOkAt, lastError, concurrencyCap}]` |
 | `PATCH` | `/api/providers/:id` | Enable/disable, base URL, per-provider cap | `{enabled?, baseUrl?, concurrencyCap?}` → provider |
 | `GET` | `/api/models` | Model registry + capability manifests (drives every chip in the composer, §3/§6) | `?provider=&modality=&refresh=0\|1` → `{models:[{providerId, modelId, displayName, family, badges, capabilities, pricing, source, updatedAt}], staleAt}` |
@@ -4088,7 +4463,7 @@ All provider traffic originates in this process, and outbound connections are re
 
 The compiled run plan comes from the browser, which owns the DAG compiler, fingerprinting and dirty propagation; **ordering, concurrency, retry and crash recovery are the server's** (§0.12, §7.7). `canvas_runs` is what makes a run survive a reload.
 
-Errors are uniform: HTTP status + `{error:{code, message, providerCode?, retryable:bool, docsUrl?}}`. The transport codes are a small, separate set — `bad_request`, `not_found`, `conflict`, `internal` — **plus any `ErrorCode` from §0.5** when the failure originated in a provider call. Provider-shaped names do not get a second spelling here: `missing_credential`, `provider_auth`, `provider_rate_limit`, `content_policy`, `capability_unsupported`, `disk_full`, `timeout` and `canceled` are §0.5 `ErrorCode`s, not HTTP codes. US `canceled` throughout, in enums and in UI copy.
+Errors are uniform: HTTP status + `{error:{code, message, providerCode?, retryable:bool, docsUrl?}}`. A request that fails `zValidator` returns `400` with `code: 'bad_request'` (§8.3.3). The transport codes are a small, separate set — `bad_request`, `not_found`, `conflict`, `internal` — **plus any `ErrorCode` from §0.5** when the failure originated in a provider call. Provider-shaped names do not get a second spelling here: `missing_credential`, `provider_auth`, `provider_rate_limit`, `content_policy`, `capability_unsupported`, `disk_full`, `timeout` and `canceled` are §0.5 `ErrorCode`s, not HTTP codes. US `canceled` throughout, in enums and in UI copy.
 
 #### 8.3.1 `POST /api/generate` — the shape that matters
 
@@ -4154,6 +4529,35 @@ Event types (§0.6): `snapshot`, `job_set.created`, `job.queued`, `job.started`,
 
 Every event carries a monotonically increasing `id`; on reconnect the browser's `EventSource` sends `Last-Event-ID` and the server replies with a fresh `snapshot` rather than a replay log — active state is small and always derivable from the db, so there is nothing to keep an event table for.
 
+#### 8.3.3 Typed client and validation
+
+Every JSON route in the table above is typed end to end with Hono RPC (§0.16). The wire stays the same, so every route can still be called with curl.
+
+- **Validation.** Each route validates its `json`, `query`, `param` and `form` inputs with `@hono/zod-validator`, against a schema from `packages/core/src/schemas/`. A failed validation returns `400` with the §8.3 error envelope, `code: 'bad_request'`, and the first failing field path in `message`. Handlers read only `c.req.valid(...)`, never the raw body.
+- **Composition.** Each resource is a Hono sub-app in `apps/server/src/routes/<resource>.ts`, built by method chaining so its types flow. `apps/server/src/app.ts` mounts the four guards first, then `/api` and `/files`, and exports `type AppType = typeof app`. `apps/server/src/app-type.ts` re-exports only that type.
+- **Responses.** Handlers return `c.json(value satisfies <CoreType>, status)`. The status is part of the inferred type, so the client narrows on `res.status`. Route tests parse every response with its core schema.
+- **Client.** `apps/web/src/api/client.ts` creates `hc<AppType>("/", { headers: { "X-Openfield-Session": token } })`. It reads the token from the `<meta name="openfield-session">` tag the server injects into `index.html`. TanStack Query hooks in `apps/web/src/api/hooks/` wrap it, and no component calls `fetch` for a JSON route.
+- **Plain HTTP, by design.** These routes stay plain HTTP:
+  - binary uploads: `POST /api/uploads`, `POST /api/masks`, and the multipart form of `POST /api/presets/import`;
+  - file serving: `/files/asset/:id`, `/files/thumb/:id`;
+  - downloads: `GET /api/assets/:id/export`, the preset exports, `GET /api/usage/export.csv`, and `POST /api/assets/bulk` with `action: 'download'`, which returns a zip;
+  - the SSE stream: `GET /api/events`.
+  They are ordinary Hono routes, validated the same way. The browser reaches them through `<img src>`, download links, `FormData` posts and the event-stream client in `apps/web/src/api/raw.ts`. JSON replies from these routes (the `{asset}` of an upload) are parsed with their core schema. Every SSE frame is parsed with `sseEventSchema`, a discriminated union on the event name.
+- **Type-check cost.** If `AppType` makes editor type-checking slow, the server exports one type per resource group and the web app creates one `hc` client per group. Routes and paths don't change.
+
+```ts
+// apps/server/src/routes/generate.ts
+export const generateRoutes = new Hono<Env>()
+  .post("/generate", zValidator("json", generateRequestSchema, onInvalid), async (c) => {
+    const accepted = await c.var.runner.createJobSet(c.req.valid("json"));
+    return c.json(accepted satisfies JobSetAccepted, 202);
+  });
+
+// apps/web/src/api/hooks/use-generate.ts
+const res = await api.api.generate.$post({ json: request });
+if (res.status === 202) return res.json();          // typed as JobSetAccepted
+```
+
 ---
 
 ### 8.4 Job queue and concurrency
@@ -4190,11 +4594,11 @@ A single per-job wall clock of 180 s does not compose with a 150 s per-attempt t
 
 #### 8.4.3 Retries and failures
 
-Retry only on the four `retryable` codes of §0.5 — `network`, `timeout`, `rate_limited`, `provider_unavailable` (HTTP 408/425/429/500/502/503/504, network timeouts, aborted sockets, provider queue errors). Everything else fails immediately and is shown to the user with the provider's message.
+Retry only on the four `retryable` codes of §0.5 — `network`, `timeout`, `rate_limited`, `provider_unavailable` (HTTP 408/425/429/500/502/503/504, network timeouts, aborted sockets, provider queue errors). Everything else fails immediately and is shown to the user with §0.5's copy for its code; the provider's own message goes to the Error log.
 
 Backoff is exponential with full jitter: 1 s, 4 s, 15 s (±20 %). A `Retry-After` header always wins over the computed delay. `jobs.attempt` and `jobs.next_attempt_at` persist the schedule so a restart mid-backoff resumes correctly; `jobs.idempotency_key` is reused on every attempt, so a retry can never bill twice. When some jobs in a set succeed and others exhaust retries, the set lands in `partial`, the feed shows the successful tiles plus an inline error tile per failure with a one-click **Retry failed** that calls `POST /api/job-sets/:id/retry {onlyFailed:true}`.
 
-Every terminal outcome — success, failure, cancel — writes a `usage_log` row. **A failed job writes a row with `cost_usd = 0` and `cost_source = 'unknown'`; no cost is ever added to a spend total for a failure** (§0.13). A job canceled after submit writes a row at full estimate with `discarded = 1`, which is what the Usage screen's "billed but discarded" line sums.
+Every terminal outcome — success, failure, cancel — writes a `usage_log` row. **A failed job writes a row with `cost_usd = 0` and `cost_source = 'unknown'`; no cost is ever added to a spend total for a failure** (§0.13). A job canceled after submit writes a row at full estimate with `discarded = 1`, which is what the Usage screen's "Canceled but charged" line sums.
 
 #### 8.4.4 Cancellation
 
@@ -4205,20 +4609,20 @@ Every terminal outcome — success, failure, cancel — writes a `usage_log` row
 3. If the adapter implements `cancel()`, call it and mark `canceled` on acknowledgement.
 4. If it does not, mark `canceled`, stop polling, discard any late result, and write a `usage_log` row at **full estimate with `discarded = 1`**.
 
-**Neither launch adapter implements provider-side `cancel()`**, so step 4 is the path every v1 cancellation takes: the provider may complete and bill the work, and no asset is produced. The copy is the same on the tile, the canvas node band and the toast, verbatim: *"Canceled — the provider may still charge for work already started."* We do not imply a refund we cannot deliver.
+**Neither launch adapter implements provider-side `cancel()`**, so step 4 is the path every v1 cancellation takes: the provider may complete and bill the work, and no asset is produced. The copy is the same on the tile, the canvas node band and the toast, verbatim: *"Canceled. You may still be charged for work that already started."* We do not imply a refund we cannot deliver.
 
 #### 8.4.5 Crash recovery
 
-On boot, after migrations, the recovery pass runs before the HTTP listener accepts traffic:
+On boot, after `openDb()` has applied migrations (§8.2.4), the recovery pass runs before the HTTP listener accepts traffic:
 
 | State found | Action |
 |---|---|
 | `jobs.status IN ('pending','queued')` | Re-enqueue as-is |
 | `status IN ('submitting','running')` **with** `provider_job_id` **and** adapter supports status polling | Resume a watcher from the provider's status endpoint; the run is not re-billed |
-| `status IN ('submitting','running')` **without** a `provider_job_id`, or adapter is fire-and-forget | Mark `interrupted`; the job set shows "Interrupted — restart the run?" with a one-click retry. Never auto-resubmit: that risks double-billing |
+| `status IN ('submitting','running')` **without** a `provider_job_id`, or adapter is fire-and-forget | Mark `interrupted`; the job set shows "Interrupted. Run again?" with a one-click retry. Never auto-resubmit: that risks double-billing |
 | `canvas_runs` with a non-terminal status | Recompute from its job sets; emit `canvas_run.updated` so a reopened canvas re-attaches |
 | `job_sets` with all jobs terminal but a non-terminal set status | Recompute set status from its jobs |
-| Asset rows whose file is absent | `file_state='missing'`; tile renders a broken-file state with "Locate or delete" |
+| Asset rows whose file is absent | `file_state='missing'`; tile renders a broken-file state reading "File missing." with **Locate** and **Delete** |
 
 A `startup.recovery` line is written to `logs/jobs.ndjson` with the counts, and a `snapshot` event reflects the result to the first client that connects.
 
@@ -4233,7 +4637,7 @@ We use **one Server-Sent Events stream**, `GET /api/events`, for these reasons:
 - No protocol upgrade, no ping/pong keepalive design, no framing — a Hono handler returning a `ReadableStream` is the whole implementation.
 - On loopback there is no proxy buffering, the classic SSE failure mode.
 
-**Fallback.** If `EventSource` fails to connect twice in a row, or the stream errors, the client degrades to polling `GET /api/job-sets?status=active` every 2 s and shows a subtle "reconnecting" indicator. A backgrounded tab keeps the stream open (SSE is cheap when idle) but throttles thumbnail decoding, not the stream.
+**Fallback.** If `EventSource` fails to connect twice in a row, or the stream errors, the client degrades to polling `GET /api/job-sets?status=active` every 2 s and shows a subtle "Reconnecting…" indicator. A backgrounded tab keeps the stream open (SSE is cheap when idle) but throttles thumbnail decoding, not the stream.
 
 **Acceptance criteria.** (a) With the stream connected, a completed image appears in the feed within 250 ms of the server writing its asset row. (b) Killing and restarting the server mid-generation leaves the UI reconnected and correct within 5 s, with no duplicate tiles. (c) Ten queued job sets produce no more than `globalConcurrency` simultaneous outbound provider requests, verified in the request log.
 
@@ -4293,9 +4697,9 @@ Height-keyed, never width-keyed: a justified-rows layout solves for row height, 
 
 **How the chunks are actually written.** `sharp` cannot write arbitrary PNG `tEXt`/`iTXt` chunks, so PNG text is written by a small in-repo chunk writer (`png-chunks-extract` / `png-chunk-text` class, MIT) applied to the **encoded buffer after** the encoder. EXIF/XMP for JPEG and WebP use `exiftool-vendored` or the same post-encode approach; **the library is chosen in `M2-13a`, and that spike is blocking** — the legacy `parameters` chunk is the single most load-bearing interop claim in this section and it does not ship on a promise.
 
-**Re-encode warning.** Any export whose `format` differs from `assets.mime` shows: *"Re-encoding may not preserve the provider's invisible watermark."* The stored original is never touched (§8.5.1).
+**Re-encode warning.** Any export whose `format` differs from `assets.mime` shows: *"Changing the format may remove the hidden AI watermark."* The stored original is never touched (§8.5.1).
 
-`?sidecar=1` additionally writes `<name>.json` with the full asset record including lineage — the lossless option, and the one bulk downloads use (a ZIP of images + one `manifest.json`). On upload, Openfield reads these same fields back and offers "Restore settings from this image" in the composer (M3).
+`?sidecar=1` additionally writes `<name>.json` with the full asset record including lineage — the lossless option, and the one bulk downloads use (a ZIP of images + one `manifest.json`). On upload, Openfield reads these same fields back and offers "Use this image's settings" in the composer (M3).
 
 C2PA signing is explicitly out of scope for v1 — noted as a v1.1 candidate, not a promise.
 
@@ -4331,32 +4735,33 @@ Five milestones. Each is independently demoable and ends with a working app; not
 
 **Definition of done:** `git clone && bun install && bun dev` opens the app on `127.0.0.1:4317`; the user pastes a Google API key into Settings, types a prompt, clicks Generate, and one image lands on disk under `~/.openfield/assets/…` with a row in SQLite and a thumbnail in the feed. No mocks anywhere in that path.
 
-1. `M0-01` Monorepo scaffold: Bun workspaces (`apps/server`, `apps/web`, `packages/shared`), TypeScript strict, Biome, MIT `LICENSE`, `README`.
-2. `M0-02` Hono server with all four §8.3 guards (Host allowlist, no-CORS assertion, cross-site guard on every method, boot-minted `X-Openfield-Session` token), `/api/health`, graceful shutdown. A CI test asserts a cross-origin page cannot list assets, read key status or cause a thumbnail to be generated.
+1. `M0-01` Monorepo scaffold per §0.16: Bun workspaces `apps/web`, `apps/server`, `packages/core`, `packages/providers`, `packages/db`, `packages/ui`; root scripts (`bun dev`, `bun run build`, `bun start`, `bun run db:generate`, `bun test`, `bun run lint`, `bun run e2e`); `tsconfig.base.json` strict; Biome with the §0.16 import rules as per-folder `noRestrictedImports`; the CI bundle check that fails if `apps/web` ships `packages/db`, `@openfield/providers/server`, an adapter or a `bun:` module; MIT `LICENSE`, `README`.
+2. `M0-02` Hono server with all four §8.3 guards (Host allowlist, no-CORS assertion, cross-site guard on every method, boot-minted `X-Openfield-Session` token), `/api/health`, graceful shutdown. Also: `@hono/zod-validator` wired with the shared `bad_request` hook, `apps/server/src/app.ts` exporting `type AppType`, and the dev proxy to Vite with session-token injection, so dev and production share one origin (§0.16, §8.3.3). A CI test asserts a cross-origin page cannot list assets, read key status or cause a thumbnail to be generated.
 3. `M0-03` `OPENFIELD_HOME` resolution, directory bootstrap, `config.json` read/write at 0600 (verify mode on every write), env-var override layer.
-4. `M0-04` SQLite bootstrap: `bun:sqlite`, PRAGMAs, migration runner, migration `001` = the full schema in §8.2.
+4. `M0-04` Database per §8.2: the Drizzle schema for every table in `packages/db/src/schema/`, the core enum constants behind every CHECK, `drizzle.config.ts`, the generated `0000_initial.sql` and custom `0001_assets_fts.sql` committed, `openDb()` with PRAGMAs and migrate-on-boot (foreign keys off during migration, `foreign_key_check` after), drizzle-zod row schemas in `src/rows.ts`, and `packages/db/test/schema.test.ts` comparing the migrated database with §8.2.1. Any index drizzle-kit can't emit exactly moves to a custom migration here.
 5. `M0-05` Provider/credential service: status-only key API, `PUT/DELETE /api/settings/keys/:id`, `POST …/test`, redaction filter applied to every log sink.
-6. `M0-06` Adapter interface + capability manifest types in `packages/shared` (per §6).
+6. `M0-06` Shared contracts per §0.16 and §6: zod schemas in `packages/core/src/schemas/` for the manifest, `GenerateRequest`/`NormalizedRequest`, errors, cost, SSE events and settings; the behaviour interfaces in `packages/providers/src/types/`; the `@openfield/providers/manifest` entry with the pure `estimate()` and `resolveControl()`; the `@openfield/providers/server` entry with the registry.
 7. `M0-07` Google Gemini image adapter: submit, poll/await, map outputs, map errors to our codes, model discovery with shipped-manifest fallback.
 8. `M0-08` Model registry service + `GET /api/models`, `POST /api/models/refresh`, staleness TTL 24 h.
 9. `M0-09` Job queue v1: job set/job creation, global + per-provider caps, retry with backoff, timeouts.
 10. `M0-10` Ingest pipeline: stream, hash, probe, place, insert, emit.
 11. `M0-11` SSE `/api/events` + client `EventSource` hook with polling fallback.
-12. `M0-12` Vite + React + Tailwind + shadcn/ui shell with Openfield branding tokens (§2/§3), dark theme, `>=1280px` layout.
-13. `M0-13` Minimal composer (prompt + model select + Generate) and a plain grid feed.
-14. `M0-14` Thumbnail service: **boot-probed** sharp/WASM-chain selection surfaced in Settings → Storage, `@h456` + `dpr=2`, `/files/thumb/:id?h=&dpr=`, single-flight on `sha@h@dpr`.
-15. `M0-15` E2E smoke test (Playwright) driving key entry → generate → asset visible, with the provider stubbed at the HTTP layer.
-16. `M0-16` **First run (§2.10)**: launch → no-key empty state → Providers → paste key → Test connection → default model auto-selected → composer focused. This exact path is the G5/S1 gate.
-17. `M0-17` **Settings shell (§6.17)**: left-rail IA — Providers · Models · Generation defaults · Appearance · Storage · Usage & budget · Privacy · Diagnostics · Experimental — with the settings-key table wired to `GET/PATCH /api/settings`. Screens fill in across M1–M3; the IA lands here because eleven sections write requirements into it.
+12. `M0-11a` Typed client (§8.3.3): `apps/web/src/api/client.ts` (`hc<AppType>` with the session header), the TanStack Query provider and the first hooks (`models`, `assets`, `generate`, `settings`), the raw-HTTP helpers, and SSE frame parsing with `sseEventSchema`. A type test proves that renaming a field in a core response schema breaks `bun run build` in `apps/web`.
+13. `M0-12` Vite + React SPA in `apps/web`, with Tailwind and shadcn/ui primitives in `packages/ui`, the `--of-*` tokens (§2.2) as the Tailwind theme, Openfield branding (§2/§3), dark theme, `>=1280px` layout.
+14. `M0-13` Minimal composer (prompt + model select + Generate) and a plain grid feed.
+15. `M0-14` Thumbnail service: **boot-probed** sharp/WASM-chain selection surfaced in Settings → Storage, `@h456` + `dpr=2`, `/files/thumb/:id?h=&dpr=`, single-flight on `sha@h@dpr`.
+16. `M0-15` E2E smoke test (Playwright) driving key entry → generate → asset visible, with the provider stubbed at the HTTP layer.
+17. `M0-16` **First run (§2.10)**: launch → no-key empty state → Keys → paste key → Check key → default model auto-selected → composer focused. This exact path is the G5/S1 gate.
+18. `M0-17` **Settings shell (§6.17)**: left-rail IA — API keys · Models · Defaults · Appearance · Storage · Spending · Privacy · Help · Experimental — with the settings-key table wired to `GET/PATCH /api/settings`. Screens fill in across M1–M3; the IA lands here because eleven sections write requirements into it.
 
 #### M1 — Feed and composer parity
 
-**Definition of done:** the Image tab matches the observed layout's geometry in our own branding: justified-row virtualised feed on the §0.10 ladder with 2 px gaps, the floating composer at 1116×142 with capability-driven chips, model picker with search and **Recent / per-provider / Unavailable** sections, batch stepper 1–4, placeholders with correct aspect ratio and a working Cancel, tile hover overlay with multi-select, and the local prompt enhancer (disabled with a reason when no text-capable key is configured). Two providers are live (Google + OpenAI).
+**Definition of done:** the Image tab matches the observed layout's geometry in our own branding: justified-row virtualised feed on the §0.10 ladder with 2 px gaps, the floating composer at 1116×142 with capability-driven chips, model picker with search and **Recent / by company / Needs a key** sections, batch stepper 1–4, placeholders with correct aspect ratio and a working Cancel, tile hover overlay with multi-select, and the local prompt enhancer (disabled with a reason when no text-capable key is configured). Two providers are live (Google + OpenAI).
 
 1. `M1-01` OpenAI GPT Image adapter (generate + `n` fan-in, quality/size/background/format params, token-cost estimation).
 2. `M1-02` Capability-driven chip renderer: the composer builds its chip row from the manifest, hiding or disabling what a model cannot do (§3.5, §0.3).
 3. `M1-03` Chip popovers: aspect ratio (proportional glyph rows, per-model lists), quality, resolution, background, prompt-enhance toggle — anchored above the chip, check on selected.
-4. `M1-04` Model picker popover: 402×642, search, **Recent / per-provider / Unavailable** sections (§3.4.1 — not the reference product's editorial Featured/All), 56 px rows, provider icon, capability-derived badges, selected state; deep link `?model=<providerId>:<modelId>`.
+4. `M1-04` Model picker popover: 402×642, search, **Recent / by company / Needs a key** sections (§3.4.1 — not the reference product's editorial Featured/All), 56 px rows, provider icon, capability-derived badges, selected state; deep link `?model=<providerId>:<modelId>`.
 5. `M1-05` Batch stepper (1–4, decrement disabled at 1) and Generate button whose USD sub-label is computed **locally from the manifest** by the pure `estimate()` of §0.13 — no HTTP round-trip per stepper click — upgrading in place if `estimateRemote()` resolves.
 6. `M1-06` Prompt editor: multi-line, max-height 112 px then scroll, `⌘/Ctrl+Enter` to submit, attach button accepting `.jpg .jpeg .png .webp .heic`.
 7. `M1-07` `POST /api/uploads` + reference-image thumbnail strip in the composer.
@@ -4366,25 +4771,25 @@ Five milestones. Each is independently demoable and ends with a working app; not
 11. `M1-11` Tile hover overlay: favourite, download, **Recreate**, more-actions menu (Open · Reuse · Use as reference · Add to folder · Download · Delete); always-present 16 px checkbox with shift-range multi-select and a bulk action bar. The three iteration actions are exactly §0.1's, with no fourth name.
 12. `M1-12` `/api/assets` cursor pagination (`limit=50`) + infinite scroll; `GET /api/job-sets?status=active` fallback path.
 13. `M1-13` Composer state persistence (prompt and settings survive submit and reload — never cleared).
-14. `M1-14` Error surfaces: the §0.5 `ErrorCode` → tile-copy table, inline on the failed tile plus a toast, each card linking to the Debug drawer.
+14. `M1-14` Error surfaces: the §0.5 `ErrorCode` → tile-copy table, inline on the failed tile plus a toast, each card linking to the Error log.
 15. `M1-15` Layout regression test: measured `getBoundingClientRect` assertions for composer 1116×142, chip heights 40, tile gaps 2, at 1280/1440/1920.
-16. `M1-16` **Prompt-enhance service (§3.4.3)**: text-model registry entry, server-side rewrite endpoint, diff sheet, preview/automatic modes, `job_sets.prompt_original` persistence, separate usage-log line. Off by default; the chip is disabled with "Add a key for a provider with a text model in Settings" when no text-capable key exists.
+16. `M1-16` **Prompt-enhance service (§3.4.3)**: text-model registry entry, server-side rewrite endpoint, diff sheet, preview/automatic modes, `job_sets.prompt_original` persistence, separate usage-log line. Off by default; the chip is disabled with "Add an OpenAI or Google key to use this" when no text-capable key exists.
 17. `M1-17` **`@`-mention typeahead** over Openfield presets, characters, reference sets and saved references, with `/` snippets, and server-side token resolution in `normalize()` (§3.2, §5.7). The reference product's server-side Elements entity is not reproduced.
-18. `M1-18` **i18n readiness (§2.12)**: every user-facing string in one `en.json` with no concatenation; dates and numbers through `Intl.DateTimeFormat`/`Intl.NumberFormat`; `currency` typed `string` with USD the only v1 value. English only ships.
+18. `M1-18` **i18n readiness (§2.12)**: every user-facing string in one catalogue, `packages/core/src/i18n/en.json`, read through `t()`, with no concatenation; dates and numbers through `Intl.DateTimeFormat`/`Intl.NumberFormat`; `currency` typed `string` with USD the only v1 value. English only ships.
 19. `M1-19` **Accessibility gate (§2.11)**, running from here to release: CI contrast check over the §2.2 token pairs against WCAG 2.2 AA, a keyboard path to every action on every surface, `aria-live="polite"` job announcements, reduced-motion coverage. The editor and canvas panes are explicitly and reasonedly out of scope for screen-reader parity.
 
 #### M2 — Detail view and editor
 
-**Definition of done** (§0.14, written to be falsifiable): Edit performs whole-image instruction edit on both launch providers; masked inpaint and mask-synthesised outpaint on OpenAI GPT Image **once `M2-15` confirms polarity**; the §0.9 regional fallback on Gemini with the Approximate badge; Upscale ships as **local Lanczos ×2/×4 only**, labelled *"Resample — adds no detail"*; Remove background renders disabled with its reason. No launch adapter declares `ops.upscale` or `ops.removeBackground`, so **a disabled row with correct copy is the pass condition for M2-08 and M2-09** — not a capability we cannot buy. Clicking a tile opens the detail dialog with blurred backdrop, arrow-key navigation and Info · Edit · History tabs, with a working version strip and lineage.
+**Definition of done** (§0.14, written to be falsifiable): Edit performs whole-image instruction edit on both launch providers; masked inpaint and mask-synthesised outpaint on OpenAI GPT Image **once `M2-15` confirms polarity**; the §0.9 regional fallback on Gemini with the Approximate badge; Upscale ships as **local Lanczos ×2/×4 only**, labelled *"Resizes, adds no detail"*; Remove background renders disabled with its reason. No launch adapter declares `ops.upscale` or `ops.removeBackground`, so **a disabled row with correct copy is the pass condition for M2-08 and M2-09** — not a capability we cannot buy. Clicking a tile opens the detail dialog with blurred backdrop, arrow-key navigation and Info · Edit · History tabs, with a working version strip and lineage.
 
 1. `M2-01` Detail dialog shell: 352 px right panel, blurred/scaled backdrop, ←/→ navigation through the current feed query, Esc to close, "last viewed" marker on return.
 2. `M2-02` Info tab: PROMPT block with copy, reference thumbnail row (72 px, primary highlighted), clamped prompt with See all/Hide, collapsible DETAILS rows (model, quality, size, created).
-3. `M2-03` Footer actions: primary pair **`Recreate | Use as reference`** (2 × 155×40); Download, Favourite, Share→Copy path/Copy image; More→**Reuse** / Move to / Copy / Delete. Exactly the three §0.1 actions, exactly those labels.
+3. `M2-03` Footer actions: primary pair **`Recreate | Use as reference`** (2 × 155×40); Download, Favourite, Share→Copy file path/Copy image; More→**Reuse** / Add to folder / Copy / Delete. Exactly the three §0.1 actions, exactly those labels.
 4. `M2-04` `POST /api/edit` + `POST /api/masks` + job-set plumbing for every non-`generate` `Op`.
 5. `M2-05` Mask canvas: brush/eraser with adjustable size, lasso, rectangular region; committed mask uploaded once via `POST /api/masks` as a `kind='mask'` asset. Depends on `M2-15`.
-6. `M2-06` Regional edit flow: selection box with inline prompt field → job set → new asset row with `parent_asset_id`, `op`, `op_params`, `mask_asset_id`. Depends on `M2-15`.
+6. `M2-06` Edit area flow: selection box with inline prompt field → job set → new asset row with `parent_asset_id`, `op`, `op_params`, `mask_asset_id`. Depends on `M2-15`.
 7. `M2-07` Expand & Crop: crop is local and lossless; expand pads locally and, with "Fill with AI" on, submits an `outpaint` where `ops.outpaint` allows it, else the regional fallback with the Approximate badge.
-8. `M2-08` Upscale: **local Lanczos ×2/×4**, labelled "Resample — adds no detail", plus a visible disabled plugin slot for ×8/×16 and detail-adding upscale.
+8. `M2-08` Upscale: **local Lanczos ×2/×4**, labelled "Resizes, adds no detail", plus a visible disabled plugin slot for ×8/×16 and detail-adding upscale.
 9. `M2-09` Remove background: **visible disabled slot** with its reason and a "How to add this" link; no launch adapter declares `ops.removeBackground`.
 10. `M2-10` Version strip: ordered thumbnails from `WHERE root_asset_id = :root ORDER BY created_at`, "Original" first, current highlighted, Approximate badge where `approximate = 1`.
 11. `M2-11` Zoom/pan control for the editor viewport (−/fit %/+, space-to-pan).
@@ -4393,7 +4798,7 @@ Five milestones. Each is independently demoable and ends with a working app; not
 14. `M2-13a` **Metadata writer spike — blocking `M2-13`.** Confirm PNG `tEXt`/`iTXt` plus the legacy `parameters` chunk round-trip, and WebP XMP/EXIF round-trip, under Bun; pick the library and record a fixture.
 15. `M2-14` Trash, restore, purge, and the `file_state='missing'` tile state.
 16. `M2-15` **Live probe of OpenAI `/v1/images/edits`: mask polarity, dimension and format requirements.** Fixture recorded, §6.14's manifest note updated. **Blocking prerequisite for `M2-05` and `M2-06`** — we do not ship a mask tool against an unverified polarity.
-17. `M2-16` Colour grading: local WebGL stack (exposure, contrast, temp/tint, saturation/vibrance, lift/gamma/gain, grain, bloom, halation, vignette), `.cube` import/export, Match-reference by local 3D histogram matching. **Preset names are Openfield's own.** Writes `generative = 0`, `provider_id = 'local'`, cost $0.00.
+17. `M2-16` Colour grading: local WebGL stack (exposure, contrast, temp/tint, saturation/vibrance, lift/gamma/gain, grain, bloom, halation, vignette), `.cube` import/export, Match reference by local 3D histogram matching. **Preset names are Openfield's own.** Writes `generative = 0`, `provider_id = 'local'`, cost $0.00.
 18. `M2-17` LAYERS panel: base + mask + local overlays (text, shapes, grade) with visibility, reorder, rename, merge. Generative layer decomposition is a visible disabled plugin slot.
 19. `M2-18` Text-detect edit: `ops.detectText` on a configured multimodal model returns `{id,text,bbox}[]` under a strict JSON schema; editing a line issues an `edit`/`inpaint`. Disabled with a reason when no multimodal model is configured.
 20. `M2-19` Relight / Angles / Enhancer widgets compiled to structured instruction edits, every one labelled best-effort, with original preset names. The Angles panel states plainly that this is a re-render, not a 3D reprojection.
@@ -4404,31 +4809,31 @@ Five milestones. Each is independently demoable and ends with a working app; not
 
 1. `M3-01` Preset data layer + CRUD API (`payload_json` round-trips the §5.3 object whole); copy-on-edit for builtin presets.
 2. `M3-02` Preset picker sheet above the composer (hero band, tabs, search, 6-column card grid) with our own copy and artwork.
-3. `M3-03` "Save current settings as preset" from the composer and from any asset's Info tab.
+3. `M3-03` "Save as preset" from the composer and from any asset's Info tab.
 4. `M3-04` Import/export routed by envelope `kind` (`style` | `reference-set` | `character` | `palette`): single object and full-library bundle, reference images inlined as base64 and re-materialised as assets on import; version field and forward-compatible parser.
-5. `M3-05` Starter pack: 12 bundled presets and 8 bundled palettes, authored by us, original names and thumbnails, re-seeded from `app/presets/` when the rows are deleted.
+5. `M3-05` Starter pack: 12 bundled presets and 8 bundled palettes, authored by us, original names and thumbnails, re-seeded from `apps/server/seed/presets/` and `apps/server/seed/palettes/` when the rows are deleted.
 6. `M3-06` Palettes: `/api/palettes` CRUD, extraction from an asset, `mode` = prompt / reference / both — our open substitute for the reference product's colour-transfer sheet.
-7. `M3-07` Reference sets and characters: `/api/reference-sets` and `/api/characters` CRUD, composer picker tiles, injection per `injection`/`token`, with a clear "not supported by this model" state where `references.supported` is false.
+7. `M3-07` Reference sets and characters: `/api/reference-sets` and `/api/characters` CRUD, composer picker tiles, injection per `injection`/`token`, with a clear "*Model* doesn't take reference images" state where `references.supported` is false (§5.6).
 8. `M3-08` Assets library route: 256 px sidebar (search, All assets, Favourites with count, folder tree with counts), fixed 6-column grid with date group headers and group-select checkboxes.
 9. `M3-09` Folders API + drag-to-folder, add-to-folder from tile and detail menus.
 10. `M3-10` FTS search over prompts with the shared cursor, plus model/provider/date filters.
-11. `M3-11` Cost engine: per-model price snapshots with `pricedAt` and `sourceUrl`, the pure `estimate()` before submit, reconciliation after, `usage_log` writes including `discarded` rows, `~/.openfield/prices.json` overlay, "pricing may be out of date" disclosure in the UI. `refreshPricing()` proposes a diff the user accepts or rejects — prices never change silently.
-12. `M3-12` Usage panel: today / 7 days / 30 days totals, per-model breakdown, a **"billed but discarded"** line summing `discarded = 1`, `≈` markers on `cost_source = 'estimated'` rows, CSV export, optional monthly soft budget warning.
+11. `M3-11` Cost engine: per-model price snapshots with `pricedAt` and `sourceUrl`, the pure `estimate()` before submit, reconciliation after, `usage_log` writes including `discarded` rows, `~/.openfield/prices.json` overlay, "Prices as of `<date>`. They may have changed since." disclosure in the UI (§6.9). `refreshPricing()` proposes a diff the user accepts or rejects — prices never change silently.
+12. `M3-12` Usage panel: today / 7 days / 30 days totals, per-model breakdown, a **"Canceled but charged"** line summing `discarded = 1`, `~` markers on `cost_source = 'estimated'` rows, CSV export, optional monthly soft budget warning.
 13. `M3-13` Maintenance UI: storage stats, GC, backup, clear thumb cache, FTS reindex, and the boot-probed encoder chain shown in Settings → Storage.
 14. `M3-14` Restore-settings-from-image (read embedded metadata on upload).
-15. `M3-15` Settings screens filled in behind the `M0-17` IA: Generation defaults, Appearance, Usage & budget, Privacy (including `networkHosts ∪ assetHosts`), Diagnostics (the Debug drawer), Experimental.
+15. `M3-15` Settings screens filled in behind the `M0-17` IA: Defaults, Appearance, Spending, Privacy (including `networkHosts ∪ assetHosts`), Help (the Error log), Experimental.
 16. `M3-16` **Conditional Higgsfield adapter (§6.15)**: Soul v2 standard endpoint, two-field key schema, `assetHosts` download path, `price.kind: 'unknown'`. Ships only if a user key reaches the documented public API; otherwise `meta.stable: false` behind Settings → Experimental.
 
 #### M4 — Canvas
 
-**Definition of done:** the Canvas index and editor ship per §7 — infinite dotted grid, node graph on React Flow, Prompt / Image Generation / Edit-Inpaint / Variations / Preset / Upload / Asset / Note / Frame nodes with typed ports and compatibility-filtered connection menus, run-node / run-downstream / run-all against the same server queue, fingerprint caching, autosave, version history, minimap, zoom cluster and toolbar. **Table and the Upscale node are out of this DoD** — Table is v1.1, and Upscale is latent until an adapter advertises `ops.upscale` (§0.14).
+**Definition of done:** the Canvas index and editor ship per §7 — infinite dotted grid, node graph on React Flow, Prompt / Image Generator / Edit image / Variations / Preset / Upload / Assets / Note / Frame nodes with typed ports and compatibility-filtered connection menus, run-node / run-downstream / run-all against the same server queue, fingerprint caching, autosave, version history, minimap, zoom cluster and toolbar. **Table and the Upscale node are out of this DoD** — Table is v1.1, and Upscale is latent until an adapter advertises `ops.upscale` (§0.14).
 
 1. `M4-01` Canvas data layer + CRUD API + optimistic-concurrency autosave (debounced 800 ms, `409` reconciliation).
 2. `M4-02` Canvas index page: create card, grid of canvases with generated 16:9 previews, name, relative "last edited", search.
 3. `M4-03` React Flow editor shell: dotted grid, pan/zoom, zoom cluster (−, % menu at 25/50/75/100/150/200, +), fit-to-content, minimap, out-of-view helper pill.
 4. `M4-04` Node base: resize handles, selection outline, label, typed input/output ports with tooltips.
 5. `M4-05` Prompt node (`text` output), Note and Frame nodes, and the toolbar's Shape and Text annotation tools.
-6. `M4-06` Image Generation node: preview area, quality/aspect chips, inline prompt, model chip reusing the M1 picker, run button showing the USD estimate.
+6. `M4-06` Image Generator node: preview area, quality/aspect chips, inline prompt, model chip reusing the M1 picker, run button showing the USD estimate.
 7. `M4-07` Upload node and Assets node (pick from library) feeding `input_images`.
 8. `M4-08` Edge model: typed compatibility, bezier rendering, drop-on-empty-canvas opens a filtered add-node menu at the drop point.
 9. `M4-09` Add-node menu with search and Quick/References/Image/Utilities groups.
@@ -4436,7 +4841,7 @@ Five milestones. Each is independently demoable and ends with a working app; not
 11. `M4-11` Version history UI (list, preview, restore) on `canvas_versions`.
 12. `M4-12` Multi-select, group move, duplicate (`⌘D`), delete, copy/paste of subgraphs, undo/redo stack. Undo never cancels an in-flight run; a node with a run in flight refuses reparenting and deletion.
 13. `M4-13` Frames/pages: titled rectangles that group a subgraph and move with it.
-14. `M4-14` **Four** starter templates authored by us, named per §7.3: **Reference → Generate**, **Image edit**, **Storyboard (4 panels)**, **Style A/B compare**. *Upscale pass* is dropped until an adapter advertises `ops.upscale`.
+14. `M4-14` **Four** starter templates authored by us, named per §7.3: **From a reference**, **Image edit**, **Storyboard (4 panels)**, **Compare styles**. Bundled as `apps/server/seed/templates/*.ofcanvas.json` and validated by `canvasDocumentSchema` in a unit test. *Upscale pass* is dropped until an adapter advertises `ops.upscale`.
 15. `M4-15` Canvas preview generation (render graph to PNG on save, debounced) for the index cards, with the **150-node threshold** above which preview rendering degrades to a static placeholder rather than blocking the save.
 16. `M4-16` Fingerprint + dirty propagation + result cache: `sha256(typeId, typeVersion, normalizedParams, modelKey, manifestVersion, [upstream fingerprints in port order])`, `cached` and `stale` node states, `⌥`-click cache bypass. §7.12 gates on "running a graph twice with no changes issues zero provider calls".
 17. `M4-17` Fan-out map semantics (k-item output into a single-arity input), `×k` badge, labelled result grid, 32-job confirmation rail.
@@ -4471,7 +4876,7 @@ Five milestones. Each is independently demoable and ends with a working app; not
 | 16 | Generate does not clear prompt/settings and stays enabled for queued runs | ✅ M1 | Queue accepts unlimited submits |
 | 17 | N placeholder tiles with correct aspect, spinner pill and Cancel pill | ✅ M1 | Width/height returned by `/api/generate` |
 | 18 | Promo/tips card inside the first placeholder | ⚠️ substituted | Local, static, dismissible tips card with a Settings switch; no CMS, no network call (§2.4). Queue position renders in the same slot when a run is waiting |
-| 19 | Model picker popover: search, grouped sections, badges, provider icons | ✅ M1 | Our grouping is **Recent / per-provider / Unavailable** (§3.4.1); badges are capability-derived, never marketing |
+| 19 | Model picker popover: search, grouped sections, badges, provider icons | ✅ M1 | Our grouping is **Recent / by company / Needs a key** (§3.4.1); badges are capability-derived, never marketing |
 | 20 | Deep-linkable `?model=` | ✅ M1 | `?model=<providerId>:<modelId>` |
 | 21 | Character tile (Soul ID) | ⚠️ M3 substitute | **Open substitute:** named reference-image bundles + descriptor text, applied on models that accept reference images. No identity training in v1 |
 | 22 | Style tile / moodboard sheet with curated presets | ⚠️ M3 substitute | **Open substitute:** our preset library (prompt template + reference images + params patch), with our own starter pack |
@@ -4485,11 +4890,11 @@ Five milestones. Each is independently demoable and ends with a working app; not
 | 30 | Edit tab: version strip, zoom control, tool bar (select/hand/regional/lasso/pen/eraser/shapes) | ✅ M2 | |
 | 31 | Regional edit with inline prompt on the selection | ✅ M2 | |
 | 32 | Expand & Crop with "Fill with AI" | ✅ M2 | Outpaint only where the manifest allows |
-| 33 | Upscale (third-party model, scale ×1–×16, sharpness/denoise/face enhance) | ⚠️ M2 partial | **Local Lanczos ×2/×4**, labelled "Resample — adds no detail", plus a visible disabled plugin slot for ×8/×16 and detail-adding upscale. No launch adapter declares `ops.upscale` (§0.14) |
+| 33 | Upscale (third-party model, scale ×1–×16, sharpness/denoise/face enhance) | ⚠️ M2 partial | **Local Lanczos ×2/×4**, labelled "Resizes, adds no detail", plus a visible disabled plugin slot for ×8/×16 and detail-adding upscale. No launch adapter declares `ops.upscale` (§0.14) |
 | 34 | Remove background | ⚠️ M2 slot | **Visible disabled slot** with its reason and a "How to add this" link; a local ONNX plugin is documented as the reference implementation. A correct disabled row is the pass condition for M2-09 |
 | 35 | Layer Decomposition | ⚠️ M2 slot | **Visible disabled plugin slot** inside the LAYERS panel. No launch adapter declares `ops.decomposeLayers` |
 | 36 | Edit text (detect + rewrite in-frame text) | ✅ M2 | Vision text-detect + instruction/masked edit (§4.8 row 2); disabled with a reason when no multimodal model is configured |
-| 37 | Colour Grading preset grid | ✅ M2 | Local WebGL grade stack with **our own preset names**, `.cube` import/export, Match-reference (§4.8 row 6). Non-generative, $0.00, offline, every model |
+| 37 | Colour Grading preset grid | ✅ M2 | Local WebGL grade stack with **our own preset names**, `.cube` import/export, Match reference (§4.8 row 6). Non-generative, $0.00, offline, every model |
 | 38 | Enhancer / Relight / Angles tools | ✅ M2 | Widget-compiled instruction edits, labelled best-effort, original preset names (§4.8 rows 7–9) |
 | 39 | Layers panel with add/visibility/reorder | ✅ M2 | LAYERS panel: base + mask + local overlays, with visibility, reorder, rename, merge (§4.8). Generative layer decomposition is the disabled slot in row 35 |
 | 40 | Assets library: sidebar, favourites count, folders with counts, date groups, group-select | ✅ M3 | Workspaces/teams dropped |
@@ -4502,7 +4907,7 @@ Five milestones. Each is independently demoable and ends with a working app; not
 | 47 | Canvas version history / rename / duplicate / delete | ✅ M4 | `canvas_versions` |
 | 48 | Ask Agent (natural-language graph building) | ❌ v1 | Would require a mandatory LLM key; v1.1 behind an optional key |
 | 49 | Canvas chat, share dialog, multiplayer cursors, comments | ❌ dropped | Single user, no server |
-| 50 | Video / Voice / LLM / Page / Table nodes | ❌ / ⚠️ | ❌ Video / Voice / Page. **Table and Text (LLM) are v1.1** (§7.5): a runnable LLM node would make a text-model key a canvas dependency, which image-only v1 forbids. The fan-out mechanism itself stays in v1 — Variations needs it |
+| 50 | Video / Voice / LLM / Page / Table nodes | ❌ / ⚠️ | ❌ Video / Voice / Page. **Table and AI text are v1.1** (§7.5): a runnable LLM node would make a text-model key a canvas dependency, which image-only v1 forbids. The fan-out mechanism itself stays in v1 — Variations needs it |
 | 51 | Image-resizing CDN proxy (webp, w, q) | ✅ M0 | **Open substitute:** local thumbnail service with a content-addressed cache (§8.5) |
 | 52 | Clerk authentication | ❌ dropped | Loopback, single user, no auth |
 | 53 | Status-batch polling for in-flight jobs | ⚠️ changed | Replaced by SSE with a polling fallback (§8.4.6) |
@@ -4519,8 +4924,8 @@ Five milestones. Each is independently demoable and ends with a working app; not
 |---|---|---|---|
 | R1 | **Provider API churn** — endpoints, parameter names or auth shapes change under us | High / High | All provider knowledge lives behind the adapter interface (§6). Adapters carry a `schemaVersion`; contract tests run against recorded fixtures in CI and against live APIs in an optional nightly job. A broken adapter disables just its provider (`providers.last_error` surfaces in Settings) instead of breaking the app |
 | R2 | **Model capability drift** — a model gains/loses aspect ratios, quality tiers or reference-image support | High / Medium | Capability manifests are data, not code paths; runtime discovery refreshes them where the provider allows (`models.source='discovered'`), shipped manifests are the fallback, and unknown parameters are passed through a `providerOptions` escape hatch. The UI renders from the manifest, so a new quality tier appears without a release |
-| R3 | **Model IDs and prices in our docs go stale** | Certain / Low | Every price carries `pricedAt` and `sourceUrl`; the UI labels estimates "estimate, pricing as of `<date>`" and never presents one as authoritative. No model id is hardcoded in the view layer — the registry is the only source. Our research snapshot (2026-09-23) is explicitly a snapshot |
-| R4 | **Cost surprises** — token-priced models (OpenAI) make per-image cost unpredictable | Medium / High | Estimates show a `min`–`max` range with `confidence` and a human-readable `basis` string disclosed (§0.13); actuals are recorded from response usage where returned and marked `≈` where not; optional monthly soft budget warns at 80 % and requires confirmation past 100 %; the usage panel and CSV make spend auditable, including the "billed but discarded" line |
+| R3 | **Model IDs and prices in our docs go stale** | Certain / Low | Every price carries `pricedAt` and `sourceUrl`; the UI labels estimates "Prices as of `<date>`" and never presents one as authoritative. No model id is hardcoded in the view layer — the registry is the only source. Our research snapshot (2026-09-23) is explicitly a snapshot |
+| R4 | **Cost surprises** — token-priced models (OpenAI) make per-image cost unpredictable | Medium / High | Estimates show a `min`–`max` range with `confidence` and a human-readable `basis` string disclosed (§0.13); actuals are recorded from response usage where returned and marked `~` where not; optional monthly soft budget warns at 80 % and requires confirmation past 100 %; the usage panel and CSV make spend auditable, including the "Canceled but charged" line |
 | R5 | **Double-billing on retry or restart** | Low / High | Client-supplied `idempotencyKey` deduplicates resubmits; recovery **never** auto-resubmits a job that may already be running (§8.4.5); cancellation is honest about work already started |
 | R6 | **Large local libraries** (100k+ assets) | Medium / Medium | Keyset pagination with partial indices (no `OFFSET` anywhere); FTS5 external-content index; thumbs content-addressed and regenerable; `VACUUM INTO` backups; measured target: feed first page <50 ms at 100k rows, enforced by a seeded benchmark in CI |
 | R7 | **Browser memory with thousands of images** | High / High | Windowed virtualiser rendering ±2 viewports; `loading="lazy"`, `decoding="async"`, a bounded concurrent-decode pool; thumbs sized to the zoom step so the browser never holds oversized bitmaps; object URLs revoked on unmount; a soak test scrolls 5 000 tiles and asserts a renderer-memory ceiling |
@@ -4530,7 +4935,7 @@ Five milestones. Each is independently demoable and ends with a working app; not
 | R11 | **Loopback server reachable from a malicious page** | Medium / High | All four §8.3 guards, on **every method including `GET`**: bind `127.0.0.1` only; Host-header allowlist (anti-DNS-rebinding); **never emit any CORS or `Timing-Allow-Origin` header, in any build**; reject `Sec-Fetch-Site: cross-site`, `Sec-Fetch-Dest: image\|script\|style` on `/api`, and any foreign `Origin`; require the boot-minted `X-Openfield-Session` token on every `/api` and `/files` request. No cookies, so no ambient authority to steal. A `GET` is not exempt: `/api/assets` is the whole prompt history and `/files/thumb/:id` writes a file. **Acceptance: a cross-origin page cannot list assets, read key status, or cause a thumbnail to be generated** |
 | R12 | **Licence and trademark hygiene** | Medium / High | MIT. No Higgsfield name, logo, colours, icons or marketing copy anywhere in the product, repo or README; all UI copy written by us; all preset names and thumbnails original. Third-party model names (e.g. provider model identifiers) appear only as registry data describing the user's own API account — nominative, factual use. The README states plainly that Openfield is an independent project, unaffiliated with and not endorsed by any model provider, and that users bring their own keys and are bound by each provider's terms |
 | R13 | **Higgsfield adapter may be impossible to ship** — style listing, character training and canvas endpoints are undocumented | Medium / Medium | The adapter is conditional by design: it ships only if a user key can reach the documented Soul endpoint. Its absence changes nothing structurally, because every Higgsfield-specific feature already has an open substitute (rows 21–24, 33 above) |
-| R14 | **Canvas graph schema evolves and breaks saved canvases** | Medium / Medium | `canvases.schema_version` plus a forward migration per bump, applied lazily on open with a version snapshot taken first; unknown node types render as a labelled placeholder rather than dropping data |
+| R14 | **Canvas graph schema evolves and breaks saved canvases** | Medium / Medium | `canvases.schema_version` plus a forward document migration per bump in `packages/core/src/canvas/migrations/` (separate from the SQL migrations in `packages/db/migrations/`), applied lazily on open with a version snapshot taken first; unknown node types render as a labelled placeholder rather than dropping data |
 | R15 | **SQLite write contention or corruption** | Low / High | WAL, single writer inside the server process, `busy_timeout`, every multi-row mutation in a transaction, `PRAGMA integrity_check` on the backup path, atomic `rename()` for every file write |
 | R16 | **Scope creep across five milestones** | High / Medium | **§0.14 is the scope contract**: anything it lists as deferred or dropped needs an explicit decision to move, and each milestone's definition of done is the release gate. §8.8 records status against the observation notes and has no authority to add or cancel scope — that ambiguity is what let a checklist row quietly veto seven features §3 and §4 specify in full |
 
@@ -4548,7 +4953,6 @@ Only genuinely open items remain. Each names the task that closes it; anything �
 - **Canvas node internals never captured:** Video, Voice, LLM Assistant, Page, Table, Upload and Assets node UIs; canvas comment threads; version-history UI; multi-select/group operations; delete and duplicate shortcuts. §7 specifies our own designs for the nodes we ship; the rest stay unbuilt rather than invented. *(M4-05 … M4-12.)*
 
 ---
-
 ## Appendix A. Consolidated open questions
 
 Rolled up from the per-section lists after reconciliation. Each item is a decision still to make or a fact to verify before the milestone that depends on it; questions that §0 settled have been removed at the source.
@@ -4560,7 +4964,7 @@ Rolled up from the per-section lists after reconciliation. Each item is a decisi
 - **Model catalogue refresh cadence.** Google publishes no `models.list` for image models and OpenAI's `/v1/models` does not flag image capability — both stand. §0.3 settles the consequence: `listModels()` need only return the adapter's static, version-stamped catalogue, network discovery is optional and **allow-listed by the adapter's own `recognise(id)`** (unrecognised ids are reported, never added), and the snapshot date is surfaced in Settings → Models. What remains open is the refresh cadence and who runs the maintainer script.
 - **Migration.** Whether existing Higgsfield users want to import their cloud library, and whether any supported export path exists, is unknown; no export API was observed.
 - **Parity ownership.** Who signs off the S2 parity checklist (§8.8), and what counts as a *must* row versus a *should* row, needs fixing before the checklist is written. §0.14 remains the scope contract either way.
-- **Canvas gaps.** Several behaviours of the v1 node set were not captured (inner UI of the Upload and Asset nodes, multi-select and group operations, delete/duplicate shortcuts). §7 decides these from first principles rather than from observation; node types §0.14 defers to v1.1 or drops outright are not open questions.
+- **Canvas gaps.** Several behaviours of the v1 node set were not captured (inner UI of the Upload and Assets nodes, multi-select and group operations, delete/duplicate shortcuts). §7 decides these from first principles rather than from observation; node types §0.14 defers to v1.1 or drops outright are not open questions.
 
 **§2**
 
@@ -4583,7 +4987,7 @@ Rolled up from the per-section lists after reconciliation. Each item is a decisi
 - The detail-view **zoom/pan affordances inside the Info tab** were not measured — only the Edit-tab zoom cluster was. Our `+ / − / 0` and wheel-zoom on the Info tab is our own addition.
 - **Version-strip thumbnail spacing, scroll behaviour and branch representation** were not observed; the 8px gap, the pinning and the fork glyph are our design.
 - **Mask encoding expected by the OpenAI edits endpoint** (which alpha polarity, whether the mask must match the input's exact dimensions and format) is undocumented in the research. Task **M2-15** is a live probe with a recorded fixture, and it is a blocking prerequisite for M2-05/M2-06.
-- **Seed support on the Gemini image models** is not documented; until confirmed, Recreate on those models shows the "no seed control" badge (§0.11).
+- **Seed support on the Gemini image models** is not documented; until confirmed, Recreate on those models carries the `~` badge and its tooltip (§0.1, §0.11).
 - Whether the **Higgsfield public API exposes inpaint / upscale / relight job types** at all (only the Soul v2 standard endpoint is confirmed) — this decides whether a Higgsfield adapter can light up rows 2–9 or only whole-image instruction editing.
 - Exact behaviour of the reference product's **Expand & Crop with layers present** ("crop keeps pixels on layers") was read from the panel copy, not exercised; our local crop preserves layers, but the AI-fill interaction with layers is unspecified.
 - The **"Add comment" button's** anchoring was not exercised; we did not observe whether comments pin to a point on the image. Our notes are asset-level only in v1.
@@ -4602,7 +5006,7 @@ Rolled up from the per-section lists after reconciliation. Each item is a decisi
 **§6**
 
 - **OpenAI mask polarity** for `/v1/images/edits` — unconfirmed in the research; the adapter converts from Openfield's canonical alpha-0-is-edit mask either way. Closed by **`M2-15`** (live probe of polarity, dimensions and format, fixture recorded, §6.14 note updated). Blocking prerequisite for `M2-05`/`M2-06`.
-- **Whether `POST /v1/images/generations` returns a `usage` block.** Until confirmed, every OpenAI cost row ships `confidence: "estimated"` and the Usage screen marks it `≈`. Closed by the same probe, **`M2-15`**.
+- **Whether `POST /v1/images/generations` returns a `usage` block.** Until confirmed, every OpenAI cost row ships `confidence: "estimated"` and the Usage screen marks it `~`. Closed by the same probe, **`M2-15`**.
 - **Exact maximum reference-image count for OpenAI image edits**, and whether it differs between Sunburst, Flare and GPT Image 2. We declare 4. Closed by **`M2-15`** (same live session).
 - **Whether Gemini exposes any multi-image-per-call parameter.** If it does, the fan-out in §6.5 step 5 becomes a cost optimisation rather than a necessity. Closed by **`M0-07`** (Google Gemini image adapter).
 - **Output-token counts per (quality × size) for OpenAI.** Must be measured before launch; until then the Generate button shows a range. Closed by **`M3-11`** (cost engine: price snapshots, estimate, reconciliation, usage log).
@@ -4612,7 +5016,7 @@ Rolled up from the per-section lists after reconciliation. Each item is a decisi
 
 **§7**
 
-- Inner UI of the reference product's Video, Voice, LLM Assistant, Page, Table, Upload and Assets nodes was not captured — our specs for Upload and Assets (and, at v1.1, Table and Text (LLM)) are our own design, not parity.
+- Inner UI of the reference product's Video, Voice, LLM Assistant, Page, Table, Upload and Assets nodes was not captured — our specs for Upload and Assets (and, at v1.1, Table and AI text) are our own design, not parity.
 - The reference version-history UI was not opened; our drawer design is not parity-checked.
 - Multi-select, group, align and copy/paste behaviour on the reference canvas was never exercised; no delete/duplicate shortcut was observed. Our shortcut table is ours.
 - Whether the reference canvas re-runs nodes automatically when an upstream node changes, or whether it caches unchanged nodes at all, was not observed — our dirty/cached model is a design decision.
