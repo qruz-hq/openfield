@@ -53,7 +53,7 @@ These were settled with the product owner before drafting and are treated as con
 ---
 ## 0. Canonical contracts
 
-This section is binding. Where any other section of this document disagrees with §0 — on a name, an enum value, a field, a route, a default, a polarity or a scope decision — §0 wins and the other section is wrong until edited. Each numbered section still owns its own surface: §2 owns the feed's layout, §3 owns the composer's geometry, §4 owns the editor's interaction, §5 owns the picker sheet, §6 owns the adapter interface, §7 owns the canvas, §8 owns storage and delivery. §0 owns only what more than one of them touches: the vocabulary, the identifiers, the capability manifest, the job state machine, the error taxonomy, the HTTP and SSE surface, the lineage model, the preset objects, the mask and version conventions, the image pipeline, determinism, concurrency, cost, the v1 scope list, and the codebase layout and stack (§0.16). Sections must reference §0 rather than restate it; a restatement that drifts is a defect.
+This section is binding. Where any other section of this document disagrees with §0 — on a name, an enum value, a field, a route, a default, a polarity or a scope decision — §0 wins and the other section is wrong until edited. Each numbered section still owns its own surface: §2 owns the feed's layout, §3 owns the composer's geometry, §4 owns the editor's interaction, §5 owns the picker sheet, §6 owns the adapter interface, §7 owns the canvas, §8 owns storage and delivery. §0 owns only what more than one of them touches: the vocabulary, the identifiers, the capability manifest, speeds and provider settings (§0.3), the job state machine, the error taxonomy, the HTTP and SSE surface, the lineage model, the preset objects, the mask and version conventions, the image pipeline, determinism, concurrency, cost, the v1 scope list, and the codebase layout and stack (§0.16). Sections must reference §0 rather than restate it; a restatement that drifts is a defect.
 
 ---
 
@@ -78,6 +78,9 @@ One word per concept. These are the only spellings, in code, in the schema and i
 | **Reference set** | A named ordered group of reference images | moodboard |
 | **Character** | Reference set + descriptor + optional pinned seed | identity, Soul ID |
 | **Palette** | Extracted colours + injection mode | colour transfer |
+| **Speed** | How fast, and at what price, a provider serves a model: `standard`, `flex`, `priority` or `batch` (§0.3). In code the axis is `speed` everywhere, because `price.tiers` already means resolution tiers | tier, service tier (except `serviceTier` on Google's wire) |
+| **Provider settings** | The panels of settings an adapter declares for its company, plus Openfield's own Limits panel, shown in the company's settings modal (§0.3, §6.17) | advanced settings, provider config |
+| **Provider batch** | One batch job at the provider that carries every job of one job set running at the Batch speed (§0.4). Row: `provider_batches` | batch job, job set (the image count stays `batch` on the request) |
 
 **The three iteration actions.** The walkthrough recorded a tile "Recreate" icon, a menu "Regenerate", a menu "Reuse", and a detail-panel pair `[Recreate | Reference]`. Openfield ships exactly three actions and no other names. **`Re-run` and `Regenerate` are deleted as names for these three actions, in code and in UI copy.** The one surviving use of `Re-run` is the canvas node's own re-execution action and run pill (§0.11, §7.5) — it never names an action on an asset or a job set.
 
@@ -232,6 +235,120 @@ resolveControl(caps: Capabilities, id: ControlId): { state: ControlState; option
 
 **Discovery is allow-listed, not additive.** `Provider.listModels()` is required only to return the adapter's static catalog; network discovery is optional. A discovered id is added to the picker **only if the adapter's own `recognise(id)` predicate accepts it**; unrecognised ids are recorded in the refresh report and listed under Settings → Models → *Not supported*, never added. There is no conservative-default path for discovered ids — the conservative manifest is reserved for entries the user added deliberately in `~/.openfield/models.json`. (Research: Gemini publishes no image-model `models.list`, and OpenAI's `/v1/models` does not flag image capability.)
 
+#### Speeds: per-model offers and prices
+
+A model's `price` stays its **Standard** price. Every other speed the model offers is declared beside it, with its own price in the same `PriceModel` union, so the estimator has one code path. `SPEED_IDS` lives in `packages/core/src/constants.ts`; `speedOfferSchema` lives in `packages/core/src/schemas/manifest.ts`.
+
+```ts
+export const SPEED_IDS = ["standard", "flex", "priority", "batch"] as const;
+export type SpeedId = (typeof SPEED_IDS)[number];
+
+export interface SpeedOffer {
+  id: Exclude<SpeedId, "standard">;
+  price: PriceModel;                      // same union as ModelManifest.price
+  delivery: "sync" | "async";             // async: results arrive later from a provider batch (§0.4)
+  waitMs: { target: number; max: number };// from the provider's docs; copy and timers, never correctness
+  requestTimeoutMs?: number;              // per-attempt timeout at this speed, sync only; overrides limits.requestTimeoutMs
+  ops?: AdapterOp[];                      // operations this speed covers; absent means every op the model has
+}
+
+// On ModelManifest (§6.3):
+//   price: PriceModel          the Standard price, unchanged
+//   speeds?: SpeedOffer[]      the other speeds this model offers; absent means Standard only
+```
+
+Rules:
+- `delivery` is `"async"` exactly when `id` is `"batch"`. A manifest with a `batch` offer must be bound to an `ImageModel` that implements `batch` (§6.7), checked by conformance.
+- Offer ids are unique, and a change to `speeds` bumps `manifestVersion`.
+- Declare an offer only when the provider's own pricing page lists it for that model (§6.12 rule 1), with `pricedAt` and `sourceUrl`.
+
+Three pure helpers in `@openfield/providers/manifest` are the only readers, shared by the composer, the canvas pills, the server and the usage log:
+
+```ts
+resolveSpeed(manifest, requested: SpeedId, op: AdapterOp = "generate"): { speed: SpeedId; fellBack: boolean };
+                                                      // not offered for this model and op: "standard", fellBack true
+priceFor(manifest, speed: SpeedId): PriceModel;       // the offer's price, or manifest.price for "standard"
+resolveProviderSettings(schema, stored, manifest, op: AdapterOp = "generate"): ResolvedProviderSettings;  // below
+```
+
+A model that lacks the chosen speed runs at Standard, and the UI says so plainly where the price shows (§3.6). Speed is chosen **only** in provider settings. There is no composer control and no `GenerateRequest` field for it.
+
+#### Provider settings: declared by the adapter, rendered by Openfield
+
+Each adapter may declare its own settings as data on `Provider.settings` (§6.2): panels holding fields, with defaults, "show when" conditions and per-model applicability. Openfield renders them in the company's settings modal (§6.17), validates and stores the values, resolves them for a model at submit time, and hands the resolved values to the adapter on every call. Adapters never render UI and never read storage. The zod schema is `providerSettingsSchemaSchema` in `packages/core/src/schemas/provider-settings.ts`.
+
+```ts
+export type SettingValue = string | number | boolean;
+
+/** Every condition must hold for the field to show. A hidden field resolves to its default. */
+export type SettingCondition =
+  | { field: string; in: SettingValue[] }
+  | { field: string; notIn: SettingValue[] };
+
+interface SettingFieldBase {
+  id: string;                     // /^[a-z][A-Za-z0-9]*$/, unique across the provider's panels
+  label: string;                  // our copy through t(), sentence case: "When Flex is busy"
+  description?: string;           // one plain line
+  showWhen?: SettingCondition[];  // may only reference fields declared earlier
+  models?: ModelKey[];            // models the field applies to; absent means every model of the provider
+}
+
+export interface SettingOption {
+  value: string;
+  label: string;                  // the provider's own name where it has one: "Flex"
+  description?: string;           // one plain line
+  models?: ModelKey[];            // models that offer this option; absent means every model the field applies to
+  speed?: SpeedId;                // binds the option to a speed: availability and price come from each manifest's speeds
+  priceAt?: SpeedId;              // the speed a run bills at under this choice, for the price on its card
+}
+
+export type SettingField =
+  | (SettingFieldBase & { kind: "select"; options: SettingOption[]; default: string; role?: "speed" })  // 1 to 8 options
+  | (SettingFieldBase & { kind: "toggle"; default: boolean })
+  | (SettingFieldBase & { kind: "number"; min: number; max: number; step: number; default: number;
+                          control: "stepper" | "input" })
+  | (SettingFieldBase & { kind: "text"; default: string; maxLength: number; placeholder?: string });
+
+export interface SettingsPanel {
+  id: string;                     // unique within the provider; "limits" is reserved for Openfield
+  label: string;                  // panel list entry and heading: "Speed"
+  description?: string;
+  fields: SettingField[];
+}
+
+export interface ProviderSettingsSchema {
+  version: number;                // bump when a field's meaning changes
+  panels: SettingsPanel[];        // at most 11 from an adapter: Openfield's Limits panel makes the modal's 12th
+}
+
+/** Stored per provider in providers.settings (§8.2): only the values the person changed. */
+export type ProviderSettingValues = Record<string, SettingValue>;
+
+export interface ResolvedProviderSettings {
+  values: Record<string, SettingValue>;   // every field of the provider, defaults filled
+  speed: SpeedId;                          // what this model runs at
+  speedRequested: SpeedId;                 // what the settings ask for
+  notes: { field: string; fallback: SettingValue; reason: "field_not_for_model" | "option_not_for_model" }[];
+}
+```
+
+Schema rules, enforced by conformance (§6.12):
+1. **No secrets.** A secret is a `CredentialField` (§6.11), never a setting.
+2. **Reserved ids.** Panel id `limits` and field id `concurrencyCap` belong to Openfield's own panel.
+3. **Valid defaults.** Every `default` is a legal value for every model the field applies to. A speed field's default is `"standard"`.
+4. **One speed field at most**, marked `role: "speed"`. Its option values are `SpeedId`s, it includes `"standard"`, and each non-standard option sets `speed` to its own value. Speed options never declare `models`: availability and price come from `manifest.speeds`, so prices live in one place.
+5. **Conditions point backwards.** `showWhen` references only fields declared earlier, so there are no cycles.
+
+**Resolution** (`resolveProviderSettings`, pure, used by the composer and by `normalize()`):
+1. Start from every field's `default`, then overlay stored values that still parse against the current schema. Unknown ids and invalid values are dropped and logged. The stored row is not rewritten.
+2. Walk fields in declared order. A field whose `models` excludes this model, or whose `showWhen` fails, resolves to its default (`field_not_for_model`).
+3. A select whose value isn't offered for this model falls back: a speed field to `"standard"` (through `resolveSpeed`, so an offer limited to other `ops` falls back too), any other select to its default when offered, else its first offered option (`option_not_for_model`).
+4. `speed` is the speed field's resolved value, or `"standard"` when the provider declares none. `speedRequested` is the value before step 3.
+
+**Openfield's own panel.** Every company's modal ends with a **Limits** panel owned by Openfield, holding one field, `concurrencyCap` ("Runs at once", `number`, `stepper`, 1 to `MAX_CONCURRENCY`, default per §0.12). Its value is stored in `providers.concurrency_cap`, not in `providers.settings`. The panel is defined in `@openfield/core` and appended by the server, so adapters never declare it. `resolveProviderSettings` skips it, so its value never reaches an adapter: the scheduler reads the cap itself (§0.12).
+
+**How values reach a run.** `normalize()` resolves the settings for the model and freezes the result onto the `NormalizedRequest` as `speed` and `providerSettings` (§0.6). The runner builds `CallContext.settings` and `CallContext.speed` from that frozen copy on every attempt, poll and resume (§6.2). A settings change therefore affects new runs only, and **Recreate** replays the frozen speed. Reuse loads no speed, because the composer has none, so the next Generate uses the current settings. `estimate()` reads `req.speed` (§0.13), and the composer, the edit-tool CTAs and the canvas pills compute it locally with the same `resolveProviderSettings` over the values from `GET /api/providers/:id/settings` (§8.3).
+
 ---
 
 ### 0.4 Job model and state machine
@@ -287,11 +404,31 @@ export type AdapterOp = "generate" | "edit" | "inpaint" | "outpaint" | "upscale"
 |---|---|
 | Concurrency | §0.12 |
 | Poll schedule | 800 ms first poll, ×1.6 backoff, cap 5 s, ±20 % jitter; `nextPollAfterMs` and `Retry-After` win |
-| Retry | Only `retryable` codes (§0.5). `maxAttempts` 3 (1 + 2 retries), full-jitter backoff 1 s / 4 s / 15 s ±20 %, `Retry-After` always wins |
-| Timeout | §0.12 |
+| Retry | Only `retryable` codes (§0.5). `maxAttempts` 3 (1 + 2 retries), full-jitter backoff 1 s / 4 s / 15 s ±20 %, `Retry-After` always wins. Flex busy answers follow their own schedule, and Batch runs are never retried automatically (below) |
+| Timeout | §0.12, per speed |
 | Idempotency | `` `${idempotencyKey}:${jobIdx}` ``, reused on every attempt |
-| Durability | Handles in SQLite; on boot, resumable jobs re-attach, non-resumable become `interrupted` |
+| Durability | Handles in SQLite; on boot, resumable jobs re-attach, non-resumable become `interrupted`. Batch runs resume from the stored provider batch id (below) |
 | Cancellation | §0.12 |
+
+**Speeds in the lifecycle.** No new `JobState` is added. Each speed maps onto the existing states, and a job set carries its resolved speed in `job_sets.speed` (§8.2) so every surface can tell them apart.
+
+| Speed | Path | States a job passes through | What the tile shows (§2.4) |
+|---|---|---|---|
+| `standard` | `submit`/`poll` (§6.3) | `pending → submitting → running → succeeded \| failed` | Generating |
+| `priority` | Same as Standard, asking the provider for Priority | Same | Generating. When the provider reports it ran at Standard, the job bills Standard and the Info tab says so |
+| `flex` | Same call, a long attempt timeout (§0.12) | Same. A busy answer sends the job back to `pending` with `next_attempt_at`, per the busy policy below | Waiting for Google, "Can take a few minutes". While waiting out a busy answer: "Flex is busy. Trying again in 2 min." |
+| `batch` | `ImageModel.batch` (§6.7): the whole job set goes to the provider as **one provider batch** of N requests | `pending → submitting` (the create call) `→ queued` (accepted, waiting) `→ running` (the provider says it started) `→ succeeded \| failed \| canceled` per job, from that job's own result | Sending to Google, then Waiting at Google, with Cancel; Stopping at Google after a cancel |
+
+**Flex busy policy.** A provider that refuses Flex for capacity answers with a `ProviderError` carrying `busy: true` (§6.8). The adapter reads the company's own setting from `ctx.settings`. Google's "When Flex is busy" (§6.13) either keeps trying at Flex, the default, or switches to Standard. On "switch", the adapter resends once without the speed inside the same attempt and reports `speedUsed: "standard"`, so the runner never sees the busy answer. On "keep trying", the runner requeues the job on the busy schedule of §0.12. Busy answers don't count toward `maxAttempts`, and they stop at the Flex deadline, which fails the job with `provider_unavailable` and the runner's own reason (§0.5).
+
+**Batch runs.** One job set at the Batch speed is exactly one provider batch, and one `provider_batches` row (§8.2), whatever its image count.
+- **Submit.** The row is written in state `submitting` *before* the create call, with `display_name = "openfield-<jobSetId>"`. The provider's id is stored the moment the call returns. Creating a batch is not idempotent. A create that fails with a retryable code is first looked up by display name through `batch.find()`, and resent only when nothing is found, within `maxAttempts`. "Nothing found" means `find()` ran and came back empty. A lookup that can't run (no key, the company off, the network down) is no answer: the row stays in `submitting` and is looked up again on the batch schedule until the deadline.
+- **Wait.** A waiting batch holds no concurrency slot. A watcher polls it on the batch schedule of §0.12 and moves the jobs to `queued` or `running` as the provider reports. A poll that fails with a retryable code is logged and tried again on the same schedule; it never fails the run.
+- **Finish.** On a terminal provider state the runner harvests every item. Each item carries its job id as its key, so a succeeded item goes through ingest (§8.5.1) exactly like a sync result, and a failed item fails its own job with its own mapped error. An image that can't be saved here (bytes that aren't an image, over the size limit) fails only its own job too. One that fails for lack of disk space (`disk_full`) keeps its job waiting and the row open, so a later poll collects it once there's room: the company still holds it. An expired batch fails every unfinished job with `timeout`. The row takes its terminal state only once every item is harvested, so a crash mid-harvest resumes it. The runner then fires the finish notice once (`provider_batches.notified_at`, §2.4) and asks the adapter to clean up at the provider. Only a run the company reported finished is cleaned up there.
+- **Never retried automatically.** A retryable code on a batch item ends that job, and its tile offers **Try again** (the runner saves that button on the job as `jobs.error_action`, §0.5). Resending on its own could bill twice.
+- **Key changes.** The row keeps the saved key's four-character hint (`credential_hint`). A poll the company refuses (403 or 404) while a different key is saved, or with a key it rejects, is tried again on the batch schedule, because the batch keeps running at the company and can be read once the right key is back. Only a refusal with the same key fails the run ("Google can't find this run anymore."), and a deadline passed while the key differs fails it as "This run was sent with a different Google key."
+- **Cancel** stops the whole provider batch, never one image of it (§0.12).
+- **Deadline.** The provider's expiry (Google: 48 hours after creation) plus a 6-hour grace. The company is always asked first, however late: whatever it reports finished is harvested, because it keeps results for weeks (Google: 6 weeks) and Openfield may simply have been closed. Past the deadline, a run fails only when the company says it's still queued or running (the runner cancels it there and fails its jobs with `timeout`), when a different key is saved (above), or when three checks in a row since this server started got no answer ("Openfield couldn't reach Google to check on this run."). A run that ends here without a final answer from the company is never deleted there, since its results may still be available.
 
 ---
 
@@ -320,7 +457,7 @@ export type ErrorCode =
 | `auth_missing` | "No key for this model" | Open Settings |
 | `auth_invalid` / `auth_forbidden` | "This key was rejected" | Change key |
 | `billing_required` / `quota_exceeded` | "This key is out of credit" | Open billing page |
-| `rate_limited` | "Too many requests. Try again in a minute." (the tile only appears once Openfield's own retries have run out; while they run, status text may say "Retrying") | Try again |
+| `rate_limited` | "Too many requests. Try again in a minute." (the tile only appears once Openfield's own retries have run out; while they run, status text says "Trying again in 8s.") | Try again |
 | `content_refused` / `content_flagged_input` | "The model wouldn't make this" | Reuse (edit the prompt) |
 | `unsupported_param` / `capability_unsupported` | "This model can't do that" | Reuse |
 | `invalid_request` / `payload_too_large` | "These settings didn't work" | Details |
@@ -330,7 +467,22 @@ export type ErrorCode =
 | `disk_full` | "Couldn't save. Your disk is full" | Free up space |
 | `canceled` | "Canceled. You may still be charged for work that already started." (§0.12, verbatim) | Recreate |
 
-When an adapter's `userMessage` says more than the row above (for example "Image blocked. It came from an unknown site."), the runner stores it on the job as `error_reason` and the tile shows it instead; retryable codes keep the row's copy, because their "trying again" wording is stale once the retries are spent. The failed tile's **Details** shows only our copy (what to try, and when it happened), never the code or the provider's message.
+When an adapter's `userMessage` says more than the row above (for example "Image blocked. It came from an unknown site."), the runner stores it on the job as `error_reason` and the tile shows it instead; retryable codes keep the row's copy, because their "trying again" wording is stale once the retries are spent. When the primary action differs from the code's row, the runner stores it as `error_action` (one of `open-settings`, `change-key`, `open-billing`, `try-again`, `reuse`, `details`, `free-up-space`, `recreate`), and the tile offers that button instead. The failed tile's **Details** shows only our copy (what to try, and when it happened), never the code or the provider's message.
+
+Reasons that speeds and billing add, stored as `error_reason` in the same way:
+
+| Case | Code | Tile reason (our copy) | Primary action |
+|---|---|---|---|
+| Google answers that the key's free-tier quota for an image model is 0 (a 429 whose quota details name a `free_tier` metric with a limit of `"0"`, §6.13). Image models have no free tier, so this means billing is off | `billing_required` | "Turn on billing for this key in Google AI Studio to make images." | Open billing page |
+| Flex stayed busy until the Flex deadline (§0.12). The runner writes this reason itself, because it is final, not "trying again" wording | `provider_unavailable` | "Flex stayed busy for an hour. Try again, or choose Standard in Google settings." | Try again |
+| The provider rejects the requested speed for this model | `unsupported_param` | "Google doesn't offer Flex for this model. Choose another speed in Google settings." | **Google settings**, which opens that company's settings modal (§6.17) |
+| A Batch image fails with a retryable code (§0.4) | That code | The code's row | Try again |
+| A batch expired at the provider with no result for this image | `timeout` | "Google didn't finish this within 48 hours." | Try again |
+| A batch passed its deadline while a different key was saved (§0.4) | `auth_forbidden` | "This run was sent with a different Google key." | Try again |
+| The company refuses to show a batch to the key it was sent with | `auth_forbidden` | "Google can't find this run anymore." | Try again |
+| A batch passed its deadline and three checks in a row got no answer (§0.4) | `timeout` | "Openfield couldn't reach Google to check on this run." | Try again |
+
+Company and speed names in these strings come from `meta.displayName` and the speed option's label, never hardcoded.
 
 Every failure card links to the **Error log** (Settings → Help): redacted request payload, HTTP status, `providerCode`, redacted response. `mapError` has one signature everywhere: `mapError(res: Response, body?: unknown): Promise<ProviderError>`, always `throw await mapError(res, body)` / `error: await mapError(res, body)`.
 
@@ -357,6 +509,8 @@ Every failure card links to the **Error log** (Settings → Help): redacted requ
 |---|---|---|
 | `POST` | `/api/masks` | Upload a painted mask as an internal asset (`multipart/form-data`, PNG, must match the base asset's pixel dimensions) → `{asset}` with `kind='mask'`, `mime='image/png'` |
 | `POST` | `/api/job-sets/:id/recreate` | Replay the frozen `NormalizedRequest` as a new job set (§0.1 **Recreate**) → 202, same shape as `/api/generate` |
+| `GET` | `/api/providers/:id/settings` | The company's settings modal (§0.3, §6.17) → `{schema, values}`: the adapter's panels plus Openfield's Limits panel, and every field's current value |
+| `PATCH` | `/api/providers/:id/settings` | `{values}` with any subset of field ids → the same shape as `GET` |
 | `POST` | `/api/canvases/:id/run` | `{scope:'node'\|'downstream'\|'all'\|'selection', nodeIds, plan:[{nodeId, typeVersion, fingerprint, model, params, inputs}], dryRun?}` → `{runId, jobSets:[{nodeId, jobSetId}], skipped:[{nodeId, reason:'cached'}], estimate}` |
 | `POST` | `/api/canvases/:id/runs/:runId/cancel` | Cancel a whole canvas run |
 | `GET`/`POST` | `/api/reference-sets` · `PATCH`/`DELETE` `/api/reference-sets/:id` | §0.8 |
@@ -401,6 +555,7 @@ export interface GenerateRequest {
   source: "composer" | "detail_editor" | "canvas" | "api" | "recreate";
   canvas?: { canvasId: string; nodeId: string };
   providerOptions?: Record<string, unknown>;   // Advanced → Custom only
+  // No speed field, by design: speed comes only from provider settings (§0.3).
 }
 ```
 
@@ -423,6 +578,9 @@ export interface NormalizedRequest
   promptAfterPreset: string;
   manifestVersion: string;
   paramsHash: string;                  // §0.11
+  speed: SpeedId;                      // resolved for this model at submit (§0.3); what estimate() prices
+  speedRequested: SpeedId;             // what the provider settings asked for; differs when the model lacks it
+  providerSettings: Record<string, SettingValue>;  // resolved values, frozen; becomes CallContext.settings
 }
 export type PixelSize = { width: number; height: number };
 export interface PerImagePrice { quality?: string; tier?: ResolutionTier; usd: number }
@@ -433,7 +591,9 @@ export interface Diagnostic { level: "error" | "warning"; field?: string; code: 
 
 **Event stream.** One SSE endpoint: `GET /api/events`. `GET /api/jobs/stream` is deleted. Event types:
 
-`snapshot` · `job_set.created` · `job.queued` · `job.started` · `job.progress` · **`job.partial`** · `job.output` · `job.failed` · `job.canceled` · `job_set.completed` · `asset.updated` · `asset.deleted` · `folder.updated` · `models.updated` · `usage.updated` · `canvas_run.updated` · `maintenance.progress`.
+`snapshot` · `job_set.created` · `job.queued` · `job.started` · `job.progress` · **`job.partial`** · `job.output` · `job.failed` · `job.canceled` · `job_set.completed` · **`batch.updated`** · `asset.updated` · `asset.deleted` · `folder.updated` · `models.updated` · `usage.updated` · `canvas_run.updated` · `maintenance.progress`.
+
+`batch.updated` carries `{jobSetId, providerId, modelKey, state, submittedAt, expiresAt, counts?, stopping?, finished}` whenever a provider batch changes state (§0.4). `modelKey` lets the finish notice name the model when the run isn't loaded in the tab; `stopping: true` means a cancel was sent and the company hasn't stopped yet. The frame with `finished: true` is the one the browser turns into the finish toast and system notification (§2.4). `snapshot` gains `batches`: every active provider batch, plus finished ones whose notice no client has received yet. `job.queued` gains `retryAt?` (ISO) and `busy?: true` when a job goes back to wait out a retry or a Flex busy answer; the tile's "Trying again in 2 min." countdown reads them.
 
 ```
 event: job.partial
@@ -577,7 +737,9 @@ On the Edit tab, tool letters take precedence over surface actions. That precede
 | Locked, `seed.supported` | The entered seed is sent; for batch > 1 the server derives `seed, seed+1, … seed+n−1` |
 | `seed.supported: false` | `jobs.seed` stays NULL. The Seed chip renders **disabled with a reason** (core set, §0.3). **No launch adapter declares seed support** (§6.13, §6.14), so on every v1 model Recreate is an exact *replay of the request*, not a reproduction of the image, and the `~` badge says so |
 
-**Frozen request.** `normalize()` ends by hashing `NormalizedRequest + {modelKey, manifestVersion, promptAfterPreset}` into `paramsHash` with `hashCanonical()`, and writes the whole normalized object to `job_sets.request_json`. **Recreate replays that object, never the current UI state or the current manifest**, so a manifest change can never silently alter a re-run.
+**Frozen request.** `normalize()` ends by hashing `NormalizedRequest + {modelKey, manifestVersion, promptAfterPreset}` into `paramsHash` with `hashCanonical()`, and writes the whole normalized object to `job_sets.request_json`. **Recreate replays that object, never the current UI state or the current manifest**, so a manifest change can never silently alter a re-run. The frozen object includes `speed` and `providerSettings` (§0.3), so Recreate runs at the speed the original run used; when the model no longer offers it, it runs at Standard with the §3.6 note.
+
+Canvas fingerprints leave out `speed`, `speedRequested` and `providerSettings`: they change the price and the wait, not the image, so changing a company's Speed never makes a cached node stale.
 
 **Canvas fingerprints reuse the same hash function**, `hashCanonical()` from `@openfield/core` (canonical JSON, then SHA-256), so the browser and the server compute identical values:
 
@@ -606,6 +768,12 @@ A node is `cached` when `fingerprint === result.fingerprint` and every reference
 | `attemptTimeoutMs` | from `limits.requestTimeoutMs` — default 120 000 generate, 300 000 upscale | Per attempt |
 | `jobDeadlineMs` | **900 000** | Whole-job wall clock across all attempts. `jobTimeoutMs: 180000` is **deleted** — it made `maxAttempts: 3` unreachable against a 150 s per-attempt timeout |
 | `maxAttempts` | 3 | Attempt 1 + 2 retries |
+| Flex `attemptTimeoutMs` | from the offer's `requestTimeoutMs`: **900 000** on Google | Google targets 1 to 15 minutes and asks clients to wait 10 minutes or more. The server's wrapped fetch must not cut the call short: its own timeout follows the attempt timeout (check Bun's fetch timeout behaviour on the installed version) |
+| Flex `jobDeadlineMs` | **3 600 000** | Whole-job wall clock at Flex, busy waits included |
+| Flex busy backoff | 30 s, 60 s, 120 s, then every 300 s, ±20 % | `Retry-After` wins. Busy answers don't count toward `maxAttempts` (§0.4) |
+| Batch poll schedule | every 30 s for the first 10 min, every 2 min until 1 h, then every 5 min | `nextPollAfterMs` wins. Every active batch is polled once at boot. In fake mode (`OPENFIELD_FAKE_PROVIDERS=1`) every step is 1 s |
+| Batch deadline | provider expiry + 6 h | Google expires a batch 48 h after creation (§0.4) |
+| Slots | n/a | A Flex call holds a concurrency slot for its whole length, because it is an open call. A waiting batch holds none: only its create, poll, cancel and cleanup calls count, while they run, under the same global and per-provider caps as any run. A due poll that finds every slot taken waits for the next heartbeat, so the boot check of every active batch goes a few at a time |
 
 OpenAI's `limits.requestTimeoutMs` is raised to **180 000** in §6.14: the research records complex prompts taking up to ~2 minutes, and 150 000 leaves no headroom.
 
@@ -618,9 +786,13 @@ OpenAI's `limits.requestTimeoutMs` is raised to **180 000** in §6.14: the resea
 3. Adapter implements `cancel()` → call it, mark `canceled` on acknowledgement.
 4. Adapter does not → mark `canceled`, stop polling, discard any late result, and write a `usage_log` row at **full estimate with `discarded = 1`**.
 
-**Neither launch adapter implements provider-side cancel**, so (4) is the path every v1 cancellation takes: the provider may complete and bill the work, and **no asset is produced**. Copy, verbatim, on the tile, the node band and the toast: *"Canceled. You may still be charged for work that already started."* §7.12's criterion becomes "…and keeps every asset already **written to the library**; runs canceled after submit are recorded in the usage log as billed-but-discarded."
+**Neither launch adapter implements provider-side cancel for a sync call**, so (4) is the path every v1 cancellation of one takes: the provider may complete and bill the work, and **no asset is produced**. Copy, verbatim, on the tile, the node band and the toast: *"Canceled. You may still be charged for work that already started."* §7.12's criterion becomes "…and keeps every asset already **written to the library**; runs canceled after submit are recorded in the usage log as billed-but-discarded."
 
-**Crash recovery** (§8.4.5) is unchanged in shape and uses §0.4's states: `queued` → re-enqueue; `submitting`/`running` with a `provider_job_id` and a pollable adapter → resume the watcher (not re-billed); otherwise → `interrupted`, never auto-resubmitted.
+**Batch runs are the exception: they cancel at the provider (step 3).** Cancel on any tile of a Batch run cancels the whole provider batch, after a confirm that names the image count (§2.4). The runner calls `batch.cancel()`, keeps polling until the provider reports a terminal state, and harvests whatever finished first: those images are saved like any other result, because they are likely billed. Every image without a result becomes `canceled` and writes a `usage_log` row at the Batch estimate with `discarded = 1`, since the provider doesn't document whether canceled work is billed. Until the provider stops, the sent images are **stopping**: the cancel response lists them under `stopping`, `batch.updated` carries `stopping: true`, the tiles say "Stopping at Google" and stop offering Cancel, and the toast says "Stopping at Google. You may still be charged for work that already started." Each tile then ends with its image or as canceled, with the verbatim copy.
+
+**Crash recovery** (§8.4.5) is unchanged in shape and uses §0.4's states: `queued` → re-enqueue; `submitting`/`running` with a `provider_job_id` and a pollable adapter → resume the watcher (not re-billed); otherwise → `interrupted`, never auto-resubmitted. Two speed rules sit on top:
+- **Batch runs resume.** A `provider_batches` row with a provider id and an active state resumes polling at boot, and its `queued`/`running` jobs stay as they are. A row still in `submitting` with no provider id is looked up by display name with `batch.find()`: found, its id is stored and polling resumes; not found, its jobs become `interrupted`. A lookup that can't run (no key, the company off, the network down) keeps the row in `submitting` and tries again on the batch schedule until the deadline.
+- **Flex calls don't resume.** A Flex job that was in flight is an open call that died with the process, so it becomes `interrupted` like any other sync call.
 
 **Canvas execution split, stated once at the top of §7.7:**
 
@@ -652,6 +824,10 @@ export interface CostActual { currency: "USD"; amount: number;
   confidence: "reconciled" | "estimated" | "unknown"; basis: string }
 ```
 
+**Every price honours the speed.** Before the run, `estimate(manifest, req)` prices with `priceFor(manifest, resolveSpeed(manifest, req.speed ?? "standard").speed)` (§0.3), and `basis` names the speed whenever it isn't Standard: "2 images × $0.067 (1K, Batch)". The composer, the model picker hint, the canvas pills, bulk Recreate confirmations and `POST /api/models/:p/:m/estimate` all pass the resolved speed, so the number a person sees is the speed their run will use. After the run, cost follows the speed the provider **reports**, not the one requested: `JobResult.speedUsed` (§6.6), falling back to `req.speed`. A Priority request that the provider served at Standard bills Standard, and a Flex request switched to Standard bills Standard. `usage_log.speed` records the speed billed.
+
+**Fake mode costs nothing.** With `OPENFIELD_FAKE_PROVIDERS=1`, every `usage_log` row, discarded rows included, is written with `cost_usd = 0` and `simulated = 1`, and `job_sets.cost_actual_usd` is 0. Estimates still render from the real price data so the UI looks right. Every spend total ("Spent today", Settings → Spending, the spend guard, CSV totals) sums only rows with `simulated = 0`.
+
 `POST /api/models/:p/:m/estimate` returns `{min, max, confidence, basis, pricedAt}` — matching `CostEstimate` exactly. §8.3's `{costUsd, low, high, basis:'per_image'|'per_token'|'unknown', asOf}` is replaced; `basis` is the human string ("3 images × $0.134 (2K)"), not an enum.
 
 **`per_token` pricing gains cached input**, since the research records cached-input discounts: `cachedInputPerMTok?: number` on the `per_token` variant and `cachedInputTokens?: number` on `ProviderUsage`. Where a provider reports cached tokens they are billed at that rate; where the field is absent, the reconciled figure is an **upper bound** and is labelled `≤`.
@@ -661,7 +837,7 @@ export interface CostActual { currency: "USD"; amount: number;
 - Higgsfield: `price.kind = "unknown"` at launch. The only evidence for an estimate endpoint is a third-party blog with no path, request or response shape recorded, and the product's private `/fnf/job-sets/costs` is out of bounds (§1.11). The Generate button reads "Cost unknown". Upgrade to `provider_estimate` + `confidence: "estimated"` only after a live probe confirms the path and response shape; `"exact"` requires a documented public endpoint.
 - OpenAI: whether `POST /v1/images/generations` returns a `usage` block is **unconfirmed** and is part of the same live probe as mask polarity. Until then the adapter ships `confidence: "estimated"` and the Usage screen marks those rows `~`.
 
-**`usage_log` — one row per terminal outcome, success, failure and cancel alike.** §8.2's table gains the columns §6.9's row spec needs: `estimate_min REAL, estimate_max REAL, price_as_of TEXT, discarded INTEGER NOT NULL DEFAULT 0, batch_index INTEGER, size TEXT, quality TEXT`, and `cost_source` values become `'reconciled' | 'estimated' | 'unknown'`.
+**`usage_log` — one row per terminal outcome, success, failure and cancel alike.** §8.2's table gains the columns §6.9's row spec needs: `estimate_min REAL, estimate_max REAL, price_as_of TEXT, discarded INTEGER NOT NULL DEFAULT 0, batch_index INTEGER, size TEXT, quality TEXT`, and `cost_source` values become `'reconciled' | 'estimated' | 'unknown'`. Migration 0003 adds `speed TEXT` and `simulated INTEGER NOT NULL DEFAULT 0` (§8.2).
 
 §2.4's "Cost is never logged for a failed job" and §8.4.3's "every terminal outcome writes a row" are reconciled as: **a failed job writes a `usage_log` row with `cost_usd = 0` and `cost_source = 'unknown'`; no cost is ever added to a spend total for a failure.** A canceled-after-submit job writes a row at full estimate with `discarded = 1`, which is what the Usage screen's "Canceled but charged" line sums.
 
@@ -686,6 +862,7 @@ Prices always carry `pricedAt` and `sourceUrl`, are never presented as authorita
 | **Layers panel** | M2 | Base + mask + local overlay layers (text, shapes, grade), with visibility, reorder, rename, merge. Generative *layer decomposition* stays a disabled plugin slot |
 | Presets, reference sets, characters, palettes, saved prompts, JSON import/export | M3 | §0.8 |
 | Cost estimate + usage log + CSV | M3 | §0.13 |
+| **Provider settings and speed** | M0.5 | Adapter-declared settings in a per-company modal with Openfield's Limits panel (§0.3, §6.17). Speed (Standard, Flex, Priority, Batch, as each model offers) chosen only there, priced per speed everywhere (§0.13). Batch runs survive restarts and end with a toast and a system notification (§0.4, §2.4) |
 | Canvas | M4 | §7, minus the rows below |
 | **Settings surface — new §6.17** | M0→M3 | Left-rail IA: API keys · Models · Defaults · Appearance · Storage · Spending · Privacy · Help · Experimental, with one table listing every setting, its `settings` key, its default and the section that specifies it. Eleven sections currently write requirements into a screen no section owns |
 | **First run — new §2.10** | M0 | launch → no-key empty state → Keys → paste key → Check key → default model auto-selected → composer focused. G5/S1 gate on exactly this path |
@@ -745,7 +922,7 @@ Every word a person sees in Openfield follows this section, including every quot
 - No filler ("simply", "just", "to get started", "here"), no stacked hedges, no marketing tone. No roadmap talk ("coming soon", "Soon", "v1.1"). Anything that hasn't shipped is hidden, not teased.
 - Keep every fact that protects the person, and say it like a person: "Canceled. You may still be charged for work that already started."
 - Buttons are verbs or short noun phrases: "Try again", "Add a key", "Change key", "Free up space".
-- A failed action always offers "Try again", never "Retry". "Retrying" is fine as status text while Openfield tries again on its own.
+- A failed action always offers "Try again", never "Retry". Status text while Openfield tries again on its own says "Trying again", never "Retrying".
 - Small caps labels are written in sentence case in the source and uppercased with CSS.
 
 **Words.** One word per concept.
@@ -761,6 +938,8 @@ Every word a person sees in Openfield follows this section, including every quot
 | edit an area, mask | inpaint, regional fallback |
 | on your computer | ~/.openfield, 0600, env vars in prose, any file path |
 | preset, character, folder, reference | fingerprint, idempotency, normalize, seed jitter |
+| Speed, with the company's own names: Standard, Flex, Batch, Priority | tier, service tier, tier id, SLA, async job |
+| Waiting at Google (a Batch run in progress) | pending, queued at provider, batch job |
 
 "Company" appears only where the person has to pick or identify who holds a key (Settings, the Info row, model picker groups). "Seed" appears only as the label of the Seed control itself.
 
@@ -771,11 +950,15 @@ Every word a person sees in Openfield follows this section, including every quot
 | Do | Don't |
 |---|---|
 | This key is out of credit. | No credit available on this key |
-| Too many requests. Retrying in 8s | Provider rate limit, retrying |
+| Too many requests. Trying again in 8s. | Provider rate limit, retrying |
 | Couldn't connect. | Couldn't reach the provider |
 | Each image is made and billed separately. | Sent as 4 separate requests, cost scales linearly |
 | About $0.27 · 2 images | ≈ $0.27 · 2 images |
 | Limited controls. Couldn't load this model's settings. | This model's manifest could not be read |
+| Standard for this model | Tier not supported, falling back to standard |
+| Flex is busy. Trying again in 2 min. | 503 from provider, backing off |
+| Half price. Ready within a day, often sooner. | Async batch inference at 50% cost, 24h SLA |
+| Your batch is ready. 4 images from Nano Banana Pro. | Batch job completed successfully! |
 
 ---
 
@@ -795,7 +978,7 @@ openfield/
 │   ├── providers/      @openfield/providers
 │   ├── db/             @openfield/db
 │   └── ui/             @openfield/ui
-├── e2e/                Playwright suites (M0-15, M1-15)
+├── e2e/                Playwright suites (M0-15, M0.5-14, M1-15)
 ├── package.json        workspaces ["apps/*", "packages/*"] and the root scripts
 ├── tsconfig.base.json  strict, extended by every workspace
 └── biome.json          format, lint and the import rules below
@@ -819,7 +1002,7 @@ Internal packages are consumed as TypeScript source. Each `package.json` `export
 1. **No package imports an app.** The only edge between apps is the type-only import of `AppType` by `apps/web` from `@openfield/server/app-type`. That entry file exports the type and nothing else, and the import is erased at build. `apps/web/tsconfig.json` adds `bun-types` so the server's type graph checks. Rule 2's bundle check proves none of it ships.
 2. **The browser never loads server code.** `apps/web` and `packages/ui` never import `@openfield/db`, `@openfield/providers/server`, an adapter folder, a `bun:` or `node:` module, or anything that reads `config.json`, env vars or keys.
 3. **`packages/providers` splits at its exports.** It has no root export.
-   - `@openfield/providers/manifest` (`src/manifest.ts`) is the browser-safe entry. It holds the manifest types re-exported from core, `estimate()` and `resolveControl()`, and imports only `@openfield/core` and files under `src/manifest/`.
+   - `@openfield/providers/manifest` (`src/manifest.ts`) is the browser-safe entry. It holds the manifest types re-exported from core, `estimate()`, `resolveControl()`, and the speed and settings helpers `resolveSpeed()`, `priceFor()` and `resolveProviderSettings()` (§0.3), and imports only `@openfield/core` and files under `src/manifest/`.
    - `@openfield/providers/server` (`src/server.ts`) is the server entry. It holds the registry and `builtinProviders`, `normalize()`, the adapters, the `mapError` helpers and the behaviour interfaces.
    - An adapter imports only `../types`, its own folder and `@openfield/core`, and never another adapter.
 4. **`packages/db` is server-only.** Only `apps/server` imports it. SQL lives only inside `packages/db` (schema, migrations, `src/queries/`), and routes call query helpers.
@@ -866,7 +1049,10 @@ apps/web        src/api/client.ts: hc<AppType>() ─▶ TanStack Query hooks
 | Drizzle schema, one file per domain | `packages/db/src/schema/` (`providers.ts`, `jobs.ts`, `assets.ts`, `organisation.ts`, `library.ts`, `canvas.ts`, `usage.ts`) |
 | Migrations, generated and custom, with drizzle-kit's journal | `packages/db/migrations/` (config: `packages/db/drizzle.config.ts`) |
 | Row schemas · query helpers · schema check | `packages/db/src/rows.ts` · `packages/db/src/queries/` · `packages/db/test/schema.test.ts` |
-| Wire schemas (API, SSE, errors, settings, manifest, request, cost, preset envelopes) | `packages/core/src/schemas/` |
+| Wire schemas (API, SSE, errors, settings, manifest, request, cost, preset envelopes, provider settings) | `packages/core/src/schemas/` (provider settings: `provider-settings.ts`) |
+| Speed and provider-settings helpers (`resolveSpeed`, `priceFor`, `resolveProviderSettings`) and Openfield's Limits panel | `packages/providers/src/manifest/speed.ts`, `packages/providers/src/manifest/provider-settings.ts` · the Limits panel: `packages/core/src/schemas/provider-settings.ts` |
+| Batch behaviour interface (§6.7) · the batch watcher | `packages/providers/src/types/batch.ts` · `apps/server/src/runner/batches.ts` |
+| Company settings modal · one panel's fields | `apps/web/src/settings/provider-settings-modal.tsx` · `apps/web/src/settings/settings-panel.tsx` |
 | Enum constants | `packages/core/src/constants.ts` |
 | Canvas document schema and document migrations (R14) | `packages/core/src/canvas/` |
 | i18n catalogue and `t()` (§2.12) | `packages/core/src/i18n/en.json`, `packages/core/src/i18n/index.ts` |
@@ -888,7 +1074,7 @@ apps/web        src/api/client.ts: hc<AppType>() ─▶ TanStack Query hooks
 | Command | Does |
 |---|---|
 | `bun install` | Installs every workspace. There is no postinstall build, and a `sharp` binary that fails to load never fails the install or the boot (§8.5.2) |
-| `bun dev` | Starts `apps/server` (watch mode, `127.0.0.1:4317`) and `apps/web` (Vite, `127.0.0.1:5173`, `strictPort`) together, and stops both on exit. Open `http://127.0.0.1:4317`. In dev the server proxies every path outside `/api` and `/files` to Vite and injects the session token into `index.html`, and Vite's HMR socket connects to 5173 directly. The app has one origin, so the four guards (§0.6) behave the same in dev and production |
+| `bun dev` | Starts `apps/server` (watch mode, `127.0.0.1:4317`) and `apps/web` (Vite, `127.0.0.1:4318`, `strictPort`) together, and stops both on exit. Open `http://127.0.0.1:4317`. In dev the server proxies every path outside `/api` and `/files` to Vite and injects the session token into `index.html`, and Vite's HMR socket connects to 4318 directly. The app has one origin, so the four guards (§0.6) behave the same in dev and production. Vite sits on 4318, beside the server, rather than its usual 5173, so `bun dev` never clashes with another Vite project; the port is set in `scripts/dev.ts`, `apps/web/vite.config.ts` and the server's dev proxy (`apps/server/src/http/spa.ts`), and `scripts/dev.ts` says plainly when it is taken |
 | `bun run typecheck` | Type-checks every workspace by running each workspace's own `tsc` |
 | `bun run build` | Runs `bun run typecheck`, then the Vite build of `apps/web` to `apps/web/dist` |
 | `bun start` | Runs `apps/server` in production mode. It serves `apps/web/dist` and injects the token into `index.html` |
@@ -1224,11 +1410,42 @@ Every tile is a single focusable element (`role="gridcell"`, roving `tabindex`) 
 **Generating.** On submit, **N placeholder tiles** (one per batch image, N ≤ 4 per §0.10) are prepended immediately — before the server responds — each reserving the **exact requested aspect ratio** so the row solve is correct and nothing reflows when the real image lands. Contents:
 
 - Top-left **"Generating" pill**: 24px tall, radius `--of-r-pill`, `--of-elevated` at 72%, 12px/500, 12px spinner.
-- Top-right **"Cancel" pill**: same geometry, `--of-danger` text on hover; cancels through §8.3's job-cancel route. Cancellation is honest per §0.12: neither launch adapter implements provider-side cancel, so the tile and the toast carry, verbatim, *"Canceled. You may still be charged for work that already started."*
+- Top-right **"Cancel" pill**: same geometry, `--of-danger` text on hover; cancels through §8.3's job-cancel route. Cancellation is honest per §0.12: neither launch adapter implements provider-side cancel for a sync call, and a Batch run's cancel only stops what hasn't finished, so the tile and the toast carry, verbatim, *"Canceled. You may still be charged for work that already started."*
 - Body: an indeterminate shimmer sweep; where the manifest declares `streaming.progressPercent` (§0.3) it becomes a 3px determinate bar pinned to the tile's bottom edge, and `streaming.partialImages` renders `job.partial` frames in place. An elapsed-time counter (`0:14`) appears after 10s, and a "Still working. Some models take up to 2 minutes" line after 45s.
 - The **first** placeholder of a batch may host a **tip card** — our own rotating local tips, shipped as a static JSON file, dismissible, switchable off in Settings (§6.17); no network request and no telemetry. **Queue position renders in the same slot when a run is waiting** ("2nd in line", from the scheduler's ordering in §0.12).
 - On completion the real image **swaps in place** with a 150ms crossfade (dropped to an instant swap under reduced motion, §2.11); the row is not re-solved unless the returned aspect ratio differs from the request, in which case only that row re-solves. Observed completion for a batch of 2 was ~15–20s.
 - Multiple queued runs stack: each new job set prepends above the previous, newest first. Prompt and settings are never cleared by submitting (§3).
+
+**Speeds on the generating tile** (§0.4, design RWSvj and LGwLk). The job set's `speed` picks the variant. The company name in every string is `meta.displayName`. A waiting tile has a still `--of-elevated` fill and no progress bar, because there is no progress to show, and its pill carries a 12px hourglass in place of the spinner. It shows no tip card and no queue position.
+
+| Speed | Pill | Body line | Cancel |
+|---|---|---|---|
+| Standard, Priority | "Generating" | The schedule above | As above |
+| Flex, call open | "Waiting for Google" | "Can take a few minutes" | As above |
+| Flex, waiting out a busy answer | "Waiting for Google" | "Flex is busy. Trying again in 2 min.", counting down to `next_attempt_at` | As above |
+| Batch, waiting here for a free slot (nothing sent yet) | "Queued" | The image count | As above: only that image, nothing was sent |
+| Batch, create call in flight | "Sending to Google" | None | Opens the confirm below |
+| Batch, `queued` or `running` at the company | "Waiting at Google" | "Usually done within a few hours" | Opens the confirm below |
+| Batch, after Cancel run, until the company stops | "Stopping at Google" | None | Off, but still focusable |
+
+A Batch tile reads its pill from the run's batch summary (`batch.state` and `batch.stopping`, kept current by `batch.updated`), not from the job states: the stream starts the jobs as the create call goes out, before it returns. The body line is design RWSvj's: Google targets 24 hours and says most batches are much quicker. The pill and Cancel share one row, so on a narrow tile the pill's label ends in an ellipsis before it reaches Cancel. The tile's accessible name leads with the pill and ends with the body line, because a wait can last hours.
+
+The Batch Cancel confirm reads **"Cancel this Batch run?"** with the body "Both images stop together. You may still be charged for work that already started." ("The image stops." for one image, "All 4 images stop together." for three or four) and the buttons **Keep waiting**, focused when it opens, and **Cancel run** (`--of-danger`). Closing it puts focus back on the tile's Cancel. Images that were already sent end only when the company stops, and Google's cancel is best effort, so `POST /api/job-sets/:id/cancel` lists them under `stopping` rather than `canceled`, the toast says "Stopping at Google. You may still be charged for work that already started.", and the tiles show the stopping state until each image ends as canceled or, when it finished first, as its image.
+
+**When a Batch run finishes**, whether the tab was open throughout or reconnects later, the browser shows one toast and one system notification for it, driven by the `batch.updated` frame with `finished: true` (§0.6, design r2wOmk). The server stamps `provider_batches.notified_at` once a connected client has received that frame, so each run notifies once. A run the person canceled said so when they did, so it gets no finish notice.
+
+| Outcome | Toast title | Toast detail | Toast action |
+|---|---|---|---|
+| Every image made | "Your batch is ready" | "4 images from Nano Banana Pro" | Show |
+| Some made | "Your batch is ready" | "3 of 4 images from Nano Banana Pro" | Show |
+| None made | "Your batch didn't make any images" | None | Show |
+| Expired at the provider | "Google didn't finish your batch within 48 hours" | None | Show |
+
+- The frame carries `modelKey` and `providerId`, and the browser loads the model's and the company's names before it builds the copy: a tab that opens after the run ended hears about it in its first frame, before its lists have loaded. A name that can't be loaded is left out ("4 images", "Your batch didn't finish within 48 hours"), never shown blank.
+- **Show** scrolls the feed to the run's tiles and focuses the first.
+- The system notification uses the browser's `Notification` API, titled "Openfield", with the title and detail joined as one line: "Your batch is ready. 4 images from Nano Banana Pro." It is tagged with the job set id, so a repeat replaces rather than stacks, and clicking it focuses the tab and does what Show does.
+- **Permission is asked once**: the first time a Batch run is submitted, inside that Generate click, because browsers only ask from a user gesture. The ask is remembered per browser in local storage. When permission is denied or the API is missing, only the toast shows. There is no error and no second ask.
+- The live region (§2.11) announces that same line once per run.
 
 **Failed.** The reference product never surfaced a failure to us, so the failed tile is Openfield's own design. A failed job keeps its tile at the requested aspect ratio: `--of-danger-soft` fill, 1px `--of-danger` at 40%, centred 20px alert glyph, a one-line plain-language reason in `--of-t-body` (§0.5's copy; the provider's own message is never shown on the tile and lives in the Error log), and a button row: **Try again** (accent ghost) · **Reuse** (loads the job's settings into the composer, §0.1) · **Details** (opens the Error log with the redacted payload, HTTP status and provider code) · dismiss ×.
 
@@ -1491,13 +1708,15 @@ Chip visual states: **default** (value = model default), **set** (value differs 
 | Reference strength | `referenceStrength` | `Ref 1.0` | 0–1 slider | Only when `references.strengthMode === "global"` |
 | Advanced | `advanced` | `Advanced` (+ count badge) | Schema-driven form | 3.4.7 |
 
+**There is no Speed chip.** Speed is a company setting, chosen only in the company's settings modal (§0.3, §6.17), so a run can't quietly differ from what Settings says. The composer shows the speed a run will use on the Generate sub-label (§3.6).
+
 ### 3.4 Per-control specifications
 
 #### 3.4.1 Model picker
 
 Popover 402×642, anchored above the chip, top-aligned search input ("Search models…", magnifier icon, filters on model name, provider and description). Rows are 56px: 32px rounded provider icon tile, name 14px + badges, description 12px muted, accent check on the right of the selected row.
 
-Our version does **not** hardcode a catalog. Rows come from the model registry (§6), which merges (a) allow-listed runtime discovery where the provider exposes it and (b) the adapter's static catalog (§0.3). Grouping differs from the reference product's editorial "Featured / All": we show **Recent** (last 5 used, session-persistent), then one section **per provider** in registry order, then **Needs a key** (models whose provider has no API key — rows greyed, subtitle "Add an OpenAI key in Settings", clicking jumps to Settings). This is the grouping §8.8 row 19 and task M1-04 build; **badges are capability-derived, never marketing**: `Edit` (`ops.imageEdit`), `14 refs` (`references.max`), `Transparent` (`background.values` includes `transparent`), the top tier of `resolution.tiers` (e.g. `2K`), `New` (registry `releaseDate` within 60 days), written in sentence case and uppercased by CSS (§0.15), plus a right-aligned price hint (`~$0.13 each`) when the manifest carries a pricing snapshot.
+Our version does **not** hardcode a catalog. Rows come from the model registry (§6), which merges (a) allow-listed runtime discovery where the provider exposes it and (b) the adapter's static catalog (§0.3). Grouping differs from the reference product's editorial "Featured / All": we show **Recent** (last 5 used, session-persistent), then one section **per provider** in registry order, then **Needs a key** (models whose provider has no API key — rows greyed, subtitle "Add an OpenAI key in Settings", clicking jumps to Settings). This is the grouping §8.8 row 19 and task M1-04 build; **badges are capability-derived, never marketing**: `Edit` (`ops.imageEdit`), `14 refs` (`references.max`), `Transparent` (`background.values` includes `transparent`), the top tier of `resolution.tiers` (e.g. `2K`), `New` (registry `releaseDate` within 60 days), written in sentence case and uppercased by CSS (§0.15), plus a right-aligned price hint (`~$0.13 each`) when the manifest carries a pricing snapshot, priced at the speed that model would run at under the current company settings (§0.13).
 
 Selecting a model writes `?model=<providerId>:<modelId>` to the URL (deep-linkable, matching the observed behaviour — §0.2), swaps the chip row per §3.5, and closes the popover. Keyboard: type-to-filter, ↑/↓ to move, `Enter` to select.
 
@@ -1584,6 +1803,16 @@ A preset is the object specified in §5.3. `presetStrength` maps to a native par
 **Generate button (144×84, `radius: 12`, accent fill, `var(--of-on-accent)` text)**
 
 - Label `Generate` (14–16px/600) with a **sub-label**: our replacement for the credit counter is a **cost estimate** — `About $0.27 · 2 images`. The composer computes it locally with the pure `estimate(manifest, req)` function (§0.13, §6.3) from the manifest already in memory — no HTTP round-trip on a chip change — and an optional `estimateRemote()` result upgrades the label in place; failing both, the literal text `Cost unknown` (never a guess presented as fact). Token-priced models (OpenAI) show a range: `About $0.12–0.19 · 2 images`, with the basis in the tooltip and the note "Prices as of Sep 23, 2026". Prompt-enhance adds its own line in the tooltip. Clicking the sub-label opens the usage log.
+- **Speed line.** The estimate is always priced at the speed the run will use (§0.13), computed locally from the company's settings (§0.3). A second sub-label line, 12px, `--of-on-accent` at reduced opacity, names it when it isn't a plain Standard run:
+
+  | Company setting, for this model | Second line | Tooltip adds |
+  |---|---|---|
+  | Standard | none | nothing |
+  | Flex, Batch or Priority, and the model offers it | "Flex", "Batch" or "Priority" | "Speed: Batch. Change it in Google settings." |
+  | A speed this model doesn't offer | "Standard for this model" | "Nano Banana 2 has no Flex, so it runs at Standard." |
+
+  Everywhere else a model's price shows beside the company's speed (the model picker rows, the model tags on the key card, Settings → Models), a model that lacks the chosen speed shows its Standard price followed by a muted "· Standard", with the same sentence as the hover text.
+
 - **Disabled** only when the run cannot be sent: no model selected; the selected model's provider has no key (button becomes a secondary **"Add a key"** that deep-links to Settings); prompt empty *and* no reference images and the model is not reference-only; references over `references.max`; an Advanced field invalid. Each disabled reason has a tooltip.
 - **Submitting**: an inline spinner replaces the sub-label **for the duration of the submit request only**. The button is *not* disabled and the form is *not* locked.
 - **Not cleared, queueable** (explicitly matching the observed behaviour): after a successful submit the prompt, references and every setting stay exactly as they were, and the user can immediately press Generate again to queue another run. Concurrency is the server's: `globalConcurrency` 4, further clamped per provider by `min(providers.concurrency_cap, capabilities.limits.maxConcurrent)` (§8.4.2, §0.12). Beyond that, runs are queued and the button sub-label shows `2 queued` until they drain. `n` placeholder tiles are prepended to the feed on submit with the correct aspect ratio reserved (§2.4).
@@ -1620,6 +1849,7 @@ As in the captured payload, the quality label and the aspect ratio resolve to ex
 10. The Generate sub-label shows an `About $` estimate that scales with the batch count, or the literal text "Cost unknown" — never a fabricated number — and changing a chip fires **no** network request to compute it.
 11. With no key for the selected model's provider, the primary button reads "Add a key" and routes to Settings; no request is attempted.
 12. Every chip is reachable and operable by keyboard alone, and each popover returns focus to its chip on close.
+13. With Google's Speed set to Batch, Nano Banana Pro at 1K × 2 shows `About $0.13 · 2 images` with the second line "Batch"; with Speed set to Flex, Nano Banana 2 shows its Standard estimate with "Standard for this model". Changing the company's Speed updates the sub-label without a reload, and computing it fires no network request beyond the settings read.
 
 ### 3.9 Open questions
 
@@ -1682,6 +1912,7 @@ Tab state is remembered per session, not per asset: opening the next image with 
 | Aspect | e.g. `3:4` | requested ratio, marked `~` if the model returned something else |
 | Seed | integer, or `None` with tooltip "This model doesn't support seeds" | §0.11; no launch adapter declares seed support |
 | Cost | e.g. `About $0.134` | from the usage log (§0.13); `About` prefix when the provider gave no billed figure |
+| Speed | e.g. `Batch`, or `Standard (Flex was busy)`, `Standard (Priority was full)`, `Standard (this model has no Flex)` | the speed billed (`usage_log.speed`), with the reason in brackets when it differs from what the settings asked for (§0.4) |
 | Duration | e.g. `18.4s` | submit → file on disk |
 | Created | long local date-time | rendered through `Intl.DateTimeFormat` with the system locale (§2.12) — never a hardcoded US format |
 | File | filename + size, click to copy path | |
@@ -2136,15 +2367,17 @@ Openfield has no models of its own. Everything the Image tab and the Canvas can 
 
 **Where these types live in code (§0.16).** Every data type in this section is declared once as a zod schema in `packages/core/src/schemas/`, and its TypeScript type is `z.infer` of that schema:
 - `provider.ts`: `ProviderId`, `ModelKey`, `ProviderMeta`, `CredentialField`, `CredentialSchema`, `PriceTable` and `RefreshReport` (§6.2)
-- `manifest.ts`: `AspectRatio` through `ModelManifest`, plus `ControlState` (§6.3)
+- `provider-settings.ts`: `SettingValue`, `SettingCondition`, `SettingOption`, `SettingField`, `SettingsPanel`, `ProviderSettingsSchema`, `ProviderSettingValues`, `ResolvedProviderSettings`, the settings route bodies and Openfield's Limits panel (§0.3)
+- `manifest.ts`: `AspectRatio` through `ModelManifest`, plus `SpeedOffer` and `ControlState` (§6.3). `SpeedId` is built from `SPEED_IDS` in `constants.ts`
 - `request.ts`: `SizeSpec`, `ReferenceInput`, `MaskInput`, `Op`, `AdapterOp`, `GenerateRequest`, `NormalizedRequest`, `PixelSize`, `PerImagePrice` and `Diagnostic` (§6.5)
-- `job.ts`: `JobState`, `JobSetState`, `JobHandle` and `JobUpdate` (§6.7)
+- `job.ts`: `JobState`, `JobSetState`, `JobHandle`, `JobUpdate`, `BatchState` and `BatchHandle` (§6.7)
 - `errors.ts`: `ErrorCode` (§6.8)
 - `cost.ts`: `PriceModel`, `CostEstimate` and `CostActual` (§6.9)
 
 Types that carry behaviour stay hand-written in `packages/providers/src/types/`:
 - `provider.ts`: `Provider`, `CallContext`, `AssetSink`, `RedactingLogger`
 - `model.ts`: `ImageModel`
+- `batch.ts`: `BatchApi` and `BatchUpdate` (§6.7)
 - `registry.ts`: `ModelRegistry`
 - `result.ts`: the in-process result types `GeneratedImage`, `ProviderUsage`, `SafetyVerdict` and `JobResult`
 
@@ -2217,6 +2450,9 @@ export type CredentialValues = Record<string, string>;
 export interface Provider {
   readonly meta: ProviderMeta;
   readonly credentials: CredentialSchema;
+  /** Optional: the company's own settings panels (§0.3). Pure data, served to the modal as is.
+   *  Openfield appends its own Limits panel; an adapter never declares it. */
+  readonly settings?: ProviderSettingsSchema;
 
   /** Shape-only check. Pure, no network. Drives inline Settings validation. */
   validateCredentials(values: CredentialValues): Diagnostic[];
@@ -2248,6 +2484,12 @@ export interface CallContext {
   now: () => number;
   /** Where the adapter writes image bytes. Adapters never return data: URLs. */
   assets: AssetSink;
+  /** This run's resolved provider settings (§0.3), frozen at submit: every field of the
+   *  adapter's schema, defaults filled. The adapter parses what it needs on every call. */
+  settings: Readonly<Record<string, SettingValue>>;
+  /** The speed to ask for, already resolved against this model's offers. "standard" for calls
+   *  that aren't runs (Check key, discovery). */
+  speed: SpeedId;
 }
 
 /** Support types, declared once so every adapter compiles against the same shapes. */
@@ -2389,9 +2631,10 @@ export interface ModelManifest {
   family?: string;             // groups rows in the picker
   badges?: ("new" | "preview" | "legacy" | "experimental")[];
   capabilities: Capabilities;
-  price: PriceModel;
+  price: PriceModel;           // the Standard price
+  speeds?: SpeedOffer[];       // other speeds this model offers, each with its own price (§0.3); absent: Standard only
   source: "static" | "discovered" | "user";
-  manifestVersion: string;     // bumped on any capability change; frozen onto the job set
+  manifestVersion: string;     // bumped on any capability or speed change; frozen onto the job set
   fetchedAt: string;           // ISO; the UI shows "Prices as of …"
 }
 
@@ -2411,8 +2654,13 @@ export interface ImageModel extends ModelManifest {
   /** Optional: ONE network round-trip for providers with a cost endpoint. Never on the
    *  render path; the result is cached per paramsHash (§6.9). The only async pricing path. */
   estimateRemote?(req: NormalizedRequest, ctx: CallContext): Promise<CostEstimate>;
+
+  /** Required when speeds includes a "batch" offer: the provider batch path (§6.7). */
+  batch?: BatchApi;
 }
 ```
+
+**Sync speeds need no new method.** Standard, Flex and Priority go through `submit`/`poll`: the adapter reads `ctx.speed` and maps it onto the provider's own field, and reports the speed actually served in `JobResult.speedUsed` (§6.6).
 
 **`estimate()` is not a method.** Cost before the run is the pure function `estimate(manifest, req)` exported from `@openfield/providers/manifest` (§6.9, §0.16), because the browser cannot call a method on an `ImageModel` and an HTTP round-trip per batch-stepper click is unacceptable.
 
@@ -2455,6 +2703,7 @@ export function resolveControl(caps: Capabilities, id: ControlId):
 | `ops.inpaint` / `ops.outpaint` | Edit-view tools (§4.8) | The row renders **disabled with its reason**, never hidden (§4.8) |
 | `extraSchema` | Advanced chip | Rendered mechanically (§3.4.7) |
 | `price` | Generate button sub-label | `About $0.27 · 2 images` (§6.9) |
+| `speeds` | Speed options in the company's settings modal; the Generate sub-label's speed line | Availability and prices per model (§0.3, §6.17); "Standard for this model" when the chosen speed isn't offered (§3.6). Never a composer chip |
 
 **Acceptance criterion.** For the models observed in the reference product, the manifest must render the observed chips, **in the observed order, with no observed chip missing and no model-capability chip added**. Openfield-only controls (Advanced, Avoid, Seed, Reference strength, Palette) are excluded from the comparison and asserted separately.
 
@@ -2647,6 +2896,9 @@ export interface JobResult {
   /** Redacted provider payload minus image bytes. Kept for the Error log. */
   providerRaw?: unknown;
   timings: { submittedAt: number; firstOutputAt?: number; completedAt: number };
+  /** The speed the provider says it served (Google: usageMetadata.serviceTier). Absent: the
+   *  speed requested. Cost follows this, never the request (§0.13). */
+  speedUsed?: SpeedId;
 }
 ```
 
@@ -2689,6 +2941,50 @@ export interface JobUpdate {
 }
 ```
 
+**The provider batch path.** A model that offers the `batch` speed implements `ImageModel.batch`. One job set is one provider batch (§0.4); each request inside it is keyed by its job id, which is unique and stable, so results map back to tiles without guessing at order.
+
+```ts
+// BatchHandle and BatchState: packages/core/src/schemas/job.ts. BatchApi, BatchUpdate: packages/providers/src/types/batch.ts
+
+export type BatchState =
+  | "submitting"                     // local only: the create call is in flight
+  | "queued" | "running"             // at the provider
+  | "succeeded" | "failed" | "canceled" | "expired";
+
+/** JSON-serialisable; stored whole on provider_batches.handle so polling survives a restart. */
+export interface BatchHandle {
+  remoteId: string;                  // the provider's id: "batches/abc", "batch_abc"
+  displayName: string;               // "openfield-<jobSetId>", used by find()
+  expiresAt: string;                 // ISO, from the provider
+  resume?: Record<string, unknown>;  // what poll, cancel and cleanup need: input mode, uploaded file ids
+}
+
+export interface BatchUpdate {
+  state: Exclude<BatchState, "submitting">;
+  counts?: { total: number; succeeded: number; failed: number; pending: number };
+  /** Present once terminal, after a cancel too. Only jobs listed in `harvest` get assets written. */
+  items?: Array<{ jobId: string } & ({ ok: true; result: JobResult } | { ok: false; error: ProviderError })>;
+  error?: ProviderError;             // the whole batch failed
+  nextPollAfterMs?: number;
+}
+
+export interface BatchApi {
+  /** One create call for every request of the job set. Not idempotent at most providers. */
+  submit(reqs: NormalizedRequest[], ctx: CallContext): Promise<BatchHandle>;
+  /** One status read. Idempotent, safe after a terminal state. Writes assets through ctx.assets
+   *  only for the job ids in `harvest`, so a harvest interrupted by a restart never duplicates. */
+  poll(handle: BatchHandle, ctx: CallContext, opts: { harvest: string[] }): Promise<BatchUpdate>;
+  /** Best effort. The runner keeps polling until the provider reports a terminal state. */
+  cancel(handle: BatchHandle, ctx: CallContext): Promise<void>;
+  /** Optional: delete the batch and any uploaded inputs at the provider once results are saved. */
+  cleanup?(handle: BatchHandle, ctx: CallContext): Promise<void>;
+  /** Optional: find a batch whose create call may have succeeded before its id was stored. */
+  find?(displayName: string, ctx: CallContext): Promise<BatchHandle | null>;
+}
+```
+
+Each item's result goes through the adapter's existing response and error mappers, so a safety block inside a batch maps to `content_refused` exactly as it would in a sync call. Batch results bill at `speedUsed: "batch"`.
+
 **Lifecycle.** `pending → submitting → (queued)* → running → succeeded | failed`, with `canceled` reachable from any non-terminal state and `interrupted` reachable on restart. Synchronous providers are modelled identically: `submit()` performs the blocking HTTP call, resolves with a handle already carrying the result, and the first `poll()` returns `succeeded`. The runner therefore has exactly one code path for OpenAI's blocking `/v1/images/generations` and for a queue-based provider.
 
 **Runner rules.**
@@ -2698,9 +2994,10 @@ export interface JobUpdate {
 | Concurrency | Effective per-provider cap = `min(providers.concurrency_cap, capabilities.limits.maxConcurrent)`; global cap = `settings.globalConcurrency`, default 4 (§8.4.2, §0.12). Excess sits in `pending`; the feed still shows its placeholder tiles |
 | Poll schedule | 800 ms first poll, ×1.6 backoff, cap 5 s, ±20 % jitter; `nextPollAfterMs` and `Retry-After` win over the schedule |
 | Retry | Only `retryable` codes (§6.8): `network`, `timeout`, `rate_limited`, `provider_unavailable`. `maxAttempts` 3 (1 + 2 retries), full-jitter backoff 1 s / 4 s / 15 s ±20 %; `Retry-After` always wins. Non-retryable errors fail immediately |
-| Timeout | Per-attempt timeout = `limits.requestTimeoutMs` (default 120 000 generate, 300 000 upscale); whole-job deadline `jobDeadlineMs` 900 000, then `timeout` + cancel. These two values are canonical; §8.4.2's `jobTimeoutMs` is deleted |
-| Cancellation | §0.12. Neither launch adapter implements provider-side cancel, so every v1 cancellation aborts the fetch, marks `canceled`, discards any late result and writes a `usage_log` row at full estimate with `discarded = 1`. The copy is verbatim: *"Canceled. You may still be charged for work that already started."* |
-| Durability | Handles live in SQLite. On restart the runner re-attaches to every resumable non-terminal job and resumes polling; **jobs whose adapter cannot resume are marked `interrupted` (§8.4.5); they are never auto-resubmitted** (double-billing risk) |
+| Timeout | Per-attempt timeout = `limits.requestTimeoutMs` (default 120 000 generate, 300 000 upscale); whole-job deadline `jobDeadlineMs` 900 000, then `timeout` + cancel. These two values are canonical; §8.4.2's `jobTimeoutMs` is deleted. At a speed whose offer sets `requestTimeoutMs` (Flex), that value is the attempt timeout, and Flex and Batch have their own deadlines and schedules (§0.12) |
+| Speed | The runner sets `ctx.speed` and `ctx.settings` from the frozen request. A `busy: true` error applies the Flex busy policy (§0.4); a Batch job set takes the provider batch path above instead of `submit`/`poll` |
+| Cancellation | §0.12. Neither launch adapter implements provider-side cancel for a sync call, so every v1 cancellation of one aborts the fetch, marks `canceled`, discards any late result and writes a `usage_log` row at full estimate with `discarded = 1`. Batch runs are the exception: they cancel at the provider through `batch.cancel()`, whole run at once. The copy is verbatim: *"Canceled. You may still be charged for work that already started."* |
+| Durability | Handles live in SQLite. On restart the runner re-attaches to every resumable non-terminal job and resumes polling; **jobs whose adapter cannot resume are marked `interrupted` (§8.4.5); they are never auto-resubmitted** (double-billing risk). Provider batches always resume from `provider_batches.handle` (§0.12) |
 | Idempotency | `idempotencyKey` is the **client-supplied job-set key** (§0.2); per-attempt provider headers are `` `${idempotencyKey}:${jobIdx}` ``, stable across retries, so a retried timeout cannot double-bill on providers that honour the header |
 
 **Events to the browser.** One SSE stream, **`GET /api/events`** (§8.3.2 owns it; `GET /api/jobs/stream` does not exist). The event types this section depends on are `job.queued`, `job.started`, `job.progress`, **`job.partial`**, `job.output`, `job.failed`, `job.canceled` and `job_set.completed`. `job.partial` is what terminates `ImageModel.stream?()` and `capabilities.streaming.partialImages` — partial frames are written to `tmp/`, served from a volatile thumb path, never inserted into `assets`, and superseded by the final `job.output` (§0.6). Placeholder tiles (Generating pill + Cancel pill, aspect-ratio-correct) subscribe to the same stream.
@@ -2725,6 +3022,8 @@ export class ProviderError extends Error {
   providerCode?: string;     // provider's own code, shown in the Error log only
   field?: string;            // for unsupported_param / invalid_request
   hint?: { action: "open-settings" | "open-model-picker" | "edit-prompt" | "retry"; label: string };
+  busy?: boolean;            // the provider refused for capacity at this speed (Flex): the runner
+                             // applies the busy policy instead of the retry budget (§0.4)
 }
 ```
 
@@ -2741,16 +3040,16 @@ Every adapter exports **one** `mapError` signature — `mapError(res: Response, 
 | `auth_missing` | No key stored for the selected provider | Generate is disabled; button sub-label "Add a key to use this model", click → Settings → Keys |
 | `auth_invalid` | 401 / bad key | Job fails; "This key was rejected." + *Change key* |
 | `auth_forbidden` | Key lacks access to this model | Job fails; "Your key can't use `<Model>`." + *Choose another model* |
-| `billing_required` | No payment method / credits at 0 | "This key is out of credit." + link to their console |
+| `billing_required` | No payment method / credits at 0; Google's free-tier quota of 0 for an image model | "This key is out of credit." + link to their console. The Google free-tier case says "Turn on billing for this key in Google AI Studio to make images." instead (§0.5) |
 | `quota_exceeded` | Hard monthly/org limit | Same copy as billing, plus *Try again* disabled until the user dismisses |
-| `rate_limited` | 429 | Tile stays in `running` with "Too many requests. Retrying in Ns"; auto-retry ×2, then fail |
+| `rate_limited` | 429 | Tile stays in `running` with "Too many requests. Trying again in Ns."; auto-retry ×2, then fail |
 | `content_refused` | Output blocked by provider safety | Muted refusal card: "The model wouldn't make this." + the provider's category if given + *Reuse*. Never retried |
 | `content_flagged_input` | A reference image rejected | Names the offending reference thumbnail |
 | `unsupported_param` | Manifest/reality mismatch, `reject` policy | Inline chip error before submit: "`<Model>` doesn't support `<setting label>`." (the setting's name as the UI shows it, never the wire field). Generate blocked until fixed |
 | `capability_unsupported` | The op itself is not in this model's manifest | "This model can't do that." + *Reuse* |
 | `invalid_request` | 400 we cannot attribute to one field | "These settings didn't work." + Error log |
 | `payload_too_large` | Reference/base image over limit | "Reference image is too large (max N MB)." + offer to downscale locally |
-| `provider_unavailable` | 5xx, 503, maintenance | "The model isn't responding. Retrying…" then "The model ran into a problem. Try again later." |
+| `provider_unavailable` | 5xx, 503, maintenance | "The model isn't responding. Trying again…" then "The model ran into a problem. Try again later." |
 | `provider_error` | Mapped 5xx with a body; also an asset host outside `meta.assetHosts` (§6.11) | Generic failure card + Error log |
 | `network` | DNS/TLS/socket | "Couldn't connect." |
 | `timeout` | Per-attempt or job deadline | "This took too long." + *Try again* |
@@ -2799,9 +3098,10 @@ export function estimate(manifest: ModelManifest, req: NormalizedRequest): CostE
 
 - **Where prices come from.** The adapter declares them, with `pricedAt` and `sourceUrl`. The UI never presents them as authoritative: the Generate tooltip and the Usage screen both carry *"Prices as of `<date>`. They may have changed since."* A `~/.openfield/prices.json` overlay lets a user correct any number without a code change; `refreshPricing()` proposes a diff in Settings that the user accepts or rejects — prices are never changed silently.
 - **Before the run.** **The composer computes the estimate locally from the manifest already in memory**, so the Generate sub-label updates live as chips change: `About $0.27 · 2 images`, or `About $0.10–0.34 · 2 images` when token-priced, or `Cost unknown` when `kind: "unknown"`. Canvas node run pills and edit-tool CTAs call the same function. `POST /api/models/:p/:m/estimate` exists for **server-side callers and the canvas run-all preview only** (§8.3), and returns `CostEstimate` exactly. Where an adapter implements `estimateRemote()` the sub-label renders the pure estimate first and upgrades in place when the round-trip resolves; the result is cached per `paramsHash` and never fires on the render path.
+- **Speed.** Every estimate and every recorded cost is priced at a speed: before the run the resolved `req.speed`, after it `JobResult.speedUsed` (§0.13). The adapter declares one `PriceModel` per offered speed in `manifest.speeds` (§0.3), in the same union as `price`, so `estimate()` and `reconcile()` need no second path.
 - **Cached input.** Where a provider reports cached input tokens they are billed at `cachedInputPerMTok`; **where the field is absent the reconciled figure is an upper bound and is labelled `≤`.**
 - **After the run.** If the provider returns usage, `reconcile(usage, price)` computes `CostActual { confidence: "reconciled" }`; otherwise the estimate is stored with `confidence: "estimated"` and the Usage screen marks those rows `~`. A failed job writes a row with `cost_usd = 0` and `cost_source = 'unknown'`, and no cost is ever added to a spend total for a failure; a canceled-after-submit job writes a row at full estimate with `discarded = 1` (§0.13).
-- **Usage log.** One row per terminal outcome, using §8.2's column names exactly: `ts, provider_id, model_id, job_set_id, job_id, operation, batch_index, size, quality, outcome, units, estimate_min, estimate_max, cost_usd, cost_source ('reconciled'|'estimated'|'unknown'), price_as_of, discarded, latency_ms, http_status`. Settings → Spending shows totals for Today / 7 days / 30 days / All time, grouped by provider and model, with a "Canceled but charged" line and an Export CSV action. Optional soft **spend guard**: a monthly threshold that, when crossed, requires one extra confirm click before each run. It is local bookkeeping only — Openfield cannot see the user's real provider invoice and says so.
+- **Usage log.** One row per terminal outcome, using §8.2's column names exactly: `ts, provider_id, model_id, job_set_id, job_id, operation, batch_index, size, quality, outcome, units, estimate_min, estimate_max, cost_usd, cost_source ('reconciled'|'estimated'|'unknown'), price_as_of, discarded, latency_ms, http_status, speed, simulated`. Rows written in fake mode have `simulated = 1` and cost 0, and no total counts them (§0.13). Settings → Spending shows totals for Today / 7 days / 30 days / All time, grouped by provider and model, with a "Canceled but charged" line and an Export CSV action. Optional soft **spend guard**: a monthly threshold that, when crossed, requires one extra confirm click before each run. It is local bookkeeping only — Openfield cannot see the user's real provider invoice and says so.
 
 ### 6.10 What replaces the closed pieces
 
@@ -2841,7 +3141,9 @@ export function estimate(manifest: ModelManifest, req: NormalizedRequest): CostE
 - `PUT /api/settings/keys/:providerId` accepts values, writes the file, and responds with status only.
 - Adapters receive credentials from `CallContext`; no credential value may appear in a `JobResult`, a manifest, an SSE frame or an error object. A conformance test asserts this by property-scanning every fixture response for the credential string.
 
-**Redaction.** All adapter logging goes through `RedactingLogger`, which (a) drops `Authorization`, `x-goog-api-key`, `api-key` and `cookie` headers, (b) replaces any substring equal to a loaded credential with `[hidden]`, and (c) applies conservative regex scrubs (`sk-[A-Za-z0-9_-]{16,}`, `AIza[0-9A-Za-z_-]{20,}`) as a second net. `providerRaw` is scrubbed with the same function before it reaches SQLite.
+**Redaction.** All adapter logging goes through `RedactingLogger`, which (a) drops `Authorization`, `x-goog-api-key`, `api-key` and `cookie` headers, (b) replaces any substring equal to a loaded credential with `[hidden]`, and (c) applies conservative regex scrubs (`sk-[A-Za-z0-9_-]{16,}`, `AIza[0-9A-Za-z_-]{20,}`, `AQ\.[0-9A-Za-z_-]{20,}`) as a second net. `providerRaw` is scrubbed with the same function before it reaches SQLite.
+
+**Google key shapes.** Google keys start with `AIza` (standard keys) or `AQ.` (the newer auth keys AI Studio creates by default, which Google says replace standard keys in September 2026). Every key-shaped net covers both, each with tests: the redaction regexes in `packages/providers/src/redact.ts` and `packages/providers/src/google/errors.ts`, and the bundle secret scan in `scripts/check-bundle.ts` (§0.16). Google's docs don't state the `AQ.` prefix (community sources do, §6.18), so the redaction nets match it with the same URL-safe alphabet as `AIza` (`AQ\.[0-9A-Za-z_-]{20,}`) and nothing narrower. The bundle scan is narrower on purpose: it also needs a digit after the prefix and a match that doesn't follow `.` or `$`, so minified code such as `AQ.getBoundingClientRect` isn't flagged. Keys configured on the machine (env vars and `config.json`) are also scanned for verbatim, whatever their shape. Credential fields keep no `pattern` that would reject either shape.
 
 **Network posture.** The server binds `127.0.0.1` only (configurable port, never `0.0.0.0`); the four inbound guards are §0.6's and are mandatory on every method including GET. Outbound connections are restricted to the union of `meta.networkHosts` of enabled adapters **plus asset-download hosts, which must each appear in `meta.assetHosts: string[]`** — a second declared allow-list per adapter (e.g. `cdn.higgsfield.ai`). A download URL whose host is in neither list is refused with `provider_error`, logged with the host, and surfaced as *"Image blocked. It came from an unknown site."* **Redirects are not followed across hosts, and only `https:` is permitted.** Settings → Privacy lists both arrays verbatim. Without this, a provider response — or a typo-squatted proxy behind a user-supplied `baseUrl` — would be an SSRF primitive inside the one process that holds every key.
 
@@ -2860,9 +3162,11 @@ packages/providers/src/openai/
   index.ts          // createOpenAIProvider(): Provider
   models.ts         // static catalog: ModelManifest[]
   capabilities.ts   // shared capability fragments + per-model overrides
-  pricing.ts        // PriceModel per model, with pricedAt + sourceUrl
+  pricing.ts        // PriceModel per model and per speed, with pricedAt + sourceUrl
+  settings.ts       // optional: the ProviderSettingsSchema (§0.3) and a parser for ctx.settings
   map-request.ts    // NormalizedRequest -> provider payload
   map-response.ts   // provider payload -> JobResult
+  batch.ts          // optional: BatchApi, when any model offers the batch speed (§6.7)
   errors.ts         // mapError()
   discovery.ts      // listModels() + recognise()
   README.md         // endpoints, auth, gaps, how fixtures were captured
@@ -2885,6 +3189,8 @@ Adapter folder names `types` and `manifest` are reserved (§0.16).
 6. `price.pricedAt` and `price.sourceUrl` are mandatory for anything other than `kind: "unknown"`.
 7. `limits.typicalLatencyMs` must come from at least 10 observed runs; it drives placeholder copy, not correctness.
 8. `meta.assetHosts` lists every host an image may be downloaded from. An empty array means "this provider returns bytes inline" and is the safest declaration.
+9. A speed offer (§0.3) needs the provider's own price for that model and speed. When two official pages disagree, follow the newest pricing page, record the conflict in the adapter README and §6.18, and cope at run time: a rejected speed maps to `unsupported_param` with the §0.5 reason, and a speed the provider ignores bills at what the response reports.
+10. Settings copy is ours, through `t()`, in plain sentence case. Option labels use the company's own names (Standard, Flex, Batch, Priority) and descriptions are one line with no jargon (§0.15).
 
 **Conformance suite** — `bun test packages/providers/conformance`. Runs in `offline` mode against `__fixtures__` in CI and in `live` mode (`OPENFIELD_CONFORMANCE=live`, real key) before a release. A new adapter merges only when all of these pass:
 
@@ -2911,6 +3217,11 @@ Adapter folder names `types` and `manifest` are reserved (§0.16).
 | 19 | Only hosts in `meta.networkHosts ∪ meta.assetHosts` are contacted (fetch spy); a download URL on any other host raises `provider_error` |
 | 20 | Golden payload snapshots for three canonical requests: t2i 3:4 @1K batch 2; edit with 2 references; inpaint with a mask |
 | 21 | Mask polarity: the canonical mask (alpha 0 = edit) is converted to the provider's documented polarity, asserted against a recorded fixture pair |
+| 22 | Settings schema parses with `providerSettingsSchemaSchema` and obeys §0.3's five rules: no secrets, no reserved ids, valid defaults, at most one speed field bound to `manifest.speeds`, conditions that point backwards |
+| 23 | Every speed offer has a price with `pricedAt` and `sourceUrl`; `batch` offers are `async` and bound to a `BatchApi`; others are `sync` |
+| 24 | Speed on the wire: golden payloads for each offered sync speed (Google: top-level `serviceTier`, absent at Standard); `speedUsed` read from the response fixture, including a Priority answer served at Standard |
+| 25 | Flex busy: a busy fixture raises `busy: true` when the setting says keep trying, and with "switch to Standard" the adapter resends once without the speed and reports `speedUsed: "standard"` |
+| 26 | Batch round trip on fixtures: the `BatchHandle` survives `JSON.parse(JSON.stringify(h))`; `poll` is idempotent after a terminal state and writes assets only for `harvest`; a partial batch maps each item to its job id; `cancel` then `poll` harvests what finished; expiry maps unfinished items to `timeout` |
 
 **Worked skeleton.**
 
@@ -3049,7 +3360,50 @@ Pricing lives in `pricing.ts` as data; the shared pure `estimate(manifest, req)`
 
 Common: `ops.textToImage: true`, `ops.imageEdit: true`, `ops.inpaint/outpaint/upscale/removeBackground/detectText/decomposeLayers: false`, `promptEnhance: "openfield"` (the local enhancer of §3.4.3), `styleStrength: false`, `streaming.partialImages: false`, `unsupportedParamPolicy: "drop-with-warning"`, `safety.notices: ["Images include a hidden AI watermark."]`, `limits.typicalLatencyMs: [3000, 9000]`, `limits.requestTimeoutMs: 120000`, `limits.maxConcurrent: 4`.
 
-**Known gaps.** No seed ⇒ Recreate replays the request, not the image, and the Info panel says *"This model can't make an exact copy. Expect changes."* (§0.1). No native negative prompt — Openfield appends it as an `Avoid: …` instruction and the chip shows `~` (§0.8). No transparent background. Mask-based inpainting is not exposed, so masked edits on Gemini go through the regional fallback with the **Approximate** badge (§0.9) and the canvas Inpaint node is unavailable on these models. Batch is client fan-out, so cost scales exactly linearly and a partial batch failure leaves a mixed job set (allowed: each job tile fails independently, and the job set is `partial`). Per-request image count and Batch-API pricing are not wired in v1.
+**Speeds** (Google's pricing page, updated 2026-09-22; checked 2026-09-23). Paid tier only: every image model shows "Not available" in the free tier column, so billing is required for any image at any speed. Prices are per output image, as Google publishes them.
+
+| Model | Standard (`price`) | Batch | Flex | Priority |
+|---|---|---|---|---|
+| Nano Banana Pro | $0.134 (1K, 2K), $0.24 (4K) | $0.067 (1K, 2K), $0.12 (4K) | $0.067 (1K, 2K), $0.12 (4K) | $0.24192 (1K, 2K), $0.432 (4K) |
+| Nano Banana 2 | $0.045 (512), $0.067 (1K), $0.101 (2K), $0.151 (4K) | $0.022, $0.034, $0.050, $0.076 | not offered | not offered |
+| Nano Banana 2 Lite | $0.0336 (1K) | $0.0168 (1K) | not offered | not offered |
+
+- **Priority** prices are derived: Google publishes only per-token rates, exactly 1.8× Standard ($216 per 1M image output tokens × 1120 or 2000 tokens). `pricing.ts` says so in a comment.
+- **Offers.** `speeds` on Pro: `batch` (async, `waitMs` target 24 h, max 48 h), `flex` (sync, `waitMs` target 60 000, max 900 000, `requestTimeoutMs: 900000`) and `priority` (sync). On Nano Banana 2 and 2 Lite: `batch` only.
+- **Unverified on Pro.** Google's model page (2026-09-03) lists Flex and Priority as "Not supported" for every image model, and the Flex and Priority guides list no image model, while the newer pricing page prices both for Pro. The owner's decision follows the pricing page. A live probe with a billed key closes it before release (`M0.5-12`). If Google rejects the field or ignores it, Flex and Priority come out of Pro's `speeds`, which is a data change.
+
+**Google's settings** (`settings.ts`), rendered in the Google settings modal before Openfield's Limits panel:
+
+| Panel | Field | Kind | Options (value: label, description) | Default | Shows when |
+|---|---|---|---|---|---|
+| Speed | `speed` ("Speed", `role: "speed"`) | select | `standard`: "Standard", "Images arrive in seconds. Works on every model." · `flex`: "Flex", "Half price. Takes 1 to 15 minutes, and Google may turn it down when busy." · `batch`: "Batch", "Half price. Ready within a day, often sooner." · `priority`: "Priority", "About 80% more. Stays fast when Google is busy." | `standard` | always |
+| When it's busy (`flexBusy`) | `flexBusy` ("When Flex is busy") | select | `wait`: "Keep trying at Flex price", "Openfield tries again until Google has room. It can take longer.", `priceAt: "flex"` · `standard`: "Switch to Standard", "Runs right away at the full price.", `priceAt: "standard"` | `wait` | `speed` is `flex` |
+
+Panel descriptions (design Sge12, dPjv7): Speed "How quickly Google makes your images. Waiting longer costs less."; When it's busy "Google can turn down a Flex run when it's busy. Pick what happens then." `flexBusy` has its own panel so it stays in view while Speed isn't Flex, muted with the note "Only used when Speed is Flex. Your speed is Batch." and a **Change speed** action (§6.17). Each option card shows its price range per image across the Google models it applies to: the speed options at their speed (Standard `$0.034–0.24`, Flex `$0.067–0.12`, Batch `$0.017–0.12`, Priority `$0.24–0.43`), and the busy choices at the speed they bill at (`priceAt`), across the models that offer Flex (`$0.067–0.12` and `$0.13–0.24`). Options offered by only some models carry the availability badge ("Nano Banana Pro only").
+
+**Speed on the wire.**
+- **Sync speeds** set `serviceTier` at the **top level** of the `generateContent` body, beside `contents` and `generationConfig`, never inside `generationConfig`. Values are lowercase `"flex"` or `"priority"`. Standard omits the field. There is no `"batch"` value: Batch is its own endpoint.
+- **Speed served.** `speedUsed` is read from `usageMetadata.serviceTier`, then the `x-gemini-service-tier` response header (documented for the Interactions API, so it may be absent here), then the speed requested. Priority over its limits is served and billed at Standard without an error, which is why cost follows `speedUsed` (§0.13).
+- **Flex busy.** Google answers 503, or a 429 without a `QuotaFailure`, when Flex is full, and never moves a Flex request up to Standard on its own. The adapter maps that to `provider_unavailable` with `busy: true` when `flexBusy` is `wait`. When it is `standard`, the adapter resends once without `serviceTier` in the same attempt. A 429 that carries a `QuotaFailure` stays a quota or rate-limit error, never a busy answer. Google doesn't say whether a refused Flex request is billed (§6.18).
+- **A rejected speed.** A 400 `INVALID_ARGUMENT` naming the service tier maps to `unsupported_param` with the §0.5 reason.
+
+**Batch** (`batch.ts`, host `generativelanguage.googleapis.com`, header `x-goog-api-key`, so `networkHosts` needs nothing new):
+
+| Action | Call | Notes |
+|---|---|---|
+| Submit | `POST /v1beta/models/{modelId}:batchGenerateContent` with `batch.displayName` and `batch.inputConfig.requests.requests[]` of `{request, metadata: {key: <jobId>}}` | Each `request` is built by the same `map-request.ts` as a sync call, without `serviceTier`. Returns an operation whose `name` is `batches/{id}`. Not idempotent |
+| Poll | `GET /v1beta/batches/{id}` | State at `metadata.state`: accept `BATCH_STATE_*` and the SDK's `JOB_STATE_*` spelling. Results at `metadata.output`, else `response`: `inlinedResponses.inlinedResponses[]` (nested twice), or a `responsesFile` read from `GET /download/v1beta/{file}:download?alt=media` as JSONL. Each item has its `metadata.key` and either a `response` or an `error` (`google.rpc.Status`). `batchStats` counts are int64 strings |
+| Cancel | `POST /v1beta/batches/{id}:cancel` | Best effort. Then poll to a terminal state and harvest what finished |
+| Cleanup | `DELETE /v1beta/batches/{id}`, plus `DELETE /v1beta/files/{id}` for uploads | Otherwise results sit at Google for 6 weeks. Delete doesn't cancel, so cancel comes first when a run is canceled |
+| Find | `GET /v1beta/batches`, paged, matching `metadata.displayName` | Recovers a create that crashed before its id was stored |
+
+- **Size.** An inline create must stay under **20 MB** in total, and base64 references repeat in every request. When the estimated body passes about 19 MB, the adapter uploads each distinct reference once through the Files API (`POST /upload/v1beta/files`, resumable; files expire after 48 h) and swaps `inlineData` for `fileData {mimeType, fileUri}`. Uploaded file ids go into `BatchHandle.resume` for cleanup. A JSONL input file (up to 2 GB) is the further fallback.
+- **Expiry.** A batch unfinished after 48 h is `BATCH_STATE_EXPIRED` with no results, which maps every unfinished job to `timeout`. Google's target is 24 h and usually much sooner.
+- **Webhooks** need a public HTTPS address, so a `127.0.0.1` app polls instead (§0.12's schedule; Google publishes no poll limit).
+
+**Errors and keys.** A 429 `RESOURCE_EXHAUSTED` whose `QuotaFailure` names a `free_tier` metric with `quotaValue` `"0"` (message "limit: 0") means billing is off: `billing_required`, not retryable, with the userMessage "Turn on billing for this key in Google AI Studio to make images." (§0.5). This shape comes from community reports, not Google's docs (§6.18). A `quotaId` containing `PerDay` is `quota_exceeded`, and `PerMinute` is `rate_limited`. Keys start with `AIza` or `AQ.` (§6.11).
+
+**Known gaps.** No seed ⇒ Recreate replays the request, not the image, and the Info panel says *"This model can't make an exact copy. Expect changes."* (§0.1). No native negative prompt — Openfield appends it as an `Avoid: …` instruction and the chip shows `~` (§0.8). No transparent background. Mask-based inpainting is not exposed, so masked edits on Gemini go through the regional fallback with the **Approximate** badge (§0.9) and the canvas Inpaint node is unavailable on these models. Batch is client fan-out, so cost scales exactly linearly and a partial batch failure leaves a mixed job set (allowed: each job tile fails independently, and the job set is `partial`). Per-request image count is not wired in v1. The Batch *speed* is wired (above), and is unrelated to the image count: a Batch run of four images is one provider batch of four requests.
 
 ### 6.14 Launch adapter — OpenAI GPT Image
 
@@ -3100,6 +3454,12 @@ Common: `ops.textToImage/imageEdit/inpaint/outpaint: true`, `ops.upscale/removeB
 
 **Pricing.** `kind: "per_token"` — text input $5.00/1M, image input $8.00/1M, image output $30.00/1M, with `cachedInputPerMTok` declared once the discount rate is confirmed (as researched 2026-09-23). Because there is no published per-image rate, the adapter ships an `outputTokenTable` mapping (quality × size) → output tokens, derived from measured runs and marked `estimated`; the Generate button therefore shows a **range** (`About $0.10–0.34 · 2 images`). If the response carries a `usage` block, `reconcile()` computes `CostActual { confidence: "reconciled" }`. **Whether the Images API returns `usage` is unconfirmed (2026-09-23) and must be established by the same live probe as the mask polarity (`M2-15`); until then the adapter ships `confidence: "estimated"` and the Usage screen marks those rows `~`.** Where cached input tokens are not reported, a reconciled figure is an upper bound and is labelled `≤` (§6.9).
 
+**Speeds (`M1-01`, researched 2026-09-23).** The adapter declares them through the same §0.3 mechanism as Google: a `settings.ts` with a Speed panel whose speed field offers `standard` ("Standard", "Full price. Images in under two minutes.") and `batch` ("Batch", "Half price. Runs in the background and is ready within 24 hours."), plus Openfield's Limits panel.
+- **No Flex, no Priority.** The Images API has no `service_tier` parameter, and OpenAI's Flex and Fast mode (the renamed Priority) cover only the Responses and Chat Completions APIs, with no image model on either pricing tab.
+- **Batch on `gpt-image-2` only.** Its model page lists Batch as supported. Sunburst and Flare list it as not supported and are absent from the Batch pricing tab, so they declare no `batch` offer and run at Standard with the §3.6 note. The `batch` offer on `gpt-image-2` is `per_token` at half the Standard rates: image input $4.00, cached $1.00, output $15.00; text input $2.50, cached $0.625 per 1M tokens, with the same `outputTokenTable`.
+- **Batch mechanics** (`batch.ts`). Each run uploads one JSONL file (`POST /v1/files`, `purpose=batch`) with one line per job, `{custom_id: <jobId>, method: "POST", url: "/v1/images/generations", body}` and `n: 1`, so each tile fails on its own like Google's. It then calls `POST /v1/batches {input_file_id, endpoint, completion_window: "24h", metadata: {openfield_job_set: <jobSetId>}}`, which `find()` matches through `GET /v1/batches`. Status values map `validating`→`queued`, `in_progress`/`finalizing`→`running`, `completed`→`succeeded`, `failed`, `expired`, `cancelling`/`cancelled`→`canceled`. Results come from `output_file_id` and `error_file_id` via `GET /v1/files/{id}/content`, matched on `custom_id`, because line order isn't guaranteed. Cancel is `POST /v1/batches/{id}/cancel`, and `cancelling` can last up to 10 minutes. `24h` is the only window. Unfinished requests fail with `batch_expired` (mapped to `timeout`), while finished ones are billed and returned. Limits: 50 000 requests or 200 MB per file, one model per file. `networkHosts` stays `["api.openai.com"]`.
+- **Edits at Batch** need `/v1/images/edits` as a JSON body (`images: [{image_url}]` with a data URL, `mask: {image_url}`). OpenAI's batch guide doesn't confirm JSON over multipart for images, so M1 declares the offer with `ops: ["generate"]` and an edit on a Batch setting runs at Standard with the §3.6 note until `M2-15` confirms it.
+
 **Known gaps.** Seed unconfirmed. `n` ceilings per quality/size unclear — we cap at 4 and surface any provider rejection as `invalid_request` naming the batch field. Maximum reference-image count undocumented (we declare 4). Mask polarity and the `usage` block are both unconfirmed and both close with `M2-15`. No character-identity feature. Long runs can approach two minutes; the placeholder tile shows its "Still working" line on the §2.4 schedule.
 
 ### 6.15 Launch adapter — Higgsfield (conditional, experimental)
@@ -3144,12 +3504,25 @@ Eleven sections write requirements into a screen no section owned. Settings is a
 
 Rules that hold across every pane: secrets are write-only (§6.11); everything that is not a secret or a boot-time value lives in the `settings` table as a JSON value keyed by the `settings` key below, reached through `GET`/`PATCH /api/settings` (§8.3); a pane never invents a default — the owning section does. Panes render in this order and each one states, in one line at the top, what it can and cannot see (e.g. Usage: *"Tracked on this computer. Your actual bill may differ."*).
 
+**Company settings modal.** Each company's settings open in a modal, never inline under the key.
+- **Entry.** Every provider card in API keys carries a **Settings** button in all five card states (Connected, Not connected, Key rejected, Checking, Set outside), so a person can choose a speed before adding a key. The inline region under the card, which held "Runs at once", is removed.
+- **Layout** (design bTybF). It uses the `Modal` primitive from `packages/ui`, 800 wide, titled "Google settings" (the company's `displayName`) beside its logo tile. A panel list, 220 wide, sits on the left as a vertical `role="tablist"` that scrolls when it runs long: the company's own panels in declared order under the company's name, then Openfield's **Limits** panel under "Openfield". Speed has a timer icon, a panel whose fields only show at some speeds an hourglass, Limits sliders. The selected panel's heading, description and fields fill the right, in a 500-tall area that scrolls. There is no footer: `Esc` and the close button close it, and focus returns to the card's Settings button (§2.11).
+- **Rendering.** The modal draws only what `GET /api/providers/:id/settings` returns (§0.3), with no per-company code:
+  - a select renders as option cards (design LfT4U, Kdwou, K0Hklk), each with the option's label, its one-line description, an availability badge when only some models offer it ("Nano Banana Pro only"), and, when the option changes what a run costs, its price range per image in mono numerals ("$0.017–0.12 per image"). A speed option is priced at its speed across the models that offer it; another option is priced at its `priceAt` speed across the models the field matters for;
+  - a toggle renders as a switch and a number as the shared stepper, in rows inside one card, and text or a typed number as a single-line input;
+  - a field whose `showWhen` reads a field in the same panel is hidden while it fails. One whose `showWhen` reads a field in another panel stays in view, muted (the checked card keeps its selected look at half opacity), under a panel note that names the condition and the current value ("Only used when Speed is Flex. Your speed is Batch.") with a ghost action that opens that panel ("Change speed"), design q5RpC;
+  - under a speed field set to a speed whose runs arrive later, a note says Batch runs keep going with Openfield closed and when the company stops them.
+- **Saving.** Each change saves at once through `PATCH /api/providers/:id/settings`, like every other setting, and applies to the next run without a restart. The panel header says "Saved" for a moment once the server has it. Runs already sent keep the values they were sent with (§0.3). A failed save puts the control back and shows an error toast in §0.15's voice ("Couldn't save this setting. Try again.").
+- **Other ways in.** A failed tile whose company refused the chosen speed offers **Google settings**, which opens this modal on the API keys pane (§0.5).
+- **Storage.** Company panels live in `providers.settings`, a JSON object of only the values the person changed. The Limits panel's "Runs at once" lives in `providers.concurrency_cap` (§8.2). Neither is a `settings`-table key, because the fields come from each adapter rather than from `settingsSchema`.
+
 | Pane | Setting | `settings` key | Default | Specified in |
 |---|---|---|---|---|
 | API keys | Your keys (per provider, write-only; env-var badge when overridden) | *(none — `config.json`, mode 0600)* | unset | §6.11 |
 | API keys | Check key · last 4 characters · last error | *(read-only, from `providers` table)* | — | §6.2, §8.2 |
 | API keys | Custom server address (OpenAI and compatible services) | *(none — `config.json`)* | `null` | §6.14, §6.16, §6.18 |
-| API keys | Runs at once, per company | *(`providers.concurrency_cap`)* | openai 2 · google 4 · higgsfield 2 | §0.12 |
+| API keys → company settings modal | The company's own panels, e.g. Google's Speed and When it's busy | *(`providers.settings`, JSON, via `/api/providers/:id/settings`)* | each field's declared default: Speed `standard`, When Flex is busy `wait` | §0.3, §6.13, §6.14 |
+| API keys → company settings modal → Limits | Runs at once, per company | *(`providers.concurrency_cap`, via the same route)* | openai 2 · google 4 · higgsfield 2 | §0.12 |
 | Models | Update model list · last checked | `modelRefreshedAt` | — | §6.4 |
 | Models | Check for new models every | `modelRefreshHours` | `24` | §6.4 |
 | Models | **Not supported**: discovered ids (read-only list) | *(from `RefreshReport`)* | — | §6.4 |
@@ -3180,7 +3553,7 @@ Rules that hold across every pane: secrets are write-only (§6.11); everything t
 | Experimental | Also save canvases as files | `canvasFileWriteThrough` | `false` | §7.8 |
 | Experimental | Upscale plugin: the program to run (it reads one image and writes a larger copy) | `upscaleCommandPath` | `null` | §7.5, §4.8 |
 
-**Acceptance criteria.** (1) Every setting the rest of the PRD references appears in exactly one row above, with the same key the API returns. (2) A pane with no configured provider still renders and tells the user what to do next (§2.10's first-run path). (3) Changing any row writes through `PATCH /api/settings` and takes effect without a restart, except `OPENFIELD_HOME` and the server port, which say so inline.
+**Acceptance criteria.** (1) Every setting the rest of the PRD references appears in exactly one row above, with the same key the API returns. (2) A pane with no configured provider still renders and tells the user what to do next (§2.10's first-run path). (3) Changing any row writes through `PATCH /api/settings` and takes effect without a restart, except `OPENFIELD_HOME` and the server port, which say so inline, and except company settings, which write through `PATCH /api/providers/:id/settings`. (4) Every provider card, in every state, opens its company's modal from a Settings button; the modal lists the company's panels then Limits, and nothing about company settings renders inline under a card. (5) Choosing Batch in Google settings changes the Generate sub-label on the next render (§3.8 criterion 13).
 
 ### 6.18 Open questions
 
@@ -3194,6 +3567,10 @@ Every item below is a **provider fact we could not verify**, and each names the 
 - **Higgsfield public API reach** — real endpoint paths beyond Soul v2 standard, the style-id catalogue, rate limits, and whether any documented cost endpoint exists. None of it was observable in the UI walkthrough (the observed traffic was the product's private endpoints, which we do not build against, §1.11). Closed by **`M3-16`**, which builds the adapter and verifies these facts with the owner's real key; if it does not resolve, the adapter ships `meta.stable: false` behind Settings → Experimental and nothing else changes.
 - ~~Whether to allow a user-supplied provider `baseUrl` override in v1.~~ **Closed at `M0-05`: deferred to the v1.1 OpenAI-compatible provider.** No launch adapter reads a custom address, and honouring one would widen the host allow-list (§0.6), so `PATCH /api/providers/:id` takes only `enabled` and `concurrencyCap`, and `providers.base_url` stays unused until then. A company with `enabled = false` makes no outbound call: new runs are refused, queued runs wait, and its models count as not ready.
 - **Price-refresh feasibility** — whether any launch provider exposes a machine-readable price document worth wiring `refreshPricing()` to, or whether the `~/.openfield/prices.json` overlay is the whole story for v1. Closed by **`M3-11`**.
+- **Flex and Priority on Nano Banana Pro.** Google's pricing page (2026-09-22) prices both; its model page (2026-09-03) says "Not supported", and the Flex and Priority guides list no image model. One `serviceTier: "flex"` and one `"priority"` request to `gemini-3-pro-image` with a billed key, reading `usageMetadata.serviceTier`, settles it. Closed by **`M0.5-12`**; on a rejection or a silent Standard answer, the two offers leave Pro's `speeds`.
+- **Whether Google bills a Flex request it refuses as busy**, and **whether batch requests finished before a cancel are billed**. Google's docs are silent on both. Openfield records neither as spend on a refusal and records canceled batch items as billed-but-discarded (§0.12). Closed by **`M0.5-12`** where the live session can observe it; otherwise stays open.
+- **Size of an inline batch result.** Google documents no cap on a `GET /v1beta/batches/{id}` response carrying N inline 4K images. Measured in **`M0.5-12`**; if it is too large, results switch to file output.
+- **Google key and error shapes from community sources.** The `AQ.` key prefix (§6.11) and the free-tier "limit 0" 429 body that means billing is off (§6.13) are documented only in community reports. Both nets are deliberately loose; confirmed or adjusted in **`M0.5-12`**.
 
 ---
 ## 7. Canvas
@@ -3253,7 +3630,7 @@ The landing page for the workspace, mirroring the observed index layout.
 
 ### 7.4 Editor chrome (`/canvas/{id}`)
 
-**Top bar.** Left: Openfield mark with a chevron menu (Back to canvases, Back to Create, Settings) followed by a name pill `Untitled ⌄`; the pill's menu is **Version history · Rename · Duplicate · Export… · Delete**. The name is also editable by double-clicking the pill. Right: a save-state chip (`Saved` / `Saving…` / `Offline. Retrying…`) and the run controls (`Run all`, and `Stop` while anything is in flight). No avatar, no bell, no Share, no Chat — single user, no auth, no telemetry.
+**Top bar.** Left: Openfield mark with a chevron menu (Back to canvases, Back to Create, Settings) followed by a name pill `Untitled ⌄`; the pill's menu is **Version history · Rename · Duplicate · Export… · Delete**. The name is also editable by double-clicking the pill. Right: a save-state chip (`Saved` / `Saving…` / `Offline. Trying again…`) and the run controls (`Run all`, and `Stop` while anything is in flight). No avatar, no bell, no Share, no Chat — single user, no auth, no telemetry.
 
 **The pane.** Infinite canvas on `var(--of-surface)`, dotted background (`<Background variant="dots" gap={24} size={1} />`) drawn in `var(--of-border)`. **Every colour in this section is a §2.2 `--of-` token; no raw hex or rgba literal appears anywhere in §7** (§0.1). Node surfaces are `var(--of-elevated)` with a `1px solid var(--of-border)` frame; selection, active ports and the run pill use `var(--of-accent)` on `var(--of-accent-fg)`. The reference product's lime accent is not reproduced.
 
@@ -3418,7 +3795,7 @@ A safety rail: any single run whose fan-out exceeds **32 jobs** requires explici
 
 **Concurrency and priority.** Canvas runs enqueue job sets into the **same queue as the composer** — one queue, one set of provider connections, one usage log. Defaults: `globalConcurrency = 4` (§8.4.2), further clamped per provider by `min(providers.concurrency_cap, capabilities.limits.maxConcurrent)`. Scheduling is `job_sets.priority DESC, job_sets.created_at, jobs.idx` with round-robin across providers: composer runs and single-node canvas runs enqueue at priority **10**, run-downstream and run-all at **5**, so a 30-node batch cannot starve a user who just hit Generate. The numbers live in §8.4.2 and §0.12; this section states none of its own. Queued nodes display their position.
 
-**Cancellation.** The node's `×` cancels that node's job set (§8.3); the top bar's *Stop* cancels the whole run via `POST /api/canvases/:id/runs/:runId/cancel`. Nodes not yet started go `canceled` synchronously, nothing spent. **Neither launch adapter implements provider-side cancel (§6.13, §6.14), so canceling a run already sent aborts our fetch only: the provider may complete and bill the work, and no asset is produced.** The usage log records it at full estimate with `discarded = 1`, and the node's `canceled` band reads *"Canceled. You may still be charged for work that already started."* (§0.12, §0.13.)
+**Cancellation.** The node's `×` cancels that node's job set (§8.3); the top bar's *Stop* cancels the whole run via `POST /api/canvases/:id/runs/:runId/cancel`. Nodes not yet started go `canceled` synchronously, nothing spent. **Neither launch adapter implements provider-side cancel for a sync call (§6.13, §6.14), so canceling a run already sent aborts our fetch only: the provider may complete and bill the work, and no asset is produced.** A node running at the Batch speed cancels its provider batch instead (§0.12). The usage log records it at full estimate with `discarded = 1`, and the node's `canceled` band reads *"Canceled. You may still be charged for work that already started."* (§0.12, §0.13.)
 
 **Cost preview (M4-18).** Every run pill shows the estimated cost for that node at its current settings, computed locally from the manifest by the pure `estimate(manifest, req)` function (§0.13) — no round-trip per stepper click. Any multi-node run first opens a confirmation popover, populated by the same run request with `dryRun: true` (which returns `estimate` and `skipped[]` without enqueuing anything):
 
@@ -3492,7 +3869,7 @@ Estimates come from the manifest's pricing snapshot (§6, §0.13), always carry 
 
 **Storage.** The document of record is the `graph` JSON column of the **`canvases`** row, with snapshots in **`canvas_versions`** and the card image at `preview_path`; §8.2's Drizzle schema owns both tables and this section restates none of it. A Settings toggle additionally write-throughs each save to `~/.openfield/canvases/{id}.json`, so a user can keep their graphs in git.
 
-**Autosave.** Local state is the source of truth while editing; mutations flow through a single `applyOp(doc, op)` reducer. Saves are **debounced 800 ms** after the last mutation, force-flushed every 10 s while dirty, and flushed on blur, route change and `beforeunload`. The request is `PATCH /api/canvases/:id` (§8.3) carrying the full document plus `graphVersion`; if the server's version has moved (two browser tabs on the same canvas), the save is rejected with `conflict` (§0.5) and the editor shows a non-destructive banner — *"This canvas changed in another tab"* — with **Reload** / **Keep mine**. The save-state chip in the top bar always reflects reality (`Saved` / `Saving…` / `Offline. Retrying…`, with exponential backoff).
+**Autosave.** Local state is the source of truth while editing; mutations flow through a single `applyOp(doc, op)` reducer. Saves are **debounced 800 ms** after the last mutation, force-flushed every 10 s while dirty, and flushed on blur, route change and `beforeunload`. The request is `PATCH /api/canvases/:id` (§8.3) carrying the full document plus `graphVersion`; if the server's version has moved (two browser tabs on the same canvas), the save is rejected with `conflict` (§0.5) and the editor shows a non-destructive banner — *"This canvas changed in another tab"* — with **Reload** / **Keep mine**. The save-state chip in the top bar always reflects reality (`Saved` / `Saving…` / `Offline. Trying again…`, with exponential backoff).
 
 **Undo/redo.** Client-side command stack, **100 entries**, `⌘Z` / `⇧⌘Z`. Continuous gestures coalesce: a drag is one entry, a burst of typing coalesces on a 500 ms idle. Undo covers add/delete/move/resize/collapse, param changes, edge add/delete/reconnect, paste, group/ungroup, and template application. Undo **does not** un-generate: undoing a run clears the node's `result` pointer, but the asset it produced stays in the library (it was paid for and may be referenced elsewhere). Redo re-attaches the same asset ids without re-running. Undo and redo never cancel an in-flight run, and a node with a run in flight refuses reparenting and deletion — the full rule is in 7.7.
 
@@ -3649,7 +4026,7 @@ Everything Openfield owns lives in one directory, referred to internally as `OPE
 
 **Paths in the database are always relative to `OPENFIELD_HOME`** (`assets/2026/09/23/01K6….png`). Copying `~/.openfield` to another machine, another OS or an external drive is a complete, working migration. No absolute path, no drive letter, no username ever enters the db.
 
-**Split of config vs settings.** `config.json` holds only secrets and boot-time values (provider keys, port, home). Everything else — default model, default aspect ratio, feed zoom step, concurrency caps, thumbnail quality, trash retention — lives in the `settings` table, so the db can be backed up, inspected or shared without leaking a key. Env vars override `config.json` at read time and are never written back: `OPENFIELD_OPENAI_API_KEY` (falling back to `OPENAI_API_KEY`), `OPENFIELD_GOOGLE_API_KEY` (→ `GOOGLE_API_KEY`/`GEMINI_API_KEY`), `OPENFIELD_HIGGSFIELD_KEY_ID` + `OPENFIELD_HIGGSFIELD_KEY_SECRET` (the researched Higgsfield auth is `Authorization: Key ${id}:${secret}`).
+**Split of config vs settings.** `config.json` holds only secrets and boot-time values (provider keys, port, home). Everything else — default model, default aspect ratio, feed zoom step, concurrency caps, thumbnail quality, trash retention — lives in the `settings` table, so the db can be backed up, inspected or shared without leaking a key. Company settings (§0.3) live in the db too, on `providers.settings` and `providers.concurrency_cap`, never in `config.json`: they hold no secret by rule. Env vars override `config.json` at read time and are never written back: `OPENFIELD_OPENAI_API_KEY` (falling back to `OPENAI_API_KEY`), `OPENFIELD_GOOGLE_API_KEY` (→ `GOOGLE_API_KEY`/`GEMINI_API_KEY`), `OPENFIELD_HIGGSFIELD_KEY_ID` + `OPENFIELD_HIGGSFIELD_KEY_SECRET` (the researched Higgsfield auth is `Authorization: Key ${id}:${secret}`).
 
 ---
 
@@ -3692,6 +4069,10 @@ export const PALETTE_MODES        = ["prompt", "reference", "both"] as const;
 export const CANVAS_RUN_SCOPES    = ["node", "downstream", "all", "selection"] as const;
 export const USAGE_OUTCOMES       = ["succeeded", "failed", "canceled"] as const;
 export const COST_SOURCES         = ["reconciled", "estimated", "unknown"] as const;
+export const SPEED_IDS            = ["standard", "flex", "priority", "batch"] as const;           // §0.3
+export const BATCH_STATES         = ["submitting", "queued", "running",
+                                     "succeeded", "failed", "canceled", "expired"] as const;     // §6.7
+export const ACTIVE_BATCH_STATES  = ["submitting", "queued", "running"] as const;
 // ERROR_CODES (§0.5) lives here too. error_code columns are typed with it and carry no CHECK.
 ```
 
@@ -3715,7 +4096,7 @@ export const json = <T>(name: string) => text(name, { mode: "json" }).$type<T>()
 // packages/db/src/schema/providers.ts
 import { check, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { AUTH_KINDS, CREDENTIAL_SOURCES, MODALITIES, MODEL_SOURCES } from "@openfield/core/constants";
-import type { Capabilities, PriceModel } from "@openfield/core/schemas";
+import type { Capabilities, PriceModel, ProviderSettingValues, SpeedOffer } from "@openfield/core/schemas";
 import { flag, json, oneOf } from "./_helpers";
 
 // No secret ever lands here. credential_ref is a POINTER into config.json / env.
@@ -3734,6 +4115,8 @@ export const providers = sqliteTable("providers", {
   lastError:        text("last_error"),
   createdAt:        text("created_at").notNull(),
   updatedAt:        text("updated_at").notNull(),
+  settings:         json<ProviderSettingValues>("settings"),        // company settings the person changed (§0.3);
+                                                                    // NULL: every default. Migration 0003
 }, () => [
   check("providers_auth_kind_check", oneOf("auth_kind", AUTH_KINDS)),
   check("providers_credential_source_check", oneOf("credential_source", CREDENTIAL_SOURCES)),
@@ -3755,6 +4138,7 @@ export const models = sqliteTable("models", {
   sortOrder:    integer("sort_order").notNull().default(0),
   discoveredAt: text("discovered_at"),
   updatedAt:    text("updated_at").notNull(),
+  speeds:       json<SpeedOffer[]>("speeds"),                     // cache of manifest.speeds (§0.3). Migration 0003
 }, (t) => [
   primaryKey({ columns: [t.providerId, t.modelId] }),
   check("models_modality_check", oneOf("modality", MODALITIES)),
@@ -3766,8 +4150,9 @@ export const models = sqliteTable("models", {
 // packages/db/src/schema/jobs.ts
 import { sql } from "drizzle-orm";
 import { check, index, integer, real, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
-import { ACTIVE_JOB_STATES, ERROR_CODES, JOB_SET_STATES, JOB_SOURCES, JOB_STATES, OPS } from "@openfield/core/constants";
-import type { NormalizedRequest } from "@openfield/core/schemas";
+import { ACTIVE_BATCH_STATES, ACTIVE_JOB_STATES, BATCH_STATES, ERROR_CODES, JOB_SET_STATES, JOB_SOURCES,
+         JOB_STATES, OPS, SPEED_IDS } from "@openfield/core/constants";
+import type { BatchHandle, NormalizedRequest } from "@openfield/core/schemas";
 import { json, oneOf } from "./_helpers";
 import { providers } from "./providers";
 import { canvases, canvasRuns } from "./canvas";
@@ -3800,12 +4185,16 @@ export const jobSets = sqliteTable("job_sets", {
   createdAt:       text("created_at").notNull(),
   startedAt:       text("started_at"),
   finishedAt:      text("finished_at"),
+  speed:           text("speed", { enum: SPEED_IDS }).notNull().default("standard"),  // resolved speed for this
+                                                                      // model (§0.3), a copy of request_json.speed so
+                                                                      // tiles and queries needn't parse JSON. Migration 0003
 }, (t) => [
   check("job_sets_op_check", oneOf("op", OPS)),
   // UI cap is 4 (observed parity); raising it requires a migration and a manifest change.
   check("job_sets_batch_size_check", sql`batch_size BETWEEN 1 AND 4`),
   check("job_sets_status_check", oneOf("status", JOB_SET_STATES)),
   check("job_sets_source_check", oneOf("source", JOB_SOURCES)),
+  check("job_sets_speed_check", oneOf("speed", SPEED_IDS)),
   index("idx_job_sets_created").on(sql`created_at DESC`),
   // Scheduler selection order (§0.12): priority DESC, then created_at, then jobs.idx.
   index("idx_job_sets_sched").on(sql`priority DESC`, t.createdAt).where(oneOf("status", ACTIVE_JOB_STATES)),
@@ -3834,12 +4223,50 @@ export const jobs = sqliteTable("jobs", {
   finishedAt:     text("finished_at"),
   errorReason:    text("error_reason"),                               // our tile copy when it says more than §0.5's row
                                                                       // (migration 0002, so the column sits last)
+  speedUsed:      text("speed_used", { enum: SPEED_IDS }),            // what the provider says it served (§0.13); NULL
+                                                                      // until the job ends. Migration 0003
+  errorAction:    text("error_action", { enum: ERROR_ACTIONS }),      // the failed tile's button when it isn't §0.5's
+                                                                      // row for the code; NULL: the row's. Migration 0004
 }, (t) => [
   unique("jobs_job_set_id_idx_unique").on(t.jobSetId, t.idx),
   check("jobs_status_check", oneOf("status", JOB_STATES)),
+  check("jobs_speed_used_check", oneOf("speed_used", SPEED_IDS)),     // NULL passes: NULL IN (…) is not false
   // Queue scan and crash recovery: tiny partial index, always hot.
   index("idx_jobs_active").on(t.status, t.nextAttemptAt).where(oneOf("status", ACTIVE_JOB_STATES)),
   index("idx_jobs_job_set").on(t.jobSetId, t.idx),
+]);
+
+// One row per job set that runs at the Batch speed: the provider batch carrying its N requests
+// (§0.4, §6.7). Written in state 'submitting' BEFORE the create call, so a crash mid-call can be
+// recovered by display name instead of resent (creating a batch is not idempotent).
+export const providerBatches = sqliteTable("provider_batches", {
+  id:             text("id").primaryKey(),                            // ULID
+  jobSetId:       text("job_set_id").notNull().unique()
+                    .references(() => jobSets.id, { onDelete: "cascade" }),   // one provider batch per run
+  providerId:     text("provider_id").notNull().references(() => providers.id),
+  modelId:        text("model_id").notNull(),
+  remoteId:       text("remote_id"),                                  // the provider's id; NULL until create returns
+  displayName:    text("display_name").notNull(),                     // 'openfield-<jobSetId>', what batch.find() matches
+  state:          text("state", { enum: BATCH_STATES }).notNull().default("submitting"),
+  handle:         json<BatchHandle>("handle"),                        // the adapter's resume data (§6.7)
+  itemCount:      integer("item_count").notNull(),
+  credentialHint: text("credential_hint"),                            // last 4 of the key it was sent with; a batch
+                                                                      // belongs to that key's project
+  submittedAt:    text("submitted_at"),
+  expiresAt:      text("expires_at"),                                 // from the provider (Google: create + 48 h)
+  lastPolledAt:   text("last_polled_at"),
+  nextPollAt:     text("next_poll_at"),                               // the §0.12 schedule, persisted across restarts
+  finishedAt:     text("finished_at"),
+  notifiedAt:     text("notified_at"),                                // finish toast and notification sent once (§2.4)
+  cleanedAt:      text("cleaned_at"),                                 // batch.cleanup() done at the provider
+  errorCode:      text("error_code", { enum: ERROR_CODES }),          // one of §0.5 ErrorCode, for a whole-batch failure
+  errorMessage:   text("error_message"),                              // detail for the error log, never shown
+  createdAt:      text("created_at").notNull(),
+  updatedAt:      text("updated_at").notNull(),
+}, (t) => [
+  check("provider_batches_state_check", oneOf("state", BATCH_STATES)),
+  // The watcher's scan: active batches by next poll. Tiny, always hot.
+  index("idx_provider_batches_active").on(t.state, t.nextPollAt).where(oneOf("state", ACTIVE_BATCH_STATES)),
 ]);
 ```
 
@@ -4103,7 +4530,7 @@ export const canvasRuns = sqliteTable("canvas_runs", {
 // packages/db/src/schema/usage.ts
 import { sql } from "drizzle-orm";
 import { check, index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { COST_SOURCES, OPS, USAGE_OUTCOMES } from "@openfield/core/constants";
+import { COST_SOURCES, OPS, SPEED_IDS, USAGE_OUTCOMES } from "@openfield/core/constants";
 import type { UsageUnits } from "@openfield/core/schemas";
 import { flag, json, oneOf } from "./_helpers";
 
@@ -4129,9 +4556,12 @@ export const usageLog = sqliteTable("usage_log", {
   discarded:   flag("discarded", 0),                                  // canceled after submit: billed but no asset
   latencyMs:   integer("latency_ms"),
   httpStatus:  integer("http_status"),
+  speed:       text("speed", { enum: SPEED_IDS }),                    // the speed billed (§0.13). Migration 0003
+  simulated:   flag("simulated", 0),                                  // written in fake mode: cost 0, never in a total
 }, (t) => [
   check("usage_log_outcome_check", oneOf("outcome", USAGE_OUTCOMES)),
   check("usage_log_cost_source_check", oneOf("cost_source", COST_SOURCES)),
+  check("usage_log_speed_check", oneOf("speed", SPEED_IDS)),
   index("idx_usage_ts").on(sql`ts DESC`),
   index("idx_usage_model").on(t.providerId, t.modelId, sql`ts DESC`),
 ]);
@@ -4205,6 +4635,9 @@ CREATE INDEX idx_job_sets_sched     ON job_sets(priority DESC, created_at)
   WHERE status IN ('pending','submitting','queued','running');
 CREATE INDEX idx_job_sets_canvas    ON job_sets(canvas_id, canvas_node_id);
 CREATE INDEX idx_job_sets_run       ON job_sets(canvas_run_id);
+-- Batch watcher: active provider batches by next poll (§0.12).
+CREATE INDEX idx_provider_batches_active ON provider_batches(state, next_poll_at)
+  WHERE state IN ('submitting','queued','running');
 
 CREATE INDEX idx_ref_set_items      ON reference_set_items(set_id, position);
 
@@ -4285,11 +4718,23 @@ SELECT DISTINCT a.*, an.depth FROM ancestors an JOIN assets a ON a.id = an.id OR
 **Crash recovery on boot** (§8.4.5):
 
 ```sql
-SELECT j.*, js.provider_id, js.model_id
+SELECT j.*, js.provider_id, js.model_id, js.speed
 FROM jobs j JOIN job_sets js ON js.id = j.job_set_id
 WHERE j.status IN ('pending','submitting','queued','running')
 ORDER BY js.priority DESC, js.created_at, j.idx;
 ```
+
+Jobs whose set runs at `batch` are left to the batch pass, which runs first:
+
+```sql
+SELECT * FROM provider_batches
+WHERE state IN ('submitting','queued','running')         -- hits idx_provider_batches_active
+ORDER BY created_at;
+```
+
+The watcher's tick reads the same index: `… WHERE state IN ('submitting','queued','running') AND next_poll_at <= :now`.
+
+**Unannounced finished batches** (for the SSE `snapshot`, §0.6): `SELECT … FROM provider_batches WHERE finished_at IS NOT NULL AND notified_at IS NULL`.
 
 **Usage rollup for the cost panel**:
 
@@ -4300,11 +4745,12 @@ SELECT substr(ts,1,10) AS day, provider_id, model_id,
        SUM(CASE WHEN discarded = 1        THEN COALESCE(cost_usd,0) ELSE 0 END) AS usd_discarded
 FROM usage_log
 WHERE ts >= :from AND outcome IN ('succeeded','canceled')
+  AND simulated = 0                              -- fake-mode rows never count (§0.13)
 GROUP BY day, provider_id, model_id
 ORDER BY day DESC, usd DESC;
 ```
 
-Failures are excluded from both sums by construction: they are written with `cost_usd = 0` and `cost_source = 'unknown'` (§0.13). `usd_discarded` is the "Canceled but charged" line — work a provider may have charged for after a cancel, with no asset to show for it. It is reported beside the spend total, never folded into it silently.
+Failures are excluded from both sums by construction: they are written with `cost_usd = 0` and `cost_source = 'unknown'` (§0.13). Fake-mode rows are excluded by `simulated = 0`, in this rollup, in "Spent today", in the spend guard and in the CSV totals. `usd_discarded` is the "Canceled but charged" line — work a provider may have charged for after a cancel, with no asset to show for it. It is reported beside the spend total, never folded into it silently.
 
 **Library stats** (Settings → Storage): `SELECT COUNT(*), SUM(bytes) FROM assets WHERE deleted_at IS NULL;` plus a `thumbs/` directory walk cached for 60 s.
 
@@ -4341,6 +4787,15 @@ END;
 ```
 
 Soft delete fires no trigger and none is added (§0.7). The rebuild after a restore (§0.7, §8.6) runs at boot, not in a migration. Any later object Drizzle can't model (an index drizzle-kit can't emit exactly, per 8.2.1) goes in a new custom migration. A committed file is never edited.
+
+**Migration 0003, provider settings and speed** (`M0.5-03`). A generated migration, made with `bun run db:generate --name=provider_settings_speed` after the schema edits above, so the file is `0003_provider_settings_speed.sql`. It contains:
+- `ALTER TABLE … ADD` for the two nullable JSON columns with no CHECK: `providers.settings` and `models.speeds`.
+- `job_sets.speed` (`NOT NULL DEFAULT 'standard'`), `jobs.speed_used`, `usage_log.speed` and `usage_log.simulated` (`NOT NULL DEFAULT 0`). Their new named CHECKs make drizzle-kit rebuild those three tables (`__new_<table>`), which is safe because foreign keys are off while migrations run (8.2.4). Existing rows come out as Standard runs and real spend.
+- `CREATE TABLE provider_batches`, its unique index `provider_batches_job_set_id_unique` and `idx_provider_batches_active`. If drizzle-kit drops the partial index's `WHERE`, the index moves to a custom migration under the same name, per 8.2.1.
+
+`packages/db/test/schema.test.ts` gains the new CHECK lists (checked against `SPEED_IDS` and `BATCH_STATES`), the new index, and `provider_batches`' foreign keys (`job_set_id` cascades, `provider_id` references `providers`).
+
+**Migration 0004, job error action.** One generated `ALTER TABLE jobs ADD error_action text` (`0004_job_error_action.sql`), nullable and with no CHECK, like `error_code`: the failed tile's button when it isn't §0.5's row for the code.
 
 #### 8.2.4 Migrations on boot
 
@@ -4404,19 +4859,21 @@ All provider traffic originates in this process, and outbound connections are re
 | `GET` | `/api/health` | Liveness, version and the newest applied migration | → `{ok, version, schema, home}`, where `schema` is the migration tag, e.g. `0001_assets_fts` (§8.2.4) |
 | `GET` | `/api/providers` | Provider list with credential status | → `[{id, displayName, enabled, credentialSource, credentialHint, lastOkAt, lastError, concurrencyCap}]` |
 | `PATCH` | `/api/providers/:id` | Enable/disable, per-provider cap (no custom address in v1, §6.18) | `{enabled?, concurrencyCap?}` → provider |
+| `GET` | `/api/providers/:id/settings` | The company settings modal and the composer's speed (§0.3, §6.17). Works with or without a key | → `{schema, values}`: `schema` is a `ProviderSettingsSchema` holding the adapter's panels then Openfield's Limits panel; `values` holds every field, stored values over defaults, `concurrencyCap` from `providers.concurrency_cap`. A company that declares no settings still returns the Limits panel |
+| `PATCH` | `/api/providers/:id/settings` | Save company settings. New runs use them; runs already sent keep theirs | `{values: {<fieldId>: value, …}}`, any subset → the same shape as `GET`. Each key must be a declared field and each value legal for its kind, options and range, else `400 bad_request` naming the field. `concurrencyCap` writes `providers.concurrency_cap` and ticks the scheduler; every other key merges into `providers.settings`, and a value equal to its default is removed from the stored object |
 | `GET` | `/api/models` | Model registry + capability manifests (drives every chip in the composer, §3/§6) | `?provider=&modality=&refresh=0\|1` → `{models:[{providerId, modelId, displayName, family, badges, capabilities, pricing, source, updatedAt}], staleAt}` |
 | `POST` | `/api/models/refresh` | Force runtime discovery per provider; falls back to shipped manifest | `{providerId?}` → `{added, updated, removed, errors:[]}` |
 | `GET` | `/api/models/:providerId/:modelId` | One manifest (capability gating for a deep-linked model) | → model |
-| `POST` | `/api/models/:providerId/:modelId/estimate` | Cost estimate for server-side callers and the canvas run-all preview | `{op, prompt, params, batch}` → `{min, max, confidence:'exact'\|'estimated'\|'unknown', basis:string, pricedAt}` — `CostEstimate` exactly (§0.13) |
+| `POST` | `/api/models/:providerId/:modelId/estimate` | Cost estimate for server-side callers and the canvas run-all preview, priced at the speed the company's settings resolve to for this model (§0.13) | `{op, prompt, params, batch}` → `{min, max, confidence:'exact'\|'estimated'\|'unknown', basis:string, pricedAt}` — `CostEstimate` exactly (§0.13) |
 | `POST` | `/api/generate` | Create a job set. `op: 'generate'` only. Returns **immediately** with N placeholder jobs | see 8.3.1 |
 | `POST` | `/api/edit` | Create a job set for every other `Op` (§0.4), **same body type** as `/api/generate` | §6.5's `GenerateRequest` verbatim, with `op` ≠ `'generate'`, `base` as the source asset, `mask: {assetId, invert?, featherPx?}`, `batch` and flat params (§0.6, §0.9) → same shape as `/api/generate` (8.3.1) |
 | `POST` | `/api/masks` | Upload a painted mask as an internal asset (`multipart/form-data`, PNG, must match the base asset's pixel dimensions) | → `{asset}` with `kind='mask'`, `mime='image/png'` |
 | `GET` | `/api/job-sets` | Active or historical job sets | `?status=active\|all&cursor=&limit=` → `{items, nextCursor}` |
-| `GET` | `/api/job-sets/:id` | One job set with its jobs and any produced assets | → `{jobSet, jobs:[], assets:[]}` |
-| `POST` | `/api/job-sets/:id/cancel` | Cancel every non-terminal job in the set | → `{canceled:[jobId], notCancelable:[jobId]}` |
+| `GET` | `/api/job-sets/:id` | One job set with its jobs and any produced assets | → `{jobSet, jobs:[], assets:[], batch?}`. `jobSet.speed` is always present; `batch` (`{state, submittedAt, expiresAt, counts?}`) only for a Batch run |
+| `POST` | `/api/job-sets/:id/cancel` | Cancel every non-terminal job in the set. For a Batch run this cancels the provider batch (§0.12): images not sent yet cancel at once, sent ones are `stopping` until the company stops | → `{canceled:[jobId], notCancelable:[jobId], stopping?:[jobId]}` |
 | `POST` | `/api/job-sets/:id/recreate` | **Recreate** (§0.1): replay the frozen `NormalizedRequest` in `request_json` as a new job set | → 202, same shape as `/api/generate` |
 | `POST` | `/api/job-sets/:id/retry` | Re-submit after failure, reusing the same frozen request | `{onlyFailed?:bool}` → new job set |
-| `POST` | `/api/jobs/:id/cancel` | Cancel one output | → `{ok}` |
+| `POST` | `/api/jobs/:id/cancel` | Cancel one output. On a Batch run it cancels the whole run, like the set route, because one provider batch can't lose one request (§0.12) | → `{ok}` |
 | `GET` | `/api/events` | **SSE** stream of job/asset/registry events (§8.4.6) | `?since=<eventId>` → `text/event-stream` |
 | `GET` | `/api/assets` | Feed / library listing | `?cursor=&limit=50&folder=&favourite=1&q=&model=&provider=&kind=&from=&to=&modality=image` → `{items:[{id,width,height,mime,sha256,modelId,createdAt,isFavourite,thumbUrl,fileUrl}], nextCursor}` |
 | `GET` | `/api/assets/:id` | Detail payload for the dialog's Info tab | → `{asset, jobSet, params, references:[asset], lineage:{ancestors,children}, folders:[], isFavourite}` |
@@ -4462,7 +4919,7 @@ All provider traffic originates in this process, and outbound connections are re
 | `PUT` | `/api/settings/keys/:providerId` | Save a key to `config.json` (0600) | `{apiKey}` or `{keyId, keySecret}` → `{present, source, hint}` |
 | `DELETE` | `/api/settings/keys/:providerId` | Remove the stored key | → `{present:false}` |
 | `POST` | `/api/settings/keys/:providerId/test` | Cheapest possible authenticated call | → `{ok, latencyMs, error?}` |
-| `GET` | `/api/usage` | Usage/cost rollup | `?from=&to=&groupBy=day\|model\|provider` → `{rows:[], totalUsd, currency:'USD'}` |
+| `GET` | `/api/usage` | Usage/cost rollup. Totals skip `simulated` rows (§0.13) | `?from=&to=&groupBy=day\|model\|provider` → `{rows:[], totalUsd, currency:'USD'}` |
 | `GET` | `/api/usage/export.csv` | CSV of `usage_log` | → `text/csv` |
 | `GET` | `/api/stats` | Counts + disk usage for Settings → Storage | → `{assets, bytes, thumbsBytes, dbBytes, trash:{count,bytes}}` |
 | `POST` | `/api/maintenance/gc` | Orphan sweep (§8.6) | `{dryRun?:bool}` → `{orphanFiles, missingRows, staleThumbs, reclaimedBytes}` |
@@ -4529,11 +4986,15 @@ data: {"jobId":"01K6BQ8…A","asset":{"id":"01K6BR…","width":1536,"height":204
 event: job_set.completed
 id: 1047
 data: {"jobSetId":"01K6BQ8…","status":"succeeded","costActualUsd":0.268,"durationMs":17420}
+
+event: batch.updated
+id: 1052
+data: {"jobSetId":"01K6BT2…","providerId":"google","state":"succeeded","submittedAt":"…","expiresAt":"…","counts":{"total":4,"succeeded":4,"failed":0,"pending":0},"finished":true}
 ```
 
-Event types (§0.6): `snapshot`, `job_set.created`, `job.queued`, `job.started`, `job.progress`, **`job.partial`**, `job.output`, `job.failed`, `job.canceled`, `job_set.completed`, `asset.updated`, `asset.deleted`, `folder.updated`, `models.updated`, `usage.updated`, **`canvas_run.updated`**, `maintenance.progress`.
+Event types (§0.6): `snapshot`, `job_set.created`, `job.queued`, `job.started`, `job.progress`, **`job.partial`**, `job.output`, `job.failed`, `job.canceled`, `job_set.completed`, **`batch.updated`**, `asset.updated`, `asset.deleted`, `folder.updated`, `models.updated`, `usage.updated`, **`canvas_run.updated`**, `maintenance.progress`.
 
-**Partial frames are written to `tmp/` and served from a volatile thumb path; they are never inserted into `assets`, and each is superseded by the final `job.output`.** This event is what terminates `ImageModel.stream?()` and `capabilities.streaming.partialImages`; without it §6.14's streaming declaration and §7.5's streamed node previews have no wire representation. `canvas_run.updated` carries `{runId, canvasId, status, nodes:[{nodeId, state}]}` and is what lets a reloaded canvas re-attach to a run in flight.
+**Partial frames are written to `tmp/` and served from a volatile thumb path; they are never inserted into `assets`, and each is superseded by the final `job.output`.** This event is what terminates `ImageModel.stream?()` and `capabilities.streaming.partialImages`; without it §6.14's streaming declaration and §7.5's streamed node previews have no wire representation. `canvas_run.updated` carries `{runId, canvasId, status, nodes:[{nodeId, state}]}` and is what lets a reloaded canvas re-attach to a run in flight. `batch.updated` (§0.6) is sent on every provider batch state change; the one with `finished: true` drives the finish toast and system notification (§2.4). The server stamps `provider_batches.notified_at` when that frame has been written to at least one connected client, and until then the batch rides in every `snapshot`'s `batches`, so a browser that was closed when the run finished still hears about it once.
 
 Every event carries a monotonically increasing `id`; on reconnect the browser's `EventSource` sends `Last-Event-ID` and the server replies with a fresh `snapshot` rather than a replay log — active state is small and always derivable from the db, so there is nothing to keep an event table for.
 
@@ -4578,6 +5039,8 @@ One `POST /api/generate` writes one `job_sets` row (with its frozen `request_jso
 
 Fan-out is adapter-decided: if the model's manifest declares **`batch.native === true`** (OpenAI `n`, Higgsfield `batch_size`), the adapter makes **one** provider call and maps its outputs onto the N `jobs` rows in `idx` order; otherwise the scheduler issues N independent calls, one per job row, each with its own seed where seeds are supported. Either way the UI sees N jobs and N placeholder tiles — the wire behaviour is an adapter detail.
 
+**Batch runs** take neither path. When the scheduler picks the first job of a job set whose `speed` is `batch`, it takes the whole set: it writes the `provider_batches` row, calls `batch.submit()` once with all N requests, and hands the row to the batch watcher (`apps/server/src/runner/batches.ts`). The watcher owns polling, harvest, the finish notice, cleanup and cancel, and emits `batch.updated` plus the ordinary `job.*` events so tiles need no second event path (§0.4).
+
 #### 8.4.2 Concurrency and fairness
 
 **§8.4.2 owns these numbers; §3.6, §6.7 and §7.7 cross-reference them and state none of their own (§0.12).**
@@ -4595,6 +5058,11 @@ Fan-out is adapter-decided: if the model's manifest declares **`batch.native ===
 | `attemptTimeoutMs` | from `capabilities.limits.requestTimeoutMs` (default 120 000 generate, 300 000 upscale) | **Per attempt** |
 | `jobDeadlineMs` | 900 000 | Whole-job wall clock across all attempts |
 | `maxAttempts` | 3 | Attempt 1 + 2 retries |
+| Flex `attemptTimeoutMs` | the offer's `requestTimeoutMs`, 900 000 on Google | §0.12 |
+| Flex `jobDeadlineMs` | 3 600 000 | Busy waits included |
+| Flex busy backoff | 30 s, 60 s, 120 s, then 300 s, ±20 % | Not counted toward `maxAttempts` |
+| Batch poll schedule | 30 s for 10 min, 2 min until 1 h, then 5 min | 1 s steps in fake mode |
+| Batch deadline | provider expiry + 6 h | Then `timeout` |
 
 A single per-job wall clock of 180 s does not compose with a 150 s per-attempt timeout — it makes `maxAttempts: 3` unreachable — so the two are separated: the attempt timeout comes from the manifest, the whole-job deadline is 15 minutes.
 
@@ -4605,6 +5073,8 @@ A single per-job wall clock of 180 s does not compose with a 150 s per-attempt t
 Retry only on the four `retryable` codes of §0.5 — `network`, `timeout`, `rate_limited`, `provider_unavailable` (HTTP 408/425/429/500/502/503/504, network timeouts, aborted sockets, provider queue errors). Everything else fails immediately and is shown to the user with §0.5's copy for its code; the provider's own message goes to the Error log.
 
 Backoff is exponential with full jitter: 1 s, 4 s, 15 s (±20 %). A `Retry-After` header always wins over the computed delay. `jobs.attempt` and `jobs.next_attempt_at` persist the schedule so a restart mid-backoff resumes correctly; `jobs.idempotency_key` is reused on every attempt, so a retry can never bill twice. When some jobs in a set succeed and others exhaust retries, the set lands in `partial`, the feed shows the successful tiles plus an inline error tile per failure with a one-click **Try again** that calls `POST /api/job-sets/:id/retry {onlyFailed:true}`.
+
+Two speeds change this (§0.4). A Flex busy answer (`busy: true`) requeues the job on the busy backoff without spending an attempt, until the Flex deadline. A Batch run is never retried by the runner, whatever the code: a failed item fails its job, and **Try again** sends the failed images as a new run, at the speed frozen on the request, which is a new provider batch.
 
 Every terminal outcome — success, failure, cancel — writes a `usage_log` row. **A failed job writes a row with `cost_usd = 0` and `cost_source = 'unknown'`; no cost is ever added to a spend total for a failure** (§0.13). A job canceled after submit writes a row at full estimate with `discarded = 1`, which is what the Usage screen's "Canceled but charged" line sums.
 
@@ -4617,7 +5087,9 @@ Every terminal outcome — success, failure, cancel — writes a `usage_log` row
 3. If the adapter implements `cancel()`, call it and mark `canceled` on acknowledgement.
 4. If it does not, mark `canceled`, stop polling, discard any late result, and write a `usage_log` row at **full estimate with `discarded = 1`**.
 
-**Neither launch adapter implements provider-side `cancel()`**, so step 4 is the path every v1 cancellation takes: the provider may complete and bill the work, and no asset is produced. The copy is the same on the tile, the canvas node band and the toast, verbatim: *"Canceled. You may still be charged for work that already started."* We do not imply a refund we cannot deliver.
+**Neither launch adapter implements provider-side `cancel()`**, so step 4 is the path every v1 cancellation of a sync call takes: the provider may complete and bill the work, and no asset is produced. The copy is the same on the tile, the canvas node band and the toast, verbatim: *"Canceled. You may still be charged for work that already started."* We do not imply a refund we cannot deliver.
+
+**Batch runs take step 3**, through `batch.cancel()`, for the whole run at once, after the §2.4 confirm. Images that finished before the provider stopped are harvested and kept; the rest become `canceled` with a discarded usage row at the Batch estimate (§0.12). A job still `pending` in a Batch run whose create call hasn't started is canceled synchronously, like step 1.
 
 #### 8.4.5 Crash recovery
 
@@ -4627,7 +5099,10 @@ On boot, after `openDb()` has applied migrations (§8.2.4), the recovery pass ru
 |---|---|
 | `jobs.status IN ('pending','queued')` | Re-enqueue as-is |
 | `status IN ('submitting','running')` **with** `provider_job_id` **and** adapter supports status polling | Resume a watcher from the provider's status endpoint; the run is not re-billed |
-| `status IN ('submitting','running')` **without** a `provider_job_id`, or adapter is fire-and-forget | Mark `interrupted`; the job set shows "Interrupted." with a one-click **Try again**. Never auto-resubmit: that risks double-billing |
+| `status IN ('submitting','running')` **without** a `provider_job_id`, or adapter is fire-and-forget | Mark `interrupted`; the job set shows "Interrupted." with a one-click **Try again**. Never auto-resubmit: that risks double-billing. This includes a Flex call that was in flight: the open call died with the process |
+| `provider_batches` with a `remote_id` and an active state | Poll it at once and resume the watcher on the §0.12 schedule. Its jobs keep their `queued`/`running` state and are **not** interrupted: the run lives at the provider, not in this process |
+| `provider_batches` in `submitting` without a `remote_id` | `batch.find(display_name)`. Found: store the id and resume as above. Not found, or the adapter has no `find`: mark the row `failed` and its jobs `interrupted`. The lookup couldn't run (no key, the company off, the network down): keep the row and look again on the batch schedule until the deadline |
+| A finished `provider_batches` row with `notified_at` NULL | Keep it for the next client's `snapshot` (§8.3.2); run `batch.cleanup()` if `cleaned_at` is NULL |
 | `canvas_runs` with a non-terminal status | Recompute from its job sets; emit `canvas_run.updated` so a reopened canvas re-attaches |
 | `job_sets` with all jobs terminal but a non-terminal set status | Recompute set status from its jobs |
 | Asset rows whose file is absent | `file_state='missing'`; tile renders a broken-file state reading "File missing." with **Locate** and **Delete** |
@@ -4739,7 +5214,7 @@ C2PA signing is explicitly out of scope for v1 — noted as a v1.1 candidate, no
 
 ### 8.7 Delivery plan
 
-Five milestones. Each is independently demoable and ends with a working app; nothing is "integrated later". Tasks are ordered and sized to become GitHub issues verbatim.
+Six milestones: M0.5 was inserted after M0 shipped, for provider settings and speed. Each is independently demoable and ends with a working app; nothing is "integrated later". Tasks are ordered and sized to become GitHub issues verbatim.
 
 #### M0 — Skeleton, settings, one adapter end-to-end
 
@@ -4764,11 +5239,30 @@ Five milestones. Each is independently demoable and ends with a working app; not
 17. `M0-16` **First run (§2.10)**: launch → no-key empty state → Keys → paste key → Check key → default model auto-selected → composer focused. This exact path is the G5/S1 gate.
 18. `M0-17` **Settings shell (§6.17)**: left-rail IA — API keys · Models · Defaults · Appearance · Storage · Spending · Privacy · Help · Experimental — with the settings-key table wired to `GET/PATCH /api/settings`. Screens fill in across M1–M3; the IA lands here because eleven sections write requirements into it. Per §0.15 a pane joins the rail once something on it works: Experimental's switches (`showExperimental`, `canvasFileWriteThrough`) change nothing until M3-16 and M4, so the pane appears with them.
 
+#### M0.5 Provider settings and speed
+
+**Definition of done:** in fake mode, Settings → API keys → Google → **Settings** opens the Google settings modal (Speed, When it's busy, then Limits) from every card state, and nothing renders inline under the card. Choosing Batch changes the Generate sub-label to half the Standard estimate with the line "Batch". Generating two images shows two "Waiting at Google" tiles; restarting the server leaves them waiting, never interrupted; when the batch finishes, both images land, one toast shows, and a system notification shows where permission was given. Flex set on Nano Banana 2 shows "Standard for this model" and runs at Standard. Spent today stays $0.00 in fake mode. With a real billed key, Batch and Flex runs are logged at half price with their speed. The Vite dev server runs on 4318.
+
+1. `M0.5-01` **Contracts** (`packages/core`): `SPEED_IDS`, `BATCH_STATES`, `ACTIVE_BATCH_STATES`; `speedOfferSchema` and `ModelManifest.speeds` (§0.3); `provider-settings.ts` with the settings schema, the five rules as refinements, the route bodies and Openfield's Limits panel; `NormalizedRequest.speed`, `speedRequested` and `providerSettings` (§0.6); `BatchState` and `BatchHandle`; the `batch.updated` SSE frame, `snapshot.batches`, and `retryAt`/`busy` on `job.queued`; `jobSet.speed` on the wire; `ProviderError.busy` and `JobResult.speedUsed`; `CallContext.settings` and `speed`; i18n strings for every copy line in §0.5, §2.4, §3.6, §6.13 and §6.17.
+2. `M0.5-02` **Pure helpers** (`@openfield/providers/manifest`): `resolveSpeed`, `priceFor` and `resolveProviderSettings` (§0.3); `estimate()` pricing at `req.speed` with the speed in `basis` (§0.13). Unit tests cover fallback per model and per op, hidden fields, stale stored values and every Google price in §6.13.
+3. `M0.5-03` **Database**: migration 0003 (§8.2.3), the query helpers for company settings, `provider_batches` and the watcher's scans, `simulated = 0` in every spend total, and the schema test.
+4. `M0.5-04` **Settings routes and normalize**: `GET`/`PATCH /api/providers/:id/settings` (§8.3) with validation, the Limits field wired to `providers.concurrency_cap`; `normalize()` resolves and freezes speed and settings; the runner builds `ctx.settings` and `ctx.speed` from the frozen copy (§6.2).
+5. `M0.5-05` **Runner, sync speeds**: per-speed attempt timeouts and deadlines, the server fetch never cutting a Flex call short, the Flex busy policy (§0.4, §0.12), cost from `speedUsed`, `jobs.speed_used`, `usage_log.speed`, and fake mode writing $0 with `simulated = 1` (§0.13).
+6. `M0.5-06` **Batch runner** (`apps/server/src/runner/batches.ts`): submit with the row written first, find-before-resend, the poll schedule, harvest by job id, whole-run cancel, cleanup, the deadline, crash recovery (§8.4.5), `notified_at` and `batch.updated`.
+7. `M0.5-07` **Google adapter**: `settings.ts` (Speed, When it's busy), `speeds` and prices per §6.13, top-level `serviceTier`, `speedUsed`, Flex busy mapping, `batch.ts` (inline, then Files API references over about 19 MB), rejected-speed mapping, the billing-needed reason (§0.5). Fixtures and `#fake:` scenarios: `flex_busy` (every other Flex call busy, so a retry gets through), `priority_standard` (served at Standard), `batch_slow` (waits long enough to cancel or restart the server), `batch_partial` (every other image fails), `batch_expired` and `batch_failed` (no images). An untagged fake batch follows the clock: about 1.5 s waiting, then each image in turn over 2.5 s, polled every second in fake mode. README updated.
+8. `M0.5-08` **Company settings modal** (`apps/web/src/settings/provider-settings-modal.tsx`, §6.17): the Settings button on every card state, the panel list and the field renderers (select as option cards with descriptions, availability badges and price ranges; toggle; number; text), conditions on another panel shown muted with a note, save on change with "Saved", Limits last; the inline region under the card removed.
+9. `M0.5-09` **Composer and picker**: the estimate at the resolved speed, the Generate speed line and "Standard for this model" with its tooltip (§3.6), the model picker price hint (§3.4.1), and the Info tab's Speed row (§4.3).
+10. `M0.5-10` **Tiles and notices** (§2.4): Flex lines, the Batch waiting tile, whole-run cancel with its confirm, the finish toast, the system notification with the one-time permission ask and quiet degrade, and the live-region line.
+11. `M0.5-11` **Key shapes** (§6.11): `AQ.` keys in `redact.ts`, `google/errors.ts` and the bundle secret scan in `scripts/check-bundle.ts`, each with tests.
+12. `M0.5-12` **Live probe, blocking release but not merge**, with a billed Google key: one Flex and one Priority request to `gemini-3-pro-image`, reading `usageMetadata.serviceTier`; one small Batch run; a busy refusal if one can be provoked; the size of an inline 4K batch result; the `AQ.` prefix and the free-tier 429 body. Fixtures recorded, §6.13 and §6.18 updated, and Pro's `speeds` trimmed if Google rejects or ignores Flex or Priority.
+13. `M0.5-13` **Dev port**: Vite on 4318 with `strictPort` in `scripts/dev.ts`, `apps/web/vite.config.ts` (server, HMR and preview) and `VITE_ORIGIN` in `apps/server/src/http/spa.ts`; the guards test's dev origin; README, CONTRIBUTING and §0.16.
+14. `M0.5-14` **E2E** in fake mode: the modal from each card state, Speed changing the Generate label, a Batch run surviving a server restart and finishing with a toast, notification permission denied degrading to the toast alone, and Spent today staying $0.00.
+
 #### M1 — Feed and composer parity
 
 **Definition of done:** the Image tab matches the observed layout's geometry in our own branding: justified-row virtualised feed on the §0.10 ladder with 2 px gaps, the floating composer at 1116×142 with capability-driven chips, model picker with search and **Recent / by company / Needs a key** sections, batch stepper 1–4, placeholders with correct aspect ratio and a working Cancel, tile hover overlay with multi-select, and the local prompt enhancer (disabled with a reason when no text-capable key is configured). Two providers are live (Google + OpenAI).
 
-1. `M1-01` OpenAI GPT Image adapter (generate + `n` fan-in, quality/size/background/format params, token-cost estimation).
+1. `M1-01` OpenAI GPT Image adapter (generate + `n` fan-in, quality/size/background/format params, token-cost estimation), with its speeds declared through the §0.3 mechanism built in M0.5: a `settings.ts` Speed panel offering Standard and Batch, a `batch` offer on `gpt-image-2` only (`ops: ["generate"]`, half the Standard token rates), a `batch.ts` over `/v1/files` and `/v1/batches` implementing the §6.7 `BatchApi`, and no Flex or Priority (§6.14). Fixtures and `#fake:batch-*` scenarios match Google's.
 2. `M1-02` Capability-driven chip renderer: the composer builds its chip row from the manifest, hiding or disabling what a model cannot do (§3.5, §0.3).
 3. `M1-03` Chip popovers: aspect ratio (proportional glyph rows, per-model lists), quality, resolution, background, prompt-enhance toggle — anchored above the chip, check on selected.
 4. `M1-04` Model picker popover: 402×642, search, **Recent / by company / Needs a key** sections (§3.4.1 — not the reference product's editorial Featured/All), 56 px rows, provider icon, capability-derived badges, selected state; deep link `?model=<providerId>:<modelId>`.
@@ -4807,7 +5301,7 @@ Five milestones. Each is independently demoable and ends with a working app; not
 13. `M2-13` Export with embedded metadata (PNG/WebP/JPEG) + sidecar option + bulk ZIP + the re-encode watermark warning.
 14. `M2-13a` **Metadata writer spike — blocking `M2-13`.** Confirm PNG `tEXt`/`iTXt` plus the legacy `parameters` chunk round-trip, and WebP XMP/EXIF round-trip, under Bun; pick the library and record a fixture.
 15. `M2-14` Trash, restore, Empty trash, the optional daily purge when `trashRetentionDays` is set (default `null`: never purge automatically), and the `file_state='missing'` tile state.
-16. `M2-15` **Live probe of OpenAI `/v1/images/edits`: mask polarity, dimension and format requirements.** Fixture recorded, §6.14's manifest note updated. **Blocking prerequisite for `M2-05` and `M2-06`** — we do not ship a mask tool against an unverified polarity.
+16. `M2-15` **Live probe of OpenAI `/v1/images/edits`: mask polarity, dimension and format requirements**, and whether a batch line can carry an edit as a JSON body (§6.14 Speeds); if it can, the `gpt-image-2` batch offer widens to `ops: ["generate", "edit", "inpaint"]`. Fixture recorded, §6.14's manifest note updated. **Blocking prerequisite for `M2-05` and `M2-06`** — we do not ship a mask tool against an unverified polarity.
 17. `M2-16` Colour grading: local WebGL stack (exposure, contrast, temp/tint, saturation/vibrance, lift/gamma/gain, grain, bloom, halation, vignette), `.cube` import/export, Match reference by local 3D histogram matching. **Preset names are Openfield's own.** Writes `generative = 0`, `provider_id = 'local'`, cost $0.00.
 18. `M2-17` LAYERS panel: base + mask + local overlays (text, shapes, grade) with visibility, reorder, rename, merge. Generative layer decomposition is a visible disabled plugin slot.
 19. `M2-18` Text-detect edit: `ops.detectText` on a configured multimodal model returns `{id,text,bbox}[]` under a strict JSON schema; editing a line issues an `edit`/`inpaint`. Disabled with a reason when no multimodal model is configured.
@@ -4947,7 +5441,8 @@ Five milestones. Each is independently demoable and ends with a working app; not
 | R13 | **Higgsfield adapter may be impossible to ship** — style listing, character training and canvas endpoints are undocumented | Medium / Medium | The adapter is conditional by design: it is built and verified with the owner's real key in `M3-16`, and ships only if a user key can reach the documented Soul endpoint. Its absence changes nothing structurally, because every Higgsfield-specific feature already has an open substitute (rows 21–24, 33 above) |
 | R14 | **Canvas graph schema evolves and breaks saved canvases** | Medium / Medium | `canvases.schema_version` plus a forward document migration per bump in `packages/core/src/canvas/migrations/` (separate from the SQL migrations in `packages/db/migrations/`), applied lazily on open with a version snapshot taken first; unknown node types render as a labelled placeholder rather than dropping data |
 | R15 | **SQLite write contention or corruption** | Low / High | WAL, single writer inside the server process, `busy_timeout`, every multi-row mutation in a transaction, `PRAGMA integrity_check` on the backup path, atomic `rename()` for every file write |
-| R16 | **Scope creep across five milestones** | High / Medium | **§0.14 is the scope contract**: anything it lists as deferred or dropped needs an explicit decision to move, and each milestone's definition of done is the release gate. §8.8 records status against the observation notes and has no authority to add or cancel scope — that ambiguity is what let a checklist row quietly veto seven features §3 and §4 specify in full |
+| R16 | **Scope creep across six milestones** | High / Medium | **§0.14 is the scope contract**: anything it lists as deferred or dropped needs an explicit decision to move, and each milestone's definition of done is the release gate. §8.8 records status against the observation notes and has no authority to add or cancel scope — that ambiguity is what let a checklist row quietly veto seven features §3 and §4 specify in full |
+| R17 | **Speed facts drift or were never true**: Google's pages disagree on Flex and Priority for Nano Banana Pro, and Priority can quietly serve Standard | Medium / Medium | Speeds are manifest data with their own prices and sources (§0.3), so trimming an offer is a data change. Cost always follows the speed the provider reports (§0.13). A rejected speed fails with a plain reason that points at the setting (§0.5). The live probe `M0.5-12` blocks release |
 
 ---
 
@@ -5021,6 +5516,10 @@ Rolled up from the per-section lists after reconciliation. Each item is a decisi
 - **Higgsfield public API reach** — real endpoint paths beyond Soul v2 standard, the style-id catalogue, rate limits, and whether any documented cost endpoint exists. None of it was observable in the UI walkthrough (the observed traffic was the product's private endpoints, which we do not build against, §1.11). Closed by **`M3-16`**, which builds the adapter and verifies these facts with the owner's real key; if it does not resolve, the adapter ships `meta.stable: false` behind Settings → Experimental and nothing else changes.
 - ~~Whether to allow a user-supplied provider `baseUrl` override in v1.~~ Closed at **`M0-05`**: deferred to the v1.1 OpenAI-compatible provider (§6.18).
 - **Price-refresh feasibility** — whether any launch provider exposes a machine-readable price document worth wiring `refreshPricing()` to, or whether the `~/.openfield/prices.json` overlay is the whole story for v1. Closed by **`M3-11`**.
+- **Flex and Priority on Nano Banana Pro**: Google's pricing and model pages disagree. Closed by the live probe **`M0.5-12`** (§6.18).
+- **Billing of refused Flex requests and of batch items finished before a cancel**: undocumented. **`M0.5-12`** where observable (§6.18).
+- **Inline batch result size** with 4K images: undocumented. Measured in **`M0.5-12`** (§6.18).
+- **The `AQ.` key prefix and the free-tier "limit 0" 429 body** rest on community sources. Confirmed in **`M0.5-12`** (§6.18).
 
 **§7**
 
