@@ -15,9 +15,9 @@ bun install
 OPENFIELD_FAKE_PROVIDERS=1 OPENFIELD_HOME=/tmp/openfield-dev bun dev
 ```
 
-Open <http://127.0.0.1:4317>. `bun dev` also needs port 5173 free for Vite, so stop any other Vite dev server first.
+Open <http://127.0.0.1:4317>. `bun dev` also runs Vite on port 4318 (`strictPort`), so it never clashes with another project's Vite on 5173. If something else holds 4318, it says so and stops. The server proxies every page request to Vite, so you only ever open 4317; the port is set in `scripts/dev.ts`, `apps/web/vite.config.ts` and `apps/server/src/http/spa.ts`.
 
-With `OPENFIELD_FAKE_PROVIDERS=1` every model call is answered on your computer, so you need no real key and spend nothing: paste any text as the key in **Settings > API keys**, as long as it doesn't contain "invalid". A `#fake:<scenario>` tag in a prompt (for example `#fake:rate_limited`) plays back that failure. The scenario names are `FAKE_SCENARIOS` in `packages/providers/src/testing/types.ts`, with underscores; the README lists them. `OPENFIELD_HOME` keeps your dev data away from your real library. Drop both to test against the real APIs with your own key.
+With `OPENFIELD_FAKE_PROVIDERS=1` every model call is answered on your computer, so you need no real key and spend nothing: paste any text as the key in **Settings > API keys**, as long as it doesn't contain "invalid". A `#fake:<scenario>` tag in a prompt (for example `#fake:rate_limited`) plays back that failure. The scenario names are `FAKE_SCENARIOS` in `packages/providers/src/testing/types.ts`, with underscores; the README lists them, including the ones for speeds (`#fake:flex_busy`, `#fake:batch_slow`, …). Fake runs are logged at $0 and never count toward "Spent today". `OPENFIELD_HOME` keeps your dev data away from your real library. Drop both to test against the real APIs with your own key.
 
 ## Layout and import rules
 
@@ -74,7 +74,7 @@ bunx playwright install chromium             # once
 bun run e2e                                  # end-to-end, fake models, no keys needed
 ```
 
-Add or update tests with every change. Adapter changes need fixtures and a passing conformance run. Live conformance (`OPENFIELD_CONFORMANCE=live`) uses real keys and costs money, so it runs only before a release, never in CI.
+Add or update tests with every change. Adapter changes need fixtures and a passing conformance run. Each e2e suite gets its own server on a free port with a throwaway library (`e2e/serve.ts`); `restartServer()` in `e2e/support.ts` restarts it mid-test on the same library, for runs that must survive a restart, such as Batch. Live conformance (`OPENFIELD_CONFORMANCE=live`) uses real keys and costs money, so it runs only before a release, never in CI.
 
 Before you open a pull request, run what CI runs:
 

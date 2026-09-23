@@ -121,6 +121,12 @@ export function findBuiltinImports(code: string): string[] {
 const SECRET_PATTERNS: { kind: string; re: RegExp }[] = [
   // Bounded on both sides so a long inlined base64 asset can't produce a false match.
   { kind: "Google API key", re: /(?<![A-Za-z0-9+/_-])AIza[0-9A-Za-z_-]{35}(?![0-9A-Za-z_-])/g },
+  // The newer auth keys AI Studio makes by default (§6.11). Google doesn't document their length, so
+  // the net is loose; a digit is required so minified code like `AQ.getBoundingClientRect` never trips it.
+  {
+    kind: "Google API key",
+    re: /(?<![A-Za-z0-9+/_.$-])AQ\.(?=[0-9A-Za-z_-]*\d)[0-9A-Za-z_-]{20,}(?![0-9A-Za-z_-])/g,
+  },
   { kind: "OpenAI API key", re: /(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}/g },
   { kind: "x-goog-api-key header value", re: /x-goog-api-key["'`]?\s*[:,=]\s*["'`][^"'`\s]{8,}["'`]/gi },
   { kind: "Bearer token", re: /Bearer\s+(?!\$\{)[A-Za-z0-9._~+/=-]{20,}/g },

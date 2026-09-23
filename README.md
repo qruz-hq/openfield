@@ -15,7 +15,7 @@ bun dev
 
 Open <http://127.0.0.1:4317>, go to **Settings > API keys**, paste a key and pick **Check key**. Then write a prompt and generate.
 
-`bun dev` also needs port 5173 for the web app, so stop any other Vite dev server first. If the port is taken, it tells you and stops.
+`bun dev` also runs the web app's dev server on port 4318, beside the app's own 4317, so it doesn't clash with other Vite projects on 5173. If 4318 is taken, it tells you and stops. You always open the app on 4317.
 
 ## Requirements
 
@@ -71,6 +71,25 @@ Openfield sends your prompt, reference images, masks and settings to the company
 
 Each company is one adapter in `packages/providers/src/<name>/`. It describes what each model can do, and the app builds its controls from that description, so a model only shows the settings it supports. Adding a company is a pull request: see [Adding a provider](docs/adding-a-provider.md).
 
+### Speed and company settings
+
+Each company's own settings open from **Settings > API keys > Settings** on its card. An adapter declares them as panels of fields, and Openfield draws them, saves them and hands them to the adapter on every run. Openfield's own **Limits** panel comes last, with **Runs at once**.
+
+Google's **Speed** panel offers the speeds on [its pricing page](https://ai.google.dev/gemini-api/docs/pricing), priced per image:
+
+| Speed | What it means | Models |
+|---|---|---|
+| Standard | Images arrive in seconds. Works on every model. | All three |
+| Flex | Half price. Takes 1 to 15 minutes, and Google may turn it down when busy. | Nano Banana Pro |
+| Batch | Half price. Ready within a day, often sooner. Google stops a batch after 48 hours. | All three |
+| Priority | About 80% more. Stays fast when Google is busy. | Nano Banana Pro |
+
+Google's **When it's busy** panel picks what happens when Google turns down a Flex run: keep trying at Flex price, or switch to Standard. It only applies while Speed is Flex.
+
+The speed is chosen only there, not in the composer. A model without the chosen speed runs at Standard, and every price for it says so: the Generate button reads "Standard for this model", and the model picker, the key card and Settings > Models add "· Standard". Estimates, the usage log and **Spent today** follow the speed a run actually used. Google's image models need billing turned on for the key; there is no free tier for them.
+
+A Batch run keeps going at Google even if you close Openfield. Its tiles say "Waiting at Google" and offer **Cancel**, which stops the whole run; the tiles say "Stopping at Google" until Google has. Openfield checks on it after a restart, and when it's done you get a toast and, if you allow it, a system notification. The browser asks once, the first time you send a Batch run.
+
 ## Running without keys
 
 ```sh
@@ -85,13 +104,20 @@ To see a failure, put a tag in the prompt, for example `#fake:rate_limited`. The
 |---|---|
 | `#fake:bad_key` | The key is rejected |
 | `#fake:forbidden` | The key can't use this model |
-| `#fake:no_billing` | The key is out of credit |
+| `#fake:no_billing` | Billing isn't turned on for the key |
 | `#fake:rate_limited` | Too many requests |
 | `#fake:invalid` | The settings didn't work |
 | `#fake:server_error`, `#fake:unavailable` | The company's server had a problem |
 | `#fake:blocked`, `#fake:refused`, `#fake:no_image` | The model wouldn't make the image |
 | `#fake:foreign_asset` | The image came from a site the adapter didn't declare |
+| `#fake:flex_busy` | Flex is busy on the first try, then the image (set Speed to Flex) |
+| `#fake:priority_standard` | A Priority run served, and billed, at Standard (set Speed to Priority) |
+| `#fake:batch_slow` | A Batch run that waits about 30 seconds, long enough to cancel it or restart Openfield |
+| `#fake:batch_partial` | A Batch run where every other image fails |
+| `#fake:batch_expired`, `#fake:batch_failed` | A Batch run that ends with no images |
 | `#fake:success` | A normal image |
+
+Without a tag, a fake Batch run finishes a few seconds after it's sent. Fake runs cost nothing: they are logged at $0 and never count toward **Spent today**.
 
 Tags use underscores, not hyphens: an unknown tag is ignored and the run succeeds. The error answers are written from Google's documentation, not recorded from real calls yet ([why](packages/providers/src/google/__fixtures__/README.md)).
 
@@ -99,7 +125,7 @@ Tags use underscores, not hyphens: an unknown tag is ignored and the run succeed
 
 | Command | Does |
 |---|---|
-| `bun dev` | Runs the server and the Vite dev server together. Open <http://127.0.0.1:4317>. |
+| `bun dev` | Runs the server and the Vite dev server (port 4318) together. Open <http://127.0.0.1:4317>. |
 | `bun start` | Runs the server in production mode, serving the built web app. |
 | `bun run build` | Type-checks every workspace, then builds `apps/web` to `apps/web/dist`. |
 | `bun run typecheck` | Type-checks every workspace, the end-to-end tests and `scripts/`. |

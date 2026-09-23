@@ -137,6 +137,20 @@ describe("secret scan", () => {
     }
   });
 
+  test("finds Google's newer AQ. keys too, without flagging minified property access", () => {
+    const aq = "AQ.Xy7FakeTmZ0xq-4F_w9TtY2kPz1QbV7cD3eH5jK8mN0pR";
+    const found = scanForSecrets("assets/index.js", `const k="${aq}";`);
+    expect(found.map((f) => f.kind)).toEqual(["Google API key"]);
+    expect(found[0]?.preview).not.toContain(aq);
+    expect(scanForSecrets("a.js", `x=${aq}`)).toHaveLength(1);
+    // Mangled names and long property names are ordinary code.
+    expect(
+      scanForSecrets("a.js", "const r=AQ.getBoundingClientRectangles();AQ.addEventListenerOptions"),
+    ).toEqual([]);
+    expect(scanForSecrets("a.js", `obj.AQ.${"a1".repeat(15)}`)).toEqual([]);
+    expect(scanForSecrets("a.js", `url(data:image/png;base64,iVBOR${aq}Qm9v)`)).toEqual([]);
+  });
+
   test("finds literal x-goog-api-key values and bearer tokens", () => {
     expect(scanForSecrets("a.js", 'fetch(u,{headers:{"x-goog-api-key":"abcdefgh12345678"}})')).toHaveLength(
       1,

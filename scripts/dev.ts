@@ -6,7 +6,8 @@ import { join } from "node:path";
 const root = join(import.meta.dir, "..");
 const env = { ...process.env, OPENFIELD_DEV: "1" };
 const posix = process.platform !== "win32";
-const VITE_PORT = 5173;
+// Beside the server's 4317, not Vite's usual 5173, so another Vite project never takes it.
+const VITE_PORT = 4318;
 
 /** Vite needs its own port (§0.16). Say so plainly instead of failing after the server's URL. */
 function vitePortFree(): boolean {
