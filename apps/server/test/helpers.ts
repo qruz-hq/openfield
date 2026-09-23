@@ -177,3 +177,46 @@ export function googleError(status: number, grpcStatus: string, message: string)
     headers: { "content-type": "application/json" },
   });
 }
+
+export interface Frame {
+  id?: number;
+  event: string;
+  data: string;
+}
+
+/** Reads text/event-stream frames until `until` says stop. */
+export async function readFrames(
+  res: Response,
+  until: (frames: Frame[]) => boolean,
+  timeoutMs = 5_000,
+): Promise<Frame[]> {
+  const reader = res.body!.getReader();
+  const decoder = new TextDecoder();
+  const frames: Frame[] = [];
+  let buffer = "";
+  const timer = setTimeout(() => reader.cancel(), timeoutMs);
+  try {
+    while (!until(frames)) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let end = buffer.indexOf("\n\n");
+      while (end >= 0) {
+        const block = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        const frame: Frame = { event: "", data: "" };
+        for (const line of block.split("\n")) {
+          if (line.startsWith("id: ")) frame.id = Number(line.slice(4));
+          else if (line.startsWith("event: ")) frame.event = line.slice(7);
+          else if (line.startsWith("data: ")) frame.data += line.slice(6);
+        }
+        if (frame.event) frames.push(frame);
+        end = buffer.indexOf("\n\n");
+      }
+    }
+  } finally {
+    clearTimeout(timer);
+    await reader.cancel().catch(() => {});
+  }
+  return frames;
+}

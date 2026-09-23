@@ -21,6 +21,7 @@ import {
   createModelRegistry,
   type ImageModel,
   type ModelRegistry,
+  manifestOnly,
   type Provider,
   UnknownModelError,
 } from "@openfield/providers/server";
@@ -91,7 +92,7 @@ export class ModelService {
       const key = `${row.providerId}:${row.modelId}` as ModelKey;
       if (!provider?.recognise(row.modelId) || this.#manifests.has(key)) continue;
       try {
-        this.#manifests.set(key, manifestOf(provider.model(key)));
+        this.#manifests.set(key, manifestOnly(provider.model(key)));
       } catch {
         // No longer recognised by this build: it drops out of the list.
       }
@@ -257,6 +258,7 @@ export class ModelService {
         badges: m.badges ?? null,
         capabilities: m.capabilities,
         pricing: m.price,
+        speeds: m.speeds ?? null,
         source: m.source,
         sortOrder: i,
         discoveredAt: m.source === "discovered" ? now : null,
@@ -269,12 +271,6 @@ export class ModelService {
       removeModels(this.opts.db, id, stale);
     }
   }
-}
-
-/** The manifest half of a bound model. */
-function manifestOf(model: ImageModel): ModelManifest {
-  const { submit: _s, poll: _p, stream: _st, cancel: _c, estimateRemote: _e, ...manifest } = model;
-  return manifest;
 }
 
 /**

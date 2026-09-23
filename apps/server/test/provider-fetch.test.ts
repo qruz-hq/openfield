@@ -71,4 +71,14 @@ describe("the adapter's fetch", () => {
     });
     expect(away.calls).toHaveLength(1);
   });
+
+  test("only the call's own signal ends it: Bun's idle timer is off, so a long Flex call isn't cut", async () => {
+    const seen: unknown[] = [];
+    const base: FetchLike = async (_input, init) => {
+      seen.push((init as { timeout?: unknown } | undefined)?.timeout);
+      return new Response("ok");
+    };
+    await providerFetch(base, google, log)("https://generativelanguage.googleapis.com/v1beta/models");
+    expect(seen).toEqual([false]);
+  });
 });

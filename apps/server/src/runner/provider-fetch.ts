@@ -1,4 +1,4 @@
-import { t } from "@openfield/core";
+import { type SettingValue, type SpeedId, t } from "@openfield/core";
 import {
   type AssetSink,
   type CallContext,
@@ -15,6 +15,8 @@ import type { CredentialService } from "../services/credentials";
 // own networkHosts and assetHosts, no redirects to another host, and a redacted log line per call.
 
 const MAX_REDIRECTS = 3;
+/** Bun's own option: only the call's signal ends it, so its 5-minute idle timer can't cut Flex short. */
+const NO_IDLE_TIMEOUT = { timeout: false } as RequestInit;
 
 export function providerFetch(base: FetchLike, provider: Provider, log: RedactingLogger): FetchLike {
   const allowed = new Set(
@@ -40,7 +42,7 @@ export function providerFetch(base: FetchLike, provider: Provider, log: Redactin
     const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
     check(url);
     const started = performance.now();
-    let res = await base(input, { ...init, redirect: "manual" });
+    let res = await base(input, { ...init, ...NO_IDLE_TIMEOUT, redirect: "manual" });
 
     for (let hop = 0; isRedirect(res.status) && hop < MAX_REDIRECTS; hop++) {
       const next = new URL(res.headers.get("location") ?? "", url);
@@ -52,6 +54,7 @@ export function providerFetch(base: FetchLike, provider: Provider, log: Redactin
         method,
         headers: init?.headers ?? (input instanceof Request ? input.headers : undefined),
         signal: init?.signal ?? (input instanceof Request ? input.signal : undefined),
+        ...NO_IDLE_TIMEOUT,
         redirect: "manual",
       });
     }
@@ -65,6 +68,15 @@ export function providerFetch(base: FetchLike, provider: Provider, log: Redactin
 
 const isRedirect = (status: number) => status >= 300 && status < 400 && status !== 304;
 
+export interface ContextOptions {
+  /** A key being checked before it's saved. */
+  candidate?: ProviderConfig;
+  /** The run's frozen company settings (§0.3). Empty for calls that aren't runs. */
+  settings?: Readonly<Record<string, SettingValue>>;
+  /** The run's resolved speed. Standard for calls that aren't runs. */
+  speed?: SpeedId;
+}
+
 /**
  * Builds CallContexts for one provider at a time. Null when the provider has no usable key, or
  * was turned off: then nothing can reach its hosts (§0.6).
@@ -77,15 +89,14 @@ export class CallContexts {
     private readonly enabled: (providerId: string) => boolean = () => true,
   ) {}
 
-  /** `candidate` is a key being checked before it's saved. */
   for(
     provider: Provider,
     signal: AbortSignal,
     assets: AssetSink,
-    candidate?: ProviderConfig,
+    opts: ContextOptions = {},
   ): CallContext | null {
     if (!this.enabled(provider.meta.id)) return null;
-    const cred = this.credentials.resolve(provider.meta.id, candidate);
+    const cred = this.credentials.resolve(provider.meta.id, opts.candidate);
     if (!cred.present) return null;
     const log = this.logger.scoped(provider.meta.id);
     return {
@@ -95,6 +106,8 @@ export class CallContexts {
       log,
       now: Date.now,
       assets,
+      settings: opts.settings ?? {},
+      speed: opts.speed ?? "standard",
     };
   }
 }

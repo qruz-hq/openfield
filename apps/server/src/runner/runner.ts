@@ -1,6 +1,5 @@
 import {
   type CancelResponse,
-  errorCopy,
   type GenerateRequest,
   isTerminalState,
   type JobHandle,
@@ -11,23 +10,18 @@ import {
   newId,
   type Op,
   parseModelKey,
-  THUMB_RUNGS,
+  type SpeedId,
+  speedName,
   t,
-  type UsageUnits,
 } from "@openfield/core";
 import {
   activeJobs,
-  assetsForJobSets,
   createJobSet,
   type Db,
-  getAsset,
   getJob,
   getJobSet,
   getJobSetByIdempotencyKey,
   getProvider,
-  insertAsset,
-  insertAssetEdges,
-  insertUsage,
   type JobRow,
   type JobSetRow,
   jobsOf,
@@ -36,9 +30,8 @@ import {
   refreshJobSetStatus,
   transitionJob,
   updateJob,
-  updateJobSet,
 } from "@openfield/db";
-import { estimate } from "@openfield/providers/manifest";
+import { estimate, pricedOp, resolveSpeed } from "@openfield/providers/manifest";
 import {
   type CallContext,
   errorFromFetchFailure,
@@ -47,31 +40,42 @@ import {
   type JobUpdate,
   normalize,
   ProviderError,
-  type ProviderUsage,
   planCalls,
 } from "@openfield/providers/server";
 import type { EventHub } from "../events/hub";
 import type { AttemptSink, Ingest } from "../files/ingest";
-import { Thumbs } from "../files/thumbs";
+import type { Thumbs } from "../files/thumbs";
 import { ApiFailure } from "../http/errors";
 import type { Logger } from "../log/logger";
-import { toAssetListItem } from "../mappers/asset";
 import { toJobSetWithJobs } from "../mappers/job";
 import type { CredentialService } from "../services/credentials";
 import type { BoundModel, ModelService } from "../services/models";
+import type { ProviderSettingsService } from "../services/provider-settings";
 import type { SettingsService } from "../services/settings";
+import { BatchWatcher, untilAborted } from "./batches";
+import { callsFor, Outcomes } from "./outcomes";
 import type { CallContexts } from "./provider-fetch";
-import { pollDelay, QUEUE_DEFAULTS, type QueueOptions, retryDelay, sleep } from "./timing";
+import {
+  busyDelay,
+  pollDelay,
+  QUEUE_DEFAULTS,
+  type QueueOptions,
+  retryDelay,
+  runTimeouts,
+  sleep,
+} from "./timing";
 
 // The job queue (§8.4, §0.12): an in-process scheduler with SQLite as its durable state.
-// One unit is one provider call: a single job on fan-out, or every job of a set when the model
-// takes a batch natively. Every state change goes through a guarded transition, so a late
-// result can never overwrite a cancel.
+// One unit is one provider call: a single job on fan-out, every job of a set when the model
+// takes a batch natively, or a whole Batch run's create call. Every state change goes through a
+// guarded transition, so a late result can never overwrite a cancel.
 
 const IN_FLIGHT: readonly JobState[] = ["submitting", "queued", "running"];
 
 interface Unit {
   id: string;
+  /** "batch": the create call of a Batch run, handed to the batch watcher. */
+  kind: "call" | "batch";
   jobSetId: string;
   providerId: string;
   modelKey: string;
@@ -82,26 +86,37 @@ interface Unit {
   handle?: JobHandle;
 }
 
+type Planned = Omit<Unit, "abort" | "id">;
+
 export interface RunnerDeps {
   db: Db;
   models: ModelService;
   credentials: CredentialService;
   settings: SettingsService;
+  providerSettings: ProviderSettingsService;
   events: EventHub;
   ingest: Ingest;
   thumbs: Thumbs;
   contexts: CallContexts;
   logger: Logger;
   jobLog: (entry: Record<string, unknown>) => void;
+  /** OPENFIELD_FAKE_PROVIDERS=1: costs are recorded as 0 and never count toward spend (§0.13). */
+  fake?: boolean;
   options?: Partial<QueueOptions>;
 }
 
 export class Runner {
   readonly opts: QueueOptions;
+  readonly outcomes: Outcomes;
+  readonly batches: BatchWatcher;
   readonly #units = new Map<string, Unit>();
   readonly #unitOfJob = new Map<string, Unit>();
+  /** A waiting batch's poll, cancel and cleanup calls in flight, per company: each holds a slot (§0.12). */
+  readonly #batchCalls = new Map<string, number>();
   readonly #tasks = new Set<Promise<void>>();
   readonly #positions = new Map<string, number>();
+  /** Flex busy answers in a row, per job. They don't count as attempts (§0.4). */
+  readonly #busy = new Map<string, number>();
   /** Runs already tried again since this server started. */
   readonly #retried = new Set<string>();
   #rotation = 0;
@@ -111,9 +126,19 @@ export class Runner {
 
   constructor(private readonly deps: RunnerDeps) {
     this.opts = { ...QUEUE_DEFAULTS, ...deps.options };
+    const fake = deps.fake ?? false;
+    this.outcomes = new Outcomes({ ...deps, fake });
+    this.batches = new BatchWatcher({
+      ...deps,
+      outcomes: this.outcomes,
+      options: this.opts,
+      fake,
+      slots: (providerId, modelKey) => this.#takeBatchSlot(providerId, modelKey),
+    });
   }
 
   start(): void {
+    this.batches.start();
     this.#heartbeat = setInterval(() => this.tick(), this.opts.heartbeatMs);
     this.#heartbeat.unref?.();
     this.tick();
@@ -135,7 +160,11 @@ export class Runner {
     if (!manifest)
       throw new ApiFailure(400, "bad_request", `Unknown model ${body.model}`, { field: "model" });
     this.#requireEnabled(manifest.providerId);
-    const result = await normalize(manifest, body, { jobSetId: newId() });
+    // The company's settings are resolved for this model and frozen onto the run (§0.3).
+    const result = await normalize(manifest, body, {
+      jobSetId: newId(),
+      settings: this.deps.providerSettings.forRun(manifest.providerId),
+    });
     if (result.error) {
       throw new ApiFailure(400, result.error.code, result.error.userMessage, {
         field: result.error.field,
@@ -143,6 +172,8 @@ export class Runner {
       });
     }
     for (const d of result.diagnostics) this.deps.logger.debug("Adjusted a setting for this model", d);
+    for (const note of result.settings.notes)
+      this.deps.logger.debug("A company setting doesn't apply here", note);
     return this.#insert(manifest, result.request, result.jobIds, result.calls, {
       op: body.op,
       priority: opts.priority ?? 10,
@@ -182,6 +213,8 @@ export class Runner {
       });
     this.#requireEnabled(manifest.providerId);
     const jobIds = Array.from({ length: change.batch }, () => newId());
+    // The frozen speed replays, unless the model stopped offering it.
+    const speed = resolveSpeed(manifest, set.requestJson.speed, pricedOp(set.op)).speed;
     const request: NormalizedRequest = {
       ...set.requestJson,
       idempotencyKey: newId(),
@@ -190,6 +223,7 @@ export class Runner {
       batchIndex: 0,
       batch: change.batch,
       source: change.source,
+      speed,
     };
     return this.#insert(manifest, request, jobIds, planCalls(manifest, request, jobIds), {
       op: set.op,
@@ -206,6 +240,7 @@ export class Runner {
     meta: { op: Op; priority: number; promptOriginal?: string | null },
   ): JobSetAccepted {
     const { providerId, modelId } = parseModelKey(request.model);
+    // Priced at the speed this run resolved to (§0.13).
     const cost = estimate(manifest, request);
     const jobCount = jobIds.length;
     const created = createJobSet(this.deps.db, {
@@ -225,6 +260,7 @@ export class Runner {
         canvasId: request.canvas?.canvasId ?? null,
         canvasNodeId: request.canvas?.nodeId ?? null,
         costEstimateUsd: cost.confidence === "unknown" ? null : cost.max,
+        speed: request.speed,
       },
       jobs: jobIds.map((id, idx) => ({ id, idx, seed: seedFor(request, calls, idx) })),
     });
@@ -236,6 +272,7 @@ export class Runner {
         jobSetId: created.jobSet.id,
         model: request.model,
         batch: jobCount,
+        speed: request.speed,
       });
       this.tick();
     }
@@ -282,16 +319,16 @@ export class Runner {
    */
   #schedule(): void {
     const now = new Date().toISOString();
-    let free = this.deps.settings.get().globalConcurrency - this.#units.size;
+    let free = this.deps.settings.get().globalConcurrency - this.#units.size - this.#batchCallCount();
     const rows = listProviders(this.deps.db);
     const caps = new Map(rows.map((p) => [p.id, p.concurrencyCap]));
     // Runs for a company that was turned off wait, and go ahead if it's turned back on.
     const off = new Set(rows.filter((p) => !p.enabled).map((p) => p.id));
-    const busy = new Map<string, number>();
+    const busy = new Map(this.#batchCalls);
     for (const unit of this.#units.values()) busy.set(unit.providerId, (busy.get(unit.providerId) ?? 0) + 1);
 
-    const queues = new Map<string, Omit<Unit, "abort" | "id">[]>();
-    const grouped = new Map<string, Omit<Unit, "abort" | "id">>();
+    const queues = new Map<string, Planned[]>();
+    const grouped = new Map<string, Planned>();
     const waiting: JobRow[] = [];
     for (const { job, jobSet } of activeJobs(this.deps.db)) {
       if (job.status !== "pending" || this.#unitOfJob.has(job.id)) continue;
@@ -299,13 +336,21 @@ export class Runner {
       if (off.has(jobSet.providerId)) continue;
       waiting.push(job);
       const modelKey = `${jobSet.providerId}:${jobSet.modelId}`;
-      const native = this.deps.models.get(modelKey)?.capabilities.batch.native ?? false;
-      if (native && grouped.has(jobSet.id)) {
+      // A Batch run goes as one provider batch, whatever its image count (§0.4).
+      const kind = jobSet.speed === "batch" ? "batch" : "call";
+      const whole = kind === "batch" || (this.deps.models.get(modelKey)?.capabilities.batch.native ?? false);
+      if (whole && grouped.has(jobSet.id)) {
         grouped.get(jobSet.id)!.jobIds.push(job.id);
         continue;
       }
-      const unit = { jobSetId: jobSet.id, providerId: jobSet.providerId, modelKey, jobIds: [job.id] };
-      if (native) grouped.set(jobSet.id, unit);
+      const unit: Planned = {
+        kind,
+        jobSetId: jobSet.id,
+        providerId: jobSet.providerId,
+        modelKey,
+        jobIds: [job.id],
+      };
+      if (whole) grouped.set(jobSet.id, unit);
       const queue = queues.get(jobSet.providerId) ?? [];
       queue.push(unit);
       queues.set(jobSet.providerId, queue);
@@ -346,14 +391,43 @@ export class Runner {
     });
   }
 
-  #launch(planned: Omit<Unit, "abort" | "id">): void {
+  #batchCallCount(): number {
+    let total = 0;
+    for (const n of this.#batchCalls.values()) total += n;
+    return total;
+  }
+
+  /**
+   * A slot for one call about a waiting batch, under the same caps as any run, or undefined when
+   * they're all taken. The caller frees it with the function it gets back.
+   */
+  #takeBatchSlot(providerId: string, modelKey: string): (() => void) | undefined {
+    const global = this.deps.settings.get().globalConcurrency;
+    if (this.#units.size + this.#batchCallCount() >= global) return undefined;
+    const maxConcurrent = this.deps.models.get(modelKey)?.capabilities.limits.maxConcurrent ?? 1;
+    const cap = Math.min(getProvider(this.deps.db, providerId)?.concurrencyCap ?? 1, maxConcurrent);
+    let busy = this.#batchCalls.get(providerId) ?? 0;
+    for (const unit of this.#units.values()) if (unit.providerId === providerId) busy++;
+    if (busy >= cap) return undefined;
+    this.#batchCalls.set(providerId, (this.#batchCalls.get(providerId) ?? 0) + 1);
+    let freed = false;
+    return () => {
+      if (freed) return;
+      freed = true;
+      this.#batchCalls.set(providerId, Math.max(0, (this.#batchCalls.get(providerId) ?? 1) - 1));
+      this.tick();
+    };
+  }
+
+  #launch(planned: Planned): void {
     const unit: Unit = { ...planned, id: planned.jobIds[0]!, abort: new AbortController() };
     this.#units.set(unit.id, unit);
     for (const jobId of unit.jobIds) {
       this.#unitOfJob.set(jobId, unit);
       this.#positions.delete(jobId);
     }
-    const task = this.#run(unit)
+    const work = unit.kind === "batch" ? this.batches.submit(unit) : this.#run(unit);
+    const task = work
       .catch((err) =>
         this.deps.logger.error("A run stopped unexpectedly", { jobSetId: unit.jobSetId, error: err }),
       )
@@ -387,6 +461,7 @@ export class Runner {
           errorCode: null,
           errorMessage: null,
           errorReason: null,
+          errorAction: null,
         },
         { from: ["pending"] },
       );
@@ -417,19 +492,32 @@ export class Runner {
     unit.bound = bound;
     const call = this.#callFor(set, bound.manifest, started);
     unit.call = call;
+    // Frozen at submit (§0.3): settings changed since apply to new runs only.
+    const speed = call.speed;
+    const { attemptMs, deadlineMs } = runTimeouts(this.opts, bound.manifest, speed);
 
     const firstStart = Math.min(...started.map((j) => Date.parse(j.startedAt ?? new Date().toISOString())));
-    const deadlineLeft = this.opts.jobDeadlineMs - (Date.now() - firstStart);
-    if (deadlineLeft <= 0)
-      return this.#fail(unit, set, new ProviderError("timeout", { message: "The run passed its deadline" }));
+    const deadlineLeft = deadlineMs - (Date.now() - firstStart);
+    if (deadlineLeft <= 0) {
+      // Waiting out Flex busy answers until now ends with the busy reason, not a plain timeout.
+      const error = unit.jobIds.some((id) => this.#busy.has(id))
+        ? new ProviderError("provider_unavailable", {
+            busy: true,
+            message: "Flex was still busy at the deadline",
+          })
+        : new ProviderError("timeout", { message: "The run passed its deadline" });
+      return this.#fail(unit, set, error);
+    }
 
-    const attemptMs = this.opts.attemptTimeoutMs ?? bound.manifest.capabilities.limits.requestTimeoutMs;
     const signal = AbortSignal.any([
       unit.abort.signal,
       AbortSignal.timeout(Math.min(attemptMs, deadlineLeft)),
     ]);
     const sink = this.deps.ingest.sink();
-    const ctx = this.deps.contexts.for(bound.provider, signal, sink);
+    const ctx = this.deps.contexts.for(bound.provider, signal, sink, {
+      settings: call.providerSettings,
+      speed,
+    });
     if (!ctx) return this.#fail(unit, set, new ProviderError("auth_missing", { message: "No key is set" }));
 
     const t0 = Date.now();
@@ -476,16 +564,7 @@ export class Runner {
     if (manifest.capabilities.batch.native || request.batch === 1) {
       return { ...request, jobId: first.id, batchIndex: first.idx, batch: jobs.length };
     }
-    const all = jobsOf(this.deps.db, set.id).map((j) => j.id);
-    const planned = all.length === request.batch ? planCalls(manifest, request, all) : [];
-    return (
-      planned.find((c) => c.jobId === first.id) ?? {
-        ...request,
-        jobId: first.id,
-        batchIndex: first.idx,
-        batch: 1,
-      }
-    );
+    return callsFor(manifest, request, jobsOf(this.deps.db, set.id)).get(first.id)!;
   }
 
   /** Polls until done. The first check is immediate: a blocking adapter's handle already holds the result. */
@@ -521,144 +600,73 @@ export class Runner {
   ): void {
     const { db } = this.deps;
     const images = result.images.filter((i) => !i.partial);
-    const each = estimate(manifest, { ...call, batch: 1 });
-    const rung = THUMB_RUNGS[this.deps.settings.get().feedZoom] ?? 456;
+    // Cost follows the speed the company served: a Priority call served at Standard bills Standard.
+    const speedUsed = result.speedUsed ?? call.speed;
+    const cost = this.outcomes.cost(manifest, call, speedUsed, result);
     const jobs = unit.jobIds.map((id) => getJob(db, id)).filter((j): j is JobRow => j !== undefined);
 
     jobs.forEach((job, i) => {
+      this.#busy.delete(job.id);
       const image = images.find((img) => img.index === job.idx) ?? images[i];
       const staged = image && sink.take(image.assetId);
       if (!image || !staged) {
-        this.#failJobs(
+        this.outcomes.fail(
           set,
           [job.id],
           new ProviderError("provider_error", { message: "The model sent no image for this slot" }),
-          latencyMs,
+          { latencyMs, speed: speedUsed },
         );
         return;
       }
-      const costUsd = result.cost
-        ? result.cost.amount / Math.max(1, images.length)
-        : each.confidence === "unknown"
-          ? null
-          : each.max;
-      const costSource = result.cost?.confidence ?? (each.confidence === "unknown" ? "unknown" : "estimated");
-      const base = call.base?.assetId;
-
-      const committed = db.transaction((tx) => {
-        const moved = transitionJob(
-          tx,
-          job.id,
-          "succeeded",
-          { progress: 1, latencyMs, seed: image.seed ?? job.seed },
-          { from: IN_FLIGHT },
-        );
-        // Canceled while the provider was working: keep nothing (§0.12).
-        if (!moved) return undefined;
-        const asset = insertAsset(tx, {
-          id: staged.assetId,
-          kind: set.op === "generate" || set.op === "variation" ? "generated" : "edited",
-          jobId: job.id,
-          jobSetId: set.id,
-          path: staged.path,
-          mime: staged.mime,
-          width: staged.width,
-          height: staged.height,
-          bytes: staged.bytes,
-          sha256: staged.sha256,
-          seed: image.seed ?? job.seed,
-          providerId: set.providerId,
-          modelId: set.modelId,
-          prompt: call.prompt,
-          params: paramsOf(call),
-          costUsd,
-          parentAssetId: base ?? null,
-          rootAssetId: base
-            ? (getAsset(tx, base, { includeDeleted: true })?.rootAssetId ?? base)
-            : staged.assetId,
-          op: set.op,
-          maskAssetId: call.mask?.assetId ?? null,
-          generative: true,
-        });
-        insertAssetEdges(tx, [
-          ...(base ? [{ parentAssetId: base, childAssetId: asset.id, relation: "derived" as const }] : []),
-          ...(call.references ?? []).map((r, ordinal) => ({
-            parentAssetId: r.assetId,
-            childAssetId: asset.id,
-            relation: "reference" as const,
-            ordinal,
-          })),
-        ]);
-        insertUsage(tx, {
-          providerId: set.providerId,
-          modelId: set.modelId,
-          jobSetId: set.id,
-          jobId: job.id,
-          batchIndex: job.idx,
-          operation: set.op,
-          outcome: "succeeded",
-          size: `${staged.width}x${staged.height}`,
-          quality: call.quality ?? null,
-          units: unitsOf(result.usage),
-          estimateMin: each.min,
-          estimateMax: each.max,
-          costUsd,
-          costSource,
-          priceAsOf: each.pricedAt || null,
-          latencyMs,
-        });
-        return asset;
-      });
-
-      if (!committed) {
-        this.deps.ingest.discard(staged);
-        return;
-      }
-      this.deps.events.publish("job.output", {
-        jobSetId: set.id,
-        jobId: job.id,
-        idx: job.idx,
-        asset: toAssetListItem(committed, false),
-      });
-      this.deps.jobLog({
-        event: "job.succeeded",
-        jobId: job.id,
-        jobSetId: set.id,
-        assetId: committed.id,
+      this.outcomes.succeed({
+        set,
+        job,
+        call,
+        image,
+        staged,
+        cost,
+        speedUsed,
         latencyMs,
+        usage: result.usage,
       });
-      this.deps.thumbs.warm(committed, Thumbs.sizeFor({ h: rung }));
     });
 
     // Anything the adapter wrote that no job claimed.
     sink.discardAll();
     recordKeyCheck(db, set.providerId, { ok: true });
-    this.#finishSet(set.id);
+    this.outcomes.finishSet(set.id);
   }
 
-  /** A failed attempt: retry retryable codes with backoff, fail the rest (§8.4.3). */
+  /** A failed attempt: retry retryable codes with backoff, wait out Flex busy, fail the rest (§8.4.3). */
   #fail(unit: Unit, set: JobSetRow, error: ProviderError, sink?: AttemptSink, latencyMs?: number): void {
     sink?.discardAll();
+    const speed = unit.call?.speed ?? set.speed;
+    const deadlineMs = this.#deadlineFor(unit, speed);
+    if (error.busy) {
+      this.#waitOutBusy(unit, set, error, deadlineMs, latencyMs);
+      return;
+    }
+
     const retry: string[] = [];
     const final: string[] = [];
     for (const jobId of unit.jobIds) {
       const job = getJob(this.deps.db, jobId);
       if (!job || isTerminalState(job.status)) continue;
       const elapsed = job.startedAt ? Date.now() - Date.parse(job.startedAt) : 0;
-      const canRetry =
-        error.retryable && job.attempt < this.opts.maxAttempts && elapsed < this.opts.jobDeadlineMs;
+      const canRetry = error.retryable && job.attempt < this.opts.maxAttempts && elapsed < deadlineMs;
       (canRetry ? retry : final).push(jobId);
     }
 
     for (const jobId of retry) {
       const job = getJob(this.deps.db, jobId)!;
       const delay = retryDelay(this.opts, job.attempt, error.retryAfterMs);
+      const retryAt = new Date(Date.now() + delay).toISOString();
       const moved = transitionJob(
         this.deps.db,
         jobId,
         "pending",
         {
-          nextAttemptAt: new Date(Date.now() + delay).toISOString(),
+          nextAttemptAt: retryAt,
           errorCode: error.code,
           errorMessage: this.deps.logger.scrub(error.message),
         },
@@ -673,173 +681,146 @@ export class Runner {
         code: error.code,
         delay,
       });
-      this.deps.events.publish("job.queued", { jobSetId: set.id, jobId, idx: job.idx });
+      this.deps.events.publish("job.queued", { jobSetId: set.id, jobId, idx: job.idx, retryAt });
       setTimeout(() => this.tick(), delay + 5).unref?.();
     }
 
     if (final.length) {
+      for (const jobId of final) this.#busy.delete(jobId);
       // Out of time after retries reads as a timeout, whatever the last attempt said.
       const code =
-        error.retryable && error.code !== "timeout" && this.#pastDeadline(final) ? "timeout" : error.code;
+        error.retryable && error.code !== "timeout" && this.#pastDeadline(final, deadlineMs)
+          ? "timeout"
+          : error.code;
       const finalError = code === error.code ? error : new ProviderError(code, { message: error.message });
-      this.#failJobs(set, final, finalError, latencyMs);
+      this.outcomes.fail(set, final, finalError, { latencyMs, speed });
     }
     if (error.code === "auth_invalid" || error.code === "auth_forbidden") {
       recordKeyCheck(this.deps.db, set.providerId, { ok: false, code: error.code });
     }
-    this.#finishSet(set.id);
-  }
-
-  #pastDeadline(jobIds: string[]): boolean {
-    return jobIds.some((id) => {
-      const job = getJob(this.deps.db, id);
-      return job?.startedAt ? Date.now() - Date.parse(job.startedAt) >= this.opts.jobDeadlineMs : false;
-    });
-  }
-
-  /** Terminal failure. A failed job logs usage at no cost, never added to spend (§0.13). */
-  #failJobs(set: JobSetRow, jobIds: string[], error: ProviderError, latencyMs?: number): void {
-    const message = this.deps.logger.scrub(error.message);
-    const reason = tileReason(error);
-    for (const jobId of jobIds) {
-      const moved = this.deps.db.transaction((tx) => {
-        const job = transitionJob(tx, jobId, "failed", {
-          errorCode: error.code,
-          errorMessage: message,
-          errorReason: reason,
-        });
-        if (!job) return undefined;
-        insertUsage(tx, {
-          providerId: set.providerId,
-          modelId: set.modelId,
-          jobSetId: set.id,
-          jobId,
-          batchIndex: job.idx,
-          operation: set.op,
-          outcome: "failed",
-          costUsd: 0,
-          costSource: "unknown",
-          latencyMs: latencyMs ?? null,
-          httpStatus: error.httpStatus ?? null,
-        });
-        return job;
-      });
-      if (!moved) continue;
-      this.deps.jobLog({ event: "job.failed", jobId, jobSetId: set.id, code: error.code, message });
-      this.deps.events.publish("job.failed", {
-        jobSetId: set.id,
-        jobId,
-        idx: moved.idx,
-        error: {
-          code: error.code,
-          message,
-          ...(reason && { reason }),
-          retryable: error.retryable,
-          ...(error.retryAfterMs !== undefined && { retryAfterMs: error.retryAfterMs }),
-          ...(error.httpStatus !== undefined && { httpStatus: error.httpStatus }),
-          ...(error.providerCode !== undefined && { providerCode: error.providerCode }),
-          ...(error.field !== undefined && { field: error.field }),
-        },
-      });
-    }
+    this.outcomes.finishSet(set.id);
   }
 
   /**
-   * Recomputes a set's status and emits job_set.completed on the move to a terminal state.
-   * The only place that makes that move, so the event fires exactly once.
+   * Flex was busy (§0.4): back to pending on the busy schedule, without spending an attempt, until
+   * the Flex deadline. Past it, the run fails with our own final reason.
    */
-  #finishSet(jobSetId: string): void {
-    const before = getJobSet(this.deps.db, jobSetId);
-    if (!before || isTerminalState(before.status)) return;
-    const after = refreshJobSetStatus(this.deps.db, jobSetId);
-    if (!after || !isTerminalState(after.status)) return;
+  #waitOutBusy(
+    unit: Unit,
+    set: JobSetRow,
+    error: ProviderError,
+    deadlineMs: number,
+    latencyMs?: number,
+  ): void {
+    const final: string[] = [];
+    for (const jobId of unit.jobIds) {
+      const job = getJob(this.deps.db, jobId);
+      if (!job || isTerminalState(job.status)) continue;
+      const count = (this.#busy.get(jobId) ?? 0) + 1;
+      const delay = busyDelay(this.opts, count, error.retryAfterMs);
+      const elapsed = job.startedAt ? Date.now() - Date.parse(job.startedAt) : 0;
+      if (elapsed + delay >= deadlineMs) {
+        final.push(jobId);
+        continue;
+      }
+      const retryAt = new Date(Date.now() + delay).toISOString();
+      const moved = transitionJob(
+        this.deps.db,
+        jobId,
+        "pending",
+        {
+          attempt: Math.max(0, job.attempt - 1),
+          nextAttemptAt: retryAt,
+          errorCode: error.code,
+          errorMessage: this.deps.logger.scrub(error.message),
+        },
+        { from: IN_FLIGHT },
+      );
+      if (!moved) continue;
+      this.#busy.set(jobId, count);
+      this.deps.jobLog({ event: "job.busy", jobId, jobSetId: set.id, busy: count, delay });
+      this.deps.events.publish("job.queued", { jobSetId: set.id, jobId, idx: job.idx, retryAt, busy: true });
+      setTimeout(() => this.tick(), delay + 5).unref?.();
+    }
 
-    const jobs = jobsOf(this.deps.db, jobSetId);
-    const costs = assetsForJobSets(this.deps.db, [jobSetId]).map((a) => a.costUsd ?? 0);
-    const firstFailure = jobs.find((j) => j.status === "failed");
-    updateJobSet(this.deps.db, jobSetId, {
-      costActualUsd: costs.length ? round(costs.reduce((a, b) => a + b, 0)) : null,
-      errorCode: firstFailure?.errorCode ?? null,
-      errorMessage: firstFailure?.errorMessage ?? null,
+    if (final.length) {
+      for (const jobId of final) this.#busy.delete(jobId);
+      const speed = unit.call?.speed ?? set.speed;
+      const provider = unit.bound?.provider ?? this.deps.credentials.provider(set.providerId);
+      const reason = t("errors.speedStayedBusy", {
+        speed: speedName(provider.settings, speed),
+        company: provider.meta.displayName,
+      });
+      const stayedBusy = new ProviderError("provider_unavailable", {
+        message: `Still busy at the deadline: ${error.message}`,
+        userMessage: reason,
+        ...(error.httpStatus !== undefined && { httpStatus: error.httpStatus }),
+      });
+      this.outcomes.fail(set, final, stayedBusy, { latencyMs, speed, reason, action: "try-again" });
+    }
+    // Also refreshes the set's status when the jobs only went back to waiting.
+    this.outcomes.finishSet(set.id);
+  }
+
+  #deadlineFor(unit: Unit, speed: SpeedId): number {
+    const manifest = unit.bound?.manifest ?? this.deps.models.get(unit.modelKey);
+    return manifest ? runTimeouts(this.opts, manifest, speed).deadlineMs : this.opts.jobDeadlineMs;
+  }
+
+  #pastDeadline(jobIds: string[], deadlineMs: number): boolean {
+    return jobIds.some((id) => {
+      const job = getJob(this.deps.db, id);
+      return job?.startedAt ? Date.now() - Date.parse(job.startedAt) >= deadlineMs : false;
     });
-    const done = getJobSet(this.deps.db, jobSetId)!;
-    this.deps.events.publish("job_set.completed", {
-      jobSetId,
-      status: done.status,
-      costActualUsd: done.costActualUsd,
-      durationMs: Math.max(0, Date.parse(done.finishedAt ?? done.createdAt) - Date.parse(done.createdAt)),
-    });
-    this.deps.events.publish("usage.updated", { jobSetId });
-    this.deps.jobLog({ event: "job_set.completed", jobSetId, status: done.status });
   }
 
   // Cancellation (§0.12)
 
   cancelJobSet(jobSetId: string): CancelResponse {
     const set = this.#jobSet(jobSetId);
+    // A Batch run stops as a whole, at the company (§0.12).
+    if (set.speed === "batch") return this.batches.cancel(set, (id) => this.#unitOfJob.has(id));
     const out: CancelResponse = { canceled: [], notCancelable: [] };
     for (const job of jobsOf(this.deps.db, jobSetId)) {
       (this.#cancelOne(set, job) ? out.canceled : out.notCancelable).push(job.id);
     }
-    this.#finishSet(jobSetId);
+    this.outcomes.finishSet(jobSetId);
     return out;
   }
 
   cancelJob(jobId: string): void {
     const job = getJob(this.deps.db, jobId);
     if (!job) throw new ApiFailure(404, "not_found", "That image doesn't exist", { field: "id" });
-    this.#cancelOne(this.#jobSet(job.jobSetId), job);
-    this.#finishSet(job.jobSetId);
+    const set = this.#jobSet(job.jobSetId);
+    // One provider batch can't lose one request, so this cancels the whole run.
+    if (set.speed === "batch") {
+      this.batches.cancel(set, (id) => this.#unitOfJob.has(id));
+      return;
+    }
+    this.#cancelOne(set, job);
+    this.outcomes.finishSet(job.jobSetId);
   }
 
   #cancelOne(set: JobSetRow, job: JobRow): boolean {
     if (isTerminalState(job.status)) return false;
     const unit = this.#unitOfJob.get(job.id);
-    const idx = job.idx;
+    this.#busy.delete(job.id);
 
     if (!unit) {
       // Not sent yet, so nothing was spent.
-      const moved = transitionJob(
-        this.deps.db,
-        job.id,
-        "canceled",
-        { errorCode: "canceled" },
-        { from: ["pending", "queued"] },
-      );
+      const moved = this.outcomes.cancel(set, job.id, { discarded: false });
       if (!moved) return false;
       this.#positions.delete(job.id);
-      this.deps.events.publish("job.canceled", { jobSetId: set.id, jobId: job.id, idx, discarded: false });
-      this.deps.jobLog({ event: "job.canceled", jobId: job.id, jobSetId: set.id, discarded: false });
       return true;
     }
 
-    // In flight. Neither launch adapter can cancel on the provider's side, so the work may still
-    // be billed: record it at the full estimate, marked discarded, and drop any late result.
+    // In flight. Neither launch adapter can cancel a sync call on the provider's side, so the work
+    // may still be billed: record it at the full estimate, marked discarded, and drop any late result.
     const manifest = unit.bound?.manifest ?? this.deps.models.get(unit.modelKey);
-    const each = manifest ? estimate(manifest, { ...(unit.call ?? set.requestJson), batch: 1 }) : undefined;
-    const moved = this.deps.db.transaction((tx) => {
-      const row = transitionJob(tx, job.id, "canceled", { errorCode: "canceled" });
-      if (!row) return undefined;
-      insertUsage(tx, {
-        providerId: set.providerId,
-        modelId: set.modelId,
-        jobSetId: set.id,
-        jobId: job.id,
-        batchIndex: idx,
-        operation: set.op,
-        outcome: "canceled",
-        estimateMin: each?.min ?? null,
-        estimateMax: each?.max ?? null,
-        costUsd: each && each.confidence !== "unknown" ? each.max : null,
-        costSource: each && each.confidence !== "unknown" ? "estimated" : "unknown",
-        priceAsOf: each?.pricedAt || null,
-        discarded: true,
-      });
-      return row;
-    });
+    const call = unit.call ?? set.requestJson;
+    const each = manifest ? estimate(manifest, { ...call, batch: 1 }) : undefined;
+    const moved = this.outcomes.cancel(set, job.id, { discarded: true, each, speed: call.speed });
     if (!moved) return false;
-    this.deps.events.publish("job.canceled", { jobSetId: set.id, jobId: job.id, idx, discarded: true });
-    this.deps.jobLog({ event: "job.canceled", jobId: job.id, jobSetId: set.id, discarded: true });
 
     // Abort the call once nothing it's making is still wanted.
     const stillWanted = unit.jobIds.some((id) => {
@@ -854,46 +835,22 @@ export class Runner {
 
   /**
    * Stops scheduling, gives in-flight calls `drainMs` to finish, then aborts the rest. Aborted
-   * jobs keep their state, so the next boot marks them interrupted (§8.4.5).
+   * jobs keep their state, so the next boot marks them interrupted (§8.4.5). A Batch run keeps
+   * waiting at the company and resumes from its row.
    */
   async stop(drainMs = 10_000): Promise<void> {
     this.#stopping = true;
     if (this.#heartbeat) clearInterval(this.#heartbeat);
+    const batches = this.batches.stop(drainMs);
     const all = Promise.allSettled([...this.#tasks]);
     const drained = await Promise.race([all.then(() => true), sleep(drainMs).then(() => false)]);
-    if (drained) return;
-    for (const unit of this.#units.values())
-      unit.abort.abort(new DOMException("Shutting down", "AbortError"));
-    await Promise.race([all, sleep(2_000)]);
+    if (!drained) {
+      for (const unit of this.#units.values())
+        unit.abort.abort(new DOMException("Shutting down", "AbortError"));
+      await Promise.race([all, sleep(2_000)]);
+    }
+    await batches;
   }
-}
-
-/**
- * The adapter's own copy for the tile, when it says more than the code's usual reason. A retryable
- * error only lands here once the retries ran out, so its "trying again" wording no longer holds.
- */
-function tileReason(error: ProviderError): string | null {
-  if (error.retryable || error.userMessage === errorCopy(error.code).reason) return null;
-  return error.userMessage;
-}
-
-/** Stops waiting when the signal fires, even if an adapter ignores it. */
-function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) return Promise.reject(signal.reason);
-  return new Promise((resolve, reject) => {
-    const onAbort = () => reject(signal.reason);
-    signal.addEventListener("abort", onAbort, { once: true });
-    work.then(
-      (value) => {
-        signal.removeEventListener("abort", onAbort);
-        resolve(value);
-      },
-      (err) => {
-        signal.removeEventListener("abort", onAbort);
-        reject(err);
-      },
-    );
-  });
 }
 
 function seedFor(request: NormalizedRequest, calls: NormalizedRequest[], idx: number): number | null {
@@ -901,22 +858,3 @@ function seedFor(request: NormalizedRequest, calls: NormalizedRequest[], idx: nu
   if (call?.seed !== undefined && calls.length > 1) return call.seed;
   return request.seed === undefined ? null : request.seed + idx;
 }
-
-/** The settings that made an image, minus the ids that change on every run. */
-function paramsOf(call: NormalizedRequest): Record<string, unknown> {
-  const { jobId: _j, jobSetId: _s, batchIndex: _b, idempotencyKey: _k, ...params } = call;
-  return params;
-}
-
-function unitsOf(usage?: ProviderUsage): UsageUnits | null {
-  if (!usage) return null;
-  const tokensIn = (usage.inputTextTokens ?? 0) + (usage.inputImageTokens ?? 0);
-  return {
-    ...(usage.imagesBilled !== undefined && { images: usage.imagesBilled }),
-    ...(tokensIn > 0 && { tokensIn }),
-    ...(usage.outputImageTokens !== undefined && { tokensOut: usage.outputImageTokens }),
-    ...(usage.cachedInputTokens !== undefined && { cachedIn: usage.cachedInputTokens }),
-  };
-}
-
-const round = (usd: number) => Math.round(usd * 1e6) / 1e6;

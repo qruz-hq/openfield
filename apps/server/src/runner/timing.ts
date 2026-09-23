@@ -1,4 +1,14 @@
-// Delays for the runner (§0.4): poll backoff and retry backoff, both with ±20 % jitter.
+import {
+  batchPollIntervalMs,
+  FLEX_BUSY_BACKOFF_MS,
+  FLEX_JOB_DEADLINE_MS,
+  type ModelManifest,
+  type SpeedId,
+} from "@openfield/core";
+import { speedTimeouts } from "@openfield/providers/manifest";
+
+// Delays for the runner (§0.4, §0.12): poll backoff, retry backoff and Flex busy waits, all with
+// ±20 % jitter, plus the batch poll schedule.
 
 export interface QueueOptions {
   /** Attempt 1 plus retries (§0.12). */
@@ -13,6 +23,12 @@ export interface QueueOptions {
   heartbeatMs: number;
   poll: { firstMs: number; factor: number; capMs: number };
   jitter: number;
+  /** Whole-job wall clock at Flex, busy waits included. */
+  flexJobDeadlineMs: number;
+  /** Wait after each Flex busy answer; the last one repeats. Retry-After wins. */
+  flexBusyDelaysMs: readonly number[];
+  /** Replaces the batch poll schedule, for tests. */
+  batchPollMs?: number;
 }
 
 export const QUEUE_DEFAULTS: QueueOptions = {
@@ -22,6 +38,8 @@ export const QUEUE_DEFAULTS: QueueOptions = {
   heartbeatMs: 1_000,
   poll: { firstMs: 800, factor: 1.6, capMs: 5_000 },
   jitter: 0.2,
+  flexJobDeadlineMs: FLEX_JOB_DEADLINE_MS,
+  flexBusyDelaysMs: FLEX_BUSY_BACKOFF_MS,
 };
 
 export const jittered = (ms: number, ratio: number): number =>
@@ -33,10 +51,37 @@ export function retryDelay(opts: QueueOptions, attempt: number, retryAfterMs?: n
   return jittered(base, opts.jitter);
 }
 
+/** The wait after the `busyCount`th Flex busy answer in a row (1 for the first). */
+export function busyDelay(opts: QueueOptions, busyCount: number, retryAfterMs?: number): number {
+  if (retryAfterMs !== undefined) return retryAfterMs;
+  const delays = opts.flexBusyDelaysMs;
+  const base = delays[Math.min(Math.max(1, busyCount), delays.length) - 1] ?? 30_000;
+  return jittered(base, opts.jitter);
+}
+
 export function pollDelay(opts: QueueOptions, poll: number, hint?: number): number {
   if (hint !== undefined) return hint;
   const { firstMs, factor, capMs } = opts.poll;
   return jittered(Math.min(capMs, firstMs * factor ** poll), opts.jitter);
+}
+
+/** The next poll of a provider batch sent `elapsedMs` ago. The adapter's hint wins. */
+export function batchPollDelay(opts: QueueOptions, elapsedMs: number, fake: boolean, hint?: number): number {
+  if (hint !== undefined) return hint;
+  return opts.batchPollMs ?? batchPollIntervalMs(elapsedMs, { fake });
+}
+
+/** One call's timeout and the whole job's deadline at a speed (§0.12). */
+export function runTimeouts(
+  opts: QueueOptions,
+  manifest: Pick<ModelManifest, "capabilities" | "speeds">,
+  speed: SpeedId,
+): { attemptMs: number; deadlineMs: number } {
+  const t = speedTimeouts(manifest, speed, { jobDeadlineMs: opts.jobDeadlineMs });
+  return {
+    attemptMs: opts.attemptTimeoutMs ?? t.attemptTimeoutMs,
+    deadlineMs: speed === "flex" ? opts.flexJobDeadlineMs : t.jobDeadlineMs,
+  };
 }
 
 /** Resolves after `ms`, or rejects with the signal's reason. */

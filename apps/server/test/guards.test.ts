@@ -28,7 +28,7 @@ describe("guards", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; schema: string };
     expect(body.ok).toBe(true);
-    expect(body.schema).toBe("0002_job_error_reason");
+    expect(body.schema).toBe("0004_job_error_action");
   });
 
   test("a wrong Host is rejected, even with the token", async () => {
@@ -73,7 +73,7 @@ describe("guards", () => {
       { origin: "https://evil.example" },
       { "sec-fetch-site": "cross-site" },
       { origin: "null" },
-      { origin: "http://localhost:5173", "sec-fetch-site": "same-site" },
+      { origin: "http://127.0.0.1:4318", "sec-fetch-site": "same-site" },
     ];
     for (const headers of attacks) {
       for (const path of ["/api/assets", "/api/settings/keys", `/files/thumb/${assetId}?h=200`]) {

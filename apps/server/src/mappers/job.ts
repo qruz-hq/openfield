@@ -1,5 +1,16 @@
-import type { Job, JobSet, JobSetWithJobs, NormalizedRequest, PixelSize } from "@openfield/core";
-import type { AssetRow, JobRow, JobSetRow } from "@openfield/db";
+import {
+  type BatchCounts,
+  type BatchSummary,
+  type BatchUpdated,
+  isTerminalBatchState,
+  isTerminalState,
+  type Job,
+  type JobSet,
+  type JobSetWithJobs,
+  type NormalizedRequest,
+  type PixelSize,
+} from "@openfield/core";
+import type { AssetRow, JobRow, JobSetRow, ProviderBatchRow } from "@openfield/db";
 import { resolveSize } from "@openfield/providers/manifest";
 import { modelKeyOf } from "./asset";
 
@@ -25,6 +36,7 @@ export function toJobSet(row: JobSetRow): JobSet {
     createdAt: row.createdAt,
     startedAt: row.startedAt,
     finishedAt: row.finishedAt,
+    speed: row.speed,
   };
 }
 
@@ -53,9 +65,47 @@ export function toJob(row: JobRow, planned: PixelSize, asset?: AssetRow): Job {
     errorCode: row.errorCode,
     errorMessage: row.errorMessage,
     errorReason: row.errorReason,
+    errorAction: row.errorAction,
     createdAt: row.createdAt,
     startedAt: row.startedAt,
     finishedAt: row.finishedAt,
+    speedUsed: row.speedUsed,
+    nextAttemptAt: row.nextAttemptAt,
+  };
+}
+
+/** Counts from the run's own jobs, for a snapshot or a finished batch. */
+export function batchCounts(batch: ProviderBatchRow, jobs: readonly JobRow[]): BatchCounts {
+  const succeeded = jobs.filter((j) => j.status === "succeeded").length;
+  const pending = jobs.filter((j) => !isTerminalState(j.status)).length;
+  const total = Math.max(batch.itemCount, jobs.length);
+  return { total, succeeded, failed: Math.max(0, total - succeeded - pending), pending };
+}
+
+export function toBatchSummary(batch: ProviderBatchRow, jobs: readonly JobRow[]): BatchSummary {
+  return {
+    state: batch.state,
+    submittedAt: batch.submittedAt,
+    expiresAt: batch.expiresAt,
+    counts: batchCounts(batch, jobs),
+    // Canceled here, and the company hasn't stopped yet.
+    ...(batch.errorCode === "canceled" && batch.finishedAt === null && { stopping: true }),
+  };
+}
+
+/** The batch.updated frame and a snapshot entry (§0.6). `counts` overrides the jobs' own tally. */
+export function toBatchUpdated(
+  batch: ProviderBatchRow,
+  jobs: readonly JobRow[],
+  counts?: BatchCounts,
+): BatchUpdated {
+  return {
+    ...toBatchSummary(batch, jobs),
+    ...(counts && { counts }),
+    jobSetId: batch.jobSetId,
+    providerId: batch.providerId,
+    modelKey: modelKeyOf(batch.providerId, batch.modelId),
+    finished: isTerminalBatchState(batch.state),
   };
 }
 
@@ -63,6 +113,7 @@ export function toJobSetWithJobs(bundle: {
   jobSet: JobSetRow;
   jobs: JobRow[];
   assets?: AssetRow[];
+  batch?: ProviderBatchRow | undefined;
 }): JobSetWithJobs {
   const planned = plannedSize(bundle.jobSet.requestJson);
   return {
@@ -74,5 +125,6 @@ export function toJobSetWithJobs(bundle: {
         bundle.assets?.find((a) => a.jobId === job.id),
       ),
     ),
+    ...(bundle.batch && { batch: toBatchSummary(bundle.batch, bundle.jobs) }),
   };
 }

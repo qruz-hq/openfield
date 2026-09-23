@@ -34,6 +34,28 @@ describe("model registry", () => {
     expect(list.models.every((m) => !m.ready && m.enabled)).toBe(true);
     expect(list.staleAt).toBeNull();
     expect(listModels(server.services.db)).toHaveLength(3);
+    // Speeds travel with the manifest (and into the models table); the batch path never does.
+    expect(list.models.map((m) => m.speeds?.map((o) => o.id))).toEqual([
+      ["batch", "flex", "priority"],
+      ["batch"],
+      ["batch"],
+    ]);
+    expect((res.body as { models: object[] }).models.every((m) => !("batch" in m))).toBe(true);
+    expect(listModels(server.services.db).map((r) => r.speeds?.length)).toEqual([3, 1, 1]);
+  });
+
+  test("a discovered model's manifest carries its speeds but never the batch path", async () => {
+    server = await startTestServer({ fetch: previewOnly() });
+    await saveKey(server);
+    await server.json("/api/models/refresh", { method: "POST", body: {} });
+    const home = server.home;
+    await server.close({ keepHome: true });
+    // After a restart, discoveries are rebuilt from their ids through the adapter.
+    server = await startTestServer({ home, fetch: previewOnly() });
+    const res = await server.json<{ models: Record<string, unknown>[] }>("/api/models");
+    const preview = res.body.models.find((m) => m.modelId === "gemini-3-pro-image-preview");
+    expect(preview).toBeDefined();
+    expect("batch" in preview!).toBe(false);
   });
 
   test("refresh adds recognised models, lists the rest as not supported, and sets the next check 24 h out", async () => {

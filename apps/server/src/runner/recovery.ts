@@ -5,6 +5,7 @@ import {
   assetFiles,
   type Db,
   listJobSets,
+  providerBatchesForJobSets,
   refreshJobSetStatus,
   setFileStates,
   transitionJob,
@@ -12,8 +13,9 @@ import {
 import { absolutePath, type HomePaths } from "../config/home";
 
 // Crash recovery (§8.4.5), run at boot before the listener accepts traffic.
-// No launch adapter can pick a call up again after a restart, so anything that was already sent
-// becomes interrupted and is never sent again on its own: that could bill twice.
+// No launch adapter can pick a sync call up again after a restart, so anything that was already
+// sent becomes interrupted and is never sent again on its own: that could bill twice. A Batch run
+// lives at the company, so the batch watcher resumes it from its row instead.
 
 export interface RecoveryReport {
   requeued: number;
@@ -25,7 +27,7 @@ export interface RecoveryReport {
 export function recover(db: Db, paths: HomePaths): RecoveryReport {
   const report: RecoveryReport = { requeued: 0, interrupted: 0, jobSets: 0, missingFiles: 0 };
 
-  for (const { job } of activeJobs(db)) {
+  for (const { job } of activeJobs(db, { skipBatch: true })) {
     if (job.status === "pending") {
       report.requeued++;
       continue;
@@ -35,6 +37,23 @@ export function recover(db: Db, paths: HomePaths): RecoveryReport {
       if (transitionJob(db, job.id, "pending", {}, { from: ["queued"] })) report.requeued++;
       continue;
     }
+    const moved = transitionJob(db, job.id, "interrupted", {
+      errorMessage: "Openfield stopped while this image was being made",
+    });
+    if (moved) report.interrupted++;
+  }
+
+  // Batch runs: jobs still waiting to be sent stay pending, and jobs covered by a live provider
+  // batch keep their state. A sent job with no live batch behind it can't be picked up again.
+  const batchJobs = activeJobs(db).filter(({ jobSet }) => jobSet.speed === "batch");
+  const live = providerBatchesForJobSets(db, [...new Set(batchJobs.map(({ jobSet }) => jobSet.id))]);
+  for (const { job, jobSet } of batchJobs) {
+    if (job.status === "pending") {
+      report.requeued++;
+      continue;
+    }
+    const batch = live.get(jobSet.id);
+    if (batch && batch.finishedAt === null) continue;
     const moved = transitionJob(db, job.id, "interrupted", {
       errorMessage: "Openfield stopped while this image was being made",
     });

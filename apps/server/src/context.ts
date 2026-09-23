@@ -10,6 +10,7 @@ import type { CallContexts } from "./runner/provider-fetch";
 import type { Runner } from "./runner/runner";
 import type { CredentialService } from "./services/credentials";
 import type { ModelService } from "./services/models";
+import type { ProviderSettingsService } from "./services/provider-settings";
 import type { SettingsService } from "./services/settings";
 
 /** Everything a route can reach, set on the Hono context as `svc`. */
@@ -26,6 +27,8 @@ export interface Services {
   schemaTag: string | null;
   providers: readonly Provider[];
   settings: SettingsService;
+  /** Company settings for the modal and for each run (§0.3). */
+  providerSettings: ProviderSettingsService;
   credentials: CredentialService;
   contexts: CallContexts;
   models: ModelService;

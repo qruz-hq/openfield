@@ -6,7 +6,9 @@ import type { Context } from "hono";
 // from apps/web/dist. Either way the session token goes into index.html, so the app has one
 // origin and the guards behave the same in both (§0.16).
 
-export const VITE_ORIGIN = "http://127.0.0.1:5173";
+// Beside the server's 4317 rather than Vite's usual 5173, so bun dev never clashes with another
+// Vite project (§0.16).
+export const VITE_ORIGIN = "http://127.0.0.1:4318";
 
 export interface SpaOptions {
   token: string;

@@ -1,5 +1,12 @@
 import { zValidator } from "@hono/zod-validator";
-import { idParamSchema, type ProviderSummary, providerPatchBodySchema } from "@openfield/core";
+import {
+  CONCURRENCY_CAP_FIELD,
+  idParamSchema,
+  type ProviderSettingsResponse,
+  type ProviderSummary,
+  providerPatchBodySchema,
+  providerSettingsPatchBodySchema,
+} from "@openfield/core";
 import { getProvider, listProviders, updateProvider } from "@openfield/db";
 import { Hono } from "hono";
 import type { Env, Services } from "../context";
@@ -31,5 +38,23 @@ export const providersRoutes = new Hono<Env>()
         toProviderSummary(row, provider, svc.credentials.status(id)) satisfies ProviderSummary,
         200,
       );
+    },
+  )
+  // The company settings modal (§6.17): the adapter's panels, then Openfield's Limits panel.
+  .get("/providers/:id/settings", zValidator("param", idParamSchema, onInvalid), (c) => {
+    const view = c.var.svc.providerSettings.view(c.req.valid("param").id);
+    return c.json(view satisfies ProviderSettingsResponse, 200);
+  })
+  .patch(
+    "/providers/:id/settings",
+    zValidator("param", idParamSchema, onInvalid),
+    zValidator("json", providerSettingsPatchBodySchema, onInvalid),
+    (c) => {
+      const svc = c.var.svc;
+      const { values } = c.req.valid("json");
+      const view = svc.providerSettings.update(c.req.valid("param").id, values);
+      // New runs pick the rest up at submit; a new cap needs the scheduler to look again.
+      if (CONCURRENCY_CAP_FIELD in values) svc.runner.tick();
+      return c.json(view satisfies ProviderSettingsResponse, 200);
     },
   );

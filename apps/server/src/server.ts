@@ -27,13 +27,14 @@ import { Thumbs } from "./files/thumbs";
 import { mintSessionToken } from "./http/guards";
 import { VITE_ORIGIN } from "./http/spa";
 import { consoleSink, createJobLog, fileSink, Logger, RollingFile } from "./log/logger";
-import { toJobSetWithJobs } from "./mappers/job";
 import { CallContexts } from "./runner/provider-fetch";
 import { recover } from "./runner/recovery";
 import { Runner } from "./runner/runner";
 import type { QueueOptions } from "./runner/timing";
 import { CredentialService } from "./services/credentials";
+import { batchSnapshot, jobSetViews, markAnnounced } from "./services/job-sets";
 import { ModelService } from "./services/models";
+import { defaultCap, ProviderSettingsService } from "./services/provider-settings";
 import { SettingsService } from "./services/settings";
 
 // Boot (§0.16): home folder, lock, config, logs, database, services, crash recovery. Nothing here
@@ -77,8 +78,6 @@ export class LibraryInUseError extends Error {
   }
 }
 
-/** Runs at once per company by default (§0.12). */
-const DEFAULT_CAPS: Record<string, number> = { openai: 2, google: 4, higgsfield: 2 };
 const HOUR = 3_600_000;
 
 export async function createServer(opts: ServerOptions = {}): Promise<OpenfieldServer> {
@@ -136,7 +135,7 @@ async function boot(
       displayName: p.meta.displayName,
       adapter: p.meta.id,
       authKind: authKindOf(p),
-      concurrencyCap: DEFAULT_CAPS[p.meta.id] ?? 2,
+      concurrencyCap: defaultCap(p.meta.id),
     })),
   );
   credentials = new CredentialService(providers, config, env, db);
@@ -163,9 +162,12 @@ async function boot(
     (id) => getProvider(db, id)?.enabled !== false,
   );
   const events = new EventHub({
-    snapshot: () => activeJobSets(db).map(toJobSetWithJobs),
+    snapshot: () => ({ activeJobSets: jobSetViews(db, activeJobSets(db)), batches: batchSnapshot(db) }),
+    // A finished Batch run is announced once, to the first tab that hears about it (§2.4).
+    onSnapshotSent: (snapshot) => markAnnounced(db, snapshot.batches),
     onInvalid: (event, issue) => logger.warn("An event didn't match its schema", { event, issue }),
   });
+  const providerSettings = new ProviderSettingsService(db, providers, logger);
   const models = new ModelService({
     providers,
     db,
@@ -183,6 +185,8 @@ async function boot(
     models,
     credentials,
     settings,
+    providerSettings,
+    fake,
     events,
     ingest,
     thumbs,
@@ -218,6 +222,7 @@ async function boot(
     schemaTag: opened.schemaTag,
     providers,
     settings,
+    providerSettings,
     credentials,
     contexts,
     models,

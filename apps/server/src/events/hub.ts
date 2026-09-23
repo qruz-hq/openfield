@@ -1,4 +1,4 @@
-import type { JobSetWithJobs, SseEventType, SsePayload } from "@openfield/core";
+import type { SseEventType, SsePayload } from "@openfield/core";
 import { sseEventSchema } from "@openfield/core";
 
 // One stream, GET /api/events (§8.3.2). Ids only ever go up. A reconnect gets a fresh snapshot
@@ -11,9 +11,13 @@ interface Subscriber {
   closed: boolean;
 }
 
+type Snapshot = Omit<SsePayload<"snapshot">, "serverTime">;
+
 export interface EventHubOptions {
-  /** Active job sets for the opening snapshot. */
-  snapshot: () => JobSetWithJobs[];
+  /** Active job sets and provider batches for the opening snapshot. */
+  snapshot: () => Snapshot;
+  /** Called once a snapshot is written to a tab, so finished batches can be marked as announced. */
+  onSnapshotSent?: (snapshot: Snapshot) => void;
   heartbeatMs?: number;
   /** Called with frames that don't match sseEventSchema. They're still sent. */
   onInvalid?: (event: string, issue: string) => void;
@@ -35,11 +39,14 @@ export class EventHub {
     return this.#subs.size;
   }
 
-  publish<E extends SseEventType>(event: E, data: SsePayload<E>): void {
+  /** Sends a frame to every tab. True when at least one tab got it. */
+  publish<E extends SseEventType>(event: E, data: SsePayload<E>): boolean {
     const check = sseEventSchema.safeParse({ event, data });
     if (!check.success) this.opts.onInvalid?.(event, check.error.issues[0]?.message ?? "invalid");
     for (const listener of this.#listeners) listener(event, data);
-    if (this.#subs.size) this.#broadcast(this.#frame(event, data));
+    if (!this.#subs.size) return false;
+    this.#broadcast(this.#frame(event, data));
+    return this.#subs.size > 0;
   }
 
   /** In-process listeners, for tests and anything else that wants the same events. */
@@ -57,13 +64,9 @@ export class EventHub {
         sub = current;
         this.#subs.add(current);
         this.#write(current, ": openfield stream\nretry: 2000\n\n");
-        this.#write(
-          current,
-          this.#frame("snapshot", {
-            activeJobSets: this.opts.snapshot(),
-            serverTime: new Date().toISOString(),
-          }),
-        );
+        const snapshot = this.opts.snapshot();
+        this.#write(current, this.#frame("snapshot", { ...snapshot, serverTime: new Date().toISOString() }));
+        if (!current.closed) this.opts.onSnapshotSent?.(snapshot);
         signal?.addEventListener("abort", () => this.#drop(current), { once: true });
       },
       cancel: () => {

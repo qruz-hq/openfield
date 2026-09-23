@@ -61,7 +61,7 @@ export const keysRoutes = new Hono<Env>()
         provider,
         AbortSignal.any([c.req.raw.signal, AbortSignal.timeout(KEY_TEST_TIMEOUT_MS)]),
         noWrites((id) => ingest.read(id)),
-        candidate,
+        candidate && { candidate },
       );
       const result = await credentials.test(providerId, ctx, candidate);
       if (candidate && result.ok) {

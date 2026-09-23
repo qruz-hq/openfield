@@ -12,14 +12,14 @@ import { listJobSets } from "@openfield/db";
 import { Hono } from "hono";
 import type { Env } from "../context";
 import { onInvalid } from "../http/errors";
-import { toJobSetWithJobs } from "../mappers/job";
+import { jobSetViews } from "../services/job-sets";
 
 export const jobSetsRoutes = new Hono<Env>()
   .get("/job-sets", zValidator("query", jobSetsListQuerySchema, onInvalid), (c) => {
     const { status, cursor, limit } = c.req.valid("query");
     const page = listJobSets(c.var.svc.db, { status, cursor, limit });
     const body: JobSetsListResponse = {
-      items: page.items.map(toJobSetWithJobs),
+      items: jobSetViews(c.var.svc.db, page.items),
       nextCursor: page.nextCursor,
     };
     return c.json(body satisfies JobSetsListResponse, 200);
