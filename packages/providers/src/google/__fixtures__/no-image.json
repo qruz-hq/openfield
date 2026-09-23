@@ -1,0 +1,35 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/v1beta/models/gemini-3-pro-image:generateContent"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=UTF-8"
+    },
+    "body": {
+      "candidates": [
+        {
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "text": "I can describe that scene, but I can't draw it as asked."
+              }
+            ]
+          },
+          "finishReason": "NO_IMAGE",
+          "index": 0
+        }
+      ],
+      "usageMetadata": {
+        "promptTokenCount": 9,
+        "candidatesTokenCount": 15,
+        "totalTokenCount": 24
+      },
+      "modelVersion": "gemini-3-pro-image",
+      "responseId": "c1bSaJ3aK7-qqtsPxO7N2A0"
+    }
+  }
+}

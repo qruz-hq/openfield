@@ -1,0 +1,29 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/v1beta/models/gemini-3-pro-image:generateContent"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=UTF-8"
+    },
+    "body": {
+      "promptFeedback": {
+        "blockReason": "PROHIBITED_CONTENT"
+      },
+      "usageMetadata": {
+        "promptTokenCount": 11,
+        "totalTokenCount": 11,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 11
+          }
+        ]
+      },
+      "modelVersion": "gemini-3-pro-image",
+      "responseId": "Q1bSaNfFB4ChqtsPo9-pwQ4"
+    }
+  }
+}

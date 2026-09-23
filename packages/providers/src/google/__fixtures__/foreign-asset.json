@@ -1,0 +1,33 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/v1beta/models/gemini-3-pro-image:generateContent"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=UTF-8"
+    },
+    "body": {
+      "candidates": [
+        {
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "fileData": {
+                  "mimeType": "image/png",
+                  "fileUri": "https://images.unknown-host.example/out.png"
+                }
+              }
+            ]
+          },
+          "finishReason": "STOP",
+          "index": 0
+        }
+      ],
+      "modelVersion": "gemini-3-pro-image",
+      "responseId": "d1bSaK2hMM6uqtsPmdLs-Ag"
+    }
+  }
+}

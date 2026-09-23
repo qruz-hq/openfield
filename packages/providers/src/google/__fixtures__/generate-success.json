@@ -1,0 +1,51 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/v1beta/models/gemini-3-pro-image:generateContent"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=UTF-8"
+    },
+    "body": {
+      "candidates": [
+        {
+          "content": {
+            "role": "model",
+            "parts": [
+              {
+                "inlineData": {
+                  "mimeType": "image/png",
+                  "data": "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAQCAIAAACtAwlQAAABL0lEQVR4nHWR60rDQBCFd27NNk0bRNT6ACIiIiIiIiLiOwmCNIkgCP4QBEEQBMG3E+MNe4vpym6a0lbyb2b4ds45s7DWOSPFCEyKXSEMQsBoCBWjG8J659yOXEMgntS1aIKaydUoM2qEFtroXJSQeKIDv9VqhELesJ/1u4PfQQ6GYDOKyK1lEF8HC+HiylK7oYP07eMz/e53ByoH2IouxxCK71movbzaqDfT1/eP9GsMbUdXVgvGck0/bAZhjbxhL+v9FHIIO9G1iybWOIrHWkudUUwOeWZUDgQMu/ENFkR5CMZacQIw5CIz7MW3ZX6eK0obDPvx3aTBqX3TBRzE9zPQv32kBA7jh7mns5D9IjhKHqusoCOs3HHyVGWlgFAxnCTPVVYm6nCavFRZmaj/Ab9bT+nRGcc0AAAAAElFTkSuQmCC"
+                }
+              }
+            ]
+          },
+          "finishReason": "STOP",
+          "index": 0
+        }
+      ],
+      "usageMetadata": {
+        "promptTokenCount": 14,
+        "candidatesTokenCount": 1120,
+        "thoughtsTokenCount": 212,
+        "totalTokenCount": 1346,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 14
+          }
+        ],
+        "candidatesTokensDetails": [
+          {
+            "modality": "IMAGE",
+            "tokenCount": 1120
+          }
+        ]
+      },
+      "modelVersion": "gemini-3-pro-image",
+      "responseId": "mVXSaMbDEuq2qtsP7KLf-Ag"
+    }
+  }
+}

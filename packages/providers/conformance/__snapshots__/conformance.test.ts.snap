@@ -1,0 +1,299 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`google 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: google:gemini-3-pro-image 1`] = `
+{
+  "edit": [
+    {
+      "body": {
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "Make the sky stormy",
+              },
+              {
+                "inlineData": {
+                  "data": "<964 base64 chars>",
+                  "mimeType": "image/png",
+                },
+              },
+              {
+                "inlineData": {
+                  "data": "<516 base64 chars>",
+                  "mimeType": "image/png",
+                },
+              },
+              {
+                "inlineData": {
+                  "data": "<580 base64 chars>",
+                  "mimeType": "image/png",
+                },
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "generationConfig": {
+          "imageConfig": {
+            "imageSize": "1K",
+          },
+          "responseModalities": [
+            "IMAGE",
+          ],
+        },
+      },
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent",
+    },
+  ],
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "A red kite over a green hill",
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "generationConfig": {
+          "imageConfig": {
+            "aspectRatio": "3:4",
+            "imageSize": "1K",
+          },
+          "responseModalities": [
+            "IMAGE",
+          ],
+        },
+      },
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent",
+    },
+    {
+      "body": {
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "A red kite over a green hill",
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "generationConfig": {
+          "imageConfig": {
+            "aspectRatio": "3:4",
+            "imageSize": "1K",
+          },
+          "responseModalities": [
+            "IMAGE",
+          ],
+        },
+      },
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent",
+    },
+  ],
+}
+`;
+
+exports[`google 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: google:gemini-3.1-flash-image 1`] = `
+{
+  "edit": [
+    {
+      "body": {
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "Make the sky stormy",
+              },
+              {
+                "inlineData": {
+                  "data": "<964 base64 chars>",
+                  "mimeType": "image/png",
+                },
+              },
+              {
+                "inlineData": {
+                  "data": "<516 base64 chars>",
+                  "mimeType": "image/png",
+                },
+              },
+              {
+                "inlineData": {
+                  "data": "<580 base64 chars>",
+                  "mimeType": "image/png",
+                },
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "generationConfig": {
+          "imageConfig": {
+            "imageSize": "1K",
+          },
+          "responseModalities": [
+            "IMAGE",
+          ],
+        },
+      },
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent",
+    },
+  ],
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "A red kite over a green hill",
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "generationConfig": {
+          "imageConfig": {
+            "aspectRatio": "3:4",
+            "imageSize": "1K",
+          },
+          "responseModalities": [
+            "IMAGE",
+          ],
+        },
+      },
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent",
+    },
+    {
+      "body": {
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "A red kite over a green hill",
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "generationConfig": {
+          "imageConfig": {
+            "aspectRatio": "3:4",
+            "imageSize": "1K",
+          },
+          "responseModalities": [
+            "IMAGE",
+          ],
+        },
+      },
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent",
+    },
+  ],
+}
+`;
+
+exports[`google 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: google:gemini-3.1-flash-lite-image 1`] = `
+{
+  "edit": [
+    {
+      "body": {
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "Make the sky stormy",
+              },
+              {
+                "inlineData": {
+                  "data": "<964 base64 chars>",
+                  "mimeType": "image/png",
+                },
+              },
+              {
+                "inlineData": {
+                  "data": "<516 base64 chars>",
+                  "mimeType": "image/png",
+                },
+              },
+              {
+                "inlineData": {
+                  "data": "<580 base64 chars>",
+                  "mimeType": "image/png",
+                },
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "generationConfig": {
+          "responseModalities": [
+            "IMAGE",
+          ],
+        },
+      },
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-image:generateContent",
+    },
+  ],
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "A red kite over a green hill",
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "generationConfig": {
+          "imageConfig": {
+            "aspectRatio": "3:4",
+          },
+          "responseModalities": [
+            "IMAGE",
+          ],
+        },
+      },
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-image:generateContent",
+    },
+    {
+      "body": {
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "A red kite over a green hill",
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "generationConfig": {
+          "imageConfig": {
+            "aspectRatio": "3:4",
+          },
+          "responseModalities": [
+            "IMAGE",
+          ],
+        },
+      },
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-image:generateContent",
+    },
+  ],
+}
+`;
