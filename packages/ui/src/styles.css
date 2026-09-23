@@ -1,0 +1,277 @@
+/* Openfield design tokens and Tailwind theme (PRD §2.2). Values come from design.pen. */
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* Scan the ui components too, not only the app that imports this file. */
+@source "./";
+
+/*
+ * Theme resolution: dark by default. Light applies for data-theme="light", or when the OS
+ * prefers light and the person hasn't picked dark. Each token is light-dark(light, dark).
+ * Where a dark value differs from design.pen, the WCAG contrast gate moved it (test/contrast.test.ts).
+ */
+:root {
+  color-scheme: dark;
+
+  --of-surface: light-dark(#f6f4f0, #0e1012);
+  --of-canvas: light-dark(#f1eee9, #0b0d0e);
+  --of-elevated: light-dark(#ffffff, #17191c);
+  --of-elevated-2: light-dark(#efece6, #202327);
+  --of-border: light-dark(#14161a1a, #ffffff14);
+  --of-border-strong: light-dark(#14161a2e, #ffffff29);
+  --of-text-primary: light-dark(#14161a, #f5f6f7);
+  --of-text-secondary: light-dark(#14161abd, #f5f6f79e);
+  /* design.pen has 38% (#F5F6F761); 49% is the lowest that clears 4.5:1 on every surface. */
+  --of-text-tertiary: light-dark(#14161a9c, #f5f6f77d);
+  --of-accent: light-dark(#1b1d21, #e9e3d8);
+  --of-accent-fg: light-dark(#f4f0e8, #14161a);
+  /* Light was 6%, too faint to mark the active rail or nav item; 10% reads like dark does. */
+  --of-accent-soft: light-dark(#1b1d211a, #e9e3d814);
+  --of-accent-line: light-dark(#1b1d212e, #e9e3d840);
+  --of-accent-hover: light-dark(#2c2f35, #f2eee7);
+  /* design.pen has #F2545B; one step brighter so it reads on danger-soft over cards. */
+  --of-danger: light-dark(#be2d35, #f35a61);
+  /* Label on a solid danger fill. Light text on the dark theme's red is only 3.1:1. */
+  --of-danger-fg: light-dark(#ffffff, #14161a);
+  --of-danger-soft: light-dark(#be2d351a, #f35a6124);
+  --of-danger-line: light-dark(#be2d3566, #f35a6166);
+  --of-scrim: light-dark(#14161a66, #0000008c);
+  --of-grid-dot: light-dark(#14161a14, #ffffff0f);
+  /* The picked segment: elevated-2 in dark as designed; in light a white pill with a
+   * border-strong edge, since elevated-2 barely differs from the light track. */
+  --of-segment-on: light-dark(#ffffff, #202327);
+  --of-segment-on-line: light-dark(#14161a2e, #00000000);
+  /* Edge of an unchecked checkbox or radio. border-strong is too faint for 3:1. */
+  --of-control-line: light-dark(#14161a80, #ffffff5c);
+  --of-shadow: light-dark(#14161a1f, #00000080);
+
+  /* Things that sit on images stay dark in both themes. */
+  --of-overlay: #0e1012b8;
+  --of-overlay-fg: #f5f6f7;
+  --of-overlay-fg-muted: #f5f6f79e;
+  --of-overlay-line: #ffffff14;
+  /* design.pen uses the scrim (55%); 58% keeps white captions at 4.5:1 on a white photo. */
+  --of-overlay-scrim: #00000094;
+  --of-overlay-check: #00000066;
+  --of-overlay-check-shadow: #00000059;
+  /* Tile status pills: the scrim in dark, deeper ink in light so white text still reads. */
+  --of-status-fill: light-dark(#14161ab8, #0000008c);
+
+  /* Aliases other sections consume by name (§2.2). Never give them their own value. */
+  --of-surface-0: var(--of-surface);
+  --of-surface-sheet: var(--of-elevated);
+  --of-on-accent: var(--of-accent-fg);
+
+  --of-r-xs: 6px;
+  --of-r-sm: 8px;
+  --of-r-md: 12px;
+  --of-r-lg: 16px;
+  --of-r-xl: 20px;
+  --of-r-2xl: 24px;
+  --of-r-pill: 999px;
+
+  --of-shadow-popover: 0 16px 40px var(--of-shadow);
+  --of-shadow-check: 0 1px 4px var(--of-overlay-check-shadow);
+  --of-blur-panel: blur(10.45px);
+  --of-blur-chip: blur(8px);
+
+  scrollbar-color: var(--of-border-strong) transparent;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+  }
+}
+
+/* Utilities read the tokens directly, so a theme switch needs no rebuild. */
+@theme inline {
+  --color-*: initial;
+  --color-surface: var(--of-surface);
+  --color-canvas: var(--of-canvas);
+  --color-elevated: var(--of-elevated);
+  --color-elevated-2: var(--of-elevated-2);
+  --color-border: var(--of-border);
+  --color-border-strong: var(--of-border-strong);
+  --color-text-primary: var(--of-text-primary);
+  --color-text-secondary: var(--of-text-secondary);
+  --color-text-tertiary: var(--of-text-tertiary);
+  --color-accent: var(--of-accent);
+  --color-accent-fg: var(--of-accent-fg);
+  --color-accent-soft: var(--of-accent-soft);
+  --color-accent-line: var(--of-accent-line);
+  --color-accent-hover: var(--of-accent-hover);
+  --color-danger: var(--of-danger);
+  --color-danger-fg: var(--of-danger-fg);
+  --color-danger-soft: var(--of-danger-soft);
+  --color-danger-line: var(--of-danger-line);
+  --color-scrim: var(--of-scrim);
+  --color-grid-dot: var(--of-grid-dot);
+  --color-control-line: var(--of-control-line);
+  --color-segment-on: var(--of-segment-on);
+  --color-segment-on-line: var(--of-segment-on-line);
+  --color-overlay: var(--of-overlay);
+  --color-overlay-fg: var(--of-overlay-fg);
+  --color-overlay-fg-muted: var(--of-overlay-fg-muted);
+  --color-overlay-line: var(--of-overlay-line);
+  --color-overlay-scrim: var(--of-overlay-scrim);
+  --color-overlay-check: var(--of-overlay-check);
+  --color-status-fill: var(--of-status-fill);
+
+  --shadow-*: initial;
+  --shadow-popover: var(--of-shadow-popover);
+  --shadow-check: var(--of-shadow-check);
+}
+
+@theme {
+  /* One spacing unit is one pixel, so classes read like the design: p-12, gap-6, h-40. */
+  --spacing: 1px;
+
+  --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+
+  /* Type roles. Line heights are the rounded ones design.pen lays text out with. */
+  --text-*: initial;
+  --text-display: 28px;
+  --text-display--line-height: 34px;
+  --text-display--letter-spacing: -0.4px;
+  --text-display--font-weight: 600;
+  --text-sheet-title: 24px;
+  --text-sheet-title--line-height: 30px;
+  --text-sheet-title--letter-spacing: -0.3px;
+  --text-sheet-title--font-weight: 600;
+  --text-page-title: 20px;
+  --text-page-title--line-height: 24px;
+  --text-page-title--font-weight: 600;
+  --text-group-title: 16px;
+  --text-group-title--line-height: 19px;
+  --text-group-title--font-weight: 600;
+  --text-button-l: 15px;
+  --text-button-l--line-height: 18px;
+  --text-button-l--font-weight: 600;
+  --text-body-strong: 14px;
+  --text-body-strong--line-height: 17px;
+  --text-body-strong--font-weight: 600;
+  --text-body-medium: 14px;
+  --text-body-medium--line-height: 17px;
+  --text-body-medium--font-weight: 500;
+  --text-body: 14px;
+  --text-body--line-height: 17px;
+  --text-small: 13px;
+  --text-small--line-height: 16px;
+  --text-caption: 12px;
+  --text-caption--line-height: 15px;
+  --text-micro: 11px;
+  --text-micro--line-height: 13px;
+
+  --radius-*: initial;
+  --radius-2: 2px;
+  --radius-4: 4px;
+  --radius-5: 5px;
+  --radius-6: 6px;
+  --radius-7: 7px;
+  --radius-8: 8px;
+  --radius-10: 10px;
+  --radius-12: 12px;
+  --radius-14: 14px;
+  --radius-16: 16px;
+  --radius-20: 20px;
+  --radius-24: 24px;
+  --radius-26: 26px;
+  --radius-30: 30px;
+
+  --blur-*: initial;
+  --blur-chip: 8px;
+  --blur-panel: 10.45px;
+
+  --animate-pop-in: pop-in 120ms ease-out;
+  --animate-progress-indeterminate: progress-indeterminate 1.6s ease-in-out infinite;
+
+  @keyframes pop-in {
+    from {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+  }
+
+  /* A third of the track sweeping across, for work with no reported progress. */
+  @keyframes progress-indeterminate {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(300%);
+    }
+  }
+}
+
+/* Caps label: typed in sentence case, uppercased here (§0.15). */
+@utility text-caps {
+  font-size: 11px;
+  line-height: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* Mono is for raw numbers only: prices, counts, sizes, key hints. */
+@utility text-mono-11 {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 15px;
+}
+
+@utility text-mono-12 {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+@utility text-mono-13 {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 17px;
+}
+
+@utility text-mono-24 {
+  font-family: var(--font-mono);
+  font-size: 24px;
+  line-height: 29px;
+  font-weight: 500;
+}
+
+@layer base {
+  html,
+  body {
+    background-color: var(--of-surface);
+    color: var(--of-text-primary);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--of-accent);
+    outline-offset: 2px;
+  }
+}
+
+/* Unlayered, so it beats every utility without !important. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms;
+    animation-iteration-count: 1;
+    transition-duration: 0.01ms;
+    scroll-behavior: auto;
+  }
+}
