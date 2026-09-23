@@ -2,9 +2,10 @@ import { formatDateTime, t } from "@openfield/core";
 import { Banner, Button, ProviderLogo } from "@openfield/ui";
 import { useProviders } from "../api/hooks/keys";
 import { useModels, useRefreshModels } from "../api/hooks/models";
+import { useRunSpeed } from "../api/hooks/provider-settings";
 import { useSettings } from "../api/hooks/settings";
 import { errorMessage } from "../api/raw";
-import { defaultPrice } from "../lib/cost";
+import { speedPrice } from "../lib/cost";
 import { companyName, logoFor } from "../lib/provider";
 import { SettingRow, SettingsSection } from "./section";
 
@@ -15,6 +16,7 @@ export function ModelsPane() {
   const providers = useProviders().data;
   const settings = useSettings().data;
   const refresh = useRefreshModels();
+  const runSpeed = useRunSpeed();
 
   if (models.isError) return <Banner variant="error" message={errorMessage(models.error)} />;
   const checked = settings?.modelRefreshedAt;
@@ -24,6 +26,7 @@ export function ModelsPane() {
       <SettingsSection label={t("settings.models.yours")}>
         {(models.data ?? []).map((model) => {
           const logo = logoFor(model.providerId);
+          const { price, note, hint } = speedPrice(model, runSpeed(model));
           return (
             <SettingRow
               key={model.key}
@@ -39,8 +42,9 @@ export function ModelsPane() {
                   : t("composer.chips.model.addKeyFor", { company: companyName(providers, model.providerId) })
               }
             >
-              <span className="shrink-0 text-mono-12 text-text-secondary">
-                {defaultPrice(model) ?? t("cost.unknown")}
+              <span className="flex shrink-0 items-center gap-4" title={hint}>
+                <span className="text-mono-12 text-text-secondary">{price ?? t("cost.unknown")}</span>
+                {note ? <span className="text-caption text-text-tertiary">{note}</span> : null}
               </span>
             </SettingRow>
           );

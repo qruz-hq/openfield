@@ -1,9 +1,15 @@
-import { errorCopy, type JobSetWithJobs, type SseEvent, t } from "@openfield/core";
+import { type BatchUpdated, errorCopy, type JobSetWithJobs, type SseEvent, t } from "@openfield/core";
 import { useEffect } from "react";
+import { type BatchNameLookups, batchNotice } from "../lib/batch-copy";
 import { announce, useLive } from "../lib/live";
+import { notify } from "../lib/notify";
+import { revealJobSet } from "../lib/reveal";
+import { systemNotify } from "../lib/system-notify";
 import { queryClient, queryKeys } from "./client";
 import { patchAsset, prependAsset, removeAssets } from "./hooks/assets";
-import { patchJob, patchJobSet, upsertJobSet } from "./hooks/job-sets";
+import { patchBatch, patchJob, patchJobSet, upsertJobSet } from "./hooks/job-sets";
+import { providersQuery } from "./hooks/keys";
+import { modelsQuery } from "./hooks/models";
 import { ApiError, readEventStream } from "./raw";
 
 // One stream, GET /api/events. Each frame patches the cache in place, so the feed never
@@ -24,6 +30,8 @@ function announceFinished(jobSetId: string, status: string) {
   const set = queryClient
     .getQueryData<JobSetWithJobs[]>(queryKeys.jobSets)
     ?.find((s) => s.jobSet.id === jobSetId);
+  // A Batch run that wasn't canceled gets a finish toast, and the toaster is already a live region.
+  if (set?.batch && !set.batch.stopping && status !== "canceled") return;
   const ready = set?.jobs.filter((job) => job.status === "succeeded").length ?? 0;
   if (ready > 0) return announce(t("feed.announce.ready", { count: ready }));
   if (status === "canceled") return announce(t("toast.canceled"));
@@ -35,23 +43,73 @@ function jobSetsCache(): JobSetWithJobs[] {
   return queryClient.getQueryData<JobSetWithJobs[]>(queryKeys.jobSets) ?? [];
 }
 
+/** Names for the finish notice, fetched when this tab hasn't loaded them yet. */
+const names: BatchNameLookups = {
+  model: async (key) =>
+    (await queryClient.ensureQueryData(modelsQuery)).models.find((m) => m.key === key)?.displayName,
+  company: async (id) =>
+    (await queryClient.ensureQueryData(providersQuery)).find((p) => p.id === id)?.meta.displayName,
+};
+
+/**
+ * A Batch run finished: one toast and one system notification, whether the tab was open all along
+ * or reconnects later (§2.4). A run the person canceled already said so when they did.
+ */
+async function batchFinished(frame: BatchUpdated) {
+  if (announced.has(`batch:${frame.jobSetId}`)) return;
+  announced.add(`batch:${frame.jobSetId}`);
+  void queryClient.invalidateQueries({ queryKey: queryKeys.usageToday });
+  if (frame.state === "canceled") return;
+
+  const set = jobSetsCache().find((s) => s.jobSet.id === frame.jobSetId);
+  const copy = await batchNotice(frame, set?.jobs, names);
+  const show = () => {
+    // Leave the toast first: the toaster hands focus back to where it came from as it's left,
+    // which would otherwise pull focus off the tile Show brings up.
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    revealJobSet(frame.jobSetId);
+  };
+  notify(copy.title, {
+    tone: copy.made ? "success" : "danger",
+    description: copy.detail,
+    duration: 10_000,
+    action: { label: t("actions.show"), onClick: show },
+  });
+  systemNotify(copy.body, { tag: frame.jobSetId, onClick: show });
+}
+
+function batchUpdated(frame: BatchUpdated) {
+  const { state, submittedAt, expiresAt, counts, stopping } = frame;
+  patchBatch(frame.jobSetId, { state, submittedAt, expiresAt, counts, stopping });
+  if (frame.finished) void batchFinished(frame);
+}
+
 export function applyEvent(event: SseEvent) {
-  const setPosition = useLive.getState().setPosition;
+  const { setPosition, setRetry } = useLive.getState();
   switch (event.event) {
     case "snapshot":
       for (const set of event.data.activeJobSets) upsertJobSet(set);
+      for (const batch of event.data.batches) batchUpdated(batch);
       return;
     case "job_set.created":
       upsertJobSet(event.data);
       announceStarted(event.data);
       return;
-    case "job.queued":
-      patchJob(event.data.jobSetId, event.data.jobId, { status: "queued" });
-      setPosition(event.data.jobId, event.data.position);
+    case "job.queued": {
+      const { jobSetId, jobId, position, retryAt, busy } = event.data;
+      patchJob(jobSetId, jobId, { status: "queued", nextAttemptAt: retryAt ?? null });
+      setPosition(jobId, position);
+      setRetry(jobId, retryAt ? { at: retryAt, busy: busy === true } : undefined);
       return;
+    }
     case "job.started":
-      patchJob(event.data.jobSetId, event.data.jobId, { status: "running", startedAt: event.data.startedAt });
+      patchJob(event.data.jobSetId, event.data.jobId, {
+        status: "running",
+        startedAt: event.data.startedAt,
+        nextAttemptAt: null,
+      });
       setPosition(event.data.jobId, undefined);
+      setRetry(event.data.jobId, undefined);
       return;
     case "job.progress":
       patchJob(event.data.jobSetId, event.data.jobId, { progress: event.data.progress });
@@ -66,14 +124,17 @@ export function applyEvent(event: SseEvent) {
         errorCode: event.data.error.code,
         errorMessage: event.data.error.message,
         errorReason: event.data.error.reason ?? null,
+        errorAction: event.data.error.action ?? null,
         // The frame carries no time; a refetch replaces this with the server's.
         finishedAt: new Date().toISOString(),
       });
       setPosition(event.data.jobId, undefined);
+      setRetry(event.data.jobId, undefined);
       return;
     case "job.canceled":
       patchJob(event.data.jobSetId, event.data.jobId, { status: "canceled", errorCode: "canceled" });
       setPosition(event.data.jobId, undefined);
+      setRetry(event.data.jobId, undefined);
       return;
     case "job_set.completed":
       patchJobSet(event.data.jobSetId, {
@@ -94,6 +155,9 @@ export function applyEvent(event: SseEvent) {
       return;
     case "usage.updated":
       void queryClient.invalidateQueries({ queryKey: queryKeys.usageToday });
+      return;
+    case "batch.updated":
+      batchUpdated(event.data);
       return;
     default:
       // Partial previews, folders, canvas runs and maintenance aren't on these screens yet.

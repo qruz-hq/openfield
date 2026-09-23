@@ -14,6 +14,8 @@ export interface ModelRowProps extends Omit<ComponentProps<"div">, "title"> {
   logo?: ReactNode;
   /** "~$0.04". */
   price?: ReactNode;
+  /** Words after the price, such as "· Standard". */
+  priceNote?: ReactNode;
   selected?: boolean;
   /** Set when the company has no key yet: the row greys out and this link takes the price's place. */
   addKeyLabel?: string;
@@ -26,6 +28,7 @@ export function ModelRow({
   description,
   logo,
   price,
+  priceNote,
   selected = false,
   addKeyLabel,
   asChild = false,
@@ -55,7 +58,10 @@ export function ModelRow({
       {needsKey ? (
         <span className="shrink-0 py-6 text-caption font-semibold text-accent">{addKeyLabel}</span>
       ) : price ? (
-        <span className="shrink-0 text-mono-12 font-medium text-text-secondary">{price}</span>
+        <span className="flex shrink-0 items-center gap-4">
+          <span className="text-mono-12 font-medium text-text-secondary">{price}</span>
+          {priceNote ? <span className="text-caption text-text-tertiary">{priceNote}</span> : null}
+        </span>
       ) : null}
       <span className="flex size-16 shrink-0 items-center justify-center">
         {selected ? <Check size={16} aria-hidden className="text-accent" /> : null}

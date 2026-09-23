@@ -1,22 +1,29 @@
-import { MAX_CONCURRENCY, type ProviderSummary, t } from "@openfield/core";
-import { Banner, Stepper } from "@openfield/ui";
-import { useId } from "react";
-import { useLocation } from "react-router";
-import { useKeys, useProviders, useUpdateProvider } from "../api/hooks/keys";
+import { Banner } from "@openfield/ui";
+import { useEffect } from "react";
+import { useLocation, useNavigate } from "react-router";
+import { useKeys, useProviders } from "../api/hooks/keys";
 import { useModels } from "../api/hooks/models";
 import { errorMessage } from "../api/raw";
-import { notifyError } from "../lib/notify";
 import { ProviderCard } from "./provider-card";
-import { SettingRow, SettingsSection } from "./section";
 
-// Settings · API keys: one card per company, then each company's own settings.
+// Settings · API keys: one card per company. Each company's own settings open in a modal from
+// its card, never inline under it (§6.17).
 
 export function ApiKeysPane() {
   const providers = useProviders();
   const keys = useKeys();
   const models = useModels();
   const location = useLocation();
-  const focusKey = (location.state as { focusKey?: boolean } | null)?.focusKey === true;
+  const navigate = useNavigate();
+  const state = location.state as { focusKey?: boolean; providerSettings?: string } | null;
+  const focusKey = state?.focusKey === true;
+  const openFor = state?.providerSettings;
+
+  const loaded = !!providers.data;
+  // Opened once the cards are there; a reload of this page shouldn't open the modal again.
+  useEffect(() => {
+    if (openFor && loaded) void navigate(location.pathname, { replace: true, state: null });
+  }, [openFor, loaded, navigate, location.pathname]);
 
   if (providers.isError) return <Banner variant="error" message={errorMessage(providers.error)} />;
   if (!providers.data) return null;
@@ -33,43 +40,9 @@ export function ApiKeysPane() {
           status={keys.data?.find((k) => k.providerId === provider.id)}
           models={models.data?.filter((m) => m.providerId === provider.id) ?? []}
           autoFocus={focusKey && provider.id === firstMissing}
+          openSettings={openFor === provider.id}
         />
-      ))}
-      {providers.data.map((provider) => (
-        <ProviderSettings key={provider.id} provider={provider} />
       ))}
     </>
-  );
-}
-
-function ProviderSettings({ provider }: { provider: ProviderSummary }) {
-  const update = useUpdateProvider();
-  const runsId = useId();
-  const company = provider.meta.displayName;
-
-  const setCap = (concurrencyCap: number) =>
-    update.mutate(
-      { providerId: provider.id, patch: { concurrencyCap } },
-      { onError: (error) => notifyError(errorMessage(error)) },
-    );
-
-  return (
-    <SettingsSection label={company}>
-      <SettingRow
-        title={t("settings.apiKeys.runsAtOnce.label")}
-        description={t("settings.apiKeys.runsAtOnce.hint", { company })}
-        titleId={runsId}
-      >
-        <Stepper
-          aria-labelledby={runsId}
-          value={provider.concurrencyCap}
-          min={1}
-          max={MAX_CONCURRENCY}
-          onValueChange={setCap}
-          decrementLabel={t("settings.apiKeys.runsAtOnce.fewer")}
-          incrementLabel={t("settings.apiKeys.runsAtOnce.more")}
-        />
-      </SettingRow>
-    </SettingsSection>
   );
 }

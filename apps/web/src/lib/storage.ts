@@ -83,3 +83,7 @@ export const safeStorage = <T>(opts: { debounceMs?: number } = {}) =>
 export function writeLocal(name: string, value: string) {
   guarded.setItem(name, value);
 }
+
+export function readLocal(name: string): string | null {
+  return guarded.getItem(name);
+}

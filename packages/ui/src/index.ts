@@ -62,6 +62,7 @@ export {
   ModalTrigger,
 } from "./components/modal";
 export { ModelRow, type ModelRowProps } from "./components/model-row";
+export { OptionCard, type OptionCardProps } from "./components/option-card";
 export {
   OptionRow,
   OptionRowContent,
@@ -72,6 +73,8 @@ export {
 export {
   FilterPill,
   type FilterPillProps,
+  SettingSummaryPill,
+  type SettingSummaryPillProps,
   SpendPill,
   type SpendPillProps,
   StatusPill,

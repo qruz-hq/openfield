@@ -1,10 +1,12 @@
 import {
   ACTIVE_JOB_STATES,
+  type BatchSummary,
   type GenerateBody,
   type Job,
   type JobSet,
   type JobSetWithJobs,
   type PixelSize,
+  type SpeedId,
 } from "@openfield/core";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, call, queryClient, queryKeys } from "../client";
@@ -68,9 +70,27 @@ export function upsertJobSet(next: JobSetWithJobs) {
   });
 }
 
+/**
+ * A new run the server just accepted. The stream may have sent it already and moved its jobs on
+ * (job_set.created, then job.started, before the 202 lands), so a copy already here wins.
+ */
+export function addJobSet(accepted: JobSetWithJobs) {
+  queryClient.setQueryData<JobSetWithJobs[]>(queryKeys.jobSets, (list) => {
+    if (!list || list.some((s) => s.jobSet.id === accepted.jobSet.id)) return list;
+    return [accepted, ...list];
+  });
+}
+
 export function patchJobSet(jobSetId: string, patch: Partial<JobSet>) {
   queryClient.setQueryData<JobSetWithJobs[]>(queryKeys.jobSets, (list) =>
     list?.map((s) => (s.jobSet.id === jobSetId ? { ...s, jobSet: { ...s.jobSet, ...patch } } : s)),
+  );
+}
+
+/** A Batch run's provider batch changed state (batch.updated). */
+export function patchBatch(jobSetId: string, batch: BatchSummary) {
+  queryClient.setQueryData<JobSetWithJobs[]>(queryKeys.jobSets, (list) =>
+    list?.map((s) => (s.jobSet.id === jobSetId ? { ...s, batch } : s)),
   );
 }
 
@@ -90,7 +110,7 @@ function removeJobSet(jobSetId: string) {
   );
 }
 
-function optimisticJobSet(body: GenerateBody, size: PixelSize): JobSetWithJobs {
+function optimisticJobSet(body: GenerateBody, size: PixelSize, speed: SpeedId): JobSetWithJobs {
   const now = new Date().toISOString();
   const id = `${OPTIMISTIC}${body.idempotencyKey}`;
   return {
@@ -113,6 +133,7 @@ function optimisticJobSet(body: GenerateBody, size: PixelSize): JobSetWithJobs {
       createdAt: now,
       startedAt: null,
       finishedAt: null,
+      speed,
     },
     jobs: Array.from({ length: body.batch }, (_, idx) => ({
       id: `${id}:${idx}`,
@@ -139,17 +160,19 @@ export interface GenerateInput {
   body: GenerateBody;
   /** Where the placeholders reserve space until the server sends the real size. */
   placeholder: PixelSize;
+  /** What the company's settings resolve to, so a Batch run's tiles wait from the start. */
+  speed: SpeedId;
 }
 
 export function useGenerate() {
   return useMutation({
     mutationFn: ({ body }: GenerateInput) => call(api.api.generate.$post({ json: body })),
-    onMutate: ({ body, placeholder }) => {
-      upsertJobSet(optimisticJobSet(body, placeholder));
+    onMutate: ({ body, placeholder, speed }) => {
+      upsertJobSet(optimisticJobSet(body, placeholder, speed));
     },
     onSuccess: (accepted, { body }) => {
       removeJobSet(`${OPTIMISTIC}${body.idempotencyKey}`);
-      upsertJobSet(accepted);
+      addJobSet(accepted);
     },
     onError: (_error, { body }) => removeJobSet(`${OPTIMISTIC}${body.idempotencyKey}`),
   });
@@ -161,12 +184,20 @@ export function useCancelJob() {
   });
 }
 
+/** Cancel a whole run. A Batch run's images stop together, at the company too (§0.12). */
+export function useCancelJobSet() {
+  return useMutation({
+    mutationFn: (jobSetId: string) =>
+      call(api.api["job-sets"][":id"].cancel.$post({ param: { id: jobSetId } })),
+  });
+}
+
 /** Try again: re-send the frozen request of a failed run, only the images that failed. */
 export function useRetryJobSet() {
   return useMutation({
     mutationFn: (jobSetId: string) =>
       call(api.api["job-sets"][":id"].retry.$post({ param: { id: jobSetId }, json: { onlyFailed: true } })),
-    onSuccess: upsertJobSet,
+    onSuccess: addJobSet,
   });
 }
 
@@ -175,6 +206,6 @@ export function useRecreateJobSet() {
   return useMutation({
     mutationFn: (jobSetId: string) =>
       call(api.api["job-sets"][":id"].recreate.$post({ param: { id: jobSetId } })),
-    onSuccess: upsertJobSet,
+    onSuccess: addJobSet,
   });
 }

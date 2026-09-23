@@ -9,6 +9,7 @@ import {
   RESOLUTION_TIER_PX,
   type ResolutionTier,
   type SizeSpec,
+  type SpeedId,
   t,
 } from "@openfield/core";
 import { estimate, nearestRatio, placeholderSize } from "@openfield/providers/manifest";
@@ -162,13 +163,20 @@ export function expectedSize(caps: Capabilities, resolved: Resolved): PixelSize 
   return placeholderSize(caps, { aspect }, resolved.resolution);
 }
 
-export function estimateRun(model: ModelListItem, resolved: Resolved, prompt: string): CostEstimate {
+/** `speed` is what the company's settings resolve to; a speed the model lacks prices as Standard. */
+export function estimateRun(
+  model: ModelListItem,
+  resolved: Resolved,
+  prompt: string,
+  speed: SpeedId = "standard",
+): CostEstimate {
   return estimate(model, {
     batch: resolved.batch,
     resolution: resolved.resolution,
     quality: resolved.quality,
     size: expectedSize(model.capabilities, resolved),
     prompt,
+    speed,
   });
 }
 
@@ -208,12 +216,13 @@ export function generateState(input: {
   anyReady: boolean;
   prompt: string;
   resolved: Resolved | undefined;
+  speed?: SpeedId;
 }): GenerateState {
-  const { model, anyReady, prompt, resolved } = input;
+  const { model, anyReady, prompt, resolved, speed } = input;
   if (!model)
     return anyReady ? { kind: "blocked", reason: t("composer.generate.noModel") } : { kind: "no-key" };
   if (!model.ready) return { kind: "needs-key", model };
-  const cost = resolved ? estimateRun(model, resolved, prompt) : undefined;
+  const cost = resolved ? estimateRun(model, resolved, prompt, speed) : undefined;
   if (!prompt.trim()) return { kind: "blocked", reason: t("composer.generate.emptyPrompt"), estimate: cost };
   return { kind: "ready", estimate: cost! };
 }

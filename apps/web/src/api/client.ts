@@ -46,6 +46,7 @@ export const queryKeys = {
   settings: ["settings"] as const,
   keys: ["keys"] as const,
   providers: ["providers"] as const,
+  providerSettings: (providerId: string) => ["providers", providerId, "settings"] as const,
   models: ["models"] as const,
   assets: (filter: "all" | "favourites") => ["assets", filter] as const,
   allAssets: ["assets"] as const,

@@ -13,7 +13,8 @@ import {
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useProviders } from "../../api/hooks/keys";
-import { defaultPrice } from "../../lib/cost";
+import { useRunSpeed } from "../../api/hooks/provider-settings";
+import { speedPrice } from "../../lib/cost";
 import { companyName, logoFor } from "../../lib/provider";
 import { focusSelected, Listbox } from "./listbox";
 
@@ -35,6 +36,7 @@ export function ModelSelect({
   const list = useRef<HTMLDivElement>(null);
   const search = useRef<HTMLInputElement>(null);
   const providers = useProviders().data;
+  const runSpeed = useRunSpeed();
 
   const needle = query.trim().toLowerCase();
   const matches = (model: ModelListItem) =>
@@ -112,6 +114,7 @@ export function ModelSelect({
                 {group.models.map((model) => {
                   const logo = logoFor(model.providerId);
                   const isSelected = model.key === selected?.key;
+                  const { price, note, hint } = speedPrice(model, runSpeed(model));
                   return (
                     <ModelRow
                       key={model.key}
@@ -119,7 +122,8 @@ export function ModelSelect({
                       name={model.displayName}
                       description={model.ready ? model.description : companyName(providers, model.providerId)}
                       logo={logo ? <ProviderLogo provider={logo} variant="tile" /> : undefined}
-                      price={defaultPrice(model)}
+                      price={price}
+                      priceNote={note}
                       selected={isSelected}
                       addKeyLabel={model.ready ? undefined : t("composer.chips.model.addKey")}
                     >
@@ -127,6 +131,7 @@ export function ModelSelect({
                         type="button"
                         role="option"
                         aria-selected={isSelected}
+                        title={hint}
                         onClick={() => pick(model)}
                       />
                     </ModelRow>

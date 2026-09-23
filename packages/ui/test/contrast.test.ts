@@ -95,6 +95,12 @@ const pairs: Pair[] = [
     where: `active nav or tab on ${bg}`,
   })),
   { fg: "text-primary", on: ["accent-soft", "elevated"], min: BODY, where: "selected option row" },
+  {
+    fg: "text-secondary",
+    on: ["accent-soft", "elevated"],
+    min: BODY,
+    where: "selected option card description and price unit",
+  },
   { fg: "accent-fg", on: ["accent"], min: BODY, where: "primary button label" },
   { fg: "accent-fg", on: ["accent-hover"], min: BODY, where: "primary button label on hover" },
   { fg: "danger", on: ["surface"], min: BODY, where: "danger text on the page" },

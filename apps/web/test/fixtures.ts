@@ -1,10 +1,13 @@
-import type {
-  AssetListItem,
-  Capabilities,
-  Job,
-  JobSet,
-  JobSetWithJobs,
-  ModelListItem,
+import {
+  type AssetListItem,
+  type Capabilities,
+  type Job,
+  type JobSet,
+  type JobSetWithJobs,
+  type ModelListItem,
+  type PriceModel,
+  type ProviderSettingsResponse,
+  withLimitsPanel,
 } from "@openfield/core";
 
 // Small, hand-written manifests: one aspect-and-tier model, one with quality levels.
@@ -128,6 +131,7 @@ export function jobSet(
       createdAt,
       startedAt: null,
       finishedAt: null,
+      speed: "standard",
       ...extra,
     },
     jobs: statuses.map((status, idx) => ({
@@ -172,4 +176,117 @@ export function asset(createdAt: string, extra: Partial<AssetListItem> = {}): As
     fileUrl: `/files/asset/${id}`,
     ...extra,
   };
+}
+
+// A company with speeds: Pro offers them all, Lite only Batch. Prices mirror Google's page.
+
+const perImage = (tiers: { tier: "1K" | "2K" | "4K"; usd: number }[]): PriceModel => ({
+  kind: "per_image",
+  currency: "USD",
+  pricedAt: "2026-09-23",
+  sourceUrl: "https://example.com/prices",
+  tiers,
+});
+const HOUR = 3_600_000;
+const batchOffer = (price: PriceModel) =>
+  ({ id: "batch", price, delivery: "async", waitMs: { target: 24 * HOUR, max: 48 * HOUR } }) as const;
+
+export const pro: ModelListItem = {
+  ...banana,
+  key: "google:pro",
+  modelId: "pro",
+  displayName: "Nano Banana Pro",
+  price: perImage([
+    { tier: "1K", usd: 0.134 },
+    { tier: "2K", usd: 0.134 },
+    { tier: "4K", usd: 0.24 },
+  ]),
+  speeds: [
+    {
+      id: "flex",
+      price: perImage([
+        { tier: "1K", usd: 0.067 },
+        { tier: "4K", usd: 0.12 },
+      ]),
+      delivery: "sync",
+      waitMs: { target: 60_000, max: 900_000 },
+      requestTimeoutMs: 900_000,
+    },
+    batchOffer(
+      perImage([
+        { tier: "1K", usd: 0.067 },
+        { tier: "4K", usd: 0.12 },
+      ]),
+    ),
+    {
+      id: "priority",
+      price: perImage([
+        { tier: "1K", usd: 0.24192 },
+        { tier: "4K", usd: 0.432 },
+      ]),
+      delivery: "sync",
+      waitMs: { target: 5000, max: 60_000 },
+    },
+  ],
+};
+
+export const lite: ModelListItem = {
+  ...banana,
+  key: "google:lite",
+  modelId: "lite",
+  displayName: "Nano Banana 2 Lite",
+  capabilities: { ...base, resolution: { tiers: ["1K"], default: "1K" } },
+  price: perImage([{ tier: "1K", usd: 0.0336 }]),
+  speeds: [batchOffer(perImage([{ tier: "1K", usd: 0.0168 }]))],
+};
+
+/** The shape GET /api/providers/google/settings serves: Speed, When it's busy, then Limits. */
+export function speedSettings(
+  values: Record<string, string | number | boolean> = {},
+): ProviderSettingsResponse {
+  const schema = withLimitsPanel(
+    {
+      version: 1,
+      panels: [
+        {
+          id: "speed",
+          label: "Speed",
+          fields: [
+            {
+              id: "speed",
+              kind: "select",
+              role: "speed",
+              label: "Speed",
+              default: "standard",
+              options: [
+                { value: "standard", label: "Standard" },
+                { value: "flex", label: "Flex", speed: "flex" },
+                { value: "batch", label: "Batch", speed: "batch" },
+                { value: "priority", label: "Priority", speed: "priority" },
+              ],
+            },
+          ],
+        },
+        {
+          id: "busy",
+          label: "When it's busy",
+          fields: [
+            {
+              id: "flexBusy",
+              kind: "select",
+              label: "When Flex is busy",
+              default: "wait",
+              showWhen: [{ field: "speed", in: ["flex"] }],
+              options: [
+                { value: "wait", label: "Keep trying at Flex price", priceAt: "flex" },
+                { value: "standard", label: "Switch to Standard", priceAt: "standard" },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    { company: "Google", defaultCap: 4 },
+  );
+  return { schema, values: { speed: "standard", flexBusy: "wait", concurrencyCap: 4, ...values } };
 }

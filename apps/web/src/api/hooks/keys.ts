@@ -1,5 +1,5 @@
-import type { KeyTestBody, ProviderPatchBody } from "@openfield/core";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import type { KeyTestBody } from "@openfield/core";
+import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
 import { api, call, queryClient, queryKeys } from "../client";
 
 // Keys are write-only: the server answers with status and a four-character hint, never the key.
@@ -11,11 +11,14 @@ export function useKeys() {
   });
 }
 
+/** Every company, with its name and key status. Shared by hooks and event handlers. */
+export const providersQuery = queryOptions({
+  queryKey: queryKeys.providers,
+  queryFn: () => call(api.api.providers.$get()),
+});
+
 export function useProviders() {
-  return useQuery({
-    queryKey: queryKeys.providers,
-    queryFn: () => call(api.api.providers.$get()),
-  });
+  return useQuery(providersQuery);
 }
 
 /** Everything that changes when a key does: status, which models are ready, the default model. */
@@ -43,13 +46,5 @@ export function useCheckKey() {
     mutationFn: ({ providerId, values = {} }: { providerId: string; values?: KeyTestBody }) =>
       call(keyRoute.test.$post({ param: { providerId }, json: values })),
     onSettled: refreshAfterKeyChange,
-  });
-}
-
-export function useUpdateProvider() {
-  return useMutation({
-    mutationFn: ({ providerId, patch }: { providerId: string; patch: ProviderPatchBody }) =>
-      call(api.api.providers[":id"].$patch({ param: { id: providerId }, json: patch })),
-    onSettled: () => queryClient.invalidateQueries({ queryKey: queryKeys.providers }),
   });
 }

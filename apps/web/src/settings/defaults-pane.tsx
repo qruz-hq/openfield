@@ -72,8 +72,8 @@ export function DefaultsPane() {
           min={1}
           max={MAX_CONCURRENCY}
           onValueChange={(globalConcurrency) => update.mutate({ globalConcurrency })}
-          decrementLabel={t("settings.apiKeys.runsAtOnce.fewer")}
-          incrementLabel={t("settings.apiKeys.runsAtOnce.more")}
+          decrementLabel={t("runsAtOnce.fewer")}
+          incrementLabel={t("runsAtOnce.more")}
         />
       </SettingRow>
     </SettingsSection>

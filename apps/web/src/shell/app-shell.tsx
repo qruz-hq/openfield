@@ -2,10 +2,11 @@ import { t } from "@openfield/core";
 import { Banner, Button, toasterPosition } from "@openfield/ui";
 import { RefreshCw, RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Outlet, useLocation } from "react-router";
+import { Outlet, useLocation, useNavigate } from "react-router";
 import { Toaster } from "sonner";
 import { useEventStream } from "../api/events";
 import { useLive } from "../lib/live";
+import { useReveal } from "../lib/reveal";
 import { useThemeSync } from "../lib/theme";
 import { TopNav } from "./top-nav";
 
@@ -13,7 +14,14 @@ export function AppShell() {
   useEventStream();
   useThemeSync();
   const { pathname } = useLocation();
+  const navigate = useNavigate();
   const onImage = pathname.startsWith("/image");
+  const revealing = useReveal((s) => s.jobSetId);
+
+  // "Show" on a finished Batch run works from any screen: the feed takes it from there.
+  useEffect(() => {
+    if (revealing && !onImage) navigate("/image");
+  }, [revealing, onImage, navigate]);
 
   return (
     <div className="flex h-dvh min-w-0 flex-col bg-surface">

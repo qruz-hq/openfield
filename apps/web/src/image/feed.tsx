@@ -1,6 +1,7 @@
 import { type ModelListItem, THUMB_RUNGS, t } from "@openfield/core";
 import { Button } from "@openfield/ui";
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useReveal } from "../lib/reveal";
 import type { FeedItem } from "./feed-items";
 import { solveRows } from "./rows";
 import { AssetTile, JobTile } from "./tiles";
@@ -51,6 +52,27 @@ export function Feed({
   const sentinel = useRef<HTMLDivElement>(null);
   const width = useWidth(container);
   const rows = useMemo(() => solveRows(items, ratioOf, Math.floor(width), rung), [items, width, rung]);
+  const revealing = useReveal((s) => s.jobSetId);
+
+  // Show on a finished Batch run: scroll to the run's first tile and focus it, once it's here.
+  useEffect(() => {
+    if (!revealing || !rows.length) return;
+    const tile = container.current?.querySelector<HTMLElement>(`[data-job-set="${CSS.escape(revealing)}"]`);
+    if (!tile) return;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    tile.scrollIntoView({ block: "center", behavior: reduced ? "auto" : "smooth" });
+    if (!tile.hasAttribute("tabindex")) tile.setAttribute("tabindex", "-1");
+    tile.focus({ preventScroll: true });
+    useReveal.getState().done();
+  }, [revealing, rows]);
+
+  // A run whose images never load here (paged out, or deleted) stops waiting after a while.
+  useEffect(() => {
+    if (!revealing) return;
+    const timer = setTimeout(() => useReveal.getState().done(), 10_000);
+    return () => clearTimeout(timer);
+  }, [revealing]);
+
   const modelName = (providerId: string | null, modelId: string | null) =>
     models.find((m) => m.providerId === providerId && m.modelId === modelId)?.displayName;
 
@@ -88,6 +110,7 @@ export function Feed({
                   jobSet={item.jobSet}
                   job={item.job}
                   jobs={item.jobs}
+                  batch={item.batch}
                   model={models.find((m) => m.key === item.jobSet.model)}
                   style={style}
                 />

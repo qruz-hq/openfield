@@ -14,6 +14,8 @@ export interface ModalContentProps extends Omit<ComponentProps<typeof Dialog.Con
   closeLabel?: string;
   /** For destructive confirmations: announced as an alert dialog. */
   alert?: boolean;
+  /** Classes for the title row, for shells with their own insets (Modal / Provider settings). */
+  headerClassName?: string;
 }
 
 /** Modal / Shell: 480 wide, title and close, then body and footer, over the scrim. */
@@ -21,6 +23,7 @@ export function ModalContent({
   title,
   closeLabel,
   alert = false,
+  headerClassName,
   className,
   children,
   ...props
@@ -36,7 +39,7 @@ export function ModalContent({
         )}
         {...props}
       >
-        <div className="flex w-full items-center justify-between">
+        <div className={cn("flex w-full items-center justify-between", headerClassName)}>
           <Dialog.Title className="text-page-title text-text-primary">{title}</Dialog.Title>
           {closeLabel ? (
             <Dialog.Close asChild>

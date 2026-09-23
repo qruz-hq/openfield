@@ -17,19 +17,25 @@ import {
   ModalFooter,
   ModelTag,
   ProviderLogo,
+  SettingSummaryPill,
   StatusPill,
   type StatusPillStatus,
   Surface,
 } from "@openfield/ui";
+import { Settings2, Timer } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useCheckKey, useRemoveKey } from "../api/hooks/keys";
+import { useProviderSettings } from "../api/hooks/provider-settings";
 import { errorMessage } from "../api/raw";
-import { defaultPrice } from "../lib/cost";
+import { speedPrice } from "../lib/cost";
 import { notify, notifyError } from "../lib/notify";
 import { logoFor } from "../lib/provider";
+import { runSpeed, settingSummaries } from "../lib/provider-settings";
+import { ProviderSettingsModal } from "./provider-settings-modal";
 
-// Settings / Provider card / {Connected, Not connected, Key rejected, Checking, Set outside}.
+// Settings / Provider card / {Connected, Not connected, Key rejected, Checking, Set outside}. The
+// footer holds the model tags, priced at the company's speed, and the Settings button (§6.17).
 
 const REJECTED: readonly ErrorCode[] = ["auth_invalid", "auth_forbidden"];
 
@@ -54,12 +60,21 @@ export interface ProviderCardProps {
   models: readonly ModelListItem[];
   /** Focus the key field on mount (first run lands here). */
   autoFocus?: boolean;
+  /** Open the company's settings on mount (a failed tile's button lands here). */
+  openSettings?: boolean;
 }
 
-export function ProviderCard({ provider, status, models, autoFocus = false }: ProviderCardProps) {
+export function ProviderCard({
+  provider,
+  status,
+  models,
+  autoFocus = false,
+  openSettings = false,
+}: ProviderCardProps) {
   const navigate = useNavigate();
   const check = useCheckKey();
   const remove = useRemoveKey();
+  const settings = useProviderSettings(provider.id).data;
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [result, setResult] = useState<CheckResult | null>(null);
@@ -310,13 +325,45 @@ export function ProviderCard({ provider, status, models, autoFocus = false }: Pr
       ) : (
         keyRow
       )}
-      {logo && models.length ? (
-        <div className="flex w-full flex-wrap items-center gap-6">
-          {models.map((model) => (
-            <ModelTag key={model.key} provider={logo} name={model.displayName} price={defaultPrice(model)} />
-          ))}
+      <div className="flex w-full items-center justify-between gap-12">
+        <div className="flex min-w-0 flex-wrap items-center gap-6">
+          {logo
+            ? models.map((model) => {
+                const { price, note, hint } = speedPrice(model, runSpeed(settings, model));
+                return (
+                  <ModelTag
+                    key={model.key}
+                    provider={logo}
+                    name={model.displayName}
+                    price={price}
+                    note={note}
+                    title={hint}
+                  />
+                );
+              })
+            : null}
         </div>
-      ) : null}
+        <div className="flex shrink-0 items-center gap-8">
+          {state === "connected"
+            ? settingSummaries(settings).map((summary) => (
+                <SettingSummaryPill key={summary.fieldId} icon={summary.speed ? Timer : Settings2}>
+                  {summary.field ? <span className="sr-only">{`${summary.field}: `}</span> : null}
+                  <span>{summary.label}</span>
+                </SettingSummaryPill>
+              ))
+            : null}
+          <ProviderSettingsModal provider={provider} models={models} defaultOpen={openSettings}>
+            <Button
+              variant="secondary"
+              size="s"
+              icon={Settings2}
+              aria-label={t("providerSettings.openFor", { company })}
+            >
+              {t("providerSettings.open")}
+            </Button>
+          </ProviderSettingsModal>
+        </div>
+      </div>
 
       <Modal open={confirmRemove} onOpenChange={setConfirmRemove}>
         <ModalContent

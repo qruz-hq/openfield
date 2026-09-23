@@ -24,7 +24,9 @@ import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef } from 
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { announceStarted } from "../../api/events";
 import { useGenerate } from "../../api/hooks/job-sets";
+import { useProviders } from "../../api/hooks/keys";
 import { findModel, useModels } from "../../api/hooks/models";
+import { useRunSpeed } from "../../api/hooks/provider-settings";
 import { useSettings } from "../../api/hooks/settings";
 import { errorMessage } from "../../api/raw";
 import {
@@ -37,10 +39,12 @@ import {
   qualityLabel,
   resolveValues,
 } from "../../lib/controls";
-import { tightCost } from "../../lib/cost";
+import { speedFallbackHint, tightCost } from "../../lib/cost";
 import { notify, notifyError } from "../../lib/notify";
+import { companyName } from "../../lib/provider";
+import { askToNotifyOnce } from "../../lib/system-notify";
 import { focusPrompt, registerPrompt } from "./focus";
-import { GenerateButton } from "./generate-button";
+import { GenerateButton, type GenerateSpeed } from "./generate-button";
 import { ModelSelect } from "./model-select";
 import { DisabledChip, OptionChip } from "./option-chip";
 import { useComposer } from "./store";
@@ -79,6 +83,8 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
   const [search, setSearch] = useSearchParams();
   const models = useModels().data ?? [];
   const settings = useSettings().data;
+  const providers = useProviders().data;
+  const runSpeedFor = useRunSpeed();
   const composer = useComposer();
   const generate = useGenerate();
   const prompt = useRef<HTMLTextAreaElement>(null);
@@ -104,7 +110,24 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
     const all = caps ? visibleControls(caps) : [];
     return picked ? all : neutral(all);
   }, [caps, picked]);
-  const state = generateState({ model: picked, anyReady, prompt: composer.prompt, resolved });
+  // Speed comes only from the company's settings (§0.3); prices here follow it.
+  const run = picked ? runSpeedFor(picked) : undefined;
+  const speed = run?.speed ?? "standard";
+  const state = generateState({ model: picked, anyReady, prompt: composer.prompt, resolved, speed });
+  const generateSpeed: GenerateSpeed | undefined =
+    !picked || !run
+      ? undefined
+      : run.fellBack
+        ? { fallback: run.name, tip: speedFallbackHint(picked, run) }
+        : run.speed !== "standard"
+          ? {
+              name: run.name,
+              tip: t("speed.tooltip", {
+                speed: run.name,
+                company: companyName(providers, picked.providerId),
+              }),
+            }
+          : undefined;
 
   const switchTo = (next: ModelListItem) => {
     const from = model?.capabilities;
@@ -170,9 +193,11 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
       focusPrompt();
       return;
     }
+    // Browsers only ask from a click, and a Batch run's finish is worth a system notification.
+    if (speed === "batch") askToNotifyOnce();
     const body = generateBody(model, resolved, composer.prompt, newId());
     generate.mutate(
-      { body, placeholder: expectedSize(model.capabilities, resolved) },
+      { body, placeholder: expectedSize(model.capabilities, resolved), speed },
       {
         onSuccess: announceStarted,
         onError: (error) => notifyError(errorMessage(error)),
@@ -255,7 +280,7 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
                 ? control.reason
                 : t(`composer.chips.resolution.tiers.${tier}`),
               price: picked
-                ? tightCost(estimateRun(picked, { ...resolved, resolution: tier, batch: 1 }, ""))
+                ? tightCost(estimateRun(picked, { ...resolved, resolution: tier, batch: 1 }, "", speed))
                 : undefined,
               disabled: control.unavailable?.includes(tier),
             }))}
@@ -280,7 +305,7 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
               title: level.label,
               subtitle: control.unavailable?.includes(level.id) ? control.reason : level.hint,
               price: picked
-                ? tightCost(estimateRun(picked, { ...resolved, quality: level.id, batch: 1 }, ""))
+                ? tightCost(estimateRun(picked, { ...resolved, quality: level.id, batch: 1 }, "", speed))
                 : undefined,
               disabled: control.unavailable?.includes(level.id),
             }))}
@@ -370,6 +395,7 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
             firstRun={firstRun}
             working={generate.isPending}
             batch={resolved?.batch ?? 1}
+            speed={generateSpeed}
             onGenerate={submit}
           />
         </div>

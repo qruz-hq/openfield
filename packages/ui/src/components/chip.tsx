@@ -205,10 +205,12 @@ export interface ModelTagProps extends Omit<ComponentProps<"span">, "children"> 
   name: ReactNode;
   /** Compact price such as "~$0.04". Leave it out when there's no price. */
   price?: ReactNode;
+  /** Words after the price, such as "· Standard". */
+  note?: ReactNode;
 }
 
 /** Chip / Model tag: a model on a Settings card. Not interactive. */
-export function ModelTag({ provider, name, price, className, ...props }: ModelTagProps) {
+export function ModelTag({ provider, name, price, note, className, ...props }: ModelTagProps) {
   return (
     <span
       className={cn(
@@ -220,6 +222,7 @@ export function ModelTag({ provider, name, price, className, ...props }: ModelTa
       <ProviderLogo provider={provider} />
       <span className="text-caption text-text-primary">{name}</span>
       {price ? <span className="text-mono-11 text-text-tertiary">{price}</span> : null}
+      {note ? <span className="-ml-2 text-caption text-text-tertiary">{note}</span> : null}
     </span>
   );
 }

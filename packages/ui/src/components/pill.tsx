@@ -4,6 +4,7 @@ import {
   CircleAlert,
   CircleDashed,
   Clock3,
+  Hourglass,
   Loader,
   Lock,
   type LucideIcon,
@@ -116,15 +117,21 @@ export function SpendPill({ label, amount, className, ...props }: SpendPillProps
   );
 }
 
-export type TileStatus = "generating" | "queued";
+export type TileStatus = "generating" | "queued" | "waiting";
+
+const TILE_ICON: Record<TileStatus, LucideIcon> = { generating: Loader, queued: Clock3, waiting: Hourglass };
 
 export interface TileStatusPillProps extends ComponentProps<"span"> {
   status: TileStatus;
 }
 
-/** Pill / Tile status / Generating and / Queued. Sits on a tile, so it keeps its dark fill in both themes. */
+/**
+ * Pill / Tile status / Generating, / Queued and / Waiting (at the company, for Batch and Flex).
+ * Sits on a tile, so it keeps its dark fill in both themes. Given `min-w-0 shrink`, a long label
+ * ends in an ellipsis rather than running under what sits beside it.
+ */
 export function TileStatusPill({ status, className, children, ...props }: TileStatusPillProps) {
-  const Icon = status === "generating" ? Loader : Clock3;
+  const Icon = TILE_ICON[status];
   return (
     <span className={cn(pillBase, "bg-status-fill px-10 py-5 text-overlay-fg", className)} {...props}>
       <Icon
@@ -135,7 +142,7 @@ export function TileStatusPill({ status, className, children, ...props }: TileSt
           status === "generating" && "motion-safe:animate-spin",
         )}
       />
-      {children}
+      <span className="min-w-0 truncate">{children}</span>
     </span>
   );
 }
@@ -147,7 +154,7 @@ export function TileCancelPill({ className, children, type = "button", ...props 
       type={type}
       className={cn(
         pillBase,
-        "cursor-pointer bg-status-fill px-10 py-5 text-overlay-fg-muted transition-colors hover:text-danger",
+        "cursor-pointer bg-status-fill px-10 py-5 text-overlay-fg-muted transition-colors not-disabled:not-aria-disabled:hover:text-danger disabled:cursor-default aria-disabled:cursor-default aria-disabled:opacity-50",
         className,
       )}
       {...props}
@@ -155,5 +162,22 @@ export function TileCancelPill({ className, children, type = "button", ...props 
       <X size={12} aria-hidden className="shrink-0 text-overlay-fg-muted" />
       {children}
     </button>
+  );
+}
+
+export interface SettingSummaryPillProps extends ComponentProps<"span"> {
+  icon: LucideIcon;
+}
+
+/** Pill / Setting summary: a company setting that isn't the default ("Batch") on its key card. */
+export function SettingSummaryPill({ icon: Icon, className, children, ...props }: SettingSummaryPillProps) {
+  return (
+    <span
+      className={cn(pillBase, "px-10 py-5 inset-ring inset-ring-border text-text-secondary", className)}
+      {...props}
+    >
+      <Icon size={12} aria-hidden className="shrink-0 text-text-tertiary" />
+      {children}
+    </span>
   );
 }

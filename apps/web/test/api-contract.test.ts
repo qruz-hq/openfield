@@ -7,6 +7,7 @@ import type {
   KeyStatus,
   KeyTestResponse,
   ModelsListResponse,
+  ProviderSettingsResponse,
   ProviderSummary,
   Settings,
   UsageResponse,
@@ -34,9 +35,13 @@ export type Contracts = [
   Assert<Same<InferResponseType<Api["job-sets"]["$get"], 200>, JobSetsListResponse>>,
   Assert<Same<InferResponseType<Api["generate"]["$post"], 202>, JobSetAccepted>>,
   Assert<Same<InferResponseType<Api["usage"]["$get"], 200>, UsageResponse>>,
+  Assert<Same<InferResponseType<Api["providers"][":id"]["settings"]["$get"], 200>, ProviderSettingsResponse>>,
+  Assert<
+    Same<InferResponseType<Api["providers"][":id"]["settings"]["$patch"], 200>, ProviderSettingsResponse>
+  >,
 ];
 
 test("route types line up with core schemas (checked by tsc)", () => {
-  const checked: Contracts["length"] = 9;
-  expect(checked).toBe(9);
+  const checked: Contracts["length"] = 11;
+  expect(checked).toBe(11);
 });

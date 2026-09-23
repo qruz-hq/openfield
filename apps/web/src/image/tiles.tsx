@@ -1,7 +1,8 @@
 import {
   ASPECT_RATIOS,
   type AssetListItem,
-  ERROR_PRIMARY_ACTION,
+  type BatchSummary,
+  type CancelResponse,
   type ErrorCode,
   errorCopy,
   formatDate,
@@ -20,6 +21,12 @@ import {
   IconButton,
   KeyValueList,
   KeyValueRow,
+  Modal,
+  ModalClose,
+  ModalContent,
+  ModalDescription,
+  ModalFooter,
+  ModalTrigger,
   ModelCaption,
   Popover,
   PopoverContent,
@@ -39,19 +46,28 @@ import {
   Settings,
   X,
 } from "lucide-react";
-import { type CSSProperties, useEffect, useState } from "react";
+import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useAuthedImage } from "../api/hooks/images";
-import { useCancelJob, useRecreateJobSet, useRetryJobSet } from "../api/hooks/job-sets";
+import {
+  isActiveJob,
+  patchBatch,
+  useCancelJob,
+  useCancelJobSet,
+  useRecreateJobSet,
+  useRetryJobSet,
+} from "../api/hooks/job-sets";
 import { useProviders } from "../api/hooks/keys";
+import { useSpeedName } from "../api/hooks/provider-settings";
 import { ApiError, errorMessage } from "../api/raw";
 import { useDismissed, useLive } from "../lib/live";
 import { notify, notifyError } from "../lib/notify";
-import { logoFor, providerOfKey } from "../lib/provider";
+import { companyName, logoFor, providerOfKey } from "../lib/provider";
 import { useReuse } from "./composer/use-reuse";
-import { endedWithoutImage, jobTileState } from "./feed-items";
+import { endedWithoutImage, failedAction, jobTileState, type WaitKind, waitKind } from "./feed-items";
 
-// Feed / Tile / {Idle, Generating, Queued, Failed}. Radius 0: the image is the tile (§2.4).
+// Feed / Tile / {Idle, Generating, Queued, Waiting at provider, Failed}. Radius 0: the image is the
+// tile (§2.4).
 
 interface TileBox {
   style: CSSProperties;
@@ -80,7 +96,12 @@ export function AssetTile({
     date: formatDate(asset.createdAt),
   });
   return (
-    <li aria-label={label} className={`${box} bg-elevated`} style={style}>
+    <li
+      aria-label={label}
+      data-job-set={asset.jobSetId ?? undefined}
+      className={`${box} bg-elevated`}
+      style={style}
+    >
       {image.status === "ready" ? (
         <img src={image.src} alt="" className="size-full object-cover" decoding="async" draggable={false} />
       ) : null}
@@ -102,15 +123,42 @@ function shapeOf(job: Job, model: ModelListItem | undefined) {
   return { aspect: aspect ?? "1:1", resolution: tier };
 }
 
-/** Seconds since a run started, ticking only while it's on screen. */
-function useElapsed(since: string | null, active: boolean): number {
+/** The clock, ticking once a second while `active`. */
+function useNow(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [active]);
+  return now;
+}
+
+/** Seconds since a run started, ticking only while it's on screen. */
+function useElapsed(since: string | null, active: boolean): number {
+  const now = useNow(active);
   return since ? Math.max(0, Math.floor((now - Date.parse(since)) / 1000)) : 0;
+}
+
+/** "Nano Banana Pro · 3:4 · 2K", with the speed after it, by its company's name, when it isn't Standard. */
+function summaryOf(jobSet: JobSet, job: Job, model: ModelListItem | undefined, speed: string): string {
+  const shape = shapeOf(job, model);
+  const vars = {
+    model: model?.displayName ?? jobSet.model,
+    aspect: shape.aspect,
+    resolution: shape.resolution,
+  };
+  return jobSet.speed === "standard"
+    ? t("feed.tile.summary", vars)
+    : t("feed.tile.summaryWithSpeed", { ...vars, speed });
+}
+
+/** "2 min" or "40s" until a waiting job goes again. */
+function waitLabel(ms: number): string {
+  const seconds = Math.max(0, Math.ceil(ms / 1000));
+  return seconds >= 60
+    ? t("speed.wait.minutes", { count: Math.ceil(seconds / 60) })
+    : t("speed.wait.seconds", { count: seconds });
 }
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -120,13 +168,18 @@ interface JobTileProps extends TileBox {
   job: Job;
   /** Every job in the run. */
   jobs: readonly Job[];
+  /** A Batch run's provider batch, once it has one. */
+  batch?: BatchSummary | undefined;
   model: ModelListItem | undefined;
 }
 
 export function JobTile(props: JobTileProps) {
   const position = useLive((s) => s.positions[props.job.id]);
-  const state = jobTileState(props.job, position);
+  const retry = useLive((s) => s.retries[props.job.id]);
+  const state = jobTileState(props.job, position, props.jobSet);
   if (state === "failed") return <FailedTile {...props} />;
+  const wait = waitKind(props.jobSet, props.job, retry, props.batch);
+  if (wait) return <WaitingTile {...props} kind={wait} retryAt={retry?.at ?? props.job.nextAttemptAt} />;
   return <WorkingTile {...props} queued={state === "queued"} position={position} />;
 }
 
@@ -139,11 +192,11 @@ function WorkingTile({
   position,
 }: JobTileProps & { queued: boolean; position?: number }) {
   const cancel = useCancelJob();
+  const speedName = useSpeedName();
   const elapsed = useElapsed(job.startedAt ?? jobSet.createdAt, !queued);
-  const logo = logoFor(model?.providerId ?? providerOfKey(jobSet.model));
-  const shape = shapeOf(job, model);
-  const name = model?.displayName ?? jobSet.model;
-  const summary = t("feed.tile.summary", { model: name, aspect: shape.aspect, resolution: shape.resolution });
+  const providerId = model?.providerId ?? providerOfKey(jobSet.model) ?? "";
+  const logo = logoFor(providerId);
+  const summary = summaryOf(jobSet, job, model, speedName(providerId, jobSet.speed));
 
   // The tile turns into a canceled one as soon as the cancel lands, so no mutate() callbacks here.
   const onCancel = () =>
@@ -153,7 +206,13 @@ function WorkingTile({
     );
 
   return (
-    <li aria-busy="true" aria-label={summary} className={`${box} bg-elevated`} style={style}>
+    <li
+      aria-busy="true"
+      aria-label={summary}
+      data-job-set={jobSet.id}
+      className={`${box} bg-elevated`}
+      style={style}
+    >
       {queued ? (
         <TileStatusPill status="queued" className="absolute top-12 left-12">
           {position ? t("feed.tile.inLine", { position }) : t("feed.tile.queued")}
@@ -195,6 +254,151 @@ function WorkingTile({
   );
 }
 
+/**
+ * Feed / Tile / Waiting at provider (design RWSvj) and its Flex variant (LGwLk): a still fill and no
+ * progress bar, because there's no progress to show. A Batch run's images stop together, so its
+ * Cancel asks first, and the tiles say they're stopping until the company has (§2.4).
+ */
+function WaitingTile({
+  jobSet,
+  job,
+  jobs,
+  batch: summary,
+  model,
+  style,
+  kind,
+  retryAt,
+}: JobTileProps & { kind: WaitKind; retryAt: string | null | undefined }) {
+  const providers = useProviders();
+  const speedName = useSpeedName();
+  const cancelJob = useCancelJob();
+  const cancelRun = useCancelJobSet();
+  const [confirm, setConfirm] = useState(false);
+  const keepWaiting = useRef<HTMLButtonElement>(null);
+  const now = useNow(kind === "flex-busy");
+  const providerId = model?.providerId ?? providerOfKey(jobSet.model) ?? "";
+  const company = companyName(providers.data, providerId);
+  const logo = logoFor(providerId);
+  const speed = speedName(providerId, jobSet.speed);
+  const summaryLine = summaryOf(jobSet, job, model, speed);
+  const batch = kind === "batch" || kind === "batch-sending";
+  const stopping = batch && summary?.stopping === true;
+
+  const status = stopping
+    ? t("speed.tile.stopping", { company })
+    : kind === "batch-sending"
+      ? t("speed.tile.sending", { company })
+      : kind === "batch"
+        ? t("speed.tile.waiting", { company })
+        : t("speed.tile.waitingFor", { company });
+  // Without the company's name, for a tile too narrow to fit it beside Cancel.
+  const shortStatus = t(
+    stopping
+      ? "speed.tile.short.stopping"
+      : kind === "batch-sending"
+        ? "speed.tile.short.sending"
+        : "speed.tile.short.waiting",
+  );
+  // Nothing to promise while the run is being sent or stopped.
+  const hint =
+    kind === "flex-busy" && retryAt
+      ? t("speed.tile.busy", { speed, wait: waitLabel(Date.parse(retryAt) - now) })
+      : kind === "batch"
+        ? stopping
+          ? null
+          : t("speed.tile.fewHours")
+        : kind === "batch-sending"
+          ? null
+          : t("speed.tile.fewMinutes");
+
+  const failed = (error: unknown) => notifyError(errorMessage(error));
+  const onCancelJob = () =>
+    void cancelJob.mutateAsync(job.id).then(() => notify(t("toast.canceled")), failed);
+  // Sent images end when the company stops: say so, rather than that they're canceled already.
+  const onCanceledRun = (res: CancelResponse) => {
+    if (!res.stopping?.length) return notify(t("toast.canceled"));
+    if (summary) patchBatch(jobSet.id, { ...summary, stopping: true });
+    notify(t("speed.cancel.stopping", { company }));
+  };
+  const cancelBatch = () => {
+    setConfirm(false);
+    void cancelRun.mutateAsync(jobSet.id).then(onCanceledRun, failed);
+  };
+
+  // Off while stopping, but still focusable, so focus has somewhere to land as the dialog closes.
+  const off = stopping || cancelRun.isPending;
+  const pill = (
+    <TileCancelPill
+      onClick={(event) => {
+        if (off) return event.preventDefault();
+        if (!batch) onCancelJob();
+      }}
+      disabled={cancelJob.isPending}
+      aria-disabled={off || undefined}
+    >
+      {t("feed.tile.cancel")}
+    </TileCancelPill>
+  );
+
+  return (
+    <li
+      aria-busy="true"
+      // A wait can last hours, so moving through the feed says what it's waiting on, not only what it is.
+      aria-label={[status, summaryLine, hint].filter(Boolean).join(". ")}
+      data-job-set={jobSet.id}
+      className={`${box} @container bg-elevated`}
+      style={style}
+    >
+      {/* One row, so a status too long for a narrow tile ends in an ellipsis before it reaches Cancel. */}
+      <div className="absolute inset-x-12 top-12 flex items-center justify-between gap-8">
+        <TileStatusPill status="waiting" className="min-w-0 shrink">
+          <span className="@max-[260px]:hidden">{status}</span>
+          <span className="hidden @max-[260px]:inline">{shortStatus}</span>
+        </TileStatusPill>
+        {batch ? (
+          <Modal open={confirm} onOpenChange={setConfirm}>
+            <ModalTrigger asChild>{pill}</ModalTrigger>
+            <ModalContent
+              alert
+              title={t("speed.cancel.title", { speed })}
+              closeLabel={t("actions.close")}
+              // The safe choice first: Enter keeps the run going.
+              onOpenAutoFocus={(event) => {
+                event.preventDefault();
+                keepWaiting.current?.focus();
+              }}
+            >
+              <ModalDescription>
+                {t("speed.cancel.body", { count: jobs.filter(isActiveJob).length || jobSet.batchSize })}
+              </ModalDescription>
+              <ModalFooter>
+                <ModalClose asChild>
+                  <Button ref={keepWaiting} variant="secondary">
+                    {t("speed.cancel.keep")}
+                  </Button>
+                </ModalClose>
+                <Button variant="danger" onClick={cancelBatch}>
+                  {t("speed.cancel.confirm")}
+                </Button>
+              </ModalFooter>
+            </ModalContent>
+          </Modal>
+        ) : (
+          pill
+        )}
+      </div>
+      <div className="absolute bottom-21 left-12 flex max-w-[calc(100%-24px)] flex-col gap-4">
+        {logo ? (
+          <ModelCaption provider={logo} name={<span className="text-text-tertiary">{summaryLine}</span>} />
+        ) : (
+          <span className="text-micro text-text-tertiary">{summaryLine}</span>
+        )}
+        {hint ? <span className="truncate text-micro text-text-secondary">{hint}</span> : null}
+      </div>
+    </li>
+  );
+}
+
 type Fix = { label: string; icon: LucideIcon; run: () => void; pending?: boolean };
 
 function FailedTile({ jobSet, job, jobs, style }: JobTileProps) {
@@ -208,7 +412,8 @@ function FailedTile({ jobSet, job, jobs, style }: JobTileProps) {
   const code: ErrorCode = job.status === "canceled" ? "canceled" : (job.errorCode ?? "unknown");
   const copy = errorCopy(code);
   const reason = job.status === "interrupted" ? t("feed.tile.interrupted") : (job.errorReason ?? copy.reason);
-  const action = job.status === "interrupted" ? "try-again" : ERROR_PRIMARY_ACTION[code];
+  const action = failedAction(job, code);
+  const providerId = providerOfKey(jobSet.model) ?? "";
   // Try again and Recreate act on the whole run, so every tile the run left behind goes with it.
   // Promises rather than mutate() callbacks: the new run reflows the feed and can unmount this tile
   // before the answer arrives, and mutate() drops its callbacks when that happens.
@@ -224,12 +429,20 @@ function FailedTile({ jobSet, job, jobs, style }: JobTileProps) {
         error instanceof ApiError && error.status === 409 ? clearRun() : notifyError(errorMessage(error)),
       ),
   };
-  const consoleUrl = providers.data?.find((p) => p.id === providerOfKey(jobSet.model))?.meta.consoleUrl;
+  const consoleUrl = providers.data?.find((p) => p.id === providerId)?.meta.consoleUrl;
 
   const primary: Fix | null = (() => {
     switch (action) {
       case "open-settings":
-        return { label: copy.action, icon: Settings, run: () => navigate("/settings/api-keys") };
+        // The job's own action points at the company's settings (a speed it won't take); the
+        // code's usual one at its key.
+        return job.errorAction === "open-settings"
+          ? {
+              label: t("providerSettings.openFor", { company: companyName(providers.data, providerId) }),
+              icon: Settings,
+              run: () => navigate("/settings/api-keys", { state: { providerSettings: providerId } }),
+            }
+          : { label: copy.action, icon: Settings, run: () => navigate("/settings/api-keys") };
       case "change-key":
         return { label: copy.action, icon: KeyRound, run: () => navigate("/settings/api-keys") };
       case "open-billing":
@@ -264,14 +477,16 @@ function FailedTile({ jobSet, job, jobs, style }: JobTileProps) {
   return (
     <li
       aria-label={reason}
-      className={`${box} flex flex-col items-center justify-center bg-danger-soft inset-ring inset-ring-danger-line`}
+      data-job-set={jobSet.id}
+      className={`${box} @container flex flex-col items-center justify-center bg-danger-soft inset-ring inset-ring-danger-line`}
       style={style}
     >
       <div className="flex w-300 max-w-[calc(100%-24px)] flex-col items-center gap-12">
         <CircleAlert size={20} aria-hidden className="shrink-0 text-danger" />
         <p className="w-full text-center text-small leading-[1.45] text-text-primary">{reason}</p>
-        {/* One row, as wide as its buttons: a long label never pushes Details onto a second line. */}
-        <div className="flex w-max shrink-0 items-center gap-6">
+        {/* One row, as wide as its buttons: a long label never pushes Details onto a second line while
+            the tile has room. On a narrow tile the buttons wrap rather than run off its edges. */}
+        <div className="flex w-max max-w-[calc(100cqw-24px)] shrink-0 flex-wrap items-center justify-center gap-6">
           {primary ? (
             <Button
               variant="ghost-accent"

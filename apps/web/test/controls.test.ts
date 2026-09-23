@@ -10,7 +10,7 @@ import {
   qualityLabel,
   resolveValues,
 } from "../src/lib/controls";
-import { banana, flare } from "./fixtures";
+import { banana, flare, lite } from "./fixtures";
 
 const labels = { quality: qualityLabel };
 const ULID = "01K6BQ8000000000000000ZZZZ";
@@ -132,5 +132,13 @@ describe("generateState and cost", () => {
       amount: "$0.12–0.19",
       range: true,
     });
+  });
+
+  test("a Batch price under a dime reads as half, like the settings and the tooltip", () => {
+    const one = resolveValues(lite.capabilities, {}, 1);
+    expect(costParts(estimateRun(lite, one, ""))).toMatchObject({ amount: "$0.034" });
+    const batch = estimateRun(lite, one, "", "batch");
+    expect(costParts(batch)).toMatchObject({ amount: "$0.017" });
+    expect(batch.basis).toContain("$0.017");
   });
 });
