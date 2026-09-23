@@ -1,0 +1,21 @@
+# dependencies
+node_modules/
+bun.lockb
+
+# build output
+dist/
+build/
+.vite/
+
+# local runtime data (never commit generated images or keys)
+.openfield/
+*.sqlite
+*.sqlite-*
+.env
+.env.*
+
+# research/scratch artifacts
+.playwright-mcp/
+
+# os
+.DS_Store
