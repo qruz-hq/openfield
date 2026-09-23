@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en" data-theme="system">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="dark light" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Openfield</title>
+    <script>
+      // Apply the last theme before first paint, so a light-theme reload doesn't flash dark.
+      try {
+        const theme = localStorage.getItem("openfield.theme");
+        if (theme === "dark" || theme === "light" || theme === "system") {
+          document.documentElement.dataset.theme = theme;
+        }
+      } catch (_) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

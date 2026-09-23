@@ -1,0 +1,46 @@
+import { formatMoney, t } from "@openfield/core";
+import { BrandLockup, IconButton, SpendPill, TopNavItem } from "@openfield/ui";
+import { Settings } from "lucide-react";
+import { Link, useLocation } from "react-router";
+import { useSpentToday } from "../api/hooks/usage";
+
+// App / Nav: 44 tall, hairline at the bottom. Only screens that work get a link (§0.15).
+
+const ITEMS = [
+  { to: "/image", label: "app.nav.image", match: (path: string) => path.startsWith("/image") },
+] as const;
+
+export function TopNav() {
+  const { pathname } = useLocation();
+  const onSettings = pathname.startsWith("/settings");
+  const spent = useSpentToday();
+
+  return (
+    <header className="relative z-30 flex h-44 w-full shrink-0 items-center justify-between gap-16 bg-surface px-16">
+      <div className="flex items-center gap-20">
+        <Link to="/image" className="inline-flex rounded-8">
+          <BrandLockup />
+        </Link>
+        <nav aria-label={t("app.name")} className="flex items-center gap-4">
+          {ITEMS.map((item) => (
+            <TopNavItem key={item.to} asChild active={item.match(pathname)}>
+              <Link to={item.to}>{t(item.label)}</Link>
+            </TopNavItem>
+          ))}
+        </nav>
+      </div>
+      <div className="flex items-center gap-8">
+        {spent.data ? (
+          <SpendPill
+            label={t("app.nav.spentToday")}
+            amount={formatMoney(spent.data.totalUsd, spent.data.currency)}
+          />
+        ) : null}
+        <IconButton asChild icon={Settings} label={t("app.nav.settings")} active={onSettings}>
+          <Link to="/settings/api-keys" aria-current={onSettings ? "page" : undefined} />
+        </IconButton>
+      </div>
+      <div aria-hidden className="absolute inset-x-0 bottom-0 h-px bg-border" />
+    </header>
+  );
+}
