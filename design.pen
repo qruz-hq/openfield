@@ -2845,7 +2845,7 @@
                                   "id": "n6eOXD",
                                   "name": "Label",
                                   "fill": "$accent",
-                                  "content": "Retry",
+                                  "content": "Try again",
                                   "fontFamily": "Inter",
                                   "fontSize": 13,
                                   "fontWeight": "600"
@@ -13499,7 +13499,7 @@
                   "content": "Voice"
                 },
                 "etQAL": {
-                  "content": "Write for someone making images. Short, plain, sentence case. No exclamation marks and no em dashes. Buttons are verbs: Retry, Add a key, Change key."
+                  "content": "Write for someone making images. Short, plain, sentence case. No exclamation marks and no em dashes. Buttons are verbs: Try again, Add a key, Change key."
                 }
               }
             },
@@ -16086,7 +16086,7 @@
                                   "name": "Glyph"
                                 },
                                 "c7xP4I": {
-                                  "content": "Gemini 3 Pro Image"
+                                  "content": "Nano Banana Pro"
                                 },
                                 "X7uHn4": {
                                   "content": "$0.134"
@@ -16384,10 +16384,10 @@
                                   "id": "xB3jH",
                                   "type": "ref",
                                   "ref": "fHqDZ",
-                                  "name": "Retry",
+                                  "name": "Try again",
                                   "descendants": {
                                     "n6eOXD": {
-                                      "content": "Retry"
+                                      "content": "Try again"
                                     }
                                   }
                                 },
@@ -18862,7 +18862,7 @@
                                           "id": "nyleI",
                                           "name": "Name",
                                           "fill": "$text-primary",
-                                          "content": "Gemini 3 Pro Image",
+                                          "content": "Nano Banana Pro",
                                           "lineHeight": 1.2857,
                                           "fontFamily": "Inter",
                                           "fontSize": 14,
@@ -19204,11 +19204,11 @@
                                           "id": "B79xA",
                                           "type": "ref",
                                           "ref": "A66OT",
-                                          "name": "Row · Gemini 3 Pro Image",
+                                          "name": "Row · Nano Banana Pro",
                                           "width": "fill_container",
                                           "descendants": {
                                             "nyleI": {
-                                              "content": "Gemini 3 Pro Image"
+                                              "content": "Nano Banana Pro"
                                             },
                                             "aF6Im": {
                                               "content": "Most detailed"
@@ -19312,11 +19312,11 @@
                                           "id": "DPHD2",
                                           "type": "ref",
                                           "ref": "A66OT",
-                                          "name": "Row · Gemini 3.1 Flash Image",
+                                          "name": "Row · Nano Banana 2",
                                           "width": "fill_container",
                                           "descendants": {
                                             "nyleI": {
-                                              "content": "Gemini 3.1 Flash Image"
+                                              "content": "Nano Banana 2"
                                             },
                                             "aF6Im": {
                                               "content": "Good all-rounder"
@@ -19330,11 +19330,11 @@
                                           "id": "s3AsA",
                                           "type": "ref",
                                           "ref": "A66OT",
-                                          "name": "Row · Gemini 3.1 Flash Lite Image",
+                                          "name": "Row · Nano Banana 2 Lite",
                                           "width": "fill_container",
                                           "descendants": {
                                             "nyleI": {
-                                              "content": "Gemini 3.1 Flash Lite Image"
+                                              "content": "Nano Banana 2 Lite"
                                             },
                                             "aF6Im": {
                                               "content": "Quick drafts"
@@ -21454,7 +21454,7 @@
                                       "name": "Glyph"
                                     },
                                     "X4BPm": {
-                                      "content": "Gemini 3 Pro Image"
+                                      "content": "Nano Banana Pro"
                                     },
                                     "K4Txq": {
                                       "content": "~$0.13"
@@ -21474,7 +21474,7 @@
                                       "name": "Glyph"
                                     },
                                     "X4BPm": {
-                                      "content": "Gemini 3.1 Flash Image"
+                                      "content": "Nano Banana 2"
                                     },
                                     "K4Txq": {
                                       "content": "~$0.07"
@@ -21494,7 +21494,7 @@
                                       "name": "Glyph"
                                     },
                                     "X4BPm": {
-                                      "content": "Gemini 3.1 Flash Lite Image"
+                                      "content": "Nano Banana 2 Lite"
                                     },
                                     "K4Txq": {
                                       "content": "~$0.03"
@@ -21713,7 +21713,7 @@
                                       "name": "Glyph"
                                     },
                                     "X4BPm": {
-                                      "content": "Gemini 3 Pro Image"
+                                      "content": "Nano Banana Pro"
                                     },
                                     "K4Txq": {
                                       "content": "~$0.13"
@@ -21733,7 +21733,7 @@
                                       "name": "Glyph"
                                     },
                                     "X4BPm": {
-                                      "content": "Gemini 3.1 Flash Image"
+                                      "content": "Nano Banana 2"
                                     },
                                     "K4Txq": {
                                       "content": "~$0.07"
@@ -21753,7 +21753,7 @@
                                       "name": "Glyph"
                                     },
                                     "X4BPm": {
-                                      "content": "Gemini 3.1 Flash Lite Image"
+                                      "content": "Nano Banana 2 Lite"
                                     },
                                     "K4Txq": {
                                       "content": "~$0.03"
@@ -23861,7 +23861,7 @@
                                   "id": "T1EHc",
                                   "type": "ref",
                                   "ref": "l7PFH",
-                                  "name": "Result · Use Gemini 3 Pro Image",
+                                  "name": "Result · Use Nano Banana Pro",
                                   "width": "fill_container",
                                   "descendants": {
                                     "w5EVO": {
@@ -23871,7 +23871,7 @@
                                       "name": "Glyph"
                                     },
                                     "yqSCL": {
-                                      "content": "Use Gemini 3 Pro Image"
+                                      "content": "Use Nano Banana Pro"
                                     },
                                     "mSGPI": {
                                       "content": "Google"
@@ -31872,7 +31872,7 @@
                           "id": "ThM0J",
                           "type": "ref",
                           "ref": "M3JTFq",
-                          "name": "Gemini 3 Pro Image",
+                          "name": "Nano Banana Pro",
                           "width": "fill_container",
                           "descendants": {
                             "wvOxP": {
@@ -31882,7 +31882,7 @@
                               "name": "Tile"
                             },
                             "L7iIM": {
-                              "content": "Gemini 3 Pro Image"
+                              "content": "Nano Banana Pro"
                             },
                             "mToPX": {
                               "content": "Up to 14 references"
@@ -31903,7 +31903,7 @@
                           "id": "S2SP2W",
                           "type": "ref",
                           "ref": "M3JTFq",
-                          "name": "Gemini 3.1 Flash Image",
+                          "name": "Nano Banana 2",
                           "width": "fill_container",
                           "descendants": {
                             "wvOxP": {
@@ -31913,7 +31913,7 @@
                               "name": "Tile"
                             },
                             "L7iIM": {
-                              "content": "Gemini 3.1 Flash Image"
+                              "content": "Nano Banana 2"
                             },
                             "mToPX": {
                               "content": "Quick drafts"
@@ -32870,7 +32870,7 @@
                           "id": "HmQAV",
                           "type": "ref",
                           "ref": "JaaEJ",
-                          "name": "Gemini 3 Pro Image",
+                          "name": "Nano Banana Pro",
                           "width": "fill_container",
                           "descendants": {
                             "p6xVg0": {
@@ -32880,7 +32880,7 @@
                               "name": "Glyph"
                             },
                             "hQGv1": {
-                              "content": "Gemini 3 Pro Image"
+                              "content": "Nano Banana Pro"
                             },
                             "dwh1d": {
                               "width": 190
@@ -36740,7 +36740,7 @@
                           "name": "Glyph"
                         },
                         "Wb64t/c7xP4I": {
-                          "content": "Gemini 3.1 Flash Image"
+                          "content": "Nano Banana 2"
                         },
                         "Wb64t/X7uHn4": {
                           "content": "$0.07"
@@ -41477,7 +41477,7 @@
                               "id": "t86eE7",
                               "name": "Model",
                               "fill": "$text-primary",
-                              "content": "Gemini 3 Pro Image",
+                              "content": "Nano Banana Pro",
                               "fontFamily": "Inter",
                               "fontSize": 13,
                               "fontWeight": "normal"
@@ -42313,10 +42313,10 @@
               "enabled": false
             },
             "T1EHc": {
-              "name": "Result · Switch to Gemini 3 Pro Image"
+              "name": "Result · Switch to Nano Banana Pro"
             },
             "T1EHc/yqSCL": {
-              "content": "Switch to Gemini 3 Pro Image"
+              "content": "Switch to Nano Banana Pro"
             },
             "T1EHc/mSGPI": {
               "content": "~$0.13",
@@ -42745,7 +42745,7 @@
               "name": "Glyph"
             },
             "mI0za/hCJaR": {
-              "content": "Gemini 3 Pro Image"
+              "content": "Nano Banana Pro"
             },
             "fTkuN/YMB16": {
               "content": "4K"
@@ -43160,7 +43160,7 @@
                           "content": "Google"
                         },
                         "DVMP0": {
-                          "content": "For Gemini models"
+                          "content": "For Nano Banana models"
                         },
                         "LkGxw": {
                           "id": "gDmwk",
@@ -44754,7 +44754,7 @@
                                       "id": "E5isk",
                                       "name": "Name",
                                       "fill": "$text-primary",
-                                      "content": "Gemini 3 Pro Image",
+                                      "content": "Nano Banana Pro",
                                       "fontFamily": "Inter",
                                       "fontSize": 13,
                                       "fontWeight": "normal"
@@ -45287,7 +45287,7 @@
                                       "content": "Generate"
                                     },
                                     "wo2TO": {
-                                      "content": "Gemini 3 Pro Image · 2K × 4"
+                                      "content": "Nano Banana Pro · 2K × 4"
                                     },
                                     "mGk5V": {
                                       "content": "~$0.52"
@@ -46565,7 +46565,7 @@
                                       "name": "Glyph"
                                     },
                                     "hCJaR": {
-                                      "content": "Gemini 3 Pro Image"
+                                      "content": "Nano Banana Pro"
                                     }
                                   }
                                 },
@@ -48097,7 +48097,7 @@
                             {
                               "type": "frame",
                               "id": "BWJOO",
-                              "name": "Result · Gemini 3 Pro Image",
+                              "name": "Result · Nano Banana Pro",
                               "width": "fill_container",
                               "layout": "vertical",
                               "children": [
@@ -48143,7 +48143,7 @@
                                           "name": "Glyph"
                                         },
                                         "c7xP4I": {
-                                          "content": "Gemini 3 Pro Image"
+                                          "content": "Nano Banana Pro"
                                         },
                                         "X7uHn4": {
                                           "content": "$0.13"
@@ -48157,7 +48157,7 @@
                             {
                               "type": "frame",
                               "id": "BJXlC",
-                              "name": "Result · Gemini 3.1 Flash Image",
+                              "name": "Result · Nano Banana 2",
                               "width": "fill_container",
                               "layout": "vertical",
                               "children": [
@@ -48203,7 +48203,7 @@
                                           "name": "Glyph"
                                         },
                                         "c7xP4I": {
-                                          "content": "Gemini 3.1 Flash Image"
+                                          "content": "Nano Banana 2"
                                         },
                                         "X7uHn4": {
                                           "content": "$0.07"
@@ -48281,7 +48281,7 @@
                                   "id": "G2rsgS",
                                   "type": "ref",
                                   "ref": "F3iTb",
-                                  "name": "Model · Gemini 3 Pro Image",
+                                  "name": "Model · Nano Banana Pro",
                                   "descendants": {
                                     "MV8Gp": {
                                       "id": "voEYz",
@@ -48290,7 +48290,7 @@
                                       "name": "Glyph"
                                     },
                                     "X4BPm": {
-                                      "content": "Gemini 3 Pro Image"
+                                      "content": "Nano Banana Pro"
                                     },
                                     "K4Txq": {
                                       "type": "icon",
@@ -48308,7 +48308,7 @@
                                   "id": "qzHwH",
                                   "type": "ref",
                                   "ref": "F3iTb",
-                                  "name": "Model · Gemini 3.1 Flash Image",
+                                  "name": "Model · Nano Banana 2",
                                   "descendants": {
                                     "MV8Gp": {
                                       "id": "HrHvW",
@@ -48317,7 +48317,7 @@
                                       "name": "Glyph"
                                     },
                                     "X4BPm": {
-                                      "content": "Gemini 3.1 Flash Image"
+                                      "content": "Nano Banana 2"
                                     },
                                     "K4Txq": {
                                       "type": "icon",
@@ -48843,7 +48843,7 @@
                                           "name": "Glyph"
                                         },
                                         "c7xP4I": {
-                                          "content": "Gemini 3 Pro Image"
+                                          "content": "Nano Banana Pro"
                                         },
                                         "X7uHn4": {
                                           "enabled": false
@@ -58657,7 +58657,7 @@
                   "height": 8
                 },
                 "A69R1P/hCJaR": {
-                  "content": "Gemini 3.1 Flash Image",
+                  "content": "Nano Banana 2",
                   "fontSize": 7
                 },
                 "A69R1P/LtySz": {
@@ -61176,7 +61176,7 @@
               "content": "Backdrop"
             },
             "jXc5X/c7xP4I": {
-              "content": "Gemini 3.1 Flash Image"
+              "content": "Nano Banana 2"
             },
             "y0HpcD": {
               "fill": {
@@ -61445,7 +61445,7 @@
               "content": "Hero shot"
             },
             "bqjPx/wo2TO": {
-              "content": "Gemini 3 Pro Image · 2K × 4"
+              "content": "Nano Banana Pro · 2K × 4"
             },
             "bqjPx/mGk5V": {
               "type": "frame",
@@ -64173,7 +64173,7 @@
               "content": "Variations"
             },
             "jXc5X/c7xP4I": {
-              "content": "Gemini 3.1 Flash Image"
+              "content": "Nano Banana 2"
             },
             "y0HpcD": {
               "fill": {
