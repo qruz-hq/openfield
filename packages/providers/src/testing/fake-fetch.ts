@@ -5,7 +5,7 @@ import type { FakeRoute, FakeScenario } from "./types";
 // OPENFIELD_FAKE_PROVIDERS=1 hands this to every adapter as ctx.fetch, so the whole app runs end
 // to end with no keys, no network and no cost (§6.12). Tests use it with a forced scenario.
 
-/** One fake per built-in adapter (docs/adding-a-provider.md, step 11). */
+/** One fake per built-in adapter (docs/adding-a-provider.md, step 14). */
 export const builtinFakes: readonly FakeRoute[] = [googleFake];
 
 export interface FakeFetchOptions {
@@ -18,6 +18,8 @@ export interface FakeFetchOptions {
   /** Model ids to leave out of model list answers, to test discovery. */
   hiddenModels?: readonly string[];
   routes?: readonly FakeRoute[];
+  /** The clock batch timelines follow. Default Date.now; tests move it by hand. */
+  now?: () => number;
 }
 
 export interface FakeCall {
@@ -40,6 +42,8 @@ export function createFakeFetch(opts: FakeFetchOptions = {}): FakeFetch {
     nextSeed: () => counter++,
     maxEdge: opts.maxEdge ?? 768,
     hiddenModels: opts.hiddenModels ?? [],
+    now: opts.now ?? Date.now,
+    store: new Map<string, unknown>(),
   };
 
   const fakeFetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {

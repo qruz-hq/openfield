@@ -21,6 +21,18 @@ interface GoogleError {
   details?: GoogleErrorDetail[];
 }
 
+/** A google.rpc.Status, as a batch item's own error or a whole batch's (§6.13). */
+export interface RpcStatus {
+  /** A gRPC code (3, 8, 13, …), or sometimes an HTTP status. */
+  code?: number;
+  message?: string;
+  status?: string;
+  details?: GoogleErrorDetail[];
+}
+
+/** Where people turn billing on for a Google key. */
+const BILLING_CONSOLE = "Google AI Studio";
+
 interface GeminiBody {
   promptFeedback?: { blockReason?: string; blockReasonMessage?: string };
   candidates?: {
@@ -148,9 +160,10 @@ function rateLimit(
   fail: (code: ErrorCode, extra?: { retryAfterMs?: number; userMessage?: string }) => ProviderError,
 ): ProviderError {
   const violations = err?.details?.flatMap((d) => d.violations ?? []) ?? [];
-  // These models have no free tier, so a quota of zero means the project has no billing.
+  // Image models have no free tier, so a free-tier quota of zero means billing is off for the key.
+  // The shape comes from community reports, so the net is loose: any quota of zero.
   if (violations.some((v) => v.quotaValue === "0") || /\blimit: 0\b/.test(err?.message ?? "")) {
-    return fail("billing_required");
+    return fail("billing_required", { userMessage: t("errors.billingOff", { console: BILLING_CONSOLE }) });
   }
   if (status === "QUOTA_EXCEEDED" || violations.some((v) => /per_?day/i.test(v.quotaId ?? ""))) {
     return fail("quota_exceeded");
@@ -162,6 +175,11 @@ function rateLimit(
     ...(retryAfterMs !== undefined && { retryAfterMs }),
     ...(seconds !== undefined && { userMessage: t("errors.rateLimitedIn", { seconds }) }),
   });
+}
+
+/** How long Google asks us to wait: Retry-After, then RetryInfo.retryDelay. */
+export function retryAfterOf(res: Response, body: unknown): number | undefined {
+  return retryAfterFromHeaders(res.headers) ?? retryDelayMs(asGoogleError(body));
 }
 
 function retryDelayMs(err: GoogleError | undefined): number | undefined {
@@ -194,6 +212,8 @@ function isQuotaStatus(status: string | undefined): boolean {
 function fieldOf(err: GoogleError | undefined, message: string): string | undefined {
   const named = err?.details?.flatMap((d) => d.fieldViolations ?? []).map((v) => v.field ?? "") ?? [];
   const text = [...named, message].join(" ");
+  // A speed this model doesn't take: the company's settings, not a composer chip.
+  if (/service[_ ]?tier/i.test(text)) return "speed";
   if (/aspect[_ ]?ratio/i.test(text)) return "size";
   if (/image[_ ]?size/i.test(text)) return "resolution";
   if (/thinking/i.test(text)) return "providerOptions.thinking";
@@ -201,7 +221,56 @@ function fieldOf(err: GoogleError | undefined, message: string): string | undefi
   return undefined;
 }
 
-/** Google's messages don't echo keys, but a second net costs nothing. */
+/**
+ * Google refusing Flex for capacity: a 503, or a 429 without a QuotaFailure (a quota or rate limit
+ * says which quota it hit). Google never moves a Flex request up to Standard on its own.
+ */
+export function isFlexBusy(res: Response, body: unknown): boolean {
+  const err = asGoogleError(body);
+  if (res.status === 503 || normaliseStatus(err) === "UNAVAILABLE") return true;
+  if (res.status !== 429 || /\blimit: 0\b/.test(err?.message ?? "")) return false;
+  return !err?.details?.some((d) => d["@type"]?.endsWith("google.rpc.QuotaFailure") || d.violations);
+}
+
+// gRPC codes to the HTTP statuses Google pairs them with, so batch item errors reuse mapError.
+const GRPC_HTTP: Record<number, [number, string]> = {
+  1: [499, "CANCELLED"],
+  2: [500, "UNKNOWN"],
+  3: [400, "INVALID_ARGUMENT"],
+  4: [504, "DEADLINE_EXCEEDED"],
+  5: [404, "NOT_FOUND"],
+  6: [409, "ALREADY_EXISTS"],
+  7: [403, "PERMISSION_DENIED"],
+  8: [429, "RESOURCE_EXHAUSTED"],
+  9: [400, "FAILED_PRECONDITION"],
+  10: [409, "ABORTED"],
+  11: [400, "OUT_OF_RANGE"],
+  12: [501, "UNIMPLEMENTED"],
+  13: [500, "INTERNAL"],
+  14: [503, "UNAVAILABLE"],
+  15: [500, "DATA_LOSS"],
+  16: [401, "UNAUTHENTICATED"],
+};
+
+/** A google.rpc.Status (a batch item's error, or a failed batch) mapped like any HTTP error. */
+export async function mapRpcStatus(status: RpcStatus | undefined): Promise<ProviderError> {
+  const code = status?.code ?? 2;
+  const [http, name] = code >= 100 ? [code, status?.status ?? ""] : (GRPC_HTTP[code] ?? [500, "UNKNOWN"]);
+  const body = {
+    error: {
+      code: http,
+      message: status?.message ?? name,
+      status: status?.status ?? name,
+      details: status?.details,
+    },
+  };
+  return mapError(new Response(null, { status: http }), body);
+}
+
+/** Google's messages don't echo keys, but a second net costs nothing. Keys start AIza or AQ. */
 function scrubKeys(text: string): string {
-  return text.replace(/AIza[0-9A-Za-z_-]{20,}/g, "[hidden]").replace(/([?&]key=)[^&\s]+/g, "$1[hidden]");
+  return text
+    .replace(/AIza[0-9A-Za-z_-]{20,}/g, "[hidden]")
+    .replace(/AQ\.[0-9A-Za-z_-]{20,}/g, "[hidden]")
+    .replace(/([?&]key=)[^&\s]+/g, "$1[hidden]");
 }

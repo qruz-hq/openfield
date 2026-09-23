@@ -1,8 +1,8 @@
 import type { ModelManifest } from "@openfield/core";
-import { type CallContext, errorFromFetchFailure, readBody, redactError } from "../types";
-import { authHeaders } from "./auth";
+import { type CallContext, redactError } from "../types";
 import { API_BASE } from "./capabilities";
 import { mapError } from "./errors";
+import { googleFetch } from "./http";
 import { GOOGLE_MODELS } from "./models";
 
 // models.list doesn't say which models make images (no output-modality field), so discovery only
@@ -51,14 +51,7 @@ export async function discoverIds(ctx: CallContext): Promise<string[]> {
     url.searchParams.set("pageSize", "1000");
     if (pageToken) url.searchParams.set("pageToken", pageToken);
 
-    let res: Response;
-    let body: unknown;
-    try {
-      res = await ctx.fetch(url, { headers: authHeaders(ctx), signal: ctx.signal });
-      body = await readBody(res);
-    } catch (err) {
-      throw redactError(errorFromFetchFailure(err, ctx.signal), ctx.log);
-    }
+    const { res, body } = await googleFetch(ctx, url);
     if (!res.ok) throw redactError(await mapError(res, body), ctx.log);
 
     const list = body as { models?: { name?: string }[]; nextPageToken?: string } | undefined;

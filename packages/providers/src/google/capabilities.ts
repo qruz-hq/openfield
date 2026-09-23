@@ -4,7 +4,13 @@ import { t } from "@openfield/core";
 // Verified against the image generation guide, its resolution tables and the ImageConfig API
 // reference on 2026-09-23. See README.md for what is still unverified.
 
-export const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
+/** meta.displayName, and the company name in our copy. */
+export const COMPANY = "Google";
+export const API_HOST = "generativelanguage.googleapis.com";
+export const API_BASE = `https://${API_HOST}/v1beta`;
+/** Files API uploads and result downloads live on the same host, under their own prefixes. */
+export const UPLOAD_BASE = `https://${API_HOST}/upload/v1beta`;
+export const DOWNLOAD_BASE = `https://${API_HOST}/download/v1beta`;
 
 /** Every model's table lists these ten. */
 const STANDARD_RATIOS = [

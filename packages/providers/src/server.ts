@@ -13,7 +13,7 @@ export {
   type ResolvedPrompt,
 } from "./normalize";
 export { HIDDEN, redact } from "./redact";
-export { builtinProviders, createModelRegistry, type RegistryOptions } from "./registry";
+export { builtinProviders, createModelRegistry, manifestOnly, type RegistryOptions } from "./registry";
 export { createFakeFetch, type FakeFetch, type FakeFetchOptions } from "./testing/fake-fetch";
 export type { FakeScenario } from "./testing/types";
 export * from "./types";

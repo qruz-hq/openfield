@@ -1,4 +1,4 @@
-import type { CostActual, JobState } from "@openfield/core";
+import type { CostActual, JobState, SpeedId } from "@openfield/core";
 import type { ProviderError } from "./errors";
 
 // §6.6, §6.7. In-process result types: they never cross HTTP as-is, so they aren't core schemas.
@@ -46,6 +46,11 @@ export interface JobResult {
   /** Redacted provider payload minus image bytes, for the error log. */
   providerRaw?: unknown;
   timings: { submittedAt: number; firstOutputAt?: number; completedAt: number };
+  /**
+   * The speed the company says it served (Google: usageMetadata.serviceTier). Absent: the speed
+   * asked for. Cost follows this, never the request (§0.13).
+   */
+  speedUsed?: SpeedId;
 }
 
 export interface JobUpdate {

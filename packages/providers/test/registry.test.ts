@@ -36,6 +36,11 @@ describe("registry", () => {
     ]);
     expect(registry.models().map((m) => m.modelId)).toContain("gemini-3-pro-image-preview");
     expect(registry.get("google:gemini-3-pro-image-preview").source).toBe("discovered");
+    // Manifests are data: no behaviour, the batch path included, leaks into the list.
+    const preview = registry.models().find((m) => m.modelId === "gemini-3-pro-image-preview");
+    expect(preview && "batch" in preview).toBe(false);
+    expect(preview?.speeds?.map((o) => o.id)).toEqual(["batch", "flex", "priority"]);
+    expect(typeof registry.get("google:gemini-3-pro-image-preview").batch?.submit).toBe("function");
 
     const [again] = await registry.refresh();
     expect([again?.added, again?.removed, again?.updated]).toEqual([[], [], []]);

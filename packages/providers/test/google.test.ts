@@ -32,6 +32,9 @@ const call = (overrides: Partial<NormalizedRequest> = {}): NormalizedRequest => 
   batchIndex: 0,
   manifestVersion: "1",
   paramsHash: `sha256:${"a".repeat(64)}`,
+  speed: "standard",
+  speedRequested: "standard",
+  providerSettings: {},
   ...overrides,
 });
 

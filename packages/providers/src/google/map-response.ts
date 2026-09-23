@@ -1,4 +1,4 @@
-import type { NormalizedRequest } from "@openfield/core";
+import type { NormalizedRequest, SpeedId } from "@openfield/core";
 import { t } from "@openfield/core";
 import { type CallContext, type JobResult, ProviderError, type ProviderUsage } from "../types";
 
@@ -33,6 +33,8 @@ export interface GeminiResponse {
     totalTokenCount?: number;
     promptTokensDetails?: TokenDetail[];
     candidatesTokensDetails?: TokenDetail[];
+    /** The speed Google served: "standard", "flex" or "priority". */
+    serviceTier?: string;
   };
   modelVersion?: string;
   responseId?: string;
@@ -59,12 +61,29 @@ export function pickImage(body: unknown): { mimeType: string; data: string } | u
   return { mimeType: image.inlineData?.mimeType ?? "image/png", data };
 }
 
+/**
+ * The speed Google says it served: usageMetadata.serviceTier, then the x-gemini-service-tier header
+ * (documented for the Interactions API, so maybe absent here), then the speed asked for. Priority
+ * over its limits is quietly served at Standard, so cost must follow this (§0.13).
+ */
+export function speedServed(body: unknown, headers: Headers | undefined, requested: SpeedId): SpeedId {
+  const raw =
+    (body as GeminiResponse | undefined)?.usageMetadata?.serviceTier ??
+    headers?.get("x-gemini-service-tier") ??
+    undefined;
+  const tier = raw?.toLowerCase().replace(/^service_tier_/, "");
+  if (tier === "standard" || tier === "flex" || tier === "priority") return tier;
+  if (tier === "unspecified") return "standard";
+  return requested;
+}
+
 export async function toJobResult(
   body: GeminiResponse,
   image: { mimeType: string; data: string },
-  req: NormalizedRequest,
+  req: Pick<NormalizedRequest, "batchIndex" | "seed">,
   ctx: CallContext,
   submittedAt: number,
+  speedUsed?: SpeedId,
 ): Promise<JobResult> {
   // Copy out of Buffer's shared pool so the sink gets bytes it owns.
   const bytes = new Uint8Array(Buffer.from(image.data, "base64"));
@@ -93,6 +112,7 @@ export async function toJobResult(
     ...(usage && { usage }),
     providerRaw: ctx.log.scrub(withoutImageData(body)),
     timings: { submittedAt, firstOutputAt: completedAt, completedAt },
+    ...(speedUsed && { speedUsed }),
   };
 }
 

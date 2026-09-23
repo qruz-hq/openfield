@@ -2,6 +2,7 @@
 // @openfield/core and src/manifest/**, so apps/web can price and render controls locally.
 
 export type {
+  AdapterOp,
   AspectRatio,
   Capabilities,
   ControlId,
@@ -12,12 +13,31 @@ export type {
   PerImagePrice,
   PixelSize,
   PriceModel,
+  ProviderSettingsSchema,
   QualityLevel,
   ResolutionTier,
   ResolvedControl,
+  ResolvedProviderSettings,
+  SettingField,
+  SettingOption,
+  SettingsPanel,
+  SettingValue,
   SizeCapability,
+  SpeedId,
+  SpeedOffer,
 } from "@openfield/core";
 export { type EstimateRequest, estimate } from "./manifest/estimate";
+export {
+  checkSettingsPatch,
+  conditionHolds,
+  modelsOffering,
+  modelsUsing,
+  resolveProviderSettings,
+  type SettingsPatchResult,
+  settingShown,
+  settingValues,
+  staleSettingIds,
+} from "./manifest/provider-settings";
 export {
   type ControlResolution,
   isCoreControl,
@@ -25,3 +45,12 @@ export {
   visibleControls,
 } from "./manifest/resolve-control";
 export { nearestRatio, placeholderSize, ratioValue, resolveSize } from "./manifest/size";
+export {
+  offeredSpeeds,
+  pricedOp,
+  priceFor,
+  resolveSpeed,
+  type SpeedTimeouts,
+  speedOffer,
+  speedTimeouts,
+} from "./manifest/speed";

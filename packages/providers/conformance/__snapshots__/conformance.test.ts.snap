@@ -297,3 +297,142 @@ exports[`google 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, 
   ],
 }
 `;
+
+exports[`google 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: google:gemini-3-pro-image speeds 1`] = `
+{
+  "flex": [
+    {
+      "body": {
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "A red kite over a green hill",
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "generationConfig": {
+          "imageConfig": {
+            "imageSize": "1K",
+          },
+          "responseModalities": [
+            "IMAGE",
+          ],
+        },
+        "serviceTier": "flex",
+      },
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent",
+    },
+  ],
+  "priority": [
+    {
+      "body": {
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "A red kite over a green hill",
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "generationConfig": {
+          "imageConfig": {
+            "imageSize": "1K",
+          },
+          "responseModalities": [
+            "IMAGE",
+          ],
+        },
+        "serviceTier": "priority",
+      },
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent",
+    },
+  ],
+  "standard": [
+    {
+      "body": {
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "A red kite over a green hill",
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "generationConfig": {
+          "imageConfig": {
+            "imageSize": "1K",
+          },
+          "responseModalities": [
+            "IMAGE",
+          ],
+        },
+      },
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image:generateContent",
+    },
+  ],
+}
+`;
+
+exports[`google 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: google:gemini-3.1-flash-image speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "A red kite over a green hill",
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "generationConfig": {
+          "imageConfig": {
+            "imageSize": "1K",
+          },
+          "responseModalities": [
+            "IMAGE",
+          ],
+        },
+      },
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-image:generateContent",
+    },
+  ],
+}
+`;
+
+exports[`google 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: google:gemini-3.1-flash-lite-image speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "contents": [
+          {
+            "parts": [
+              {
+                "text": "A red kite over a green hill",
+              },
+            ],
+            "role": "user",
+          },
+        ],
+        "generationConfig": {
+          "responseModalities": [
+            "IMAGE",
+          ],
+        },
+      },
+      "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-image:generateContent",
+    },
+  ],
+}
+`;

@@ -124,3 +124,208 @@ describe("createFakeFetch", () => {
     expect(fetch.calls.map((c) => c.host)).toEqual(["example.com"]);
   });
 });
+
+describe("fake speeds", () => {
+  const withTier = (
+    fetch: ReturnType<typeof createFakeFetch>,
+    model: string,
+    text: string,
+    serviceTier?: string,
+  ) =>
+    fetch(`${URL_BASE}/models/${model}:generateContent`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        contents: [{ parts: [{ text }] }],
+        generationConfig: { responseModalities: ["IMAGE"] },
+        ...(serviceTier && { serviceTier }),
+      }),
+    });
+  const tierOf = async (res: Response) =>
+    ((await res.json()) as { usageMetadata: { serviceTier?: string } }).usageMetadata.serviceTier;
+
+  test("Flex and Priority only where Google's pricing page lists them", async () => {
+    const fetch = createFakeFetch({ delayMs: 0, maxEdge: 16 });
+    const flex = await withTier(fetch, "gemini-3-pro-image", "x", "flex");
+    expect([flex.status, await tierOf(flex)]).toEqual([200, "flex"]);
+    expect(await tierOf(await withTier(fetch, "gemini-3-pro-image", "x"))).toBe("standard");
+    const refused = await withTier(fetch, "gemini-3.1-flash-image", "x", "flex");
+    expect(refused.status).toBe(400);
+    expect(JSON.stringify(await refused.json())).toContain("service_tier");
+    expect((await withTier(fetch, "gemini-3-pro-image", "x", "turbo")).status).toBe(400);
+  });
+
+  test("#fake:flex_busy answers every other Flex call busy, so a retry gets through", async () => {
+    const fetch = createFakeFetch({ delayMs: 0, maxEdge: 16 });
+    const prompt = "a kite #fake:flex_busy";
+    const busy = await withTier(fetch, "gemini-3-pro-image", prompt, "flex");
+    expect([busy.status, busy.headers.get("retry-after")]).toEqual([503, "2"]);
+    expect((await withTier(fetch, "gemini-3-pro-image", prompt, "flex")).status).toBe(200);
+    expect((await withTier(fetch, "gemini-3-pro-image", prompt, "flex")).status).toBe(503);
+    // Only Flex is ever busy.
+    expect((await withTier(fetch, "gemini-3-pro-image", prompt)).status).toBe(200);
+  });
+
+  test("#fake:priority_standard serves Priority at Standard", async () => {
+    const fetch = createFakeFetch({ delayMs: 0, maxEdge: 16 });
+    const res = await withTier(fetch, "gemini-3-pro-image", "x #fake:priority_standard", "priority");
+    expect(await tierOf(res)).toBe("standard");
+  });
+});
+
+describe("fake batches", () => {
+  const create = (fetch: ReturnType<typeof createFakeFetch>, text: string, keys = ["job-a", "job-b"]) =>
+    fetch(`${URL_BASE}/models/gemini-3.1-flash-image:batchGenerateContent`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        batch: {
+          displayName: "openfield-run",
+          inputConfig: {
+            requests: {
+              requests: keys.map((key) => ({
+                request: {
+                  contents: [{ parts: [{ text }] }],
+                  generationConfig: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "16:9" } },
+                },
+                metadata: { key },
+              })),
+            },
+          },
+        },
+      }),
+    });
+  interface Op {
+    name: string;
+    done?: boolean;
+    metadata: {
+      state: string;
+      displayName: string;
+      batchStats: Record<string, string>;
+      output?: {
+        inlinedResponses: {
+          inlinedResponses: { metadata: { key: string }; response?: unknown; error?: unknown }[];
+        };
+      };
+    };
+  }
+  const get = async (fetch: ReturnType<typeof createFakeFetch>, name: string) => {
+    const res = await fetch(`${URL_BASE}/${name}`, { headers });
+    return { status: res.status, op: (await res.json()) as Op };
+  };
+
+  test("pending, then running, then succeeded, on the fake's clock", async () => {
+    let now = 1_000_000;
+    const fetch = createFakeFetch({ delayMs: 0, maxEdge: 32, now: () => now });
+    const made = (await (await create(fetch, "a lighthouse")).json()) as Op;
+    expect(made.name).toMatch(/^batches\/fake/);
+    expect(made.metadata.state).toBe("BATCH_STATE_PENDING");
+    now += 2_000;
+    const running = await get(fetch, made.name);
+    expect(running.op.metadata.state).toBe("BATCH_STATE_RUNNING");
+    expect(running.op.metadata.output).toBeUndefined();
+    now += 3_000;
+    const done = await get(fetch, made.name);
+    expect(done.op.done).toBe(true);
+    expect(done.op.metadata.state).toBe("BATCH_STATE_SUCCEEDED");
+    expect(done.op.metadata.batchStats).toMatchObject({ requestCount: "2", successfulRequestCount: "2" });
+    const items = done.op.metadata.output?.inlinedResponses.inlinedResponses ?? [];
+    expect(items.map((i) => i.metadata.key)).toEqual(["job-a", "job-b"]);
+    const first = items[0]!.response as {
+      candidates: { content: { parts: { inlineData: { data: string } }[] } }[];
+    };
+    const image = first.candidates[0]!.content.parts[0]!.inlineData.data;
+    expect(probeImage(new Uint8Array(Buffer.from(image, "base64")))).toMatchObject({ width: 32, height: 18 });
+  });
+
+  test("a batch survives a server restart: a new fake still answers for it", async () => {
+    let now = 5_000_000;
+    const before = createFakeFetch({ delayMs: 0, maxEdge: 16, now: () => now });
+    const made = (await (await create(before, "a harbour")).json()) as Op;
+    now += 10_000;
+    const after = createFakeFetch({ delayMs: 0, maxEdge: 16, now: () => now });
+    expect((await get(after, made.name)).op.metadata.state).toBe("BATCH_STATE_SUCCEEDED");
+  });
+
+  test("cancel keeps what finished first; delete removes the batch", async () => {
+    let now = 0;
+    const fetch = createFakeFetch({ delayMs: 0, maxEdge: 16, now: () => now });
+    const made = (await (await create(fetch, "slow #fake:batch_slow", ["a", "b", "c", "d"])).json()) as Op;
+    now = 5_000 + 13_000; // two of four done
+    expect((await fetch(`${URL_BASE}/${made.name}:cancel`, { method: "POST", headers })).status).toBe(200);
+    now += 60_000;
+    const { op } = await get(fetch, made.name);
+    expect(op.metadata.state).toBe("BATCH_STATE_CANCELLED");
+    expect(op.metadata.output?.inlinedResponses.inlinedResponses.map((i) => i.metadata.key)).toEqual([
+      "a",
+      "b",
+    ]);
+    expect((await fetch(`${URL_BASE}/${made.name}`, { method: "DELETE", headers })).status).toBe(200);
+    expect((await get(fetch, made.name)).status).toBe(404);
+  });
+
+  test("tags: partial fails every other image, expired and failed end with none", async () => {
+    let now = 0;
+    const fetch = createFakeFetch({ delayMs: 0, maxEdge: 16, now: () => now });
+    const partial = (await (await create(fetch, "p #fake:batch_partial", ["a", "b", "c", "d"])).json()) as Op;
+    const expired = (await (await create(fetch, "e #fake:batch_expired")).json()) as Op;
+    const failed = (await (await create(fetch, "f #fake:batch_failed")).json()) as Op;
+    now = 60_000;
+    const items =
+      (await get(fetch, partial.name)).op.metadata.output?.inlinedResponses.inlinedResponses ?? [];
+    expect(
+      items.map((i) =>
+        "error" in i
+          ? "error"
+          : (i.response as { promptFeedback?: unknown }).promptFeedback
+            ? "blocked"
+            : "ok",
+      ),
+    ).toEqual(["ok", "error", "ok", "blocked"]);
+    const exp = (await get(fetch, expired.name)).op;
+    expect([exp.metadata.state, exp.metadata.output]).toEqual(["BATCH_STATE_EXPIRED", undefined]);
+    const fail = (await get(fetch, failed.name)).op as Op & { error?: { code: number } };
+    expect([fail.metadata.state, fail.error?.code]).toEqual(["BATCH_STATE_FAILED", 13]);
+  });
+
+  test("the list finds batches by display name", async () => {
+    const fetch = createFakeFetch({ delayMs: 0, maxEdge: 16 });
+    const made = (await (await create(fetch, "x")).json()) as Op;
+    const list = (await (await fetch(`${URL_BASE}/batches?pageSize=100`, { headers })).json()) as {
+      operations: Op[];
+    };
+    expect(list.operations.map((o) => [o.name, o.metadata.displayName])).toEqual([
+      [made.name, "openfield-run"],
+    ]);
+  });
+
+  test("a create over 20 MB is refused, like the real API", async () => {
+    const fetch = createFakeFetch({ delayMs: 0 });
+    const res = await create(fetch, "x".repeat(21 * 1024 * 1024));
+    expect(res.status).toBe(400);
+  });
+
+  test("files: a resumable upload, then delete", async () => {
+    const fetch = createFakeFetch({ delayMs: 0 });
+    const start = await fetch("https://generativelanguage.googleapis.com/upload/v1beta/files", {
+      method: "POST",
+      headers: {
+        ...headers,
+        "x-goog-upload-command": "start",
+        "x-goog-upload-header-content-type": "image/png",
+      },
+      body: JSON.stringify({ file: { display_name: "ref" } }),
+    });
+    const uploadUrl = start.headers.get("x-goog-upload-url")!;
+    expect(new URL(uploadUrl).host).toBe("generativelanguage.googleapis.com");
+    const done = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { "x-goog-api-key": "k", "x-goog-upload-command": "upload, finalize" },
+      body: new Uint8Array([1, 2, 3]),
+    });
+    const file = ((await done.json()) as { file: { name: string; uri: string; sizeBytes: string } }).file;
+    expect([file.sizeBytes, file.uri.endsWith(file.name)]).toEqual(["3", true]);
+    expect((await fetch(`${URL_BASE}/${file.name}`, { method: "DELETE", headers })).status).toBe(200);
+    expect((await fetch(`${URL_BASE}/${file.name}`, { method: "DELETE", headers })).status).toBe(404);
+  });
+});

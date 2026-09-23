@@ -19,6 +19,8 @@ export interface ProviderErrorOptions {
   providerCode?: string;
   field?: string;
   hint?: { action: ErrorHintAction; label: string };
+  /** The company refused for capacity at this speed (Flex). The runner waits instead of retrying. */
+  busy?: boolean;
   cause?: unknown;
 }
 
@@ -31,6 +33,7 @@ export class ProviderError extends Error {
   readonly providerCode?: string;
   readonly field?: string;
   readonly hint?: { action: ErrorHintAction; label: string };
+  readonly busy?: boolean;
 
   constructor(code: ErrorCode, opts: ProviderErrorOptions = {}) {
     super(opts.message ?? code, opts.cause === undefined ? undefined : { cause: opts.cause });
@@ -43,6 +46,7 @@ export class ProviderError extends Error {
     if (opts.providerCode !== undefined) this.providerCode = opts.providerCode;
     if (opts.field !== undefined) this.field = opts.field;
     if (opts.hint !== undefined) this.hint = opts.hint;
+    if (opts.busy) this.busy = true;
   }
 
   toJSON(): ProviderErrorData {
@@ -55,6 +59,7 @@ export class ProviderError extends Error {
       ...(this.providerCode !== undefined && { providerCode: this.providerCode }),
       ...(this.field !== undefined && { field: this.field }),
       ...(this.hint !== undefined && { hint: this.hint }),
+      ...(this.busy && { busy: true }),
     };
   }
 }

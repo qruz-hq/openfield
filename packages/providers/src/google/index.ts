@@ -1,4 +1,4 @@
-import { formatBytes, type JobHandle, type ModelManifest, type NormalizedRequest, t } from "@openfield/core";
+import { type JobHandle, type ModelManifest, type SpeedId, speedName, t } from "@openfield/core";
 import {
   type CallContext,
   errorFromFetchFailure,
@@ -7,17 +7,19 @@ import {
   type JobUpdate,
   type Provider,
   ProviderError,
-  readBody,
   redactError,
   UnknownModelError,
 } from "../types";
-import { authHeaders } from "./auth";
-import { API_BASE } from "./capabilities";
+import { googleBatch } from "./batch";
+import { API_BASE, COMPANY } from "./capabilities";
 import { discoverIds, manifestFor, mergeDiscovered, recognise, variantOf } from "./discovery";
-import { mapError } from "./errors";
-import { type InlineImage, toGeminiRequest } from "./map-request";
-import { type GeminiResponse, pickImage, toJobResult } from "./map-response";
+import { isFlexBusy, mapError, retryAfterOf } from "./errors";
+import { googleFetch } from "./http";
+import { inlineImages } from "./images";
+import { type GeminiRequest, serviceTierFor, toGeminiRequest } from "./map-request";
+import { type GeminiResponse, pickImage, speedServed, toJobResult } from "./map-response";
 import { GOOGLE_MODELS } from "./models";
+import { GOOGLE_SETTINGS, parseGoogleSettings } from "./settings";
 
 export { mapError } from "./errors";
 
@@ -25,7 +27,7 @@ export function createGoogleProvider(): Provider {
   return {
     meta: {
       id: "google",
-      displayName: "Google",
+      displayName: COMPANY,
       docsUrl: "https://ai.google.dev/gemini-api/docs/image-generation",
       consoleUrl: "https://aistudio.google.com/apikey",
       networkHosts: ["generativelanguage.googleapis.com"],
@@ -45,6 +47,7 @@ export function createGoogleProvider(): Provider {
         },
       ],
     },
+    settings: GOOGLE_SETTINGS,
 
     validateCredentials(values) {
       return values.apiKey?.trim()
@@ -79,8 +82,10 @@ export function createGoogleProvider(): Provider {
 }
 
 function bindModel(manifest: ModelManifest): ImageModel {
+  const offersBatch = manifest.speeds?.some((o) => o.id === "batch") ?? false;
   return {
     ...manifest,
+    ...(offersBatch && { batch: googleBatch(manifest) }),
 
     // Gemini answers in one blocking call, so the handle already carries the result (§6.7).
     async submit(req, ctx) {
@@ -89,38 +94,45 @@ function bindModel(manifest: ModelManifest): ImageModel {
           message: `${manifest.displayName} can't ${req.op}`,
         });
       }
+      if (ctx.speed === "batch") {
+        throw new ProviderError("invalid_request", { message: "A Batch run goes through model.batch" });
+      }
       if (ctx.signal.aborted) throw errorFromFetchFailure(ctx.signal.reason, ctx.signal);
       const submittedAt = ctx.now();
-      const url = `${API_BASE}/models/${encodeURIComponent(manifest.modelId)}:generateContent`;
-      const headers = { ...authHeaders(ctx), "content-type": "application/json" };
-      const payload = toGeminiRequest(manifest, req, await inlineImages(manifest, req, ctx));
+      const serviceTier = serviceTierFor(ctx.speed);
+      const payload = toGeminiRequest(manifest, req, await inlineImages(manifest, req, ctx), {
+        ...(serviceTier && { serviceTier }),
+      });
       ctx.log.debug("Gemini request", {
         model: manifest.modelId,
         imageConfig: payload.generationConfig.imageConfig,
         parts: payload.contents[0]?.parts.length,
+        serviceTier,
       });
 
-      let res: Response;
-      let body: unknown;
-      try {
-        res = await ctx.fetch(url, {
-          method: "POST",
-          headers,
-          body: JSON.stringify(payload),
-          signal: ctx.signal,
-        });
-        body = await readBody(res);
-      } catch (err) {
-        throw redactError(errorFromFetchFailure(err, ctx.signal), ctx.log);
+      let requested: SpeedId = ctx.speed;
+      let sent = await generate(manifest, payload, ctx);
+      if (!sent.res.ok && serviceTier === "flex" && isFlexBusy(sent.res, sent.body)) {
+        // Google never moves a busy Flex request up to Standard itself; the person's setting decides.
+        if (parseGoogleSettings(ctx.settings).flexBusy === "wait") {
+          throw redactError(await busyError(sent.res, sent.body), ctx.log);
+        }
+        ctx.log.info("Flex is busy, sending again at Standard", { model: manifest.modelId });
+        const { serviceTier: _, ...standard } = payload;
+        requested = "standard";
+        sent = await generate(manifest, standard, ctx);
       }
-      if (!res.ok) throw redactError(await mapError(res, body), ctx.log);
+      const { res, body } = sent;
+      if (!res.ok) throw redactError(speedAware(await mapError(res, body), requested), ctx.log);
 
       const image = pickImage(body);
       if (!image) throw redactError(await mapError(res, body), ctx.log);
-      const result = await toJobResult(body as GeminiResponse, image, req, ctx, submittedAt);
+      const speedUsed = speedServed(body, res.headers, requested);
+      const result = await toJobResult(body as GeminiResponse, image, req, ctx, submittedAt, speedUsed);
       ctx.log.info("Gemini image saved", {
         model: manifest.modelId,
         ms: result.timings.completedAt - submittedAt,
+        speed: speedUsed,
       });
 
       // No idempotency header: Gemini doesn't document one.
@@ -145,48 +157,44 @@ function bindModel(manifest: ModelManifest): ImageModel {
   };
 }
 
-/** The edit base first, then references, read from the asset store and checked against the manifest. */
-async function inlineImages(
+async function generate(
   manifest: ModelManifest,
-  req: NormalizedRequest,
+  payload: GeminiRequest,
   ctx: CallContext,
-): Promise<InlineImage[]> {
-  const refs = manifest.capabilities.references;
-  const ids = [
-    ...(req.op === "edit" && req.base ? [req.base.assetId] : []),
-    ...(req.references ?? []).map((r) => r.assetId),
-  ];
-  if (req.op === "edit" && !req.base) {
-    throw new ProviderError("invalid_request", {
-      field: "base",
-      message: "An edit needs an image to start from",
-    });
-  }
+): Promise<{ res: Response; body: unknown }> {
+  const url = `${API_BASE}/models/${encodeURIComponent(manifest.modelId)}:generateContent`;
+  return googleFetch(ctx, url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
 
-  const images: InlineImage[] = [];
-  for (const id of ids) {
-    const asset = await ctx.assets.read(id).catch((err: unknown) => {
-      if (err instanceof ProviderError) throw err;
-      throw new ProviderError("invalid_request", {
-        field: "references",
-        message: `Couldn't read asset ${id}`,
-        cause: err,
-      });
-    });
-    if (!refs.mimeTypes.includes(asset.mimeType)) {
-      throw new ProviderError("invalid_request", {
-        field: "references",
-        message: `${manifest.displayName} can't read ${asset.mimeType} images`,
-      });
-    }
-    if (asset.bytes.byteLength > refs.maxBytes) {
-      throw new ProviderError("payload_too_large", {
-        field: "references",
-        message: `Reference ${id} is ${asset.bytes.byteLength} bytes`,
-        userMessage: t("errors.referenceTooLarge", { size: formatBytes(refs.maxBytes) }),
-      });
-    }
-    images.push({ mimeType: asset.mimeType, data: Buffer.from(asset.bytes).toString("base64") });
-  }
-  return images;
+/** Flex refused for capacity: the runner waits it out on its busy schedule, not the retry budget. */
+async function busyError(res: Response, body: unknown): Promise<ProviderError> {
+  const mapped = await mapError(res, body);
+  const retryAfterMs = retryAfterOf(res, body);
+  return new ProviderError("provider_unavailable", {
+    busy: true,
+    httpStatus: res.status,
+    ...(mapped.providerCode && { providerCode: mapped.providerCode }),
+    message: `Flex is busy: ${mapped.message}`,
+    ...(retryAfterMs !== undefined && { retryAfterMs }),
+  });
+}
+
+/** A speed Google won't take for this model points at the setting, in its own words (§0.5). */
+function speedAware(err: ProviderError, requested: SpeedId): ProviderError {
+  if (err.field !== "speed") return err;
+  return new ProviderError("unsupported_param", {
+    field: "speed",
+    ...(err.httpStatus !== undefined && { httpStatus: err.httpStatus }),
+    ...(err.providerCode && { providerCode: err.providerCode }),
+    message: err.message,
+    userMessage: t("errors.speedNotOffered", {
+      company: COMPANY,
+      speed: speedName(GOOGLE_SETTINGS, requested),
+    }),
+    hint: { action: "open-settings", label: t("actions.openSettings") },
+  });
 }

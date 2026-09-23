@@ -1,4 +1,5 @@
 import type { CostEstimate, JobHandle, ModelManifest, NormalizedRequest } from "@openfield/core";
+import type { BatchApi } from "./batch";
 import type { CallContext } from "./provider";
 import type { JobUpdate } from "./result";
 
@@ -23,4 +24,10 @@ export interface ImageModel extends ModelManifest {
 
   /** Optional: one round-trip to a documented cost endpoint. Never on the render path. */
   estimateRemote?(req: NormalizedRequest, ctx: CallContext): Promise<CostEstimate>;
+
+  /**
+   * The provider batch path (§6.7). Required when the manifest offers the "batch" speed. Standard,
+   * Flex and Priority go through submit and poll, reading ctx.speed.
+   */
+  batch?: BatchApi;
 }

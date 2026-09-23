@@ -30,5 +30,17 @@ Each file is one exchange:
 | `server-error.json` | 500 `INTERNAL` | `provider_unavailable` |
 | `unavailable.json` | 503 `UNAVAILABLE` | `provider_unavailable` |
 | `models-list.json` | `GET /v1beta/models` with image, text and embedding models | discovery |
+| `flex-busy.json` | 503 `UNAVAILABLE` to a Flex request | `provider_unavailable`, `busy: true` when the setting says keep trying |
+| `priority-standard.json` | A Priority request served at Standard: `usageMetadata.serviceTier: "standard"` | `speedUsed: "standard"` |
+| `speed-rejected.json` | 400 `INVALID_ARGUMENT` naming `service_tier` | `unsupported_param` on `speed` |
+| `batch-create.json` | `batchGenerateContent`: an Operation named `batches/…`, `BATCH_STATE_PENDING` | a `BatchHandle` |
+| `batch-running.json` | `BATCH_STATE_RUNNING` with `batchStats` as int64 strings | `running`, counts |
+| `batch-succeeded.json` | Two `inlinedResponses`, each with `metadata.key` | two saved images at Batch |
+| `batch-partial.json` | One image, one item `error` (`google.rpc.Status` code 13) | one result, one `provider_unavailable` |
+| `batch-expired.json` | `BATCH_STATE_EXPIRED`, no output | `timeout` for every image |
+| `batch-cancelled.json` | `BATCH_STATE_CANCELLED` with the one image that finished first | one result, one `canceled` |
+| `batch-list.json` | `GET /v1beta/batches` with two operations | `find()` by display name |
+
+The speed and batch files follow the [generateContent reference](https://ai.google.dev/api/generate-content) (`serviceTier`, `UsageMetadata.serviceTier`) and the [Batch API reference](https://ai.google.dev/api/batch-mode) (`Operation`, `GenerateContentBatch`, `InlinedResponse`) as of 2026-09-23.
 
 **Replace them with recorded exchanges** the first time someone runs the live suite with a real key (`OPENFIELD_CONFORMANCE=live`). Remove the key and any auth headers before committing, and swap large images for small ones.

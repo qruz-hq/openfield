@@ -1,4 +1,4 @@
-import type { AspectRatio, ModelManifest, NormalizedRequest } from "@openfield/core";
+import type { AspectRatio, ModelManifest, NormalizedRequest, SpeedId } from "@openfield/core";
 
 // NormalizedRequest to a generateContent body. Pure, so golden tests can snapshot it.
 //
@@ -12,7 +12,16 @@ export interface InlineImage {
   data: string;
 }
 
-export type GeminiPart = { text: string } | { inlineData: InlineImage };
+/** A file uploaded once through the Files API, used by batch requests over the inline size limit. */
+export interface FileRef {
+  mimeType: string;
+  fileUri: string;
+}
+
+export type GeminiPart = { text: string } | { inlineData: InlineImage } | { fileData: FileRef };
+
+/** The generateContent value for a sync speed. Standard leaves the field out; Batch has its own endpoint. */
+export type ServiceTier = "flex" | "priority";
 
 export interface GeminiRequest {
   contents: { role: "user"; parts: GeminiPart[] }[];
@@ -23,6 +32,12 @@ export interface GeminiRequest {
     thinkingConfig?: { thinkingLevel: "MINIMAL" | "HIGH" };
   };
   tools?: { googleSearch: Record<string, never> }[];
+  /** Top level, beside contents, never inside generationConfig (§6.13). */
+  serviceTier?: ServiceTier;
+}
+
+export function serviceTierFor(speed: SpeedId): ServiceTier | undefined {
+  return speed === "flex" || speed === "priority" ? speed : undefined;
 }
 
 /**
@@ -33,6 +48,7 @@ export function toGeminiRequest(
   manifest: ModelManifest,
   req: NormalizedRequest,
   images: InlineImage[],
+  opts: { serviceTier?: ServiceTier } = {},
 ): GeminiRequest {
   const caps = manifest.capabilities;
   const parts: GeminiPart[] = [];
@@ -63,6 +79,7 @@ export function toGeminiRequest(
     body.generationConfig.thinkingConfig = { thinkingLevel: thinking === "high" ? "HIGH" : "MINIMAL" };
   }
   if ("grounding" in extras && req.providerOptions?.grounding === true) body.tools = [{ googleSearch: {} }];
+  if (opts.serviceTier) body.serviceTier = opts.serviceTier;
 
   return body;
 }

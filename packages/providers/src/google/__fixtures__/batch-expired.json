@@ -1,0 +1,31 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/v1beta/batches/k3v9q2m8x7w1r5t0"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=UTF-8"
+    },
+    "body": {
+      "name": "batches/k3v9q2m8x7w1r5t0",
+      "metadata": {
+        "@type": "type.googleapis.com/google.ai.generativelanguage.v1main.GenerateContentBatch",
+        "model": "models/gemini-3-pro-image",
+        "displayName": "openfield-01K6BQ7Y2M8N4P0R3S5T7V9W1X",
+        "state": "BATCH_STATE_EXPIRED",
+        "createTime": "2026-09-23T12:00:00.123456Z",
+        "updateTime": "2026-09-23T12:04:10.500000Z",
+        "batchStats": {
+          "requestCount": "2",
+          "successfulRequestCount": "0",
+          "failedRequestCount": "0",
+          "pendingRequestCount": "2"
+        },
+        "endTime": "2026-09-23T12:04:10.500000Z"
+      },
+      "done": true
+    }
+  }
+}

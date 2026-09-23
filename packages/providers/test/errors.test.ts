@@ -94,4 +94,14 @@ describe("redact", () => {
   test("short values aren't treated as keys", () => {
     expect(redact("the cat sat", ["cat"])).toBe("the cat sat");
   });
+
+  test("Google's newer AQ. keys are hidden too, whatever follows the prefix", () => {
+    const aq = "AQ.Xy7FakeTmZ0xq-4F_w9TtY2kPz1QbV7cD3eH5jK8mN0pR";
+    expect(redact({ msg: `bad key ${aq} here`, list: [aq] })).toEqual({
+      msg: `bad key ${HIDDEN} here`,
+      list: [HIDDEN],
+    } as never);
+    // Too short to be a key: ordinary text survives.
+    expect(redact("AQ.short and AQ.x")).toBe("AQ.short and AQ.x");
+  });
 });

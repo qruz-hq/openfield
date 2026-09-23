@@ -1,0 +1,212 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/v1beta/batches/k3v9q2m8x7w1r5t0"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json; charset=UTF-8"
+    },
+    "body": {
+      "name": "batches/k3v9q2m8x7w1r5t0",
+      "metadata": {
+        "@type": "type.googleapis.com/google.ai.generativelanguage.v1main.GenerateContentBatch",
+        "model": "models/gemini-3-pro-image",
+        "displayName": "openfield-01K6BQ7Y2M8N4P0R3S5T7V9W1X",
+        "state": "BATCH_STATE_SUCCEEDED",
+        "createTime": "2026-09-23T12:00:00.123456Z",
+        "updateTime": "2026-09-23T12:04:10.500000Z",
+        "batchStats": {
+          "requestCount": "2",
+          "successfulRequestCount": "2",
+          "failedRequestCount": "0",
+          "pendingRequestCount": "0"
+        },
+        "endTime": "2026-09-23T12:04:10.500000Z",
+        "output": {
+          "inlinedResponses": {
+            "inlinedResponses": [
+              {
+                "response": {
+                  "candidates": [
+                    {
+                      "content": {
+                        "role": "model",
+                        "parts": [
+                          {
+                            "inlineData": {
+                              "mimeType": "image/png",
+                              "data": "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAQCAIAAACtAwlQAAABL0lEQVR4nHWR60rDQBCFd27NNk0bRNT6ACIiIiIiIiLiOwmCNIkgCP4QBEEQBMG3E+MNe4vpym6a0lbyb2b4ds45s7DWOSPFCEyKXSEMQsBoCBWjG8J659yOXEMgntS1aIKaydUoM2qEFtroXJSQeKIDv9VqhELesJ/1u4PfQQ6GYDOKyK1lEF8HC+HiylK7oYP07eMz/e53ByoH2IouxxCK71movbzaqDfT1/eP9GsMbUdXVgvGck0/bAZhjbxhL+v9FHIIO9G1iybWOIrHWkudUUwOeWZUDgQMu/ENFkR5CMZacQIw5CIz7MW3ZX6eK0obDPvx3aTBqX3TBRzE9zPQv32kBA7jh7mns5D9IjhKHqusoCOs3HHyVGWlgFAxnCTPVVYm6nCavFRZmaj/Ab9bT+nRGcc0AAAAAElFTkSuQmCC"
+                            }
+                          }
+                        ]
+                      },
+                      "finishReason": "STOP",
+                      "index": 0
+                    }
+                  ],
+                  "usageMetadata": {
+                    "promptTokenCount": 14,
+                    "candidatesTokenCount": 1120,
+                    "totalTokenCount": 1134,
+                    "promptTokensDetails": [
+                      {
+                        "modality": "TEXT",
+                        "tokenCount": 14
+                      }
+                    ],
+                    "candidatesTokensDetails": [
+                      {
+                        "modality": "IMAGE",
+                        "tokenCount": 1120
+                      }
+                    ]
+                  },
+                  "modelVersion": "gemini-3-pro-image"
+                },
+                "metadata": {
+                  "key": "01K6BQ8A1C4D7E9F2G3H4J5K6M"
+                }
+              },
+              {
+                "response": {
+                  "candidates": [
+                    {
+                      "content": {
+                        "role": "model",
+                        "parts": [
+                          {
+                            "inlineData": {
+                              "mimeType": "image/png",
+                              "data": "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAQCAIAAACtAwlQAAABL0lEQVR4nHWR60rDQBCFd27NNk0bRNT6ACIiIiIiIiLiOwmCNIkgCP4QBEEQBMG3E+MNe4vpym6a0lbyb2b4ds45s7DWOSPFCEyKXSEMQsBoCBWjG8J659yOXEMgntS1aIKaydUoM2qEFtroXJSQeKIDv9VqhELesJ/1u4PfQQ6GYDOKyK1lEF8HC+HiylK7oYP07eMz/e53ByoH2IouxxCK71movbzaqDfT1/eP9GsMbUdXVgvGck0/bAZhjbxhL+v9FHIIO9G1iybWOIrHWkudUUwOeWZUDgQMu/ENFkR5CMZacQIw5CIz7MW3ZX6eK0obDPvx3aTBqX3TBRzE9zPQv32kBA7jh7mns5D9IjhKHqusoCOs3HHyVGWlgFAxnCTPVVYm6nCavFRZmaj/Ab9bT+nRGcc0AAAAAElFTkSuQmCC"
+                            }
+                          }
+                        ]
+                      },
+                      "finishReason": "STOP",
+                      "index": 0
+                    }
+                  ],
+                  "usageMetadata": {
+                    "promptTokenCount": 14,
+                    "candidatesTokenCount": 1120,
+                    "totalTokenCount": 1134,
+                    "promptTokensDetails": [
+                      {
+                        "modality": "TEXT",
+                        "tokenCount": 14
+                      }
+                    ],
+                    "candidatesTokensDetails": [
+                      {
+                        "modality": "IMAGE",
+                        "tokenCount": 1120
+                      }
+                    ]
+                  },
+                  "modelVersion": "gemini-3-pro-image"
+                },
+                "metadata": {
+                  "key": "01K6BQ9Z0A1B2C3D4E5F6G7H8J"
+                }
+              }
+            ]
+          }
+        }
+      },
+      "done": true,
+      "response": {
+        "@type": "type.googleapis.com/google.ai.generativelanguage.v1main.GenerateContentBatchOutput",
+        "inlinedResponses": {
+          "inlinedResponses": [
+            {
+              "response": {
+                "candidates": [
+                  {
+                    "content": {
+                      "role": "model",
+                      "parts": [
+                        {
+                          "inlineData": {
+                            "mimeType": "image/png",
+                            "data": "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAQCAIAAACtAwlQAAABL0lEQVR4nHWR60rDQBCFd27NNk0bRNT6ACIiIiIiIiLiOwmCNIkgCP4QBEEQBMG3E+MNe4vpym6a0lbyb2b4ds45s7DWOSPFCEyKXSEMQsBoCBWjG8J659yOXEMgntS1aIKaydUoM2qEFtroXJSQeKIDv9VqhELesJ/1u4PfQQ6GYDOKyK1lEF8HC+HiylK7oYP07eMz/e53ByoH2IouxxCK71movbzaqDfT1/eP9GsMbUdXVgvGck0/bAZhjbxhL+v9FHIIO9G1iybWOIrHWkudUUwOeWZUDgQMu/ENFkR5CMZacQIw5CIz7MW3ZX6eK0obDPvx3aTBqX3TBRzE9zPQv32kBA7jh7mns5D9IjhKHqusoCOs3HHyVGWlgFAxnCTPVVYm6nCavFRZmaj/Ab9bT+nRGcc0AAAAAElFTkSuQmCC"
+                          }
+                        }
+                      ]
+                    },
+                    "finishReason": "STOP",
+                    "index": 0
+                  }
+                ],
+                "usageMetadata": {
+                  "promptTokenCount": 14,
+                  "candidatesTokenCount": 1120,
+                  "totalTokenCount": 1134,
+                  "promptTokensDetails": [
+                    {
+                      "modality": "TEXT",
+                      "tokenCount": 14
+                    }
+                  ],
+                  "candidatesTokensDetails": [
+                    {
+                      "modality": "IMAGE",
+                      "tokenCount": 1120
+                    }
+                  ]
+                },
+                "modelVersion": "gemini-3-pro-image"
+              },
+              "metadata": {
+                "key": "01K6BQ8A1C4D7E9F2G3H4J5K6M"
+              }
+            },
+            {
+              "response": {
+                "candidates": [
+                  {
+                    "content": {
+                      "role": "model",
+                      "parts": [
+                        {
+                          "inlineData": {
+                            "mimeType": "image/png",
+                            "data": "iVBORw0KGgoAAAANSUhEUgAAAAwAAAAQCAIAAACtAwlQAAABL0lEQVR4nHWR60rDQBCFd27NNk0bRNT6ACIiIiIiIiLiOwmCNIkgCP4QBEEQBMG3E+MNe4vpym6a0lbyb2b4ds45s7DWOSPFCEyKXSEMQsBoCBWjG8J659yOXEMgntS1aIKaydUoM2qEFtroXJSQeKIDv9VqhELesJ/1u4PfQQ6GYDOKyK1lEF8HC+HiylK7oYP07eMz/e53ByoH2IouxxCK71movbzaqDfT1/eP9GsMbUdXVgvGck0/bAZhjbxhL+v9FHIIO9G1iybWOIrHWkudUUwOeWZUDgQMu/ENFkR5CMZacQIw5CIz7MW3ZX6eK0obDPvx3aTBqX3TBRzE9zPQv32kBA7jh7mns5D9IjhKHqusoCOs3HHyVGWlgFAxnCTPVVYm6nCavFRZmaj/Ab9bT+nRGcc0AAAAAElFTkSuQmCC"
+                          }
+                        }
+                      ]
+                    },
+                    "finishReason": "STOP",
+                    "index": 0
+                  }
+                ],
+                "usageMetadata": {
+                  "promptTokenCount": 14,
+                  "candidatesTokenCount": 1120,
+                  "totalTokenCount": 1134,
+                  "promptTokensDetails": [
+                    {
+                      "modality": "TEXT",
+                      "tokenCount": 14
+                    }
+                  ],
+                  "candidatesTokensDetails": [
+                    {
+                      "modality": "IMAGE",
+                      "tokenCount": 1120
+                    }
+                  ]
+                },
+                "modelVersion": "gemini-3-pro-image"
+              },
+              "metadata": {
+                "key": "01K6BQ9Z0A1B2C3D4E5F6G7H8J"
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

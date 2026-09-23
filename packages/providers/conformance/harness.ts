@@ -1,4 +1,10 @@
-import { type CredentialValues, type GenerateRequest, type ModelManifest, newId } from "@openfield/core";
+import {
+  type CredentialValues,
+  type GenerateRequest,
+  type ModelManifest,
+  newId,
+  type SettingValue,
+} from "@openfield/core";
 import { normalize } from "../src/normalize";
 import { builtinProviders } from "../src/registry";
 import { createTestContext, type TestContext } from "../src/testing/context";
@@ -48,6 +54,8 @@ export function harness(
     delayMs?: number;
     signal?: AbortSignal;
     credentials?: CredentialValues;
+    /** The fake's clock, for batch timelines. */
+    now?: () => number;
   } = {},
 ): Harness {
   const fake = createFakeFetch({
@@ -55,6 +63,7 @@ export function harness(
     delayMs: opts.delayMs ?? 0,
     maxEdge: 48,
     ...(opts.scenario && { scenario: opts.scenario }),
+    ...(opts.now && { now: opts.now }),
   });
   const sent: Sent[] = [];
   const spy: FetchLike = async (input, init) => {
@@ -100,10 +109,36 @@ export function request(manifest: ModelManifest, overrides: Partial<GenerateRequ
   };
 }
 
-/** Normalizes, then submits every call. Throws what submit throws. */
-export async function generate(kit: Kit, manifest: ModelManifest, req: GenerateRequest, h: Harness) {
-  const normalized = await normalize(manifest, req, { jobSetId: newId() });
+/**
+ * Normalizes with the company's settings (`stored` is what the person changed), sets the context's
+ * speed and settings from the frozen request as the runner does, then submits every call.
+ */
+export async function prepare(
+  kit: Kit,
+  manifest: ModelManifest,
+  req: GenerateRequest,
+  h: Harness,
+  stored: Record<string, SettingValue> = {},
+) {
+  const normalized = await normalize(manifest, req, {
+    jobSetId: newId(),
+    settings: { ...(kit.provider.settings && { schema: kit.provider.settings }), stored },
+  });
   if (normalized.error) throw normalized.error;
+  h.ctx.speed = normalized.request.speed;
+  h.ctx.settings = normalized.request.providerSettings;
+  return normalized;
+}
+
+/** Normalizes, then submits every call. Throws what submit throws. */
+export async function generate(
+  kit: Kit,
+  manifest: ModelManifest,
+  req: GenerateRequest,
+  h: Harness,
+  stored: Record<string, SettingValue> = {},
+) {
+  const normalized = await prepare(kit, manifest, req, h, stored);
   const model = kit.provider.model(manifest.key);
   const handles = [];
   for (const call of normalized.calls) handles.push(await model.submit(call, h.ctx));

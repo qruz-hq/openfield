@@ -13,7 +13,8 @@ const SECRET_HEADERS = new Set([
   "set-cookie",
 ]);
 
-const KEY_SHAPES = [/sk-[A-Za-z0-9_-]{16,}/g, /AIza[0-9A-Za-z_-]{20,}/g];
+// Google keys start with AIza, or AQ. for the newer auth keys AI Studio makes by default (§6.11).
+const KEY_SHAPES = [/sk-[A-Za-z0-9_-]{16,}/g, /AIza[0-9A-Za-z_-]{20,}/g, /AQ\.[0-9A-Za-z_-]{20,}/g];
 
 export function redact<T>(value: T, secrets: readonly string[] = []): T {
   // Longest first, so a key that contains another is hidden whole. Short strings would hide

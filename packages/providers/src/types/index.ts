@@ -1,3 +1,4 @@
+export type * from "./batch";
 export * from "./errors";
 export type * from "./model";
 export * from "./provider";

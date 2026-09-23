@@ -1,0 +1,30 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/v1beta/models/gemini-3.1-flash-image:generateContent"
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "content-type": "application/json; charset=UTF-8"
+    },
+    "body": {
+      "error": {
+        "code": 400,
+        "message": "Service tier flex is not supported for models/gemini-3.1-flash-image.",
+        "status": "INVALID_ARGUMENT",
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.rpc.BadRequest",
+            "fieldViolations": [
+              {
+                "field": "service_tier",
+                "description": "Service tier flex is not supported for models/gemini-3.1-flash-image."
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

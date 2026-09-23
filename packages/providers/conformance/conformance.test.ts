@@ -1,13 +1,20 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
+  batchHandleSchema,
   credentialSchemaSchema,
   jobHandleSchema,
+  type ModelManifest,
   modelManifestSchema,
   newId,
   normalizedRequestSchema,
   providerMetaSchema,
+  providerSettingsSchemaSchema,
+  settingFields,
+  speedSettingField,
 } from "@openfield/core";
 import { estimate } from "../src/manifest/estimate";
+import { resolveProviderSettings } from "../src/manifest/provider-settings";
+import { offeredSpeeds } from "../src/manifest/speed";
 import { normalize } from "../src/normalize";
 import { createModelRegistry } from "../src/registry";
 import { ProviderError } from "../src/types";
@@ -18,6 +25,7 @@ import {
   harness,
   type Kit,
   kits,
+  prepare,
   request,
   withoutImageBytes,
 } from "./harness";
@@ -406,6 +414,166 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
       // Only adapters that take a mask have something to convert. The fixture pair test lives
       // with an adapter that declares ops.inpaint.
       if (!manifest.capabilities.ops.inpaint) expect(manifest.capabilities.ops.inpaint).toBe(false);
+    }
+  });
+
+  const offers = (m: ModelManifest, id: string) => m.speeds?.some((o) => o.id === id) ?? false;
+
+  test("22. settings obey §0.3's rules, and Speed is bound to the manifests' offers", () => {
+    const schema = kit.provider.settings;
+    const offered = new Set(catalog.flatMap((m) => m.speeds?.map((o) => o.id) ?? []));
+    if (!schema) {
+      expect(offered.size).toBe(0);
+      return;
+    }
+    expect(providerSettingsSchemaSchema.safeParse(schema).error?.issues ?? []).toEqual([]);
+    // Rule 1: a key is a credential field, never a setting.
+    const credentialNames = kit.provider.credentials.fields.map((f) => f.name);
+    for (const field of settingFields(schema)) expect(credentialNames).not.toContain(field.id);
+
+    const speed = speedSettingField(schema);
+    if (offered.size > 0) expect(speed).toBeDefined();
+    const values = speed?.options.map((o) => o.value) ?? [];
+    for (const id of offered) expect(values).toContain(id);
+    for (const value of values) if (value !== "standard") expect(offered.has(value as never)).toBe(true);
+    // Rule 3: every default is legal for every model.
+    for (const manifest of catalog) expect(resolveProviderSettings(schema, {}, manifest).notes).toEqual([]);
+  });
+
+  test("23. every speed offer is priced and sourced; Batch is async and has a batch path", () => {
+    for (const manifest of catalog) {
+      for (const offer of manifest.speeds ?? []) {
+        expect(offer.price.kind).not.toBe("unknown");
+        if (offer.price.kind !== "unknown") {
+          expect(offer.price.pricedAt).toBeTruthy();
+          expect(offer.price.sourceUrl).toMatch(/^https:\/\//);
+        }
+        expect(offer.delivery).toBe(offer.id === "batch" ? "async" : "sync");
+      }
+      const model = kit.provider.model(manifest.key);
+      expect(typeof model.batch?.submit === "function").toBe(offers(manifest, "batch"));
+      if (model.batch) {
+        expect(typeof model.batch.poll).toBe("function");
+        expect(typeof model.batch.cancel).toBe("function");
+      }
+    }
+  });
+
+  test("24. speed on the wire: golden payloads per sync speed, and cost follows the speed served", async () => {
+    for (const manifest of catalog) {
+      const golden: Record<string, unknown> = {};
+      for (const speed of offeredSpeeds(manifest).filter((s) => s !== "batch")) {
+        const h = harness(kit);
+        const { handles, model } = await generate(kit, manifest, request(manifest), h, { speed });
+        const result = (await model.poll(handles[0]!, h.ctx)).result;
+        expect(result?.speedUsed).toBe(speed);
+        golden[speed] = h.sent.map((s) => ({ url: s.url, body: s.body }));
+      }
+      expect(golden).toMatchSnapshot(`${manifest.key} speeds`);
+
+      if (offers(manifest, "priority")) {
+        const h = harness(kit, { scenario: "priority_standard" });
+        const { handles, model } = await generate(kit, manifest, request(manifest), h, { speed: "priority" });
+        expect((await model.poll(handles[0]!, h.ctx)).result?.speedUsed).toBe("standard");
+      }
+    }
+  });
+
+  test("25. Flex busy: keep trying raises busy; switch to Standard sends once more without the speed", async () => {
+    for (const manifest of catalog.filter((m) => offers(m, "flex"))) {
+      // The busy policy is a setting named flexBusy: "wait" or "standard" (§0.4).
+      const busyField = settingFields(kit.provider.settings).find((f) => f.id === "flexBusy");
+      expect(busyField?.kind === "select" && busyField.options.map((o) => o.value).sort()).toEqual([
+        "standard",
+        "wait",
+      ]);
+
+      const waiting = harness(kit, { scenario: "flex_busy" });
+      const err = await expectError(
+        generate(kit, manifest, request(manifest), waiting, { speed: "flex", flexBusy: "wait" }),
+      );
+      expect([err.code, err.busy, err.retryable]).toEqual(["provider_unavailable", true, true]);
+      expect(waiting.ctx.assets.written).toHaveLength(0);
+
+      const switching = harness(kit, { scenario: "flex_busy" });
+      const { handles, model } = await generate(kit, manifest, request(manifest), switching, {
+        speed: "flex",
+        flexBusy: "standard",
+      });
+      expect(switching.sent).toHaveLength(2);
+      expect((await model.poll(handles[0]!, switching.ctx)).result?.speedUsed).toBe("standard");
+    }
+  });
+
+  test("26. batch round trip: handle survives JSON, harvest writes once, items map to jobs, cancel and expiry", async () => {
+    for (const manifest of catalog.filter((m) => offers(m, "batch"))) {
+      let now = Date.parse("2026-09-23T12:00:00.000Z");
+      const clock = () => now;
+      const stored = { speed: "batch" };
+
+      // Success, across a restart: a fresh binding and a fresh context poll the stored handle.
+      const h = harness(kit, { now: clock });
+      const normalized = await prepare(kit, manifest, request(manifest, { batch: 2 }), h, stored);
+      expect(normalized.request.speed).toBe("batch");
+      expect(normalized.calls).toHaveLength(2);
+      const handle = await kit.provider.model(manifest.key).batch!.submit(normalized.calls, h.ctx);
+      const saved = batchHandleSchema.parse(JSON.parse(JSON.stringify(handle)));
+      const later = harness(kit, { now: clock });
+      const batch = kit.provider.model(manifest.key).batch!;
+      const waiting = await batch.poll(saved, later.ctx, { harvest: normalized.jobIds });
+      expect(["queued", "running"]).toContain(waiting.state);
+      expect(waiting.items).toBeUndefined();
+      expect(later.ctx.assets.written).toHaveLength(0);
+
+      now += 10 * 60_000;
+      const done = await batch.poll(saved, later.ctx, { harvest: normalized.jobIds });
+      expect(done.state).toBe("succeeded");
+      expect(done.items?.map((i) => [i.jobId, i.ok])).toEqual(normalized.jobIds.map((id) => [id, true]));
+      for (const item of done.items ?? []) if (item.ok) expect(item.result.speedUsed).toBe("batch");
+      expect(later.ctx.assets.written).toHaveLength(2);
+      const again = await batch.poll(saved, later.ctx, { harvest: [] });
+      expect([again.state, again.items]).toEqual(["succeeded", []]);
+      expect(later.ctx.assets.written).toHaveLength(2);
+      if (batch.find) expect((await batch.find(saved.displayName, h.ctx))?.remoteId).toBe(saved.remoteId);
+
+      // A partial batch maps each item to its own job.
+      const p = harness(kit, { now: clock, scenario: "batch_partial" });
+      const partial = await prepare(kit, manifest, request(manifest, { batch: 4 }), p, stored);
+      const ph = await batch.submit(partial.calls, p.ctx);
+      now += 10 * 60_000;
+      const mixed = await batch.poll(ph, p.ctx, { harvest: partial.jobIds });
+      expect(mixed.items?.map((i) => [i.jobId, i.ok])).toEqual(
+        partial.jobIds.map((id, i) => [id, i % 2 === 0]),
+      );
+
+      // Cancel, then poll: what finished first is harvested, the rest is canceled.
+      const c = harness(kit, { now: clock, scenario: "batch_slow" });
+      const slow = await prepare(kit, manifest, request(manifest, { batch: 4 }), c, stored);
+      const ch = await batch.submit(slow.calls, c.ctx);
+      now += 18_000;
+      await batch.cancel(ch, c.ctx);
+      now += 60_000;
+      const stopped = await batch.poll(ch, c.ctx, { harvest: slow.jobIds });
+      expect(stopped.state).toBe("canceled");
+      const kept = stopped.items?.filter((i) => i.ok).length ?? 0;
+      expect(kept).toBeGreaterThan(0);
+      expect(kept).toBeLessThan(4);
+      for (const item of stopped.items ?? []) if (!item.ok) expect(item.error.code).toBe("canceled");
+      expect(c.ctx.assets.written).toHaveLength(kept);
+
+      // Expiry maps every unfinished image to timeout.
+      const e = harness(kit, { now: clock, scenario: "batch_expired" });
+      const exp = await prepare(kit, manifest, request(manifest, { batch: 2 }), e, stored);
+      const eh = await batch.submit(exp.calls, e.ctx);
+      now += 10 * 60_000;
+      const expired = await batch.poll(eh, e.ctx, { harvest: exp.jobIds });
+      expect(expired.state).toBe("expired");
+      expect(expired.items?.map((i) => (i.ok ? "ok" : i.error.code))).toEqual(["timeout", "timeout"]);
+
+      // No key anywhere in what the batch path logged or returned.
+      const urls = h.sent.map((sent) => [sent.url, sent.body]);
+      const text = JSON.stringify([h.ctx.log.lines, later.ctx.log.lines, saved, done, urls]);
+      for (const secret of kit.secrets) expect(text).not.toContain(secret);
     }
   });
 

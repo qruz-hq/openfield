@@ -13,10 +13,13 @@ import {
   type NormalizedRequest,
   newId,
   type PixelSize,
+  type ProviderSettingsSchema,
   type ReferenceInput,
   type ResolutionTier,
+  type ResolvedProviderSettings,
   t,
 } from "@openfield/core";
+import { resolveProviderSettings } from "./manifest/provider-settings";
 import { nearestRatio, placeholderSize, resolveSize } from "./manifest/size";
 import { ProviderError } from "./types";
 
@@ -46,6 +49,11 @@ export interface NormalizeOptions {
   resolvePrompt?: PromptResolver;
   /** A random 32-bit seed. Injectable so tests are deterministic. */
   randomSeed?: () => number;
+  /**
+   * The company's settings: the adapter's schema and the values the person changed. They're
+   * resolved for this model and frozen onto the request (§0.3). Without them the run is Standard.
+   */
+  settings?: { schema?: ProviderSettingsSchema; stored?: Readonly<Record<string, unknown>> | null };
 }
 
 export interface NormalizeResult {
@@ -60,6 +68,8 @@ export interface NormalizeResult {
   diagnostics: Diagnostic[];
   /** Controls Openfield faked for this run, recorded on the job set. */
   emulated: ControlId[];
+  /** The company's settings for this model, including why a choice fell back. Frozen on `request`. */
+  settings: ResolvedProviderSettings;
   /** Set when the run can't be sent as asked. Don't submit. */
   error?: ProviderError;
 }
@@ -198,6 +208,14 @@ export async function normalize(
     unsupportedSetting("seed", "composer.chips.seed.label");
   }
 
+  // Company settings and speed (§0.3): a speed this model lacks for this op runs at Standard.
+  const settings = resolveProviderSettings(
+    opts.settings?.schema,
+    opts.settings?.stored,
+    manifest,
+    op ?? "generate",
+  );
+
   // Freeze
   const mint = opts.newId ?? newId;
   const jobIds = Array.from({ length: batch }, () => mint());
@@ -228,6 +246,9 @@ export async function normalize(
     batchIndex: 0,
     promptAfterPreset,
     manifestVersion: manifest.manifestVersion,
+    speed: settings.speed,
+    speedRequested: settings.speedRequested,
+    providerSettings: settings.values,
   });
   const request: NormalizedRequest = { ...frozen, paramsHash: await paramsHashOf(frozen, manifest) };
 
@@ -241,6 +262,7 @@ export async function normalize(
     dimensions: placeholderSize(caps, size, resolution),
     diagnostics,
     emulated,
+    settings,
     ...(firstError && {
       error: new ProviderError(firstError.code as ErrorCode, {
         userMessage: firstError.message,
@@ -254,6 +276,7 @@ export async function normalize(
 /**
  * Splits a frozen request into provider calls (§6.5 step 5). Recreate calls this on the stored
  * request with fresh job ids; seeds come out the same because they derive from the stored base.
+ * A Batch run always splits into single-image requests, so each tile fails on its own.
  */
 export function planCalls(
   manifest: ModelManifest,
@@ -263,7 +286,8 @@ export function planCalls(
   const caps = manifest.capabilities;
   if (jobIds.length !== request.batch)
     throw new RangeError(`Expected ${request.batch} job ids, got ${jobIds.length}`);
-  if (caps.batch.native || request.batch === 1) return [{ ...request, jobId: jobIds[0]!, batchIndex: 0 }];
+  const single = request.batch === 1 || (caps.batch.native && request.speed !== "batch");
+  if (single) return [{ ...request, jobId: jobIds[0]!, batchIndex: 0 }];
   const [low, high] = caps.seed.range ?? [0, 4_294_967_295];
   return jobIds.map((jobId, i) => ({
     ...request,

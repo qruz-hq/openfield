@@ -6,15 +6,22 @@ import {
   type NormalizedRequest,
   type PerImagePrice,
   type PriceModel,
+  type SpeedId,
   t,
 } from "@openfield/core";
+import { pricedOp, priceFor, resolveSpeed } from "./speed";
 
-// §0.13: pure. Reads manifest.price and the request, never credentials, the network or the clock,
-// so the composer can re-run it on every chip change.
+// §0.13: pure. Reads the manifest's prices and the request, never credentials, the network or the
+// clock, so the composer can re-run it on every chip change.
 
-/** The fields a price depends on. A full NormalizedRequest fits, and so does the composer's state. */
+/**
+ * The fields a price depends on. A full NormalizedRequest fits, and so does the composer's state.
+ * `speed` is what the company's settings resolve to; a speed the model lacks prices as Standard.
+ */
 export type EstimateRequest = Pick<NormalizedRequest, "batch"> &
-  Partial<Pick<NormalizedRequest, "resolution" | "quality" | "size" | "prompt" | "promptAfterPreset">>;
+  Partial<
+    Pick<NormalizedRequest, "resolution" | "quality" | "size" | "prompt" | "promptAfterPreset" | "op">
+  > & { speed?: SpeedId };
 
 const round = (usd: number) => Math.round(usd * 1e6) / 1e6;
 
@@ -30,13 +37,16 @@ function unknownCost(pricedAt = ""): CostEstimate {
 }
 
 export function estimate(manifest: ModelManifest, req: EstimateRequest): CostEstimate {
-  const price = manifest.price;
+  const { speed } = resolveSpeed(manifest, req.speed ?? "standard", pricedOp(req.op));
+  const price = priceFor(manifest, speed);
   const count = Math.max(1, req.batch);
+  // The basis names the speed whenever it isn't Standard: "2 × $0.067 (1K, Batch)".
+  const speedLabel = speed === "standard" ? undefined : t(`speed.names.${speed}`);
   switch (price.kind) {
     case "per_image":
-      return perImage(manifest, price, req, count);
+      return perImage(manifest, price, req, count, speedLabel);
     case "per_token":
-      return perToken(manifest, price, req, count);
+      return perToken(manifest, price, req, count, speedLabel);
     case "per_second":
     case "provider_estimate":
       // Images have no duration, and a remote estimate needs estimateRemote().
@@ -54,6 +64,7 @@ function perImage(
   price: PerImagePriceModel,
   req: EstimateRequest,
   count: number,
+  speedLabel: string | undefined,
 ): CostEstimate {
   const caps = manifest.capabilities;
   const tier = req.resolution ?? caps.resolution?.default;
@@ -65,7 +76,9 @@ function perImage(
     .sort((a, b) => specificity(b) - specificity(a))[0];
 
   if (hit) {
-    const label = [hit.quality && qualityLabel(manifest, hit.quality), hit.tier].filter(Boolean).join(", ");
+    const label = [hit.quality && qualityLabel(manifest, hit.quality), hit.tier, speedLabel]
+      .filter(Boolean)
+      .join(", ");
     return {
       currency: price.currency,
       min: round(hit.usd * count),
@@ -87,7 +100,7 @@ function perImage(
     min: round(low * count),
     max: round(high * count),
     confidence: "estimated",
-    basis: t("cost.basis", { count, each: moneyRange(low, high, price.currency) }),
+    basis: basis(count, moneyRange(low, high, price.currency), speedLabel),
     pricedAt: price.pricedAt,
   };
 }
@@ -97,6 +110,7 @@ function perToken(
   price: PerTokenPriceModel,
   req: EstimateRequest,
   count: number,
+  speedLabel: string | undefined,
 ): CostEstimate {
   const caps = manifest.capabilities;
   const quality = req.quality ?? caps.quality?.default;
@@ -122,9 +136,13 @@ function perToken(
     min: round(low * count),
     max: round(high * count),
     confidence: "estimated",
-    basis: t("cost.basis", { count, each: moneyRange(low, high, price.currency) }),
+    basis: basis(count, moneyRange(low, high, price.currency), speedLabel),
     pricedAt: price.pricedAt,
   };
+}
+
+function basis(count: number, each: string, detail: string | undefined): string {
+  return detail ? t("cost.basisWith", { count, each, detail }) : t("cost.basis", { count, each });
 }
 
 /** "$0.134", or "$0.039–$0.134" per image. */

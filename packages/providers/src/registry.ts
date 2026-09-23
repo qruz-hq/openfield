@@ -136,8 +136,9 @@ function withDiscoveries(p: Provider, ids: string[]): ModelManifest[] {
   return models;
 }
 
-function manifestOnly(model: ImageModel): ModelManifest {
-  const { submit: _s, poll: _p, stream: _st, cancel: _c, estimateRemote: _e, ...manifest } = model;
+/** The data half of a bound model: no methods, and no batch path, so it can go to the browser. */
+export function manifestOnly(model: ImageModel): ModelManifest {
+  const { submit: _s, poll: _p, stream: _st, cancel: _c, estimateRemote: _e, batch: _b, ...manifest } = model;
   return manifest;
 }
 

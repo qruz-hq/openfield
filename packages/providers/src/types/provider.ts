@@ -6,6 +6,9 @@ import type {
   ModelManifest,
   PriceTable,
   ProviderMeta,
+  ProviderSettingsSchema,
+  SettingValue,
+  SpeedId,
 } from "@openfield/core";
 import type { ImageModel } from "./model";
 
@@ -17,6 +20,11 @@ export type FetchLike = (input: string | URL | Request, init?: RequestInit) => P
 export interface Provider {
   readonly meta: ProviderMeta;
   readonly credentials: CredentialSchema;
+  /**
+   * Optional: the company's own settings panels (§0.3). Pure data, served to the settings modal as
+   * is. Openfield appends its own Limits panel; an adapter never declares it.
+   */
+  readonly settings?: ProviderSettingsSchema;
 
   /** Shape-only check. Pure, no network. Drives inline Settings validation. */
   validateCredentials(values: CredentialValues): Diagnostic[];
@@ -65,6 +73,14 @@ export interface CallContext {
   now: () => number;
   /** Where image bytes go in and out. Adapters never return base64 or data URLs. */
   assets: AssetSink;
+  /**
+   * This run's company settings, resolved for its model and frozen at submit (§0.3): every field of
+   * the adapter's schema, defaults filled. Empty for calls that aren't runs. Parse what you need on
+   * every call; never trust a value's shape.
+   */
+  settings: Readonly<Record<string, SettingValue>>;
+  /** The speed to ask for, already resolved against the model's offers. "standard" outside runs. */
+  speed: SpeedId;
 }
 
 export interface WrittenAsset {

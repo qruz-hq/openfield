@@ -1,6 +1,6 @@
-import type { ModelManifest } from "@openfield/core";
+import type { ModelManifest, PriceModel, SpeedOffer } from "@openfield/core";
 import { EXTRAS, geminiCapabilities, RATIOS } from "./capabilities";
-import { PRICES } from "./pricing";
+import { PRICES, SPEED_PRICES } from "./pricing";
 
 // The static catalog, checked against ai.google.dev/gemini-api/docs/models on 2026-09-23.
 // Nano Banana (gemini-2.5-flash-image) is left out: Google shuts it down on October 2, 2026 and
@@ -12,6 +12,29 @@ const CATALOGED = {
   source: "static",
   fetchedAt: "2026-09-23",
 } as const;
+
+// Waits from Google's guides: Batch targets 24 hours and expires at 48; Flex targets 1 to 15
+// minutes and asks clients to wait 10 minutes or more, so a Flex call gets 15.
+const HOUR = 3_600_000;
+const batch = (price: PriceModel): SpeedOffer => ({
+  id: "batch",
+  price,
+  delivery: "async",
+  waitMs: { target: 24 * HOUR, max: 48 * HOUR },
+});
+const flex = (price: PriceModel): SpeedOffer => ({
+  id: "flex",
+  price,
+  delivery: "sync",
+  waitMs: { target: 60_000, max: 900_000 },
+  requestTimeoutMs: 900_000,
+});
+const priority = (price: PriceModel): SpeedOffer => ({
+  id: "priority",
+  price,
+  delivery: "sync",
+  waitMs: { target: 3_000, max: 120_000 },
+});
 
 export const GOOGLE_MODELS: readonly ModelManifest[] = [
   {
@@ -27,7 +50,14 @@ export const GOOGLE_MODELS: readonly ModelManifest[] = [
       extraSchema: EXTRAS.pro,
     }),
     price: PRICES["gemini-3-pro-image"],
-    manifestVersion: "1",
+    // Flex and Priority follow the newer pricing page; the model page still says "Not supported"
+    // (README.md). If Google rejects or ignores them, they come out of this list.
+    speeds: [
+      batch(SPEED_PRICES["gemini-3-pro-image"].batch),
+      flex(SPEED_PRICES["gemini-3-pro-image"].flex),
+      priority(SPEED_PRICES["gemini-3-pro-image"].priority),
+    ],
+    manifestVersion: "2",
   },
   {
     ...CATALOGED,
@@ -42,7 +72,8 @@ export const GOOGLE_MODELS: readonly ModelManifest[] = [
       extraSchema: EXTRAS.flash,
     }),
     price: PRICES["gemini-3.1-flash-image"],
-    manifestVersion: "1",
+    speeds: [batch(SPEED_PRICES["gemini-3.1-flash-image"].batch)],
+    manifestVersion: "2",
   },
   {
     ...CATALOGED,
@@ -59,6 +90,7 @@ export const GOOGLE_MODELS: readonly ModelManifest[] = [
       unsupported: { resolution: { reason: "Nano Banana 2 Lite makes 1K images only." } },
     }),
     price: PRICES["gemini-3.1-flash-lite-image"],
-    manifestVersion: "1",
+    speeds: [batch(SPEED_PRICES["gemini-3.1-flash-lite-image"].batch)],
+    manifestVersion: "2",
   },
 ];

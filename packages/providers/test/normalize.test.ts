@@ -7,6 +7,7 @@ import {
   normalizedRequestSchema,
 } from "@openfield/core";
 import { GOOGLE_MODELS } from "../src/google/models";
+import { GOOGLE_SETTINGS } from "../src/google/settings";
 import { appendAvoid, normalize, planCalls } from "../src/normalize";
 
 const pro = GOOGLE_MODELS.find((m) => m.modelId === "gemini-3-pro-image")!;
@@ -204,6 +205,48 @@ describe("normalize", () => {
     expect(a.request.paramsHash).not.toBe(c.request.paramsHash);
   });
 
+  test("company settings resolve for the model and freeze onto the request (§0.3)", async () => {
+    const settings = { schema: GOOGLE_SETTINGS, stored: { speed: "flex", flexBusy: "standard" } };
+    const out = await normalize(pro, req({ batch: 2 }), { jobSetId: newId(), settings });
+    expect([out.request.speed, out.request.speedRequested]).toEqual(["flex", "flex"]);
+    expect(out.request.providerSettings).toEqual({ speed: "flex", flexBusy: "standard" });
+    expect(out.calls.every((c) => c.speed === "flex" && c.providerSettings.flexBusy === "standard")).toBe(
+      true,
+    );
+    expect(() => normalizedRequestSchema.parse(out.request)).not.toThrow();
+
+    // Nano Banana 2 has no Flex: it runs at Standard, and says what was asked for.
+    const flash = GOOGLE_MODELS.find((m) => m.modelId === "gemini-3.1-flash-image")!;
+    const other = await normalize(flash, req({ model: flash.key }), { jobSetId: newId(), settings });
+    expect([other.request.speed, other.request.speedRequested]).toEqual(["standard", "flex"]);
+    expect(other.settings.notes[0]).toMatchObject({ field: "speed", reason: "option_not_for_model" });
+  });
+
+  test("without company settings a run is Standard with none", async () => {
+    const out = await run(pro);
+    expect([out.request.speed, out.request.speedRequested, out.request.providerSettings]).toEqual([
+      "standard",
+      "standard",
+      {},
+    ]);
+  });
+
+  test("the speed is part of paramsHash: it changes the price", async () => {
+    const standard = await run(pro);
+    const batch = await normalize(pro, req(), {
+      jobSetId: newId(),
+      randomSeed: () => 7,
+      settings: { schema: GOOGLE_SETTINGS, stored: { speed: "batch" } },
+    });
+    expect(batch.request.paramsHash).not.toBe(standard.request.paramsHash);
+  });
+
+  test("a Batch run always splits into single-image requests, native batch or not", () => {
+    const frozen = { ...strictRequest(), batch: 3, speed: "batch" as const };
+    expect(planCalls(strict, frozen, [newId(), newId(), newId()])).toHaveLength(3);
+    expect(planCalls(strict, { ...frozen, speed: "standard" }, [newId(), newId(), newId()])).toHaveLength(1);
+  });
+
   test("Recreate: planCalls on a frozen request with new ids keeps everything else", async () => {
     const out = await run(pro, { batch: 2 });
     const frozen = JSON.parse(JSON.stringify(out.request));
@@ -230,5 +273,8 @@ function strictRequest() {
     promptAfterPreset: "x",
     manifestVersion: "1",
     paramsHash: `sha256:${"0".repeat(64)}`,
+    speed: "standard" as const,
+    speedRequested: "standard" as const,
+    providerSettings: {},
   };
 }

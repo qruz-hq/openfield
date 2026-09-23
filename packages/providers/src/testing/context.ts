@@ -1,4 +1,4 @@
-import { type CredentialValues, newId, sha256Hex } from "@openfield/core";
+import { type CredentialValues, newId, type SettingValue, type SpeedId, sha256Hex } from "@openfield/core";
 import { redact } from "../redact";
 import type { AssetSink, CallContext, FetchLike, RedactingLogger, StoredAsset, WrittenAsset } from "../types";
 import { probeImage } from "./png";
@@ -97,6 +97,10 @@ export interface TestContextOptions {
   signal?: AbortSignal;
   now?: () => number;
   assets?: MemoryAssetSink;
+  /** The run's resolved company settings. Default: none. */
+  settings?: Record<string, SettingValue>;
+  /** Default: standard. */
+  speed?: SpeedId;
 }
 
 export interface TestContext extends CallContext {
@@ -113,5 +117,7 @@ export function createTestContext(opts: TestContextOptions): TestContext {
     log: createRecordingLogger(() => Object.values(credentials)),
     now: opts.now ?? Date.now,
     assets: opts.assets ?? new MemoryAssetSink(),
+    settings: opts.settings ?? {},
+    speed: opts.speed ?? "standard",
   };
 }
