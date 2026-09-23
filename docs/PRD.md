@@ -256,7 +256,7 @@ pending → submitting → (queued)* → running → succeeded | failed
         interrupted (restart, non-resumable adapter)
 ```
 
-A job whose adapter cannot resume after a restart is marked **`interrupted`**, shown as "Interrupted. Run again?", and is **never auto-resubmitted** (double-billing risk). §6.7's "marked `failed` with `provider_error`" is deleted.
+A job whose adapter cannot resume after a restart is marked **`interrupted`**, shown as "Interrupted." with **Try again**, and is **never auto-resubmitted** (double-billing risk). §6.7's "marked `failed` with `provider_error`" is deleted.
 
 **Operations.** One snake_case union, used byte-identically by `job_sets.op`, `assets.op`, `usage_log.operation` and §4.9's operation record:
 
@@ -320,15 +320,17 @@ export type ErrorCode =
 | `auth_missing` | "No key for this model" | Open Settings |
 | `auth_invalid` / `auth_forbidden` | "This key was rejected" | Change key |
 | `billing_required` / `quota_exceeded` | "This key is out of credit" | Open billing page |
-| `rate_limited` | "Too many requests. Retrying" | Retry (with backoff hint) |
+| `rate_limited` | "Too many requests. Try again in a minute." (the tile only appears once Openfield's own retries have run out; while they run, status text may say "Retrying") | Try again |
 | `content_refused` / `content_flagged_input` | "The model wouldn't make this" | Reuse (edit the prompt) |
 | `unsupported_param` / `capability_unsupported` | "This model can't do that" | Reuse |
 | `invalid_request` / `payload_too_large` | "These settings didn't work" | Details |
 | `provider_unavailable` / `provider_error` | "The model ran into a problem" | Details |
-| `network` | "Couldn't connect" | Retry |
-| `timeout` | "This took too long" | Retry |
+| `network` | "Couldn't connect" | Try again |
+| `timeout` | "This took too long" | Try again |
 | `disk_full` | "Couldn't save. Your disk is full" | Free up space |
 | `canceled` | "Canceled. You may still be charged for work that already started." (§0.12, verbatim) | Recreate |
+
+When an adapter's `userMessage` says more than the row above (for example "Image blocked. It came from an unknown site."), the runner stores it on the job as `error_reason` and the tile shows it instead; retryable codes keep the row's copy, because their "trying again" wording is stale once the retries are spent. The failed tile's **Details** shows only our copy (what to try, and when it happened), never the code or the provider's message.
 
 Every failure card links to the **Error log** (Settings → Help): redacted request payload, HTTP status, `providerCode`, redacted response. `mapError` has one signature everywhere: `mapError(res: Response, body?: unknown): Promise<ProviderError>`, always `throw await mapError(res, body)` / `error: await mapError(res, body)`.
 
@@ -476,7 +478,7 @@ Acceptance: *a cross-origin page cannot list assets, read key status, or cause a
 
 **Ingest is non-destructive and single-pathed.** Every byte that enters Openfield — provider output or user upload — goes through §8.5.1: stream to `tmp/<ulid>.part`, hash while streaming, probe dimensions and real MIME from magic bytes (never the declared type), dedupe on `assets.sha256`, atomic `rename()` into place, insert the row in the same transaction that flips the job. **Originals are stored exactly as returned — no re-encode, no strip, no EXIF removal.** Google's SynthID watermark survives untouched; `safety.notices` is therefore an honest claim. A 2048px-long-edge WebP working copy for the editor lives in the thumb cache, never in place. §5.6's sha256-named `refs/` tree and its q85 re-encode are deleted; reference sets hold **asset ids**, never paths or hashes.
 
-Consequently **§6.13's Gemini `output.format` row becomes "not exposed ⇒ `output.formats: ["png"]`, chip hidden."** Format conversion happens only on export (§8.5.4), where the dialog warns: *"Changing the format may remove the hidden AI watermark."*
+Consequently **§6.13's Gemini `output.format` row becomes "not exposed ⇒ `output.formats: ["jpeg"]`, chip hidden."** (JPEG is the only image output type the generateContent reference documents, checked at M0-07; the stored bytes are whatever Google returns.) Format conversion happens only on export (§8.5.4), where the dialog warns: *"Changing the format may remove the hidden AI watermark."*
 
 **Deletes.** Soft delete sets `deleted_at`; the asset leaves every feed and every query filters `deleted_at IS NULL`. **The FTS row is retained on soft delete** (no trigger fires on `deleted_at`, and none is added); hard delete removes it via the `assets_ad` trigger. §8.6's claim "FTS row is removed" is deleted.
 
@@ -555,9 +557,9 @@ On the Edit tab, tool letters take precedence over surface actions. That precede
 - Cache path: `~/.openfield/thumbs/<sha[0:2]>/<sha>@h456.webp`. Not `cache/thumbs/`.
 - **AC-2.3.1 is rewritten:** *at a 1440 px viewport, zoom step 3, a row of four 4:5 assets solves to 365×456 with 2 px gaps, and the row's rendered width equals the container width to within 1 px, verified with `getBoundingClientRect()`.* The mixed-row worked example in §2.3 already solves at 456 and stands.
 
-**Encoder chain** — named concretely, because neither library in §8.5.2 can do what §8.5.4 promises:
+**Encoder: `sharp` only**, with a safe fallback instead of a second encoder:
 
-> `sharp` (libvips) **where its prebuilt binary loads under Bun**, else a WASM chain of `@jsquash/png` + `@jsquash/jpeg` (decode) + `@jsquash/resize` + `@jsquash/webp` (encode). The selection is **probed at boot**, not only at install, and the result is shown in Settings → Storage. WebP `quality 82`, `effort 4`, metadata stripped, `fit: inside`. Worker pool capped at `max(1, cores − 2)`.
+> `sharp` (libvips) is loaded once at boot. If it loads, thumbnails are WebP `quality 82`, `effort 4`, metadata stripped, `fit: inside`, on a worker pool capped at `max(1, cores − 2)`. **If it fails to load under Bun, thumbnails are off**: `GET /files/thumb/:id` streams the original instead, and Settings → Storage says "Thumbnails are off. Images show at full size, so scrolling may be slower." There is no WASM chain.
 
 **Metadata on export.** PNG `tEXt`/`iTXt` chunks — including the legacy `parameters` chunk for interop with existing tooling — are written by a small in-repo chunk writer (`png-chunks-extract` / `png-chunk-text` class, MIT) applied to the **encoded buffer after** the encoder; `sharp` cannot write arbitrary PNG text chunks. EXIF/XMP for JPEG and WebP use `exiftool-vendored` or the same post-encode approach; the choice is a **blocking sub-task `M2-13a`** (spike: confirm PNG `tEXt`/`iTXt` + legacy `parameters` round-trip and WebP XMP/EXIF round-trip, under Bun). Any export whose `format` differs from `assets.mime` shows the re-encode watermark warning (§0.7).
 
@@ -742,7 +744,8 @@ Every word a person sees in Openfield follows this section, including every quot
 - No internal terms (see the word list). If a word only makes sense to someone who has read the code, rewrite it.
 - No filler ("simply", "just", "to get started", "here"), no stacked hedges, no marketing tone. No roadmap talk ("coming soon", "Soon", "v1.1"). Anything that hasn't shipped is hidden, not teased.
 - Keep every fact that protects the person, and say it like a person: "Canceled. You may still be charged for work that already started."
-- Buttons are verbs or short noun phrases: "Retry", "Add a key", "Change key", "Free up space".
+- Buttons are verbs or short noun phrases: "Try again", "Add a key", "Change key", "Free up space".
+- A failed action always offers "Try again", never "Retry". "Retrying" is fine as status text while Openfield tries again on its own.
 - Small caps labels are written in sentence case in the source and uppercased with CSS.
 
 **Words.** One word per concept.
@@ -805,8 +808,8 @@ Internal packages are consumed as TypeScript source. Each `package.json` `export
 | Workspace | Owns | May import (workspace) | Main external deps |
 |---|---|---|---|
 | `apps/web` | The SPA: routing (React Router), every screen in §2 to §5, the canvas (§7: React Flow nodes, `<NodeShell>`, DAG compiler, fingerprints, dirty propagation), server state through TanStack Query, the `hc` client, the SSE consumer | `@openfield/core`, `@openfield/ui`, `@openfield/providers/manifest`, and `import type { AppType } from "@openfield/server/app-type"` | `react`, `react-router`, `@tanstack/react-query`, `@xyflow/react`, `zustand` (canvas stores, §7.10), `hono/client`, `vite`, `tailwindcss` |
-| `apps/server` | The Hono app on Bun: the four guards (§0.6), every route in §8.3, the job runner and scheduler (§8.4), crash recovery, the SSE hub, ingest, thumbnails and export (§8.5), the file store under `OPENFIELD_HOME` (§8.1), `config.json` and keys (§6.11), seeding, serving the built SPA | `@openfield/core`, `@openfield/db`, `@openfield/providers/server`, `@openfield/providers/manifest` | `hono`, `@hono/zod-validator`, `sharp` or the WASM chain (§8.5.2) |
-| `packages/providers` | The `Provider`, `ImageModel` and other behaviour interfaces (§6.2), the registry, request normalization (`normalize()`), the pure `estimate()` and `resolveControl()`, one folder per adapter, the conformance suite | `@openfield/core` | none (global `fetch`) |
+| `apps/server` | The Hono app on Bun: the four guards (§0.6), every route in §8.3, the job runner and scheduler (§8.4), crash recovery, the SSE hub, ingest, thumbnails and export (§8.5), the file store under `OPENFIELD_HOME` (§8.1), `config.json` and keys (§6.11), seeding, serving the built SPA | `@openfield/core`, `@openfield/db`, `@openfield/providers/server`, `@openfield/providers/manifest` | `hono`, `@hono/zod-validator`, `sharp` (§8.5.2) |
+| `packages/providers` | The `Provider`, `ImageModel` and other behaviour interfaces (§6.2), the registry, request normalization (`normalize()`), the pure `estimate()` and `resolveControl()`, one folder per adapter, the conformance suite | `@openfield/core` | none (`fetch` comes from `CallContext`, §6.2) |
 | `packages/core` | Every zod schema, and the type inferred from it, for data that crosses a boundary: HTTP request and response bodies, SSE event payloads, the error envelope, manifest data (`Capabilities`, `ModelManifest`, `PriceModel`), `GenerateRequest` and `NormalizedRequest`, settings (§6.17 keys and defaults), preset envelopes (§5.3), the canvas document (§7.8) and its document migrations. Also the enum constants (§0.4, §0.5 and every CHECK list), ULIDs, `hashCanonical()` (§0.11), and the i18n catalogue with `t()` | none | `zod` (v4), `ulid` |
 | `packages/db` | The Drizzle schema, the single source of truth for every table (§8.2), drizzle-kit migrations, drizzle-zod row schemas, `openDb()` with migrate-on-boot, typed query helpers (§8.2.2) | `@openfield/core` | `drizzle-orm`, `drizzle-zod`, `drizzle-kit` (dev) |
 | `packages/ui` | Design tokens (`--of-*`, §2.2) and the Tailwind theme, shadcn/ui primitives restyled to the tokens, and the presentational components shared across surfaces (chips, popovers, stepper, tiles, badges, `<PickerSheet>`, icons). Props in, events out: no data fetching, no routing, no API client, no React Flow | `@openfield/core` (types and `t()` only) | `react`, `tailwindcss`, Radix primitives via shadcn/ui |
@@ -884,9 +887,10 @@ apps/web        src/api/client.ts: hc<AppType>() ─▶ TanStack Query hooks
 
 | Command | Does |
 |---|---|
-| `bun install` | Installs every workspace. There is no postinstall build, and a `sharp` binary that fails to load never fails the install (§8.5.2) |
+| `bun install` | Installs every workspace. There is no postinstall build, and a `sharp` binary that fails to load never fails the install or the boot (§8.5.2) |
 | `bun dev` | Starts `apps/server` (watch mode, `127.0.0.1:4317`) and `apps/web` (Vite, `127.0.0.1:5173`, `strictPort`) together, and stops both on exit. Open `http://127.0.0.1:4317`. In dev the server proxies every path outside `/api` and `/files` to Vite and injects the session token into `index.html`, and Vite's HMR socket connects to 5173 directly. The app has one origin, so the four guards (§0.6) behave the same in dev and production |
-| `bun run build` | Type-checks every workspace (`tsc -b`) and builds `apps/web` to `apps/web/dist` |
+| `bun run typecheck` | Type-checks every workspace by running each workspace's own `tsc` |
+| `bun run build` | Runs `bun run typecheck`, then the Vite build of `apps/web` to `apps/web/dist` |
 | `bun start` | Runs `apps/server` in production mode. It serves `apps/web/dist` and injects the token into `index.html` |
 | `bun run db:generate` | Runs `drizzle-kit generate` in `packages/db` after a schema edit. The new SQL file is committed together with the schema change. `bun run db:generate --custom --name=<name>` creates an empty hand-written migration |
 | `bun test` | Runs Bun's test runner across all workspaces: unit tests, the db schema check (§8.2.1) and the conformance suite in offline mode |
@@ -903,7 +907,7 @@ S1's three commands (`bun install`, `bun dev`, open the URL) are exactly the fir
 
 It runs from `git clone` + `bun`. A Bun/Hono server binds to `127.0.0.1` only; there is no account, no login, no hosted component. Generated images are ordinary files under `~/.openfield`, with metadata and lineage in SQLite. API keys live in a `0600` config file (env vars override) and are used exclusively server-side, so no provider key ever reaches browser JavaScript. Providers are typed TypeScript adapters that publish a per-model **capability manifest** (shape in §0.3, interface in §6.3); one resolver renders every control from it, hiding what a model cannot do and disabling the core chips with a reason instead of lying about them — the same per-model behaviour recorded in the walkthrough, where the reference product's GPT Image 2 shows `Aspect · Quality · Resolution · Background · 1/4` while its Nano Banana Pro shows only `Aspect · Quality(=resolution) · 1/4`. Openfield's equivalent manifests render `openai:gpt-image-2` as `Aspect · Quality · Resolution · Background · Advanced · 1/4` and `google:gemini-3-pro-image` as `Aspect · Resolution · Advanced · 1/4` (§3.7), because Gemini exposes no separate quality axis (§6.13).
 
-Launch adapters are **Google Gemini image** (canonical display name *Gemini 3 Pro Image*; the vendor's "Nano Banana" nickname appears only as the manifest `family`, never as our UI copy) and **OpenAI GPT Image**, plus a **Higgsfield adapter** if and only if its public API exposes presets and characters to a user-supplied key. fal.ai and Replicate are designed for but shipped in v1.1. v1 is image-only; the job and asset model is modality-agnostic so video slots in without a migration. Licence MIT. No telemetry, ever.
+Launch adapters are **Google Gemini image** (shown in the UI by Google's Nano Banana names: *Nano Banana Pro*, *Nano Banana 2*, *Nano Banana 2 Lite*; the Gemini API ids stay in the model keys, §6.13) and **OpenAI GPT Image**, plus a **Higgsfield adapter** if and only if its public API exposes presets and characters to a user-supplied key. fal.ai and Replicate are designed for but shipped in v1.1. v1 is image-only; the job and asset model is modality-agnostic so video slots in without a migration. Licence MIT. No telemetry, ever.
 
 ### 1.2 The problem
 
@@ -1033,12 +1037,12 @@ Openfield reproduces **user experience and workflow** — layout, control invent
 - **No proprietary models or services.** Soul, Soul Cinema, Soul ID, Soul HEX, Higgsfield's curated style catalogue and the Topaz upscaler are not reimplemented, redistributed or emulated as models. Each has a declared open substitute or a capability slot (§1.6).
 - **No private API use.** Openfield does not call Higgsfield's application endpoints (`/fnf/*`), does not use scraped session credentials, and does not circumvent authentication or rate limits. The optional Higgsfield adapter is opt-in, uses the **documented public API** at `api.higgsfield.ai` with the user's own API key and their own billing relationship, and is disabled and hidden when no key is configured.
 - **No confidential material.** The research behind this PRD was a logged-in walkthrough of a publicly available product using the researcher's own paid account, recording layout measurements and observable behaviour. No source code, internal documentation or non-public material was obtained or used.
-- **Licence and notice.** Openfield is MIT. The README carries a plain statement that Openfield is an independent project, not affiliated with, endorsed by or sponsored by Higgsfield, and that Higgsfield and its product names are trademarks of their owner, referenced only nominatively. `CONTRIBUTING.md` asks contributors not to submit assets, strings or code derived from Higgsfield or any other closed product.
+- **Licence and notice.** Openfield is MIT, copyright "Openfield contributors". The README carries a plain statement that Openfield is an independent project, not affiliated with, endorsed by or sponsored by Higgsfield, and that Higgsfield and its product names are trademarks of their owner, referenced only nominatively. `CONTRIBUTING.md` asks contributors not to submit assets, strings or code derived from Higgsfield or any other closed product.
 - **Before release**, a maintainer performs a brand-and-copy audit against this list, on the release checklist alongside the S2 parity checklist.
 
 ### 1.12 Open questions
 
-- **Higgsfield adapter viability.** The public API is documented for Soul v2 (`POST /higgsfield-ai/soul/v2/standard`) with `Authorization: Key <id>:<secret>`, but research found no documented endpoint for **listing style IDs** (70+ styles referenced without a schema), no documented **identity-training** endpoint, and no Canvas API. Until style-listing and character endpoints are confirmed with a real key, the adapter's scope — and whether it ships in v1 at all — is undecided; §0.13 already pins its pricing to `kind: "unknown"` until a live probe confirms an estimate endpoint.
+- **Higgsfield adapter viability.** The public API is documented for Soul v2 (`POST /higgsfield-ai/soul/v2/standard`) with `Authorization: Key <id>:<secret>`, but research found no documented endpoint for **listing style IDs** (70+ styles referenced without a schema), no documented **identity-training** endpoint, and no Canvas API. Until style-listing and character endpoints are confirmed with a real key (the owner's, in `M3-16`), the adapter's scope — and whether it ships in v1 at all — is undecided; §0.13 already pins its pricing to `kind: "unknown"` until a live probe confirms an estimate endpoint.
 - **Provider terms.** Whether each provider's ToS permits a BYOK client of this shape, and whether any require attribution or restrict presenting cost estimates, has not been verified per-provider.
 - **Model catalogue refresh cadence.** Google publishes no `models.list` for image models and OpenAI's `/v1/models` does not flag image capability — both stand. §0.3 settles the consequence: `listModels()` need only return the adapter's static, version-stamped catalogue, network discovery is optional and **allow-listed by the adapter's own `recognise(id)`** (unrecognised ids are reported, never added), and the snapshot date is surfaced in Settings → Models. What remains open is the refresh cadence and who runs the maintainer script.
 - **Migration.** Whether existing Higgsfield users want to import their cloud library, and whether any supported export path exists, is unknown; no export API was observed.
@@ -1090,7 +1094,7 @@ Fixed, full width, **44px tall**, `background: var(--of-surface)`, `border-botto
 
 ### 2.2 Theme and design tokens
 
-Dark is the default. Light is a full first-class theme, not an inversion hack. Theme resolution order: explicit user choice persisted in the local config → `prefers-color-scheme` → dark. Implemented as CSS custom properties on `:root`, re-declared under `@media (prefers-color-scheme: dark)` guarded by `:root:not([data-theme="light"])` and under `:root[data-theme="dark"]`; Tailwind consumes them through `theme.extend.colors`. `body` always sets an explicit background.
+Dark and light both ship in v1. Dark is the default and is what `design.pen` shows; light is a full first-class theme derived from the same tokens, not an inversion hack. Theme resolution order: explicit user choice persisted in the local config → `prefers-color-scheme` → dark. Implemented as CSS custom properties on `:root`, re-declared under `@media (prefers-color-scheme: dark)` guarded by `:root:not([data-theme="light"])` and under `:root[data-theme="dark"]`; Tailwind consumes them through `theme.extend.colors`. `body` always sets an explicit background.
 
 #### Colour tokens
 
@@ -1192,7 +1196,7 @@ The five target row heights and their thumb rungs are **§0.10's ladder, owned b
 - The scroll container is `position: relative` with an explicit computed total height; visible tiles are **absolutely positioned** (`transform: translate3d(x, y, 0)`), with an overscan of 2 rows above and below the viewport. Tiles carry `contain: layout paint style`.
 - Row geometry is computed incrementally and memoised per `(zoomStep, containerWidth, assetListVersion)`; a resize re-solves from the first row intersecting the viewport so the user's scroll anchor does not jump.
 - Images come from the local thumbnail service (`GET /files/thumb/:id?h=&dpr=`, §8.3), WebP, generated on first request and cached under **`~/.openfield/thumbs`**. `srcset` spans the height ladder `@h200, @h280, @h360, @h456, @h640` plus their `dpr=2` variants; `sizes` is derived from the solved tile width. Rung resolution, the cache key and the encoder are §0.10/§8.5.2 and are not restated here. Full-resolution originals load only in the detail view (§4). `loading="lazy"`, `decoding="async"`, and an `--of-elevated` placeholder box at the exact aspect ratio so nothing reflows.
-- **Paging**: cursor pagination, page size **50** — the measured feed page size — ordered `created_at DESC, id DESC`, over §8.3's asset list endpoint. An IntersectionObserver sentinel 1200px before the end requests the next page; a failed page shows an inline "Couldn't load more. Retry" row rather than an empty void.
+- **Paging**: cursor pagination, page size **50** — the measured feed page size — ordered `created_at DESC, id DESC`, over §8.3's asset list endpoint. An IntersectionObserver sentinel 1200px before the end requests the next page; a failed page shows an inline "Couldn't load more." row with **Try again** rather than an empty void.
 - **Prepending** (new jobs, see below) inserts at the head and compensates `scrollTop` by the inserted block height whenever `scrollTop > 0`, so the user's view never jumps.
 - Job state changes arrive on the single SSE stream `GET /api/events` (§0.6, §8.3) with a polling fallback; the feed never full-refetches on a job update, it patches the single asset in its store. Partial frames (`job.partial`) render into the placeholder and are superseded by the final output.
 
@@ -1226,7 +1230,7 @@ Every tile is a single focusable element (`role="gridcell"`, roving `tabindex`) 
 - On completion the real image **swaps in place** with a 150ms crossfade (dropped to an instant swap under reduced motion, §2.11); the row is not re-solved unless the returned aspect ratio differs from the request, in which case only that row re-solves. Observed completion for a batch of 2 was ~15–20s.
 - Multiple queued runs stack: each new job set prepends above the previous, newest first. Prompt and settings are never cleared by submitting (§3).
 
-**Failed.** The reference product never surfaced a failure to us, so the failed tile is Openfield's own design. A failed job keeps its tile at the requested aspect ratio: `--of-danger-soft` fill, 1px `--of-danger` at 40%, centred 20px alert glyph, a one-line plain-language reason in `--of-t-body` (§0.5's copy; the provider's own message is never shown on the tile and lives in the Error log), and a button row: **Retry** (accent ghost) · **Reuse** (loads the job's settings into the composer, §0.1) · **Details** (opens the Error log with the redacted payload, HTTP status and provider code) · dismiss ×.
+**Failed.** The reference product never surfaced a failure to us, so the failed tile is Openfield's own design. A failed job keeps its tile at the requested aspect ratio: `--of-danger-soft` fill, 1px `--of-danger` at 40%, centred 20px alert glyph, a one-line plain-language reason in `--of-t-body` (§0.5's copy; the provider's own message is never shown on the tile and lives in the Error log), and a button row: **Try again** (accent ghost) · **Reuse** (loads the job's settings into the composer, §0.1) · **Details** (opens the Error log with the redacted payload, HTTP status and provider code) · dismiss ×.
 
 The reason line and the primary action for every failure are **§0.5's failed-tile copy table**, keyed on §0.5's `ErrorCode`; §2 does not restate them. The spelling is **`canceled`** everywhere — enum, column and UI copy alike.
 
@@ -1249,7 +1253,7 @@ Failed tiles persist (`jobs.status = 'failed'`, §0.4) and stay in the feed unti
 | Favourite | Optimistic toggle, single batched write; flips to *Unfavourite* when all selected are already favourited |
 | Recreate | Replays each selected asset's frozen `NormalizedRequest` through §8.3's recreate route (§0.1). A confirmation shows the **total estimated cost** (§0.13) when more than 4 job sets are involved or the estimate exceeds the warn threshold, and states plainly when any selected model has `seed.supported: false` so its results will differ. Placeholders prepend as usual |
 | Export… | Opens the export sheet: format (PNG/JPEG/WebP), max dimension, whether to write a sidecar `.json` with prompt/model/settings, destination folder. A format that differs from the stored MIME carries §0.7's re-encode warning |
-| Delete | Confirmation dialog: "Delete N images?" with the body "They move to the trash for 30 days. They're also removed from folders and canvases." (the number of days is the Storage setting `trashRetentionDays`, §8.6); destructive button `--of-danger`; a single undo toast (8s) restores them straight away, and until the trash is emptied they can be restored from the Trash view |
+| Delete | Confirmation dialog: "Delete N images?" with the body "They move to the trash. You can restore them from there. They're also removed from folders and canvases." When the person has set `trashRetentionDays` (§8.6), the body adds "They're deleted for good after N days in the trash."; destructive button `--of-danger`; a single undo toast (8s) restores them straight away, and until the trash is emptied they can be restored from the Trash view |
 
 > **AC-2.5.1** Selecting 200 assets, applying *Add to folder*, and clearing selection performs one HTTP request and one SQLite transaction, and the folder count in the library sidebar updates without a refetch of the grid.
 
@@ -1464,7 +1468,7 @@ Geometry measured 1:1 from the reference product at 1440×900. **Colours are Ope
 - **Paste image**: pasting one or more images from the clipboard adds them as reference images. Pasting a mix of text and images inserts the text and attaches the images.
 - **Drag & drop**: the **whole app window** is a drop target. On `dragenter` with files, a full-window overlay appears (dimmed backdrop, dashed 2px accent border inset 24px, label "Drop images to use as references"). Dropping anywhere attaches them to the composer; dropping onto a canvas node is handled by §7 instead.
 - **Attach button** ("+", 32×32): opens the OS file picker, `accept="image/jpeg,image/png,image/webp,image/heic"` (`.jpg,.jpeg,.png,.webp,.heic` — the ingest set of §0.6; HEIC is transcoded to PNG on ingest), `multiple` (the reference product used single-file inputs; multi-select is our improvement). Non-matching files are rejected with a toast naming the file. Files are rejected above `min(20 MB, capabilities.references.maxBytes)`; files above the model's pixel limit are downscaled server-side on submit with a note in the job record.
-- **Reference strip**: attached images render as a horizontal strip between the attach button and the editor, 56×56 tiles, `radius: 8`, 6px gap. Each tile has a hover ✕ (remove, 16px, top-right) and is drag-reorderable. The **first tile is the primary reference** and carries a 2px accent border — same convention as the reference thumbnails in the detail view (§4). Tile count is capped at `capabilities.references.max`; the attach button disables at the cap with tooltip "Gemini 3 Pro Image accepts up to 14 reference images."
+- **Reference strip**: attached images render as a horizontal strip between the attach button and the editor, 56×56 tiles, `radius: 8`, 6px gap. Each tile has a hover ✕ (remove, 16px, top-right) and is drag-reorderable. The **first tile is the primary reference** and carries a 2px accent border — same convention as the reference thumbnails in the detail view (§4). Tile count is capped at `capabilities.references.max`; the attach button disables at the cap with tooltip "Nano Banana Pro accepts up to 14 reference images."
 - **Per-reference weight**: shown only where `capabilities.references.strengthMode` declares it (§0.3). `"per-image"` → each tile gets a long-press/right-click weight popover with a 0–1 slider (default 1.0) and the weight badged on the tile; `"global"` → a single "Reference strength" chip appears in the settings row (the captured payload carries one `custom_reference_strength: 1` for the whole run, which is why a Higgsfield-style adapter is `global`); `"none"` → no weight UI, images are passed as plain references.
 - **`@`-mentions** (ships M1, task M1-17 — §0.14). *Observed*: the source product's editor is a Lexical instance with typeahead listboxes, and its server-side "Elements" entity is referenced from the prompt with `@`. **That entity is not reproduced.** *Our design*: typing `@` opens a typeahead popover (anchored to the caret, 320px wide, ≤6 rows + "Search all…") over four groups — **Presets**, **Characters**, **Reference sets**, **Saved references** — resolving Openfield objects only (§0.8). Selecting one inserts an atomic token chip (`@Dusk Portrait`, accent-tinted, one backspace deletes the whole token). At submit the server resolves tokens in `normalize()` step 1 (§0.8): a Preset token contributes its template and reference images, a Character token its reference bundle and identity phrase, a Reference set token its ordered reference images at their stored weights and roles, a Saved reference an image; the token's own text leaves the literal prompt string. The resolved `promptAfterPreset` is frozen onto the job set (§0.11), so Reuse and Recreate are exact.
 
@@ -1524,7 +1528,7 @@ Chip contains a numeric field (0–2147483647), a **dice** button (randomise now
 - **Unlocked (default)**: the field shows the seed of the last completed run, greyed; the composer sends `seed: null` and the server generates one 32-bit seed per output and records it (§6.5 step 4).
 - **Locked**: the entered seed is sent; for batch > 1 the server derives `seed, seed+1, … seed+n−1`.
 - When the model supports seeds, the seed used is recorded per job and Recreate is exact. **No launch adapter declares seed support (§6.13, §6.14), so on every v1 model the Seed chip is disabled with a reason and Recreate is an exact replay of the request, not a reproduction of the image.**
-- `capabilities.unsupported.seed.reason` is the tooltip, naming the model on the launch adapters ("Gemini 3 Pro Image doesn't support seeds.", §3.5), and the chip renders disabled rather than hidden. This is deliberate: hiding it would hide the reason reproducibility is unavailable.
+- `capabilities.unsupported.seed.reason` is the tooltip, naming the model on the launch adapters ("Nano Banana Pro doesn't support seeds.", §3.5), and the chip renders disabled rather than hidden. This is deliberate: hiding it would hide the reason reproducibility is unavailable.
 
 #### 3.4.6 Background transparency
 
@@ -1543,7 +1547,7 @@ Every control on every surface resolves through the single function of §0.3 —
 | `supported` | the capability's own `options[]` + `default` | Chip renders; the popover lists **the model's own option list**, never a house list; the model's default is preselected unless a carried value applies (3.5.1) |
 | `partial` | `Capabilities.partial[controlId]` (`unavailable[]` + `reason`) | Chip renders; unavailable options are shown greyed with `reason` as subtitle and cannot be selected; the chip carries an info dot |
 | `emulated` | `controlId` listed in `Capabilities.emulated[]` | Chip renders with the `~` glyph; popover header states how it is emulated and any cost consequence |
-| `unsupported` | `Capabilities.unsupported[controlId].reason` | **Core set → chip renders disabled** with a tooltip naming the model, e.g. "Gemini 3 Pro Image doesn't support seeds." Non-core → hidden |
+| `unsupported` | `Capabilities.unsupported[controlId].reason` | **Core set → chip renders disabled** with a tooltip naming the model, e.g. "Nano Banana Pro doesn't support seeds." Non-core → hidden |
 | `absent` | key omitted from the manifest | Chip is not in the DOM |
 
 **Core set** (always present so the bar never visually jumps between models): **Model · Aspect · Resolution/Quality · Images · Seed** — §0.3's set, unchanged. Everything else is hidden when `unsupported` or `absent`.
@@ -1590,15 +1594,15 @@ A preset is the object specified in §5.3. `presetStrength` maps to a native par
 
 | Model (`ModelKey`) | Chips, in order after Model | Images | Seed | Avoid | Background | References (`references.max`, `strengthMode`) | Aside |
 |---|---|---|---|---|---|---|---|
-| **Gemini 3 Pro Image** `google:gemini-3-pro-image` | Aspect · Resolution · Advanced · 1/4 | 1–4 `~` | disabled (undocumented) | `~` | hidden | 14, `none` | Preset · Character `~` |
-| **Gemini 3.1 Flash Image** `google:gemini-3.1-flash-image` | Aspect · Resolution · Advanced · 1/4 | 1–4 `~` | disabled (undocumented) | `~` | hidden | 14, `none` | Preset · Character `~` |
-| **Gemini 3.1 Flash Lite Image** `google:gemini-3.1-flash-lite-image` | Aspect *(partial)* · Resolution *(single tier in §6.13 → rendered disabled)* · 1/4 | 1–4 `~` | disabled (undocumented) | `~` | hidden | 14, `none` | Preset · Character `~` |
+| **Nano Banana Pro** `google:gemini-3-pro-image` | Aspect · Resolution · Advanced · 1/4 | 1–4 `~` | disabled (undocumented) | `~` | hidden | 14, `none` | Preset · Character `~` |
+| **Nano Banana 2** `google:gemini-3.1-flash-image` | Aspect · Resolution · Advanced · 1/4 | 1–4 `~` | disabled (undocumented) | `~` | hidden | 14, `none` | Preset · Character `~` |
+| **Nano Banana 2 Lite** `google:gemini-3.1-flash-lite-image` | Aspect *(the standard ten, verified at M0-07)* · Resolution *(single tier in §6.13 → rendered disabled)* · 1/4 | 1–4 `~` | disabled (undocumented) | `~` | hidden | 14, `none` | Preset · Character `~` |
 | **GPT Image 2.5 Sunburst** `openai:gpt-image-2.5-sunburst` | Aspect · Quality · Resolution · Background · Advanced · 1/4 | 1–4 native `n` | disabled (unconfirmed) | `~` | Auto/Opaque/Transparent | 4 (cap; provider limit unconfirmed), `none` | Preset · Character `~` |
 | **GPT Image 2.5 Flare** `openai:gpt-image-2.5-flare` | Aspect · Quality · Resolution · Background · Advanced · 1/4 | 1–4 native `n` | disabled (unconfirmed) | `~` | Auto/Opaque/Transparent | 4 (cap; provider limit unconfirmed), `none` | Preset · Character `~` |
 | **GPT Image 2** `openai:gpt-image-2` | Aspect · Quality · Resolution · Background · Advanced · 1/4 | 1–4 native `n` | disabled (unconfirmed) | `~` | Auto/Opaque/Transparent | 4 (cap; provider limit unconfirmed), `none` | Preset · Character `~` |
 | **Soul 2.0** `higgsfield:soul-v2-standard` *(only if the public API exposes it to a user key)* | Aspect · Quality · Enhance · Avoid · Seed · Ref strength · Advanced · 1/4 | 1–4 native `batch_size` | editable (native) | native | hidden | native `medias[]`, `global` (`custom_reference_strength` 0–1) | Preset (maps to native `style_id` + `style_strength`) · Character (native character id if exposed, else `~`) |
 
-**Display names come from the provider's own naming, not from the reference product's catalogue** (§6.13). The Resolution chip on all three OpenAI models offers **1K · 1.5K** only: the Images API documents 1024×1024 / 1536×1024 / 1024×1536 plus custom dimensions in multiples of 16, with no 2K and no 4K (§6.14, researched 2026-09-23). The reference product's chip set reflects its own proxy, not the OpenAI API; where they disagree the API wins.
+**Display names are the names the model's own company uses**: Google's Nano Banana names and OpenAI's GPT Image names (§6.13, §6.14). API ids stay in the model keys. The Resolution chip on all three OpenAI models offers **1K · 1.5K** only: the Images API documents 1024×1024 / 1536×1024 / 1024×1536 plus custom dimensions in multiples of 16, with no 2K and no 4K (§6.14, researched 2026-09-23). The reference product's chip set reflects its own proxy, not the OpenAI API; where they disagree the API wins.
 
 As in the captured payload, the quality label and the aspect ratio resolve to explicit `width`/`height` in the request (e.g. 2K + 3:4 → 1536×2048); that mapping lives in each manifest, never in the UI.
 
@@ -1671,7 +1675,7 @@ Tab state is remembered per session, not per asset: opening the next image with 
 
 | Row | Value | Notes |
 | --- | --- | --- |
-| Model | e.g. `Gemini 3 Pro Image` | resolved `displayName` from the model registry (§6.13) |
+| Model | e.g. `Nano Banana Pro` | resolved `displayName` from the model registry (§6.13) |
 | Company | e.g. `Google` | provider glyph + name |
 | Quality / Resolution | e.g. `2K` | whichever axis the model exposes; both rows if it exposes both |
 | Size | e.g. `1856×2304` | actual pixel size of the stored file |
@@ -2238,7 +2242,7 @@ export interface Provider {
 
 export interface CallContext {
   credentials: CredentialValues;   // injected by the server; never logged
-  fetch: typeof fetch;             // wrapped: timeout, redacting log, host allow-list
+  fetch: typeof fetch;             // the only way out: timeout, redacting log, host allow-list
   signal: AbortSignal;
   log: RedactingLogger;
   now: () => number;
@@ -2738,7 +2742,7 @@ Every adapter exports **one** `mapError` signature — `mapError(res: Response, 
 | `auth_invalid` | 401 / bad key | Job fails; "This key was rejected." + *Change key* |
 | `auth_forbidden` | Key lacks access to this model | Job fails; "Your key can't use `<Model>`." + *Choose another model* |
 | `billing_required` | No payment method / credits at 0 | "This key is out of credit." + link to their console |
-| `quota_exceeded` | Hard monthly/org limit | Same copy as billing, plus *Retry* disabled until the user dismisses |
+| `quota_exceeded` | Hard monthly/org limit | Same copy as billing, plus *Try again* disabled until the user dismisses |
 | `rate_limited` | 429 | Tile stays in `running` with "Too many requests. Retrying in Ns"; auto-retry ×2, then fail |
 | `content_refused` | Output blocked by provider safety | Muted refusal card: "The model wouldn't make this." + the provider's category if given + *Reuse*. Never retried |
 | `content_flagged_input` | A reference image rejected | Names the offending reference thumbnail |
@@ -2749,7 +2753,7 @@ Every adapter exports **one** `mapError` signature — `mapError(res: Response, 
 | `provider_unavailable` | 5xx, 503, maintenance | "The model isn't responding. Retrying…" then "The model ran into a problem. Try again later." |
 | `provider_error` | Mapped 5xx with a body; also an asset host outside `meta.assetHosts` (§6.11) | Generic failure card + Error log |
 | `network` | DNS/TLS/socket | "Couldn't connect." |
-| `timeout` | Per-attempt or job deadline | "This took too long." + *Retry* |
+| `timeout` | Per-attempt or job deadline | "This took too long." + *Try again* |
 | `disk_full` | Ingest could not write the file (§8.5.1) | "Couldn't save. Your disk is full." + Free up space |
 | `canceled` | User cancel | "Canceled. You may still be charged for work that already started." + a `usage_log` row flagged `discarded` |
 
@@ -2866,6 +2870,8 @@ packages/providers/src/openai/
 ```
 
 Adapter folder names `types` and `manifest` are reserved (§0.16).
+
+**HTTP goes through `ctx.fetch`, never the global `fetch`.** The server passes a wrapped fetch (timeout, redacting log, host allow-list), tests pass a stub, and `OPENFIELD_FAKE_PROVIDERS=1` makes the server pass a fetch that replays each adapter's `__fixtures__`, so the whole app runs end to end with no keys and no network. That switch is for development and e2e only, and the server logs it at boot.
 
 **Registration** is static in v1: `packages/providers/src/registry.ts` exports `builtinProviders = [openai(), google(), higgsfield()]`, re-exported by `@openfield/providers/server`. No dynamic plugin loading, no `eval`, no remote adapter fetch; adding an adapter means a PR. (Third-party loadable adapters are deliberately deferred; see §6.16.)
 
@@ -3013,7 +3019,7 @@ Pricing lives in `pricing.ts` as data; the shared pure `estimate(manifest, req)`
 **Discovery.** `GET /v1beta/models`, filtered through `recognise(id)` (known image-family id patterns only). **Image-model detection from `GET /v1beta/models` is not documented (researched 2026-09-23)**: no image-model `models.list` is published and `supportedGenerationMethods` is not documented to flag image output. The adapter therefore treats discovery as a way to learn about **new versions of known families, not new capabilities**; every unrecognised id goes to Settings → Models → Not supported (§6.4).
 **Auth.** `x-goog-api-key: <apiKey>` header (never the `?key=` query form — it would land in logs). One credential field, `apiKey`.
 **Hosts.** `networkHosts: ["generativelanguage.googleapis.com"]`, `assetHosts: []` — images arrive inline as `inlineData`.
-**Naming.** `displayName` uses Google's own canonical model naming, not the reference product's catalogue labels; the vendor nickname appears only as `family`.
+**Naming.** `displayName` is the Nano Banana name Google gives each model (Nano Banana Pro, Nano Banana 2, Nano Banana 2 Lite). The Gemini API id stays in `modelId` and the `key`, and is what gets verified against Google's docs.
 
 | Canonical field | Gemini mapping |
 |---|---|
@@ -3021,25 +3027,25 @@ Pricing lives in `pricing.ts` as data; the shared pure `estimate(manifest, req)`
 | `references[]` | `contents[0].parts[].inlineData { mimeType, data }`, max 14, order preserved; `role` is expressed in the prompt template, not on the wire. `references.weights: false`, `strengthMode: "none"` |
 | `base` (edit) | first `inlineData` part |
 | `size` (aspect) | `generationConfig.imageConfig.aspectRatio`; `"auto"` omits the field |
-| `resolution` | `generationConfig.imageConfig.imageSize` (`"1K" \| "2K" \| "4K"`) |
+| `resolution` | `generationConfig.imageConfig.imageSize` (`"512" \| "1K" \| "2K" \| "4K"`, uppercase K; the reference's `ImageConfig` spells the smallest tier `512`) |
 | `batch` | **client fan-out** — `batch.native: false`, N parallel calls. The manifest's `emulated` array is the union of every emulated row in this table: `emulated: ["batch", "negativePrompt"]` |
 | `seed` | not exposed ⇒ `seed.supported: false` (Seed chip disabled with a reason, §6.3) |
 | `negativePrompt` | no native field ⇒ `negativePrompt: false` plus `emulated: ["negativePrompt"]`; core appends it as a trailing `Avoid: …` sentence and the chip carries `~` (§0.8, §3.4.4) |
 | `quality` | n/a — resolution is the only quality axis |
 | `background` / transparency | not exposed ⇒ chip hidden |
-| `output.format` | not exposed ⇒ `output.formats: ["png"]`, chip hidden. **Bytes are stored exactly as returned (§8.5.1)**; format conversion happens only on export (§8.5.4), where the dialog warns *"Changing the format may remove the hidden AI watermark."* |
+| `output.format` | not exposed ⇒ `output.formats: ["jpeg"]`, chip hidden (JPEG is the only documented image output type). **Bytes are stored exactly as returned (§8.5.1)**; format conversion happens only on export (§8.5.4), where the dialog warns *"Changing the format may remove the hidden AI watermark."* |
 | `moderation` | not exposed |
 
 **Manifest values (static catalog).** `"auto"` is the first ratio and the default on every Gemini model.
 
-| `displayName` (`family`) | `key` | Ratios | Resolution tiers | Refs | Batch | Price (declared) |
+| `displayName` | `key` | Ratios | Resolution tiers | Refs | Batch | Price (declared) |
 |---|---|---|---|---|---|---|
-| Gemini 3 Pro Image (Nano Banana Pro) | `google:gemini-3-pro-image` | auto, 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9, 1:4, 4:1, 1:8, 8:1 | 1K, 2K, 4K (default 1K) | 14 | 4 (fan-out) | per_image: $0.134 (1K/2K), $0.24 (4K) |
-| Gemini 3.1 Flash Image (Nano Banana 2) | `google:gemini-3.1-flash-image` | same 14 + auto | 512, 1K, 2K, 4K (default 1K) | 14 | 4 (fan-out) | per_image: $0.045–$0.151 by tier |
-| Gemini 3.1 Flash Lite Image (Nano Banana 2 Lite) | `google:gemini-3.1-flash-lite-image` | auto, 1:1 (others unverified) | 1K only | 14 | 4 (fan-out) | per_image: $0.0336 |
-| Gemini 2.5 Flash Image (legacy) | `google:gemini-2.5-flash-image` | auto, 1:1 | 1K | 14 | 4 (fan-out) | unknown; badge `legacy` |
+| Nano Banana Pro | `google:gemini-3-pro-image` | auto, 1:1, 2:3, 3:2, 3:4, 4:3, 4:5, 5:4, 9:16, 16:9, 21:9 | 1K, 2K, 4K (default 1K) | 14 | 4 (fan-out) | per_image: $0.134 (1K/2K), $0.24 (4K) |
+| Nano Banana 2 | `google:gemini-3.1-flash-image` | the Pro list + 1:4, 4:1, 1:8, 8:1 | 512, 1K, 2K, 4K (default 1K) | 14 | 4 (fan-out) | per_image: $0.045–$0.151 by tier |
+| Nano Banana 2 Lite | `google:gemini-3.1-flash-lite-image` | the Pro list | 1K only | 14 | 4 (fan-out) | per_image: $0.0336 |
+| Nano Banana | `google:gemini-2.5-flash-image` | auto, 1:1 | 1K | 14 | 4 (fan-out) | unknown; badge `legacy` |
 
-> Research confirms 14 ratios for Nano Banana 2 and states Pro supports "14+ (same as Nano Banana 2)"; **the Pro list is inherited, not separately sourced — verify at implementation.**
+> Verified at M0-07 against Google's resolution tables: only Nano Banana 2 lists 1:4, 4:1, 1:8 and 8:1; Pro and Lite list the standard ten. Nano Banana (`gemini-2.5-flash-image`) is left out: Google shuts it down on October 2, 2026, and discovery lists it as not supported. `packages/providers/src/google/README.md` records each source and what is still unverified until a live run.
 
 Common: `ops.textToImage: true`, `ops.imageEdit: true`, `ops.inpaint/outpaint/upscale/removeBackground/detectText/decomposeLayers: false`, `promptEnhance: "openfield"` (the local enhancer of §3.4.3), `styleStrength: false`, `streaming.partialImages: false`, `unsupportedParamPolicy: "drop-with-warning"`, `safety.notices: ["Images include a hidden AI watermark."]`, `limits.typicalLatencyMs: [3000, 9000]`, `limits.requestTimeoutMs: 120000`, `limits.maxConcurrent: 4`.
 
@@ -3049,8 +3055,8 @@ Common: `ops.textToImage: true`, `ops.imageEdit: true`, `ops.inpaint/outpaint/up
 
 **Endpoints.** `POST https://api.openai.com/v1/images/generations` (t2i, JSON) and `POST /v1/images/edits` (edit + inpaint, multipart: `image[]`, optional `mask`). The adapter requests `b64_json` so image bytes arrive inline.
 **Discovery.** `GET /v1/models`, filtered through `recognise(id)` (`/^gpt-image-/`). Image capability is **not** documented as discoverable (researched 2026-09-23), so the same allow-listed rule as §6.13 applies.
-**Auth.** `Authorization: Bearer <apiKey>`; optional non-secret `organization` and `baseUrl` options (the `baseUrl` option is what makes the generic OpenAI-compatible adapter of §6.16 cheap).
-**Hosts.** `networkHosts: ["api.openai.com"]` (plus the configured `baseUrl` host when overridden), `assetHosts: []`.
+**Auth.** `Authorization: Bearer <apiKey>`; optional non-secret `organization` option. A custom `baseUrl` waits for the generic OpenAI-compatible provider of §6.16 (§6.18).
+**Hosts.** `networkHosts: ["api.openai.com"]`, `assetHosts: []`.
 
 | Canonical field | OpenAI mapping |
 |---|---|
@@ -3098,7 +3104,7 @@ Common: `ops.textToImage/imageEdit/inpaint/outpaint: true`, `ops.upscale/removeB
 
 ### 6.15 Launch adapter — Higgsfield (conditional, experimental)
 
-This adapter ships **only if** its public API is reachable with a user key at build time; otherwise it is present but `meta.stable: false` and hidden behind Settings → Experimental. Openfield is fully functional without it, and nothing in the product depends on it.
+This adapter is built in M3 (`M3-16`) against the real public API, using the owner's key. The facts below are from research and are verified with that key in M3; anything the key can't reach stays undeclared. If the public API isn't reachable with a user key, the adapter is present but `meta.stable: false` and hidden behind Settings → Experimental. Openfield is fully functional without it, and nothing in the product depends on it.
 
 **Endpoint (only one confirmed).** `POST https://api.higgsfield.ai/higgsfield-ai/soul/v2/standard`.
 **Auth.** `Authorization: Key ${keyId}:${keySecret}` — a **two-field** credential schema (`keyId`, `keySecret`, both secret), which is precisely why `CredentialSchema` is a field list rather than a single string.
@@ -3160,9 +3166,9 @@ Rules that hold across every pane: secrets are write-only (§6.11); everything t
 | Appearance | Show tips while generating | `tipsCard` | `true` | §2.4, §2.9 |
 | Storage | Library location (read-only readout) | *(none — env/`config.json`)* | `~/.openfield` | §8.1 |
 | Storage | Space used by images, thumbnails and trash | *(read-only, `GET /api/stats`)* | — | §8.6 |
-| Storage | Thumbnail format (probed at boot) | *(read-only)* | `sharp`, else WASM chain | §0.10, §8.5.2 |
+| Storage | Thumbnails: "On", or "Thumbnails are off. Images show at full size, so scrolling may be slower." | *(read-only, checked at boot)* | on when `sharp` loads | §0.10, §8.5.2 |
 | Storage | Thumbnail quality | `thumbQuality` | `82` | §0.10, §8.5.2 |
-| Storage | Trash retention | `trashRetentionDays` | `30` (`0` = never) | §8.6 |
+| Storage | Empty the trash automatically (Never, or after a number of days) | `trashRetentionDays` | `null` (never) | §8.6 |
 | Storage | Clear thumbnail cache · Empty trash · Clean up files · Back up · Rebuild search | *(actions, `POST /api/maintenance/*`)* | — | §8.6, §0.7 |
 | Spending | Totals for today, 7 days, 30 days, all time, by company and model · Canceled but charged · Export CSV | *(read-only, `GET /api/usage`)* | — | §6.9 |
 | Spending | Monthly spending limit | `spendGuardUsd` | `null` (off) | §6.9 |
@@ -3185,8 +3191,8 @@ Every item below is a **provider fact we could not verify**, and each names the 
 - **Exact maximum reference-image count for OpenAI image edits**, and whether it differs between Sunburst, Flare and GPT Image 2. We declare 4. Closed by **`M2-15`** (same live session).
 - **Whether Gemini exposes any multi-image-per-call parameter.** If it does, the fan-out in §6.5 step 5 becomes a cost optimisation rather than a necessity. Closed by **`M0-07`** (Google Gemini image adapter).
 - **Output-token counts per (quality × size) for OpenAI.** Must be measured before launch; until then the Generate button shows a range. Closed by **`M3-11`** (cost engine: price snapshots, estimate, reconciliation, usage log).
-- **Higgsfield public API reach** — real endpoint paths beyond Soul v2 standard, the style-id catalogue, rate limits, and whether any documented cost endpoint exists. None of it was observable in the UI walkthrough (the observed traffic was the product's private endpoints, which we do not build against, §1.11). Closed by **`M3-16`** (conditional Higgsfield adapter); if it does not resolve, the adapter ships `meta.stable: false` behind Settings → Experimental and nothing else changes.
-- **Whether to allow a user-supplied provider `baseUrl` override on the first-party OpenAI adapter in v1** (convenient for proxies, but it widens both host allow-lists) or to defer it entirely to the v1.1 OpenAI-compatible provider. Closed by **`M0-05`** (provider/credential service).
+- **Higgsfield public API reach** — real endpoint paths beyond Soul v2 standard, the style-id catalogue, rate limits, and whether any documented cost endpoint exists. None of it was observable in the UI walkthrough (the observed traffic was the product's private endpoints, which we do not build against, §1.11). Closed by **`M3-16`**, which builds the adapter and verifies these facts with the owner's real key; if it does not resolve, the adapter ships `meta.stable: false` behind Settings → Experimental and nothing else changes.
+- ~~Whether to allow a user-supplied provider `baseUrl` override in v1.~~ **Closed at `M0-05`: deferred to the v1.1 OpenAI-compatible provider.** No launch adapter reads a custom address, and honouring one would widen the host allow-list (§0.6), so `PATCH /api/providers/:id` takes only `enabled` and `concurrencyCap`, and `providers.base_url` stays unused until then. A company with `enabled = false` makes no outbound call: new runs are refused, queued runs wait, and its models count as not ready.
 - **Price-refresh feasibility** — whether any launch provider exposes a machine-readable price document worth wiring `refreshPricing()` to, or whether the `~/.openfield/prices.json` overlay is the whole story for v1. Closed by **`M3-11`**.
 
 ---
@@ -3418,7 +3424,7 @@ A safety rail: any single run whose fan-out exceeds **32 jobs** requires explici
 
 ```
 Run all: 5 nodes, 8 images
-  Image Generator (Gemini 3 Pro Image, 2K ×4)  ~$0.54
+  Image Generator (Nano Banana Pro, 2K ×4)     ~$0.54
   Edit image (GPT Image ×4)                    ~$0.18–0.31
   2 nodes reused                                Free
   1 node                                        Cost unknown
@@ -3654,7 +3660,7 @@ One file, `openfield.db`, opened by the Bun server through `bun:sqlite` with the
 Conventions for every table below:
 - Timestamps are ISO-8601 UTC `TEXT`.
 - Ids are ULIDs in `TEXT` primary keys (§0.2), generated in application code. `$defaultFn` hooks run in JS and add nothing to the generated SQL.
-- Flags are plain `integer()` columns with a literal `0`/`1` default, so the generated SQL is `INTEGER NOT NULL DEFAULT 1`, typed `number`. `mode: "boolean"` is not used: the schema has no 0/1 CHECK on any flag, and boolean mode would make drizzle-kit print `DEFAULT true`/`DEFAULT false` instead of `DEFAULT 1`/`DEFAULT 0`.
+- Flags use Drizzle's boolean mode, `integer("x", { mode: "boolean" })`: `0`/`1` on disk, `boolean` in TypeScript and in the drizzle-zod row schemas. The default is a raw SQL literal (`sql.raw("1")`), because a plain `true`/`false` default would make drizzle-kit print `DEFAULT true`/`DEFAULT false`. The generated SQL stays `INTEGER NOT NULL DEFAULT 1`, and SQL written by hand (queries, §8.2.2) compares flags with `= 1`/`= 0`. No flag has a 0/1 CHECK.
 - JSON columns are `text({ mode: "json" }).$type<T>()`: `TEXT` on disk, parsed and serialised by Drizzle, typed by the core schema named in `T`.
 - `text({ enum })` narrows the TypeScript type only. The database enforces the same list through a named CHECK that `oneOf()` builds from `@openfield/core/constants`. A column with no CHECK in this schema has none on purpose (`error_code`, `assets.op`, `usage_log.operation`, every `modality` except `models.modality`).
 - CHECK and partial-index SQL uses bare column names, never `${t.column}`. A drizzle-kit table rebuild (`__new_<table>`) then can't carry a stale table qualifier.
@@ -3698,9 +3704,9 @@ import { integer, text } from "drizzle-orm/sqlite-core";
 export const oneOf = (column: string, values: readonly string[]): SQL =>
   sql.raw(`${column} IN (${values.map((v) => `'${v}'`).join(",")})`);
 
-/** 0/1 flag: generates plain INTEGER NOT NULL DEFAULT 0|1 (no CHECK, so no boolean mode). */
+/** Boolean in TS, 0/1 in SQLite. The sql default keeps the migration at DEFAULT 0|1. */
 export const flag = (name: string, dflt: 0 | 1) =>
-  integer(name).notNull().default(dflt);
+  integer(name, { mode: "boolean" }).notNull().default(sql.raw(String(dflt)));
 
 export const json = <T>(name: string) => text(name, { mode: "json" }).$type<T>();
 ```
@@ -3820,12 +3826,14 @@ export const jobs = sqliteTable("jobs", {
   attempt:        integer("attempt").notNull().default(0),
   nextAttemptAt:  text("next_attempt_at"),
   errorCode:      text("error_code", { enum: ERROR_CODES }),          // one of §0.5 ErrorCode
-  errorMessage:   text("error_message"),
+  errorMessage:   text("error_message"),                              // detail for the error log, never shown
   latencyMs:      integer("latency_ms"),
   createdAt:      text("created_at").notNull(),
   updatedAt:      text("updated_at").notNull(),
   startedAt:      text("started_at"),
   finishedAt:     text("finished_at"),
+  errorReason:    text("error_reason"),                               // our tile copy when it says more than §0.5's row
+                                                                      // (migration 0002, so the column sits last)
 }, (t) => [
   unique("jobs_job_set_id_idx_unique").on(t.jobSetId, t.idx),
   check("jobs_status_check", oneOf("status", JOB_STATES)),
@@ -4395,7 +4403,7 @@ All provider traffic originates in this process, and outbound connections are re
 |---|---|---|---|
 | `GET` | `/api/health` | Liveness, version and the newest applied migration | → `{ok, version, schema, home}`, where `schema` is the migration tag, e.g. `0001_assets_fts` (§8.2.4) |
 | `GET` | `/api/providers` | Provider list with credential status | → `[{id, displayName, enabled, credentialSource, credentialHint, lastOkAt, lastError, concurrencyCap}]` |
-| `PATCH` | `/api/providers/:id` | Enable/disable, base URL, per-provider cap | `{enabled?, baseUrl?, concurrencyCap?}` → provider |
+| `PATCH` | `/api/providers/:id` | Enable/disable, per-provider cap (no custom address in v1, §6.18) | `{enabled?, concurrencyCap?}` → provider |
 | `GET` | `/api/models` | Model registry + capability manifests (drives every chip in the composer, §3/§6) | `?provider=&modality=&refresh=0\|1` → `{models:[{providerId, modelId, displayName, family, badges, capabilities, pricing, source, updatedAt}], staleAt}` |
 | `POST` | `/api/models/refresh` | Force runtime discovery per provider; falls back to shipped manifest | `{providerId?}` → `{added, updated, removed, errors:[]}` |
 | `GET` | `/api/models/:providerId/:modelId` | One manifest (capability gating for a deep-linked model) | → model |
@@ -4596,7 +4604,7 @@ A single per-job wall clock of 180 s does not compose with a 150 s per-attempt t
 
 Retry only on the four `retryable` codes of §0.5 — `network`, `timeout`, `rate_limited`, `provider_unavailable` (HTTP 408/425/429/500/502/503/504, network timeouts, aborted sockets, provider queue errors). Everything else fails immediately and is shown to the user with §0.5's copy for its code; the provider's own message goes to the Error log.
 
-Backoff is exponential with full jitter: 1 s, 4 s, 15 s (±20 %). A `Retry-After` header always wins over the computed delay. `jobs.attempt` and `jobs.next_attempt_at` persist the schedule so a restart mid-backoff resumes correctly; `jobs.idempotency_key` is reused on every attempt, so a retry can never bill twice. When some jobs in a set succeed and others exhaust retries, the set lands in `partial`, the feed shows the successful tiles plus an inline error tile per failure with a one-click **Retry failed** that calls `POST /api/job-sets/:id/retry {onlyFailed:true}`.
+Backoff is exponential with full jitter: 1 s, 4 s, 15 s (±20 %). A `Retry-After` header always wins over the computed delay. `jobs.attempt` and `jobs.next_attempt_at` persist the schedule so a restart mid-backoff resumes correctly; `jobs.idempotency_key` is reused on every attempt, so a retry can never bill twice. When some jobs in a set succeed and others exhaust retries, the set lands in `partial`, the feed shows the successful tiles plus an inline error tile per failure with a one-click **Try again** that calls `POST /api/job-sets/:id/retry {onlyFailed:true}`.
 
 Every terminal outcome — success, failure, cancel — writes a `usage_log` row. **A failed job writes a row with `cost_usd = 0` and `cost_source = 'unknown'`; no cost is ever added to a spend total for a failure** (§0.13). A job canceled after submit writes a row at full estimate with `discarded = 1`, which is what the Usage screen's "Canceled but charged" line sums.
 
@@ -4619,7 +4627,7 @@ On boot, after `openDb()` has applied migrations (§8.2.4), the recovery pass ru
 |---|---|
 | `jobs.status IN ('pending','queued')` | Re-enqueue as-is |
 | `status IN ('submitting','running')` **with** `provider_job_id` **and** adapter supports status polling | Resume a watcher from the provider's status endpoint; the run is not re-billed |
-| `status IN ('submitting','running')` **without** a `provider_job_id`, or adapter is fire-and-forget | Mark `interrupted`; the job set shows "Interrupted. Run again?" with a one-click retry. Never auto-resubmit: that risks double-billing |
+| `status IN ('submitting','running')` **without** a `provider_job_id`, or adapter is fire-and-forget | Mark `interrupted`; the job set shows "Interrupted." with a one-click **Try again**. Never auto-resubmit: that risks double-billing |
 | `canvas_runs` with a non-terminal status | Recompute from its job sets; emit `canvas_run.updated` so a reopened canvas re-attaches |
 | `job_sets` with all jobs terminal but a non-terminal set status | Recompute set status from its jobs |
 | Asset rows whose file is absent | `file_state='missing'`; tile renders a broken-file state reading "File missing." with **Locate** and **Delete** |
@@ -4674,7 +4682,9 @@ The reference product serves every feed image through a resizing proxy. Our loca
 
 Height-keyed, never width-keyed: a justified-rows layout solves for row height, so a width ladder would miss every rung. `srcset` spans `@h200,@h280,@h360,@h456,@h640` plus a `dpr=2` variant per rung, capped at the original's dimensions. Canvas node thumbnails request the smallest rung ≥ 2× their rendered box. The client requests `/files/thumb/:id?h=456&dpr=2`; the server resolves to the **nearest-or-larger rung**, so arbitrary query values can never explode the cache.
 
-**Encoder:** `sharp` (libvips) **where its prebuilt binary loads under Bun**, else a WASM chain of `@jsquash/png` + `@jsquash/jpeg` (decode) + `@jsquash/resize` + `@jsquash/webp` (encode). The chain is named in full because `@jsquash/webp` alone is an encoder — it cannot decode PNG or JPEG, nor resize, so it could not produce this ladder by itself. **The selection is probed at boot, not only at install**, and the result is shown in Settings → Storage; a local-first app must not fail `bun install` because of a native addon, and must not silently fall back to a chain that cannot run. WebP `quality 82`, `effort 4`, metadata stripped, `fit: inside`. Generation is CPU-bounded to `max(1, cores − 2)` workers so a large backfill never makes the UI stutter.
+**Encoder:** `sharp` (libvips) only, loaded once at boot. WebP `quality 82`, `effort 4`, metadata stripped, `fit: inside`. Generation is CPU-bounded to `max(1, cores − 2)` workers so a large backfill never makes the UI stutter.
+
+**Fallback when `sharp` can't load.** A local-first app must not fail `bun install` or the boot because of a native addon, so a failed load turns thumbnails off instead. `GET /files/thumb/:id` then streams the original with `Cache-Control: no-cache` (never `immutable`, so real thumbnails take over once `sharp` loads), and Settings → Storage says "Thumbnails are off. Images show at full size, so scrolling may be slower." The feed stays correct, only heavier. There is no WASM chain.
 
 #### 8.5.3 Serving
 
@@ -4707,7 +4717,7 @@ C2PA signing is explicitly out of scope for v1 — noted as a v1.1 candidate, no
 
 ### 8.6 Filesystem hygiene
 
-**Deletes.** `DELETE /api/assets/:id` is a soft delete: `deleted_at` is set, the asset leaves every feed, files stay. **The FTS row is retained** — no trigger fires on `deleted_at` and none is added; every query filters `deleted_at IS NULL`, and hard delete removes the FTS row via the `assets_ad` trigger. A Trash view lists soft-deleted assets; purge happens on the user's command or automatically after `trashRetentionDays` (default 30, `0` = never). Hard delete removes the original file, every `thumbs/<sha>@*` entry **whose hash no longer has a live asset**, and the row (cascading `asset_folders`, `favourites`, and `asset_edges` on `child_asset_id` only). Deleting a parent never deletes its children: `assets.parent_asset_id` and `asset_edges.parent_asset_id` carry **no foreign key**, so the pointer survives as a tombstone and the lineage view renders "deleted image" instead of losing the chain.
+**Deletes.** `DELETE /api/assets/:id` is a soft delete: `deleted_at` is set, the asset leaves every feed, files stay. **The FTS row is retained** — no trigger fires on `deleted_at` and none is added; every query filters `deleted_at IS NULL`, and hard delete removes the FTS row via the `assets_ad` trigger. A Trash view lists soft-deleted assets. The trash never empties itself by default: purge happens on the user's command (Empty trash, or delete from the Trash view). Only when the person sets `trashRetentionDays` (default `null` = never) does a purge pass run, at boot and once a day, hard-deleting assets whose `deleted_at` is older than that many days. Hard delete removes the original file, every `thumbs/<sha>@*` entry **whose hash no longer has a live asset**, and the row (cascading `asset_folders`, `favourites`, and `asset_edges` on `child_asset_id` only). Deleting a parent never deletes its children: `assets.parent_asset_id` and `asset_edges.parent_asset_id` carry **no foreign key**, so the pointer survives as a tombstone and the lineage view renders "deleted image" instead of losing the chain.
 
 **Orphan GC** (`POST /api/maintenance/gc`, dry-run by default, also offered on startup if >7 days since the last sweep):
 
@@ -4733,9 +4743,9 @@ Five milestones. Each is independently demoable and ends with a working app; not
 
 #### M0 — Skeleton, settings, one adapter end-to-end
 
-**Definition of done:** `git clone && bun install && bun dev` opens the app on `127.0.0.1:4317`; the user pastes a Google API key into Settings, types a prompt, clicks Generate, and one image lands on disk under `~/.openfield/assets/…` with a row in SQLite and a thumbnail in the feed. No mocks anywhere in that path.
+**Definition of done:** `git clone && bun install && bun dev` opens the app on `127.0.0.1:4317`; the user pastes a Google API key into Settings, types a prompt, clicks Generate, and one image lands on disk under `~/.openfield/assets/…` with a row in SQLite and a thumbnail in the feed. No mocks anywhere in that path: the fixture-backed fetch behind `OPENFIELD_FAKE_PROVIDERS=1` is for e2e (`M0-15`), not for this demo.
 
-1. `M0-01` Monorepo scaffold per §0.16: Bun workspaces `apps/web`, `apps/server`, `packages/core`, `packages/providers`, `packages/db`, `packages/ui`; root scripts (`bun dev`, `bun run build`, `bun start`, `bun run db:generate`, `bun test`, `bun run lint`, `bun run e2e`); `tsconfig.base.json` strict; Biome with the §0.16 import rules as per-folder `noRestrictedImports`; the CI bundle check that fails if `apps/web` ships `packages/db`, `@openfield/providers/server`, an adapter or a `bun:` module; MIT `LICENSE`, `README`.
+1. `M0-01` Monorepo scaffold per §0.16: Bun workspaces `apps/web`, `apps/server`, `packages/core`, `packages/providers`, `packages/db`, `packages/ui`; root scripts (`bun dev`, `bun run build`, `bun start`, `bun run db:generate`, `bun test`, `bun run lint`, `bun run e2e`); `tsconfig.base.json` strict; Biome with the §0.16 import rules as per-folder `noRestrictedImports`; the CI bundle check that fails if `apps/web` ships `packages/db`, `@openfield/providers/server`, an adapter or a `bun:` module; MIT `LICENSE` (copyright "Openfield contributors"), `README`.
 2. `M0-02` Hono server with all four §8.3 guards (Host allowlist, no-CORS assertion, cross-site guard on every method, boot-minted `X-Openfield-Session` token), `/api/health`, graceful shutdown. Also: `@hono/zod-validator` wired with the shared `bad_request` hook, `apps/server/src/app.ts` exporting `type AppType`, and the dev proxy to Vite with session-token injection, so dev and production share one origin (§0.16, §8.3.3). A CI test asserts a cross-origin page cannot list assets, read key status or cause a thumbnail to be generated.
 3. `M0-03` `OPENFIELD_HOME` resolution, directory bootstrap, `config.json` read/write at 0600 (verify mode on every write), env-var override layer.
 4. `M0-04` Database per §8.2: the Drizzle schema for every table in `packages/db/src/schema/`, the core enum constants behind every CHECK, `drizzle.config.ts`, the generated `0000_initial.sql` and custom `0001_assets_fts.sql` committed, `openDb()` with PRAGMAs and migrate-on-boot (foreign keys off during migration, `foreign_key_check` after), drizzle-zod row schemas in `src/rows.ts`, and `packages/db/test/schema.test.ts` comparing the migrated database with §8.2.1. Any index drizzle-kit can't emit exactly moves to a custom migration here.
@@ -4747,12 +4757,12 @@ Five milestones. Each is independently demoable and ends with a working app; not
 10. `M0-10` Ingest pipeline: stream, hash, probe, place, insert, emit.
 11. `M0-11` SSE `/api/events` + client `EventSource` hook with polling fallback.
 12. `M0-11a` Typed client (§8.3.3): `apps/web/src/api/client.ts` (`hc<AppType>` with the session header), the TanStack Query provider and the first hooks (`models`, `assets`, `generate`, `settings`), the raw-HTTP helpers, and SSE frame parsing with `sseEventSchema`. A type test proves that renaming a field in a core response schema breaks `bun run build` in `apps/web`.
-13. `M0-12` Vite + React SPA in `apps/web`, with Tailwind and shadcn/ui primitives in `packages/ui`, the `--of-*` tokens (§2.2) as the Tailwind theme, Openfield branding (§2/§3), dark theme, `>=1280px` layout.
+13. `M0-12` Vite + React SPA in `apps/web`, with Tailwind and shadcn/ui primitives in `packages/ui`, the `--of-*` tokens (§2.2) as the Tailwind theme, Openfield branding (§2/§3), dark and light themes (§2.2), `>=1280px` layout.
 14. `M0-13` Minimal composer (prompt + model select + Generate) and a plain grid feed.
-15. `M0-14` Thumbnail service: **boot-probed** sharp/WASM-chain selection surfaced in Settings → Storage, `@h456` + `dpr=2`, `/files/thumb/:id?h=&dpr=`, single-flight on `sha@h@dpr`.
-16. `M0-15` E2E smoke test (Playwright) driving key entry → generate → asset visible, with the provider stubbed at the HTTP layer.
+15. `M0-14` Thumbnail service on `sharp`, loaded once at boot: `@h456` + `dpr=2`, `/files/thumb/:id?h=&dpr=`, single-flight on `sha@h@dpr`. If `sharp` fails to load, thumbnails are off, the route serves the original (§8.5.2), and Settings → Storage says so.
+16. `M0-15` E2E smoke test (Playwright) driving key entry → generate → asset visible, run with `OPENFIELD_FAKE_PROVIDERS=1` so every adapter call goes through a fixture-backed `ctx.fetch` (§6.12) and no key or network is needed.
 17. `M0-16` **First run (§2.10)**: launch → no-key empty state → Keys → paste key → Check key → default model auto-selected → composer focused. This exact path is the G5/S1 gate.
-18. `M0-17` **Settings shell (§6.17)**: left-rail IA — API keys · Models · Defaults · Appearance · Storage · Spending · Privacy · Help · Experimental — with the settings-key table wired to `GET/PATCH /api/settings`. Screens fill in across M1–M3; the IA lands here because eleven sections write requirements into it.
+18. `M0-17` **Settings shell (§6.17)**: left-rail IA — API keys · Models · Defaults · Appearance · Storage · Spending · Privacy · Help · Experimental — with the settings-key table wired to `GET/PATCH /api/settings`. Screens fill in across M1–M3; the IA lands here because eleven sections write requirements into it. Per §0.15 a pane joins the rail once something on it works: Experimental's switches (`showExperimental`, `canvasFileWriteThrough`) change nothing until M3-16 and M4, so the pane appears with them.
 
 #### M1 — Feed and composer parity
 
@@ -4796,7 +4806,7 @@ Five milestones. Each is independently demoable and ends with a working app; not
 12. `M2-12` Lineage view + `GET /api/assets/:id/lineage` (the recursive reference graph).
 13. `M2-13` Export with embedded metadata (PNG/WebP/JPEG) + sidecar option + bulk ZIP + the re-encode watermark warning.
 14. `M2-13a` **Metadata writer spike — blocking `M2-13`.** Confirm PNG `tEXt`/`iTXt` plus the legacy `parameters` chunk round-trip, and WebP XMP/EXIF round-trip, under Bun; pick the library and record a fixture.
-15. `M2-14` Trash, restore, purge, and the `file_state='missing'` tile state.
+15. `M2-14` Trash, restore, Empty trash, the optional daily purge when `trashRetentionDays` is set (default `null`: never purge automatically), and the `file_state='missing'` tile state.
 16. `M2-15` **Live probe of OpenAI `/v1/images/edits`: mask polarity, dimension and format requirements.** Fixture recorded, §6.14's manifest note updated. **Blocking prerequisite for `M2-05` and `M2-06`** — we do not ship a mask tool against an unverified polarity.
 17. `M2-16` Colour grading: local WebGL stack (exposure, contrast, temp/tint, saturation/vibrance, lift/gamma/gain, grain, bloom, halation, vignette), `.cube` import/export, Match reference by local 3D histogram matching. **Preset names are Openfield's own.** Writes `generative = 0`, `provider_id = 'local'`, cost $0.00.
 18. `M2-17` LAYERS panel: base + mask + local overlays (text, shapes, grade) with visibility, reorder, rename, merge. Generative layer decomposition is a visible disabled plugin slot.
@@ -4819,10 +4829,10 @@ Five milestones. Each is independently demoable and ends with a working app; not
 10. `M3-10` FTS search over prompts with the shared cursor, plus model/provider/date filters.
 11. `M3-11` Cost engine: per-model price snapshots with `pricedAt` and `sourceUrl`, the pure `estimate()` before submit, reconciliation after, `usage_log` writes including `discarded` rows, `~/.openfield/prices.json` overlay, "Prices as of `<date>`. They may have changed since." disclosure in the UI (§6.9). `refreshPricing()` proposes a diff the user accepts or rejects — prices never change silently.
 12. `M3-12` Usage panel: today / 7 days / 30 days totals, per-model breakdown, a **"Canceled but charged"** line summing `discarded = 1`, `~` markers on `cost_source = 'estimated'` rows, CSV export, optional monthly soft budget warning.
-13. `M3-13` Maintenance UI: storage stats, GC, backup, clear thumb cache, FTS reindex, and the boot-probed encoder chain shown in Settings → Storage.
+13. `M3-13` Maintenance UI: storage stats, GC, backup, clear thumb cache, FTS reindex, and the thumbnail status (on, or off when `sharp` can't load) shown in Settings → Storage.
 14. `M3-14` Restore-settings-from-image (read embedded metadata on upload).
 15. `M3-15` Settings screens filled in behind the `M0-17` IA: Defaults, Appearance, Spending, Privacy (including `networkHosts ∪ assetHosts`), Help (the Error log), Experimental.
-16. `M3-16` **Conditional Higgsfield adapter (§6.15)**: Soul v2 standard endpoint, two-field key schema, `assetHosts` download path, `price.kind: 'unknown'`. Ships only if a user key reaches the documented public API; otherwise `meta.stable: false` behind Settings → Experimental.
+16. `M3-16` **Higgsfield adapter (§6.15)**, built against the real public API with the owner's key: Soul v2 standard endpoint, two-field key schema, `assetHosts` download path, `price.kind: 'unknown'`. Every §6.15 fact is verified live with that key and the fixtures are recorded from those runs. Ships only if a user key reaches the documented public API; otherwise `meta.stable: false` behind Settings → Experimental.
 
 #### M4 — Canvas
 
@@ -4930,11 +4940,11 @@ Five milestones. Each is independently demoable and ends with a working app; not
 | R6 | **Large local libraries** (100k+ assets) | Medium / Medium | Keyset pagination with partial indices (no `OFFSET` anywhere); FTS5 external-content index; thumbs content-addressed and regenerable; `VACUUM INTO` backups; measured target: feed first page <50 ms at 100k rows, enforced by a seeded benchmark in CI |
 | R7 | **Browser memory with thousands of images** | High / High | Windowed virtualiser rendering ±2 viewports; `loading="lazy"`, `decoding="async"`, a bounded concurrent-decode pool; thumbs sized to the zoom step so the browser never holds oversized bitmaps; object URLs revoked on unmount; a soak test scrolls 5 000 tiles and asserts a renderer-memory ceiling |
 | R8 | **Thumbnail CPU spikes** starving the UI | Medium / Low | Worker pool capped at `cores − 2`, generation deprioritised behind live job ingest, single-flight locking, on-demand generation for non-default rungs |
-| R9 | **Native dependency (`sharp`) fails to install or to load under Bun** | Medium / Medium | A complete WASM chain — `@jsquash/png` + `@jsquash/jpeg` + `@jsquash/resize` + `@jsquash/webp` — not an encoder alone, **probed at boot** and reported in Settings → Storage (§8.5.2). `bun install` must never fail because of the image pipeline, and the app must never boot onto a chain that cannot decode |
+| R9 | **Native dependency (`sharp`) fails to install or to load under Bun** | Medium / Medium | `sharp` is loaded once at boot, and a failure never fails `bun install` or the boot. Thumbnails turn off: `/files/thumb/:id` serves the original with `no-cache`, and Settings → Storage says "Thumbnails are off. Images show at full size, so scrolling may be slower." (§8.5.2). The feed stays correct, only heavier. No WASM chain |
 | R10 | **API key leakage** | Low / Critical | Keys never enter the db, never enter a response body, never reach browser JS; `config.json` written 0600 with mode verified after write; a redaction filter wraps every log sink; a CI test asserts no endpoint response and no log line can contain a key-shaped string |
 | R11 | **Loopback server reachable from a malicious page** | Medium / High | All four §8.3 guards, on **every method including `GET`**: bind `127.0.0.1` only; Host-header allowlist (anti-DNS-rebinding); **never emit any CORS or `Timing-Allow-Origin` header, in any build**; reject `Sec-Fetch-Site: cross-site`, `Sec-Fetch-Dest: image\|script\|style` on `/api`, and any foreign `Origin`; require the boot-minted `X-Openfield-Session` token on every `/api` and `/files` request. No cookies, so no ambient authority to steal. A `GET` is not exempt: `/api/assets` is the whole prompt history and `/files/thumb/:id` writes a file. **Acceptance: a cross-origin page cannot list assets, read key status, or cause a thumbnail to be generated** |
-| R12 | **Licence and trademark hygiene** | Medium / High | MIT. No Higgsfield name, logo, colours, icons or marketing copy anywhere in the product, repo or README; all UI copy written by us; all preset names and thumbnails original. Third-party model names (e.g. provider model identifiers) appear only as registry data describing the user's own API account — nominative, factual use. The README states plainly that Openfield is an independent project, unaffiliated with and not endorsed by any model provider, and that users bring their own keys and are bound by each provider's terms |
-| R13 | **Higgsfield adapter may be impossible to ship** — style listing, character training and canvas endpoints are undocumented | Medium / Medium | The adapter is conditional by design: it ships only if a user key can reach the documented Soul endpoint. Its absence changes nothing structurally, because every Higgsfield-specific feature already has an open substitute (rows 21–24, 33 above) |
+| R12 | **Licence and trademark hygiene** | Medium / High | MIT, copyright "Openfield contributors". No Higgsfield name, logo, colours, icons or marketing copy anywhere in the product, repo or README; all UI copy written by us; all preset names and thumbnails original. Third-party model names (e.g. provider model identifiers) appear only as registry data describing the user's own API account — nominative, factual use. The README states plainly that Openfield is an independent project, unaffiliated with and not endorsed by any model provider, and that users bring their own keys and are bound by each provider's terms |
+| R13 | **Higgsfield adapter may be impossible to ship** — style listing, character training and canvas endpoints are undocumented | Medium / Medium | The adapter is conditional by design: it is built and verified with the owner's real key in `M3-16`, and ships only if a user key can reach the documented Soul endpoint. Its absence changes nothing structurally, because every Higgsfield-specific feature already has an open substitute (rows 21–24, 33 above) |
 | R14 | **Canvas graph schema evolves and breaks saved canvases** | Medium / Medium | `canvases.schema_version` plus a forward document migration per bump in `packages/core/src/canvas/migrations/` (separate from the SQL migrations in `packages/db/migrations/`), applied lazily on open with a version snapshot taken first; unknown node types render as a labelled placeholder rather than dropping data |
 | R15 | **SQLite write contention or corruption** | Low / High | WAL, single writer inside the server process, `busy_timeout`, every multi-row mutation in a transaction, `PRAGMA integrity_check` on the backup path, atomic `rename()` for every file write |
 | R16 | **Scope creep across five milestones** | High / Medium | **§0.14 is the scope contract**: anything it lists as deferred or dropped needs an explicit decision to move, and each milestone's definition of done is the release gate. §8.8 records status against the observation notes and has no authority to add or cancel scope — that ambiguity is what let a checklist row quietly veto seven features §3 and §4 specify in full |
@@ -4948,8 +4958,6 @@ Only genuinely open items remain. Each names the task that closes it; anything �
 - **Polling cadence of the reference product's in-progress status calls** was never measured. Our 2 s SSE-failure fallback interval is chosen, not copied. *(No task: it is a fallback we control, recorded for honesty.)*
 - **OpenAI `n` limits per quality × size** are undocumented, so batch fan-in vs fan-out for GPT Image is a guess until measured. *(M2-15's probe session measures it alongside the mask probe.)*
 - **Measured output-token counts per quality × size for OpenAI GPT Image** are undocumented, so pre-submit estimates for those models are a range, not a number — and it is an open product question whether to suppress the estimate entirely when the range is wider than ±50 %. *(M3-11.)*
-- **Trash retention default.** 30 days is proposed; a local app with no storage bill might reasonably default to "never purge automatically". *(M2-14.)*
-- **Multi-provider fan-out for one prompt** (the same prompt to two models side by side) is not a reference-product behaviour and is not in v1 scope — but the job-set model supports it trivially. Decide before M1 freezes the composer. *(M1-13.)*
 - **Canvas node internals never captured:** Video, Voice, LLM Assistant, Page, Table, Upload and Assets node UIs; canvas comment threads; version-history UI; multi-select/group operations; delete and duplicate shortcuts. §7 specifies our own designs for the nodes we ship; the rest stay unbuilt rather than invented. *(M4-05 … M4-12.)*
 
 ---
@@ -4959,7 +4967,7 @@ Rolled up from the per-section lists after reconciliation. Each item is a decisi
 
 **§1**
 
-- **Higgsfield adapter viability.** The public API is documented for Soul v2 (`POST /higgsfield-ai/soul/v2/standard`) with `Authorization: Key <id>:<secret>`, but research found no documented endpoint for **listing style IDs** (70+ styles referenced without a schema), no documented **identity-training** endpoint, and no Canvas API. Until style-listing and character endpoints are confirmed with a real key, the adapter's scope — and whether it ships in v1 at all — is undecided; §0.13 already pins its pricing to `kind: "unknown"` until a live probe confirms an estimate endpoint.
+- **Higgsfield adapter viability.** The public API is documented for Soul v2 (`POST /higgsfield-ai/soul/v2/standard`) with `Authorization: Key <id>:<secret>`, but research found no documented endpoint for **listing style IDs** (70+ styles referenced without a schema), no documented **identity-training** endpoint, and no Canvas API. Until style-listing and character endpoints are confirmed with a real key (the owner's, in `M3-16`), the adapter's scope — and whether it ships in v1 at all — is undecided; §0.13 already pins its pricing to `kind: "unknown"` until a live probe confirms an estimate endpoint.
 - **Provider terms.** Whether each provider's ToS permits a BYOK client of this shape, and whether any require attribution or restrict presenting cost estimates, has not been verified per-provider.
 - **Model catalogue refresh cadence.** Google publishes no `models.list` for image models and OpenAI's `/v1/models` does not flag image capability — both stand. §0.3 settles the consequence: `listModels()` need only return the adapter's static, version-stamped catalogue, network discovery is optional and **allow-listed by the adapter's own `recognise(id)`** (unrecognised ids are reported, never added), and the snapshot date is surfaced in Settings → Models. What remains open is the refresh cadence and who runs the maintainer script.
 - **Migration.** Whether existing Higgsfield users want to import their cloud library, and whether any supported export path exists, is unknown; no export API was observed.
@@ -5010,8 +5018,8 @@ Rolled up from the per-section lists after reconciliation. Each item is a decisi
 - **Exact maximum reference-image count for OpenAI image edits**, and whether it differs between Sunburst, Flare and GPT Image 2. We declare 4. Closed by **`M2-15`** (same live session).
 - **Whether Gemini exposes any multi-image-per-call parameter.** If it does, the fan-out in §6.5 step 5 becomes a cost optimisation rather than a necessity. Closed by **`M0-07`** (Google Gemini image adapter).
 - **Output-token counts per (quality × size) for OpenAI.** Must be measured before launch; until then the Generate button shows a range. Closed by **`M3-11`** (cost engine: price snapshots, estimate, reconciliation, usage log).
-- **Higgsfield public API reach** — real endpoint paths beyond Soul v2 standard, the style-id catalogue, rate limits, and whether any documented cost endpoint exists. None of it was observable in the UI walkthrough (the observed traffic was the product's private endpoints, which we do not build against, §1.11). Closed by **`M3-16`** (conditional Higgsfield adapter); if it does not resolve, the adapter ships `meta.stable: false` behind Settings → Experimental and nothing else changes.
-- **Whether to allow a user-supplied provider `baseUrl` override on the first-party OpenAI adapter in v1** (convenient for proxies, but it widens both host allow-lists) or to defer it entirely to the v1.1 OpenAI-compatible provider. Closed by **`M0-05`** (provider/credential service).
+- **Higgsfield public API reach** — real endpoint paths beyond Soul v2 standard, the style-id catalogue, rate limits, and whether any documented cost endpoint exists. None of it was observable in the UI walkthrough (the observed traffic was the product's private endpoints, which we do not build against, §1.11). Closed by **`M3-16`**, which builds the adapter and verifies these facts with the owner's real key; if it does not resolve, the adapter ships `meta.stable: false` behind Settings → Experimental and nothing else changes.
+- ~~Whether to allow a user-supplied provider `baseUrl` override in v1.~~ Closed at **`M0-05`**: deferred to the v1.1 OpenAI-compatible provider (§6.18).
 - **Price-refresh feasibility** — whether any launch provider exposes a machine-readable price document worth wiring `refreshPricing()` to, or whether the `~/.openfield/prices.json` overlay is the whole story for v1. Closed by **`M3-11`**.
 
 **§7**
@@ -5031,6 +5039,4 @@ Rolled up from the per-section lists after reconciliation. Each item is a decisi
 - **Polling cadence of the reference product's in-progress status calls** was never measured. Our 2 s SSE-failure fallback interval is chosen, not copied. *(No task: it is a fallback we control, recorded for honesty.)*
 - **OpenAI `n` limits per quality × size** are undocumented, so batch fan-in vs fan-out for GPT Image is a guess until measured. *(M2-15's probe session measures it alongside the mask probe.)*
 - **Measured output-token counts per quality × size for OpenAI GPT Image** are undocumented, so pre-submit estimates for those models are a range, not a number — and it is an open product question whether to suppress the estimate entirely when the range is wider than ±50 %. *(M3-11.)*
-- **Trash retention default.** 30 days is proposed; a local app with no storage bill might reasonably default to "never purge automatically". *(M2-14.)*
-- **Multi-provider fan-out for one prompt** (the same prompt to two models side by side) is not a reference-product behaviour and is not in v1 scope — but the job-set model supports it trivially. Decide before M1 freezes the composer. *(M1-13.)*
 - **Canvas node internals never captured:** Video, Voice, LLM Assistant, Page, Table, Upload and Assets node UIs; canvas comment threads; version-history UI; multi-select/group operations; delete and duplicate shortcuts. §7 specifies our own designs for the nodes we ship; the rest stay unbuilt rather than invented. *(M4-05 … M4-12.)*
