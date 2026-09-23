@@ -1,4 +1,4 @@
-import { COST_SOURCES, OPS, USAGE_OUTCOMES } from "@openfield/core/constants";
+import { COST_SOURCES, OPS, SPEED_IDS, USAGE_OUTCOMES } from "@openfield/core/constants";
 import type { UsageUnits } from "@openfield/core/schemas";
 import { sql } from "drizzle-orm";
 import { check, index, integer, real, sqliteTable, text } from "drizzle-orm/sqlite-core";
@@ -29,10 +29,13 @@ export const usageLog = sqliteTable(
     discarded: flag("discarded", 0),
     latencyMs: integer("latency_ms"),
     httpStatus: integer("http_status"),
+    speed: text("speed", { enum: SPEED_IDS }), // the speed billed (§0.13). Added in 0003
+    simulated: flag("simulated", 0), // fake mode: cost 0, never in a spend total
   },
   (t) => [
     check("usage_log_outcome_check", oneOf("outcome", USAGE_OUTCOMES)),
     check("usage_log_cost_source_check", oneOf("cost_source", COST_SOURCES)),
+    check("usage_log_speed_check", oneOf("speed", SPEED_IDS)),
     index("idx_usage_ts").on(sql`ts DESC`),
     index("idx_usage_model").on(t.providerId, t.modelId, sql`ts DESC`),
   ],

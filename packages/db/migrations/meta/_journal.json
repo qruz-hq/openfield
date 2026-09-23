@@ -22,6 +22,20 @@
       "when": 1790163948979,
       "tag": "0002_job_error_reason",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1790169190608,
+      "tag": "0003_provider_settings_speed",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1790179065933,
+      "tag": "0004_job_error_action",
+      "breakpoints": true
     }
   ]
 }

@@ -68,6 +68,34 @@ describe("manifest", () => {
     expect(modelManifestSchema.safeParse({ ...sampleManifest, key: "google:other" }).success).toBe(false);
   });
 
+  test("speed offers: priced, async only for Batch, each speed once", () => {
+    const half = { ...sampleManifest.price };
+    const batch = {
+      id: "batch",
+      price: half,
+      delivery: "async",
+      waitMs: { target: 86_400_000, max: 172_800_000 },
+    } as const;
+    const flex = {
+      id: "flex",
+      price: half,
+      delivery: "sync",
+      waitMs: { target: 60_000, max: 900_000 },
+      requestTimeoutMs: 900_000,
+    } as const;
+    const withSpeeds = { ...sampleManifest, speeds: [batch, flex] };
+    expect(roundTrip(modelManifestSchema, withSpeeds)).toEqual(withSpeeds);
+    const bad = (speeds: unknown[]) => modelManifestSchema.safeParse({ ...sampleManifest, speeds }).success;
+    expect(bad([{ ...batch, delivery: "sync" }])).toBe(false);
+    expect(bad([{ ...flex, delivery: "async" }])).toBe(false);
+    expect(bad([{ ...batch, requestTimeoutMs: 1000 }])).toBe(false);
+    expect(bad([{ ...flex, id: "standard" }])).toBe(false);
+    expect(bad([{ ...flex, price: { kind: "unknown" } }])).toBe(false);
+    expect(bad([flex, flex])).toBe(false);
+    expect(bad([{ ...flex, waitMs: { target: 10, max: 5 } }])).toBe(false);
+    expect(bad([{ ...batch, ops: ["generate"] }])).toBe(true);
+  });
+
   test("list items add what the picker needs", () => {
     const item = modelListItemSchema.parse({ ...sampleManifest, ready: true, enabled: true });
     expect(item.ready).toBe(true);
@@ -141,6 +169,25 @@ describe("requests", () => {
     expect("presetId" in normalized).toBe(false);
     expect(normalized.size).toEqual({ width: 1536, height: 2048 });
     expect(normalizedRequestSchema.safeParse({ ...normalized, paramsHash: "abc" }).success).toBe(false);
+    // Frozen before speeds existed: reads back as a plain Standard run.
+    expect([normalized.speed, normalized.speedRequested, normalized.providerSettings]).toEqual([
+      "standard",
+      "standard",
+      {},
+    ]);
+    const batch = normalizedRequestSchema.parse({
+      ...normalized,
+      speed: "standard",
+      speedRequested: "flex",
+      providerSettings: { speed: "flex", flexBusy: "wait" },
+    });
+    expect(batch.speedRequested).toBe("flex");
+    expect(normalizedRequestSchema.safeParse({ ...normalized, speed: "turbo" }).success).toBe(false);
+  });
+
+  test("GenerateRequest has no speed: it comes from the company's settings", () => {
+    expect("speed" in generateRequestSchema.shape).toBe(false);
+    expect(generateRequestSchema.parse({ ...request, speed: "batch" })).not.toHaveProperty("speed");
   });
 });
 
@@ -234,6 +281,7 @@ const jobSet = {
   createdAt: NOW,
   startedAt: null,
   finishedAt: null,
+  speed: "batch",
 };
 const assetItem = {
   id: ID_C,
@@ -258,6 +306,28 @@ describe("job sets and events", () => {
   test("the 202 body round-trips", () => {
     const accepted = { jobSet, jobs: [job] };
     expect(roundTrip(jobSetAcceptedSchema, accepted)).toEqual(accepted as never);
+  });
+
+  test("a job set from before speeds reads as Standard", () => {
+    const { speed: _, ...older } = jobSet;
+    expect(jobSetAcceptedSchema.parse({ jobSet: older, jobs: [job] }).jobSet.speed).toBe("standard");
+  });
+
+  test("a Batch run carries its provider batch", () => {
+    const batch = {
+      state: "queued",
+      submittedAt: NOW,
+      expiresAt: NOW,
+      counts: { total: 1, succeeded: 0, failed: 0, pending: 1 },
+    };
+    expect(
+      roundTrip(jobSetAcceptedSchema, { jobSet, jobs: [{ ...job, speedUsed: null }], batch }),
+    ).toMatchObject({
+      batch,
+    });
+    expect(
+      jobSetAcceptedSchema.safeParse({ jobSet, jobs: [job], batch: { ...batch, state: "done" } }).success,
+    ).toBe(false);
   });
 
   test("every event type has a schema", () => {
@@ -289,6 +359,39 @@ describe("job sets and events", () => {
       JSON.stringify({ activeJobSets: [{ jobSet, jobs: [job] }], serverTime: NOW }),
     );
     expect(snapshot?.event).toBe("snapshot");
+    if (snapshot?.event === "snapshot") expect(snapshot.data.batches).toEqual([]);
+
+    const update = {
+      jobSetId: ID_A,
+      providerId: "google",
+      modelKey: "google:gemini-3-pro-image",
+      state: "succeeded",
+      submittedAt: NOW,
+      expiresAt: NOW,
+      counts: { total: 4, succeeded: 4, failed: 0, pending: 0 },
+      finished: true,
+    };
+    const batch = parseSseFrame("batch.updated", JSON.stringify(update));
+    expect(batch?.event).toBe("batch.updated");
+    const withBatches = parseSseFrame(
+      "snapshot",
+      JSON.stringify({ activeJobSets: [], serverTime: NOW, batches: [update] }),
+    );
+    if (withBatches?.event === "snapshot") expect(withBatches.data.batches).toHaveLength(1);
+    expect(parseSseFrame("batch.updated", JSON.stringify({ ...update, submittedAt: null }))).not.toBeNull();
+    // The finish notice names the model from the frame itself, so it can't be left out.
+    const { modelKey: _, ...nameless } = update;
+    expect(parseSseFrame("batch.updated", JSON.stringify(nameless))).toBeNull();
+    expect(parseSseFrame("batch.updated", JSON.stringify({ ...update, stopping: true }))).not.toBeNull();
+
+    const busy = parseSseFrame(
+      "job.queued",
+      JSON.stringify({ jobSetId: ID_A, jobId: ID_B, idx: 0, retryAt: NOW, busy: true }),
+    );
+    if (busy?.event === "job.queued") expect(busy.data.busy).toBe(true);
+    expect(
+      parseSseFrame("job.queued", JSON.stringify({ jobSetId: ID_A, jobId: ID_B, idx: 0, busy: false })),
+    ).toBeNull();
   });
 
   test("unknown or broken frames come back null", () => {

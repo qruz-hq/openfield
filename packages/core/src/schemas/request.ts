@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ADAPTER_OPS, type AdapterOp, DIAGNOSTIC_LEVELS, EDIT_OPS, type Op } from "../constants";
+import { type AdapterOp, DIAGNOSTIC_LEVELS, EDIT_OPS, type Op } from "../constants";
 import { HASH_RE } from "../hash";
 import {
   aspectRatioSchema,
@@ -12,9 +12,11 @@ import {
   pixelSizeSchema,
   referenceRoleSchema,
   resolutionTierSchema,
+  speedIdSchema,
   ulidSchema,
 } from "./common";
 import { backgroundSchema } from "./manifest";
+import { providerSettingValuesSchema } from "./provider-settings";
 
 // One body for POST /api/generate and POST /api/edit (§0.6, §6.5).
 
@@ -86,6 +88,7 @@ export const generateRequestSchema = z.object({
   canvas: z.object({ canvasId: ulidSchema, nodeId: z.string().min(1).max(64) }).optional(),
   /** Advanced fields, passed to the adapter under the model's own names. */
   providerOptions: z.record(z.string(), z.unknown()).optional(),
+  // No speed, by design: the speed comes only from the company's settings (§0.3).
 });
 
 /** POST /api/generate */
@@ -116,6 +119,13 @@ export const normalizedRequestSchema = generateRequestSchema
     promptAfterPreset: z.string(),
     manifestVersion: z.string().min(1),
     paramsHash: z.string().regex(HASH_RE),
+    // Resolved and frozen at submit (§0.3). The defaults let requests frozen before speeds still parse.
+    /** What this model runs at, and what estimate() prices. */
+    speed: speedIdSchema.default("standard"),
+    /** What the company's settings asked for. Differs when the model doesn't offer it. */
+    speedRequested: speedIdSchema.default("standard"),
+    /** The resolved company settings. The runner hands them to the adapter as ctx.settings. */
+    providerSettings: providerSettingValuesSchema.default({}),
   });
 
 /** POST /api/models/:providerId/:modelId/estimate, for server-side callers and the canvas preview. */
@@ -129,8 +139,6 @@ export const diagnosticSchema = z.object({
   code: z.string().min(1),
   message: z.string(),
 });
-
-export const adapterOpSchema = z.enum(ADAPTER_OPS);
 
 /**
  * The adapter op a recorded op compiles to (§0.4), or null for local and plugin-only ops.

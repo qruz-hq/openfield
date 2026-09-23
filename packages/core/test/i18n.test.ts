@@ -9,6 +9,7 @@ import {
   formatCostWithCount,
   formatDate,
   formatMoney,
+  formatPrice,
   hasMessage,
   parseMessage,
   setFormatLocale,
@@ -105,7 +106,7 @@ describe("catalogue", () => {
   });
 
   test("says Try again, never Retry", () => {
-    for (const [key, message] of entries) expect(/\bretry\b/i.test(message), key).toBe(false);
+    for (const [key, message] of entries) expect(/\bretr(y|ying|ies|ied)\b/i.test(message), key).toBe(false);
   });
 
   test("keeps internal words out of the UI", () => {
@@ -136,6 +137,14 @@ describe("cost wording", () => {
     expect(formatCost(usd(0, 0, "exact"))).toBe("Free");
     expect(formatCostWithCount(usd(0.27, 0.27), 2)).toBe("About $0.27 · 2 images");
     expect(formatMoney(0.134, "USD", true)).toBe("$0.134");
+  });
+
+  test("prices under a dime keep two significant digits, so half price reads as half", () => {
+    expect(formatCost(usd(0.0336, 0.0336))).toBe("About $0.034");
+    expect(formatCost(usd(0.0168, 0.0168))).toBe("About $0.017");
+    expect(formatCost(usd(0.067, 0.067), { tight: true })).toBe("~$0.067");
+    expect(formatCost(usd(0.0168, 0.12))).toBe("About $0.017–0.12");
+    expect(formatPrice(0.24192)).toBe("$0.24");
   });
 
   test("never uses the words we avoid", () => {

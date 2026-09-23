@@ -52,6 +52,7 @@ export function upsertModels(db: Executor, rows: Draft<NewModelRow, "updatedAt">
         badges: sql`excluded.badges`,
         capabilities: sql`excluded.capabilities`,
         pricing: sql`excluded.pricing`,
+        speeds: sql`excluded.speeds`,
         source: sql`excluded.source`,
         sortOrder: sql`excluded.sort_order`,
         discoveredAt: sql`coalesce(excluded.discovered_at, ${models.discoveredAt})`,

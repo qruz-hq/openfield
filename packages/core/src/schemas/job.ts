@@ -1,13 +1,17 @@
 import { z } from "zod";
 import {
+  batchStateSchema,
   cursorSchema,
+  errorActionSchema,
   errorCodeSchema,
   jobSetStateSchema,
   jobSourceSchema,
   jobStateSchema,
   modelKeySchema,
   opSchema,
+  providerIdSchema,
   queryLimitSchema,
+  speedIdSchema,
   timestampSchema,
   ulidSchema,
   usdSchema,
@@ -24,6 +28,49 @@ export const jobHandleSchema = z.object({
   cancelUrl: z.url().optional(),
   resume: z.record(z.string(), z.unknown()).optional(),
   attempt: z.int().nonnegative(),
+});
+
+/**
+ * What a provider batch needs to be found again after a restart (§6.7). Stored whole on
+ * provider_batches.handle.
+ */
+export const batchHandleSchema = z.object({
+  /** The company's id: "batches/abc", "batch_abc". */
+  remoteId: z.string().min(1),
+  /** "openfield-<jobSetId>", what batch.find() matches. */
+  displayName: z.string().min(1),
+  /** From the company: Google expires a batch 48 hours after it's created. */
+  expiresAt: timestampSchema,
+  /** What poll, cancel and cleanup need, such as uploaded file ids. */
+  resume: z.record(z.string(), z.unknown()).optional(),
+});
+
+export const batchCountsSchema = z.object({
+  total: z.int().nonnegative(),
+  succeeded: z.int().nonnegative(),
+  failed: z.int().nonnegative(),
+  pending: z.int().nonnegative(),
+});
+
+/** A Batch run's provider batch, as tiles and GET /api/job-sets/:id show it. */
+export const batchSummarySchema = z.object({
+  state: batchStateSchema,
+  /** Null while the create call is in flight. */
+  submittedAt: timestampSchema.nullable(),
+  expiresAt: timestampSchema.nullable(),
+  counts: batchCountsSchema.optional(),
+  /** A cancel was sent and the company hasn't stopped yet: the tiles stop offering Cancel. */
+  stopping: z.boolean().optional(),
+});
+
+/** The batch.updated frame, and each entry of snapshot.batches (§0.6). */
+export const batchUpdatedSchema = batchSummarySchema.extend({
+  jobSetId: ulidSchema,
+  providerId: providerIdSchema,
+  /** So the finish notice can name the model even when the run isn't loaded in the tab. */
+  modelKey: modelKeySchema,
+  /** The frame the browser turns into the finish toast and system notification. */
+  finished: z.boolean(),
 });
 
 export const jobSchema = z.object({
@@ -44,9 +91,15 @@ export const jobSchema = z.object({
   errorMessage: z.string().nullable(),
   /** Our tile reason, when it says more than the code's usual words. Shown as is. */
   errorReason: z.string().nullable(),
+  /** The failed tile's button, when it isn't the code's usual one (§0.5). */
+  errorAction: errorActionSchema.nullish(),
   createdAt: timestampSchema,
   startedAt: timestampSchema.nullable(),
   finishedAt: timestampSchema.nullable(),
+  /** The speed the company says it served, once the job ends. Cost follows it (§0.13). */
+  speedUsed: speedIdSchema.nullish(),
+  /** When a job waiting out a retry or a Flex busy answer goes again. */
+  nextAttemptAt: timestampSchema.nullish(),
 });
 
 export const jobSetSchema = z.object({
@@ -70,9 +123,16 @@ export const jobSetSchema = z.object({
   createdAt: timestampSchema,
   startedAt: timestampSchema.nullable(),
   finishedAt: timestampSchema.nullable(),
+  /** The speed this run was resolved to at submit (§0.3). Picks the tile's variant (§2.4). */
+  speed: speedIdSchema.default("standard"),
 });
 
-export const jobSetWithJobsSchema = z.object({ jobSet: jobSetSchema, jobs: z.array(jobSchema) });
+export const jobSetWithJobsSchema = z.object({
+  jobSet: jobSetSchema,
+  jobs: z.array(jobSchema),
+  /** Only for a Batch run. */
+  batch: batchSummarySchema.optional(),
+});
 
 /** 202 from POST /api/generate, /api/edit and /api/job-sets/:id/recreate. */
 export const jobSetAcceptedSchema = jobSetWithJobsSchema;
@@ -92,12 +152,18 @@ export const jobSetsListResponseSchema = z.object({
 export const cancelResponseSchema = z.object({
   canceled: z.array(ulidSchema),
   notCancelable: z.array(ulidSchema),
+  /** Sent images of a Batch run: the company was asked to stop, and they end when it has. */
+  stopping: z.array(ulidSchema).optional(),
 });
 
 /** POST /api/job-sets/:id/retry */
 export const jobSetRetryBodySchema = z.object({ onlyFailed: z.boolean().optional() });
 
 export type JobHandle = z.infer<typeof jobHandleSchema>;
+export type BatchHandle = z.infer<typeof batchHandleSchema>;
+export type BatchCounts = z.infer<typeof batchCountsSchema>;
+export type BatchSummary = z.infer<typeof batchSummarySchema>;
+export type BatchUpdated = z.infer<typeof batchUpdatedSchema>;
 export type Job = z.infer<typeof jobSchema>;
 export type JobSet = z.infer<typeof jobSetSchema>;
 export type JobSetWithJobs = z.infer<typeof jobSetWithJobsSchema>;

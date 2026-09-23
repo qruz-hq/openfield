@@ -1,10 +1,13 @@
 import { canvasDocumentSchema } from "@openfield/core/canvas";
 import { MODEL_BADGES } from "@openfield/core/constants";
 import {
+  batchHandleSchema,
   capabilitiesSchema,
   normalizedRequestSchema,
   presetObjectSchema,
   priceModelSchema,
+  providerSettingValuesSchema,
+  speedOfferSchema,
   usageUnitsSchema,
 } from "@openfield/core/schemas";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
@@ -20,17 +23,22 @@ const badges = () => z.array(z.enum(MODEL_BADGES));
 const capabilities = () => capabilitiesSchema;
 const pricing = () => priceModelSchema;
 const request = () => normalizedRequestSchema;
+const speeds = () => z.array(speedOfferSchema);
+const settings = () => providerSettingValuesSchema;
+const handle = () => batchHandleSchema;
 const graph = () => canvasDocumentSchema;
 
-export const providerRow = createSelectSchema(t.providers);
-export const newProviderRow = createInsertSchema(t.providers);
-export const modelRow = createSelectSchema(t.models, { badges, capabilities, pricing });
-export const newModelRow = createInsertSchema(t.models, { badges, capabilities, pricing });
+export const providerRow = createSelectSchema(t.providers, { settings });
+export const newProviderRow = createInsertSchema(t.providers, { settings });
+export const modelRow = createSelectSchema(t.models, { badges, capabilities, pricing, speeds });
+export const newModelRow = createInsertSchema(t.models, { badges, capabilities, pricing, speeds });
 
 export const jobSetRow = createSelectSchema(t.jobSets, { requestJson: request });
 export const newJobSetRow = createInsertSchema(t.jobSets, { requestJson: request });
 export const jobRow = createSelectSchema(t.jobs);
 export const newJobRow = createInsertSchema(t.jobs);
+export const providerBatchRow = createSelectSchema(t.providerBatches, { handle });
+export const newProviderBatchRow = createInsertSchema(t.providerBatches, { handle });
 
 export const assetRow = createSelectSchema(t.assets);
 export const newAssetRow = createInsertSchema(t.assets);
@@ -81,6 +89,8 @@ export type JobSetRow = typeof t.jobSets.$inferSelect;
 export type NewJobSetRow = typeof t.jobSets.$inferInsert;
 export type JobRow = typeof t.jobs.$inferSelect;
 export type NewJobRow = typeof t.jobs.$inferInsert;
+export type ProviderBatchRow = typeof t.providerBatches.$inferSelect;
+export type NewProviderBatchRow = typeof t.providerBatches.$inferInsert;
 export type AssetRow = typeof t.assets.$inferSelect;
 export type NewAssetRow = typeof t.assets.$inferInsert;
 export type AssetEdgeRow = typeof t.assetEdges.$inferSelect;

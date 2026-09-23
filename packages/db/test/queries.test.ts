@@ -4,18 +4,26 @@ import type { Capabilities, NormalizedRequest } from "@openfield/core/schemas";
 import {
   activeJobSets,
   activeJobs,
+  activeProviderBatches,
   addToFolder,
   assetVersions,
   clearFavourite,
   createFolder,
   createJobSet,
+  createProviderBatch,
   deleteFolder,
   deriveJobSetStatus,
+  dueProviderBatches,
   feedPage,
   findLiveAssetBySha256,
+  finishProviderBatch,
   getAssets,
   getJobSetBundle,
   getModel,
+  getProvider,
+  getProviderBatch,
+  getProviderBatchForJobSet,
+  getProviderSettings,
   InvalidCursorError,
   insertAsset,
   insertUsage,
@@ -23,13 +31,19 @@ import {
   listJobSets,
   listKeyStatus,
   listModels,
+  markBatchCleaned,
+  markBatchNotified,
   type OpenDb,
   openDb,
+  providerBatchesForJobSets,
   readSettings,
+  recordBatchPoll,
+  recordBatchSubmitted,
   recordKeyCheck,
   refreshJobSetStatus,
   removeFromFolder,
   restoreAsset,
+  resumableBatches,
   seedProviders,
   setAssetFileState,
   setFavourite,
@@ -39,8 +53,11 @@ import {
   transitionJob,
   transitionJobsInSet,
   trashedBefore,
+  unannouncedBatches,
+  uncleanedBatches,
   updateFolder,
   updateJob,
+  updateProviderSettings,
   upsertModels,
   usageRollup,
   writeSettings,
@@ -59,7 +76,7 @@ afterEach(() => opened.close());
 
 const request = {} as NormalizedRequest; // the frozen request is opaque to these helpers
 
-function newRun(key: string | null = newId(), batch = 2) {
+function newRun(key: string | null = newId(), batch = 2, speed: "standard" | "batch" = "standard") {
   return createJobSet(db(), {
     jobSet: {
       id: newId(),
@@ -68,6 +85,7 @@ function newRun(key: string | null = newId(), batch = 2) {
       providerId: "google",
       modelId: "m",
       requestJson: request,
+      speed,
     },
     jobs: Array.from({ length: batch }, (_, idx) => ({ id: newId(), idx })),
   });
@@ -105,6 +123,26 @@ describe("job sets", () => {
     expect(again.created).toBe(false);
     expect(again.jobSet.id).toBe(first.jobSet.id);
     expect(again.jobs.map((j) => j.id)).toEqual(first.jobs.map((j) => j.id));
+  });
+
+  test("a run keeps its speed, and a job records the speed it was served at", () => {
+    const run = newRun(null, 1);
+    expect(run.jobSet.speed).toBe("standard");
+    const job = run.jobs[0]!;
+    expect(job.speedUsed).toBeNull();
+    expect(transitionJob(db(), job.id, "succeeded", { speedUsed: "standard" })?.speedUsed).toBe("standard");
+    expect(newRun(null, 1, "batch").jobSet.speed).toBe("batch");
+  });
+
+  test("the queue scan can leave Batch runs to the batch watcher", () => {
+    const sync = newRun(null, 1);
+    const batch = newRun(null, 2, "batch");
+    expect(activeJobs(db()).map((r) => r.jobSet.id)).toEqual([
+      sync.jobSet.id,
+      batch.jobSet.id,
+      batch.jobSet.id,
+    ]);
+    expect(activeJobs(db(), { skipBatch: true }).map((r) => r.jobSet.id)).toEqual([sync.jobSet.id]);
   });
 
   test("a batch over 4 is refused by the database", () => {
@@ -383,6 +421,156 @@ describe("providers and models", () => {
   });
 });
 
+describe("company settings", () => {
+  test("only changed values are stored; a value back at its default is removed", () => {
+    expect(getProviderSettings(db(), "google")).toEqual({});
+    updateProviderSettings(db(), "google", { set: { speed: "flex", flexBusy: "standard" } });
+    expect(getProviderSettings(db(), "google")).toEqual({ speed: "flex", flexBusy: "standard" });
+    const row = updateProviderSettings(db(), "google", { set: { speed: "batch" }, unset: ["flexBusy"] });
+    expect(row?.settings).toEqual({ speed: "batch" });
+    expect(updateProviderSettings(db(), "google", { unset: ["speed"] })?.settings).toBeNull();
+    expect(getProviderSettings(db(), "google")).toEqual({});
+  });
+
+  test("the Limits panel writes the concurrency cap", () => {
+    expect(updateProviderSettings(db(), "google", { concurrencyCap: 2 })?.concurrencyCap).toBe(2);
+    expect(getProvider(db(), "google")?.settings).toBeNull();
+    expect(updateProviderSettings(db(), "nobody", { concurrencyCap: 2 })).toBeUndefined();
+    expect(getProviderSettings(db(), "nobody")).toEqual({});
+  });
+});
+
+describe("provider batches", () => {
+  const handle = {
+    remoteId: "batches/abc123",
+    displayName: "",
+    expiresAt: "2026-09-25T10:00:00.000Z",
+    resume: { uploads: [] },
+  };
+
+  function newBatch() {
+    const run = newRun(null, 2, "batch");
+    const batch = createProviderBatch(db(), {
+      jobSetId: run.jobSet.id,
+      providerId: "google",
+      modelId: "m",
+      itemCount: 2,
+      credentialHint: "a1b2",
+      createdAt: "2026-09-23T10:00:00.000Z",
+    });
+    return { run, batch };
+  }
+
+  test("written before the create call, named after its run, one per run", () => {
+    const { run, batch } = newBatch();
+    expect(batch).toMatchObject({
+      state: "submitting",
+      remoteId: null,
+      displayName: `openfield-${run.jobSet.id}`,
+      itemCount: 2,
+    });
+    expect(getProviderBatchForJobSet(db(), run.jobSet.id)?.id).toBe(batch.id);
+    expect(() =>
+      createProviderBatch(db(), {
+        jobSetId: run.jobSet.id,
+        providerId: "google",
+        modelId: "m",
+        itemCount: 2,
+      }),
+    ).toThrow(/UNIQUE/);
+    expect(providerBatchesForJobSets(db(), [run.jobSet.id]).get(run.jobSet.id)?.id).toBe(batch.id);
+  });
+
+  test("the company's id is stored the moment create returns, and polls follow the schedule", () => {
+    const { batch } = newBatch();
+    const sent = recordBatchSubmitted(
+      db(),
+      batch.id,
+      { ...handle, displayName: batch.displayName },
+      {
+        nextPollAt: "2026-09-23T10:00:30.000Z",
+        submittedAt: "2026-09-23T10:00:01.000Z",
+      },
+    );
+    expect(sent).toMatchObject({
+      state: "queued",
+      remoteId: "batches/abc123",
+      expiresAt: handle.expiresAt,
+      submittedAt: "2026-09-23T10:00:01.000Z",
+    });
+    expect(getProviderBatch(db(), batch.id)?.handle?.resume).toEqual({ uploads: [] });
+
+    expect(dueProviderBatches(db(), "2026-09-23T10:00:29.000Z")).toEqual([]);
+    expect(dueProviderBatches(db(), "2026-09-23T10:00:30.000Z").map((b) => b.id)).toEqual([batch.id]);
+    const polled = recordBatchPoll(db(), batch.id, {
+      state: "running",
+      nextPollAt: "2026-09-23T10:01:00.000Z",
+      at: "2026-09-23T10:00:30.000Z",
+    });
+    expect(polled).toMatchObject({ state: "running", lastPolledAt: "2026-09-23T10:00:30.000Z" });
+  });
+
+  test("a cancel during the create call keeps its state, and the id is still stored", () => {
+    const { batch } = newBatch();
+    finishProviderBatch(db(), batch.id, { state: "canceled" });
+    const sent = recordBatchSubmitted(db(), batch.id, handle, { nextPollAt: "2026-09-23T10:00:30.000Z" });
+    expect(sent).toMatchObject({ state: "canceled", remoteId: "batches/abc123" });
+  });
+
+  test("restart: every batch in flight comes back with the jobs still waiting", () => {
+    const { run, batch } = newBatch();
+    const done = newBatch();
+    finishProviderBatch(db(), done.batch.id, { state: "succeeded" });
+    transitionJob(db(), run.jobs[0]!.id, "queued");
+    transitionJob(db(), run.jobs[1]!.id, "failed", { errorCode: "content_refused" });
+    expect(activeProviderBatches(db()).map((b) => b.id)).toEqual([batch.id]);
+    const [resumed] = resumableBatches(db());
+    expect(resumed?.batch.id).toBe(batch.id);
+    expect(resumed?.jobSet.id).toBe(run.jobSet.id);
+    expect(resumed?.jobs.map((j) => j.id)).toEqual([run.jobs[0]!.id]);
+  });
+
+  test("finishes once, notifies once, and is cleaned up at the company", () => {
+    const { batch } = newBatch();
+    recordBatchSubmitted(db(), batch.id, handle, { nextPollAt: "2026-09-23T10:00:30.000Z" });
+    expect(unannouncedBatches(db())).toEqual([]);
+    const finished = finishProviderBatch(db(), batch.id, {
+      state: "expired",
+      errorCode: "timeout",
+      at: "2026-09-25T10:00:00.000Z",
+    });
+    expect(finished).toMatchObject({ state: "expired", nextPollAt: null, errorCode: "timeout" });
+    expect(finishProviderBatch(db(), batch.id, { state: "succeeded" })).toBeUndefined();
+    expect(recordBatchPoll(db(), batch.id, { state: "running", nextPollAt: "x" })).toBeUndefined();
+    expect(dueProviderBatches(db(), "2030-01-01T00:00:00.000Z")).toEqual([]);
+
+    expect(unannouncedBatches(db()).map((b) => b.id)).toEqual([batch.id]);
+    expect(markBatchNotified(db(), batch.id)).toBe(true);
+    expect(markBatchNotified(db(), batch.id)).toBe(false);
+    expect(unannouncedBatches(db())).toEqual([]);
+
+    expect(uncleanedBatches(db()).map((b) => b.id)).toEqual([batch.id]);
+    markBatchCleaned(db(), batch.id);
+    expect(uncleanedBatches(db())).toEqual([]);
+  });
+
+  test("a batch goes with its run", () => {
+    const { run, batch } = newBatch();
+    opened.db.$client.run("DELETE FROM job_sets WHERE id = ?", [run.jobSet.id]);
+    expect(getProviderBatch(db(), batch.id)).toBeUndefined();
+  });
+
+  test("the database refuses states and speeds outside the lists", () => {
+    const { batch } = newBatch();
+    expect(() =>
+      opened.db.$client.run("UPDATE provider_batches SET state = 'done' WHERE id = ?", [batch.id]),
+    ).toThrow(/CHECK constraint failed/);
+    expect(() => opened.db.$client.run("UPDATE job_sets SET speed = 'turbo'")).toThrow(
+      /CHECK constraint failed/,
+    );
+  });
+});
+
 describe("usage", () => {
   test("failures cost nothing, cancels after submit count as discarded", () => {
     const base = { providerId: "google", modelId: "m", operation: "generate" as const };
@@ -419,5 +607,48 @@ describe("usage", () => {
         usdDiscarded: 0.134,
       },
     ]);
+  });
+
+  test("fake mode costs nothing and never reaches a spend total, but its images still count", () => {
+    const base = {
+      providerId: "google",
+      modelId: "m",
+      operation: "generate" as const,
+      outcome: "succeeded" as const,
+    };
+    const fake = insertUsage(db(), {
+      ...base,
+      ts: "2026-09-23T11:00:00.000Z",
+      costUsd: 0.067,
+      speed: "batch",
+      simulated: true,
+    });
+    expect([fake.costUsd, fake.simulated, fake.speed]).toEqual([0, true, "batch"]);
+    insertUsage(db(), {
+      ...base,
+      ts: "2026-09-23T11:01:00.000Z",
+      outcome: "canceled",
+      discarded: true,
+      costUsd: 0.2,
+      simulated: true,
+    });
+    expect(usageRollup(db(), { from: "2026-09-23" })).toEqual([
+      { day: "2026-09-23", providerId: "google", modelId: "m", runs: 2, images: 1, usd: 0, usdDiscarded: 0 },
+    ]);
+    // Even a fake row that carries a cost adds nothing to a total.
+    db().$client.run("UPDATE usage_log SET cost_usd = 0.5 WHERE simulated = 1 AND outcome = 'succeeded'");
+    const real = insertUsage(db(), {
+      ...base,
+      ts: "2026-09-23T11:02:00.000Z",
+      costUsd: 0.067,
+      speed: "flex",
+    });
+    expect([real.simulated, real.speed]).toEqual([false, "flex"]);
+    expect(usageRollup(db(), { from: "2026-09-23" })[0]).toMatchObject({
+      runs: 3,
+      images: 2,
+      usd: 0.067,
+      usdDiscarded: 0,
+    });
   });
 });

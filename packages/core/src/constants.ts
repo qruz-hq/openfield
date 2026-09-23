@@ -82,6 +82,72 @@ export type JobSource = (typeof JOB_SOURCES)[number];
 /** UI cap, observed parity. Raising it needs a migration and a manifest change (§0.10). */
 export const BATCH_MAX = 4;
 
+// Speeds (§0.3). "speed" everywhere in code, because "tier" already means resolution tiers.
+export const SPEED_IDS = ["standard", "flex", "priority", "batch"] as const;
+export type SpeedId = (typeof SPEED_IDS)[number];
+export const DEFAULT_SPEED: SpeedId = "standard";
+
+/** sync: the same call answers. async: results arrive later from a provider batch (§0.4). */
+export const SPEED_DELIVERIES = ["sync", "async"] as const;
+export type SpeedDelivery = (typeof SPEED_DELIVERIES)[number];
+
+// Provider batches (§0.4, §6.7): one per job set that runs at the Batch speed.
+export const BATCH_STATES = [
+  "submitting",
+  "queued",
+  "running",
+  "succeeded",
+  "failed",
+  "canceled",
+  "expired",
+] as const;
+export type BatchState = (typeof BATCH_STATES)[number];
+export const ACTIVE_BATCH_STATES = ["submitting", "queued", "running"] as const;
+export const TERMINAL_BATCH_STATES = ["succeeded", "failed", "canceled", "expired"] as const;
+export const isTerminalBatchState = (state: BatchState): boolean =>
+  (TERMINAL_BATCH_STATES as readonly string[]).includes(state);
+
+// Runner numbers for speeds (§0.12). The server schedules; the numbers live here so copy agrees.
+/** Whole-job wall clock at Flex, busy waits included. */
+export const FLEX_JOB_DEADLINE_MS = 3_600_000;
+/** Waits after each Flex busy answer; the last one repeats. Retry-After wins. */
+export const FLEX_BUSY_BACKOFF_MS = [30_000, 60_000, 120_000, 300_000] as const;
+/** Time since submit, then how often to poll a waiting provider batch. */
+export const BATCH_POLL_SCHEDULE = [
+  { untilMs: 600_000, everyMs: 30_000 },
+  { untilMs: 3_600_000, everyMs: 120_000 },
+  { untilMs: Number.POSITIVE_INFINITY, everyMs: 300_000 },
+] as const;
+/** Every poll step in fake mode, so a fake batch lands in seconds. */
+export const FAKE_BATCH_POLL_MS = 1_000;
+/** A provider batch still unfinished this long after its provider expiry fails with timeout. */
+export const BATCH_DEADLINE_GRACE_MS = 6 * 3_600_000;
+/** A provider batch's expiry when neither its manifest nor its dates say: Google's 48 hours. */
+export const DEFAULT_BATCH_EXPIRY_MS = 48 * 3_600_000;
+
+/** How long to wait before the next poll of a batch sent `elapsedMs` ago (§0.12). */
+export function batchPollIntervalMs(elapsedMs: number, opts: { fake?: boolean } = {}): number {
+  if (opts.fake) return FAKE_BATCH_POLL_MS;
+  return (BATCH_POLL_SCHEDULE.find((step) => elapsedMs < step.untilMs) ?? BATCH_POLL_SCHEDULE[2]).everyMs;
+}
+
+/** The wait before retrying the `busyCount`th Flex busy answer (1 for the first), without jitter. */
+export function flexBusyDelayMs(busyCount: number): number {
+  const i = Math.min(Math.max(1, busyCount), FLEX_BUSY_BACKOFF_MS.length) - 1;
+  return FLEX_BUSY_BACKOFF_MS[i]!;
+}
+
+// Provider settings (§0.3)
+export const SETTING_FIELD_KINDS = ["select", "toggle", "number", "text"] as const;
+export type SettingFieldKind = (typeof SETTING_FIELD_KINDS)[number];
+export const SETTING_NUMBER_CONTROLS = ["stepper", "input"] as const;
+/** Why a stored value didn't apply to a model and its default or first offer did. */
+export const SETTING_NOTE_REASONS = ["field_not_for_model", "option_not_for_model"] as const;
+export type SettingNoteReason = (typeof SETTING_NOTE_REASONS)[number];
+/** Openfield's own panel, appended after the adapter's. Adapters may not use these ids. */
+export const LIMITS_PANEL_ID = "limits";
+export const CONCURRENCY_CAP_FIELD = "concurrencyCap";
+
 // Errors (§0.5)
 export const ERROR_CODES = [
   "auth_missing",
@@ -364,6 +430,7 @@ export const SSE_EVENT_TYPES = [
   "job.failed",
   "job.canceled",
   "job_set.completed",
+  "batch.updated",
   "asset.updated",
   "asset.deleted",
   "folder.updated",

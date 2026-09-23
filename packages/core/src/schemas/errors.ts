@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ERROR_CODES, ERROR_HINT_ACTIONS, TRANSPORT_ERROR_CODES } from "../constants";
-import { errorCodeSchema } from "./common";
+import { errorActionSchema, errorCodeSchema } from "./common";
 
 // §0.5, §6.8. ErrorCode covers anything that reaches a job, a tile, a node or an SSE frame.
 // Transport codes are HTTP-only and never overlap with it.
@@ -35,6 +35,8 @@ export const providerErrorDataSchema = z.object({
   providerCode: z.string().optional(),
   field: z.string().optional(),
   hint: z.object({ action: z.enum(ERROR_HINT_ACTIONS), label: z.string() }).optional(),
+  /** The company refused for capacity at this speed (Flex). The runner waits it out instead of retrying. */
+  busy: z.boolean().optional(),
 });
 
 /** What a failed job carries over the wire. `message` is detail for the error log, never the tile. */
@@ -48,6 +50,8 @@ export const jobErrorSchema = z.object({
   httpStatus: z.int().optional(),
   providerCode: z.string().optional(),
   field: z.string().optional(),
+  /** The failed tile's button, when it isn't the code's usual one (§0.5). */
+  action: errorActionSchema.optional(),
 });
 
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>;

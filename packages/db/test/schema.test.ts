@@ -3,12 +3,13 @@
 // boot rules (§8.2.4). If this fails after a schema edit, the migration and the spec disagree.
 import { Database } from "bun:sqlite";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   ASSET_KINDS,
   AUTH_KINDS,
+  BATCH_STATES,
   CANVAS_RUN_SCOPES,
   CHARACTER_INJECTIONS,
   COST_SOURCES,
@@ -24,14 +25,18 @@ import {
   PALETTE_MODES,
   PRESET_ASSET_ROLES,
   REFERENCE_SET_ROLES,
+  SPEED_IDS,
   USAGE_OUTCOMES,
 } from "@openfield/core/constants";
+import { drizzle } from "drizzle-orm/bun-sqlite";
+import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import {
   feedPage,
   getAsset,
   hardDeleteAsset,
   insertAsset,
+  MIGRATIONS_FOLDER,
   MigrationError,
   MigrationIntegrityError,
   type OpenDb,
@@ -96,6 +101,7 @@ const COLUMNS: Record<string, string[]> = {
     "last_error text",
     "created_at text not null",
     "updated_at text not null",
+    "settings text",
   ],
   models: [
     "provider_id text not null pk1",
@@ -111,6 +117,7 @@ const COLUMNS: Record<string, string[]> = {
     "sort_order integer not null default 0",
     "discovered_at text",
     "updated_at text not null",
+    "speeds text",
   ],
   job_sets: [
     "id text not null pk",
@@ -137,6 +144,7 @@ const COLUMNS: Record<string, string[]> = {
     "created_at text not null",
     "started_at text",
     "finished_at text",
+    "speed text not null default 'standard'",
   ],
   jobs: [
     "id text not null pk",
@@ -157,6 +165,31 @@ const COLUMNS: Record<string, string[]> = {
     "started_at text",
     "finished_at text",
     "error_reason text",
+    "speed_used text",
+    "error_action text",
+  ],
+  provider_batches: [
+    "id text not null pk",
+    "job_set_id text not null",
+    "provider_id text not null",
+    "model_id text not null",
+    "remote_id text",
+    "display_name text not null",
+    "state text not null default 'submitting'",
+    "handle text",
+    "item_count integer not null",
+    "credential_hint text",
+    "submitted_at text",
+    "expires_at text",
+    "last_polled_at text",
+    "next_poll_at text",
+    "finished_at text",
+    "notified_at text",
+    "cleaned_at text",
+    "error_code text",
+    "error_message text",
+    "created_at text not null",
+    "updated_at text not null",
   ],
   assets: [
     "id text not null pk",
@@ -328,6 +361,8 @@ const COLUMNS: Record<string, string[]> = {
     "discarded integer not null default 0",
     "latency_ms integer",
     "http_status integer",
+    "speed text",
+    "simulated integer not null default 0",
   ],
   settings: ["key text not null pk", "value text not null", "updated_at text not null"],
 };
@@ -353,12 +388,15 @@ CREATE INDEX idx_job_sets_sched     ON job_sets(priority DESC, created_at)
   WHERE status IN ('pending','submitting','queued','running');
 CREATE INDEX idx_job_sets_canvas    ON job_sets(canvas_id, canvas_node_id);
 CREATE INDEX idx_job_sets_run       ON job_sets(canvas_run_id);
+CREATE INDEX idx_provider_batches_active ON provider_batches(state, next_poll_at)
+  WHERE state IN ('submitting','queued','running');
 CREATE INDEX idx_ref_set_items      ON reference_set_items(set_id, position);
 CREATE INDEX idx_usage_ts           ON usage_log(ts DESC);
 CREATE INDEX idx_usage_model        ON usage_log(provider_id, model_id, ts DESC);
 CREATE INDEX idx_canvas_versions    ON canvas_versions(canvas_id, created_at DESC);
 CREATE UNIQUE INDEX job_sets_idempotency_key_unique ON job_sets(idempotency_key);
 CREATE UNIQUE INDEX jobs_job_set_id_idx_unique ON jobs(job_set_id, idx);
+CREATE UNIQUE INDEX provider_batches_job_set_id_unique ON provider_batches(job_set_id);
 `;
 
 // name -> the list its IN (...) must equal, or the exact expression.
@@ -371,7 +409,10 @@ const CHECKS: Record<string, [string, readonly string[]] | string> = {
   job_sets_batch_size_check: "batch_size BETWEEN 1 AND 4",
   job_sets_status_check: ["status", JOB_SET_STATES],
   job_sets_source_check: ["source", JOB_SOURCES],
+  job_sets_speed_check: ["speed", SPEED_IDS],
   jobs_status_check: ["status", JOB_STATES],
+  jobs_speed_used_check: ["speed_used", SPEED_IDS],
+  provider_batches_state_check: ["state", BATCH_STATES],
   assets_kind_check: ["kind", ASSET_KINDS],
   assets_file_state_check: ["file_state", FILE_STATES],
   asset_edges_relation_check: ["relation", EDGE_RELATIONS],
@@ -383,6 +424,7 @@ const CHECKS: Record<string, [string, readonly string[]] | string> = {
   canvas_runs_status_check: ["status", JOB_SET_STATES],
   usage_log_outcome_check: ["outcome", USAGE_OUTCOMES],
   usage_log_cost_source_check: ["cost_source", COST_SOURCES],
+  usage_log_speed_check: ["speed", SPEED_IDS],
 };
 
 // table -> "from -> parent.to on delete <action>". Lineage parents deliberately have none (§0.7).
@@ -395,6 +437,10 @@ const FOREIGN_KEYS: Record<string, string[]> = {
     "provider_id -> providers.id on delete no action",
   ],
   jobs: ["job_set_id -> job_sets.id on delete cascade"],
+  provider_batches: [
+    "job_set_id -> job_sets.id on delete cascade",
+    "provider_id -> providers.id on delete no action",
+  ],
   assets: [
     "job_id -> jobs.id on delete set null",
     "job_set_id -> job_sets.id on delete set null",
@@ -609,15 +655,79 @@ describe("boot (§8.2.4)", () => {
   });
 
   test("every migration is in the journal and applied, newest tag reported", () => {
-    expect(opened.schemaTag).toBe("0002_job_error_reason");
-    expect(raw.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 3 });
+    expect(opened.schemaTag).toBe("0004_job_error_action");
+    expect(raw.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 5 });
   });
 
   test("reopening applies nothing twice", () => {
     const again = openDb(file);
-    expect(again.schemaTag).toBe("0002_job_error_reason");
-    expect(again.db.$client.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 3 });
+    expect(again.schemaTag).toBe("0004_job_error_action");
+    expect(again.db.$client.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 5 });
     again.close();
+  });
+
+  test("0003 keeps existing rows: Standard runs, real spend, no settings", () => {
+    // A library last opened at 0002, with a run and its usage row in it.
+    const folder = join(dir, "migrations-0002");
+    cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
+    const journalPath = join(folder, "meta/_journal.json");
+    const journal = JSON.parse(readFileSync(journalPath, "utf8")) as { entries: { tag: string }[] };
+    journal.entries = journal.entries.filter((e) => e.tag < "0003");
+    writeFileSync(journalPath, JSON.stringify(journal));
+
+    const path = join(dir, "upgrade.db");
+    const old = new Database(path, { create: true });
+    old.run("PRAGMA foreign_keys = OFF");
+    migrate(drizzle({ client: old }), { migrationsFolder: folder });
+    const at = "2026-09-20T10:00:00.000Z";
+    old.run(
+      `INSERT INTO providers (id, display_name, adapter, auth_kind, concurrency_cap, created_at, updated_at)
+       VALUES ('google', 'Google', 'google', 'api_key', 3, ?, ?)`,
+      [at, at],
+    );
+    old.run(
+      `INSERT INTO job_sets (id, op, provider_id, model_id, request_json, batch_size, status, created_at, cost_actual_usd)
+       VALUES ('set1', 'generate', 'google', 'gemini-3-pro-image', '{"batch":1}', 1, 'succeeded', ?, 0.134)`,
+      [at],
+    );
+    old.run(
+      `INSERT INTO jobs (id, job_set_id, idx, status, created_at, updated_at, error_reason)
+       VALUES ('job1', 'set1', 0, 'succeeded', ?, ?, NULL)`,
+      [at, at],
+    );
+    old.run(
+      `INSERT INTO usage_log (ts, provider_id, model_id, job_set_id, job_id, operation, outcome, cost_usd, discarded)
+       VALUES (?, 'google', 'gemini-3-pro-image', 'set1', 'job1', 'generate', 'succeeded', 0.134, 0)`,
+      [at],
+    );
+    old.close();
+
+    const upgraded = openDb(path);
+    const db = upgraded.db.$client;
+    expect(upgraded.schemaTag).toBe("0004_job_error_action");
+    expect(db.query("SELECT speed, cost_actual_usd, request_json FROM job_sets").get()).toEqual({
+      speed: "standard",
+      cost_actual_usd: 0.134,
+      request_json: '{"batch":1}',
+    });
+    expect(db.query("SELECT status, speed_used FROM jobs").get()).toEqual({
+      status: "succeeded",
+      speed_used: null,
+    });
+    expect(db.query("SELECT cost_usd, speed, simulated FROM usage_log").get()).toEqual({
+      cost_usd: 0.134,
+      speed: null,
+      simulated: 0,
+    });
+    expect(db.query("SELECT settings, concurrency_cap FROM providers").get()).toEqual({
+      settings: null,
+      concurrency_cap: 3,
+    });
+    // The rebuilt tables keep their indexes and their links to each other.
+    expect(db.query("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect(() => db.run("DELETE FROM job_sets WHERE id = 'set1'")).not.toThrow();
+    expect(db.query("SELECT count(*) AS n FROM jobs").get()).toEqual({ n: 0 });
+    upgraded.close();
   });
 
   test("a failing migration rolls back and names the file", () => {

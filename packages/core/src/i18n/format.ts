@@ -19,9 +19,17 @@ export function formatMoney(amount: number, currency = DEFAULT_CURRENCY, precise
   }).format(amount);
 }
 
-/** Only the digits, for the upper end of a range ("0.19"). */
-function formatAmount(amount: number): string {
-  return numberFormat({ minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(amount);
+/**
+ * A price per image or per run: two significant digits under a dime, so half-price speeds don't
+ * round by a third ("$0.017", "$0.067"), cents above it ("$0.13"). `symbol: false` gives the digits.
+ */
+export function formatPrice(amount: number, currency = DEFAULT_CURRENCY, symbol = true): string {
+  const most = amount >= 0.1 || amount <= 0 ? 2 : Math.min(4, 1 - Math.floor(Math.log10(amount)));
+  return numberFormat({
+    ...(symbol ? { style: "currency", currency, currencyDisplay: "narrowSymbol" } : {}),
+    minimumFractionDigits: 2,
+    maximumFractionDigits: most,
+  }).format(amount);
 }
 
 interface CostLike {
@@ -36,17 +44,18 @@ export type CostParts =
   | { kind: "amount"; amount: string; range: boolean };
 
 /**
- * The amount on its own ("$0.16", "$0.12–0.19"), so a caller can set it in mono and the words
- * around it in the body font (§0.15). A range whose ends round to the same cents is one amount.
+ * The amount on its own ("$0.16", "$0.12–0.19", "$0.017"), so a caller can set it in mono and the
+ * words around it in the body font (§0.15). A range whose ends read the same is one amount.
  */
 export function costParts(estimate: CostLike): CostParts {
   if (estimate.confidence === "unknown") return { kind: "unknown", text: t("cost.unknown") };
   if (estimate.max === 0) return { kind: "free", text: t("cost.free") };
-  const min = formatMoney(estimate.min, estimate.currency);
-  if (formatAmount(estimate.min) === formatAmount(estimate.max)) {
+  const min = formatPrice(estimate.min, estimate.currency);
+  const max = formatPrice(estimate.max, estimate.currency, false);
+  if (formatPrice(estimate.min, estimate.currency, false) === max) {
     return { kind: "amount", amount: min, range: false };
   }
-  return { kind: "amount", amount: t("cost.range", { min, max: formatAmount(estimate.max) }), range: true };
+  return { kind: "amount", amount: t("cost.range", { min, max }), range: true };
 }
 
 /** The words around an estimate. `tight` is for chips, node pills and table cells. */

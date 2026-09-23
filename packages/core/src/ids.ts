@@ -44,6 +44,9 @@ export const isModelKey = (value: string): value is ModelKey => safeParseModelKe
 /** Per-attempt provider idempotency key, stable across retries (§0.2). */
 export const jobIdempotencyKey = (jobSetKey: string, jobIdx: number): string => `${jobSetKey}:${jobIdx}`;
 
+/** The name a job set's provider batch goes by, so batch.find() can recover a lost create (§0.4). */
+export const batchDisplayName = (jobSetId: string): string => `openfield-${jobSetId}`;
+
 /** assets.op_params.source for canvas output; drives "Open in Canvas". */
 export const canvasSource = (canvasId: string, nodeId: string): string => `canvas:${canvasId}:${nodeId}`;
 

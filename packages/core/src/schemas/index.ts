@@ -7,6 +7,7 @@ export * from "./job";
 export * from "./library";
 export * from "./manifest";
 export * from "./provider";
+export * from "./provider-settings";
 export * from "./request";
 export * from "./settings";
 export * from "./sse";

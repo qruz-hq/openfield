@@ -8,9 +8,11 @@ import {
   MODEL_SOURCES,
   PROMPT_ENHANCE_MODES,
   REFERENCE_STRENGTH_MODES,
+  SPEED_DELIVERIES,
   UNSUPPORTED_PARAM_POLICIES,
 } from "../constants";
 import {
+  adapterOpSchema,
   aspectRatioSchema,
   dateOrTimestampSchema,
   modelIdSchema,
@@ -20,6 +22,7 @@ import {
   providerIdSchema,
   referenceRoleSchema,
   resolutionTierSchema,
+  speedIdSchema,
 } from "./common";
 import { priceModelSchema } from "./cost";
 
@@ -226,6 +229,39 @@ export const capabilitiesSchema = z.strictObject({
   unsupportedParamPolicy: z.enum(UNSUPPORTED_PARAM_POLICIES),
 });
 
+/**
+ * A speed a model offers besides Standard (§0.3), priced in the same union as the manifest's
+ * Standard price so the estimate has one code path. Declared only when the company's own pricing
+ * page lists it for that model.
+ */
+export const speedOfferSchema = z
+  .strictObject({
+    id: speedIdSchema.exclude(["standard"]),
+    price: priceModelSchema,
+    /** async: results arrive later from a provider batch. */
+    delivery: z.enum(SPEED_DELIVERIES),
+    /** From the company's docs. Drives copy and timers, never correctness. */
+    waitMs: z
+      .strictObject({ target: z.int().positive(), max: z.int().positive() })
+      .refine((w) => w.target <= w.max, { message: "target must not be above max", path: ["target"] }),
+    /** Per-attempt timeout at this speed, for sync speeds. Overrides limits.requestTimeoutMs. */
+    requestTimeoutMs: z.int().positive().optional(),
+    /** Operations this speed covers. Absent: every op the model has. */
+    ops: z.array(adapterOpSchema).min(1).optional(),
+  })
+  .refine((o) => (o.delivery === "async") === (o.id === "batch"), {
+    message: "delivery is async exactly when the speed is batch",
+    path: ["delivery"],
+  })
+  .refine((o) => o.delivery === "sync" || o.requestTimeoutMs === undefined, {
+    message: "requestTimeoutMs is for sync speeds",
+    path: ["requestTimeoutMs"],
+  })
+  .refine((o) => o.price.kind !== "unknown", {
+    message: "a speed needs the company's own price",
+    path: ["price"],
+  });
+
 export const modelManifestSchema = z
   .strictObject({
     key: modelKeySchema,
@@ -238,9 +274,17 @@ export const modelManifestSchema = z
     family: z.string().optional(),
     badges: z.array(z.enum(MODEL_BADGES)).optional(),
     capabilities: capabilitiesSchema,
+    /** The Standard price. */
     price: priceModelSchema,
+    /** Other speeds this model offers, each with its own price. Absent: Standard only. */
+    speeds: z
+      .array(speedOfferSchema)
+      .refine((offers) => new Set(offers.map((o) => o.id)).size === offers.length, {
+        message: "each speed is offered once",
+      })
+      .optional(),
     source: z.enum(MODEL_SOURCES),
-    /** Bumped on any capability change; frozen onto the job set. */
+    /** Bumped on any capability or speed change; frozen onto the job set. */
     manifestVersion: z.string().min(1),
     fetchedAt: dateOrTimestampSchema,
   })
@@ -265,3 +309,4 @@ export type ExtraSchema = z.infer<typeof extraSchemaSchema>;
 export type SizeCapability = z.infer<typeof sizeCapabilitySchema>;
 export type Capabilities = z.infer<typeof capabilitiesSchema>;
 export type ModelManifest = z.infer<typeof modelManifestSchema>;
+export type SpeedOffer = z.infer<typeof speedOfferSchema>;

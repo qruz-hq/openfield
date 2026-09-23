@@ -6,7 +6,7 @@ import {
   MODEL_SOURCES,
   type ModelBadge,
 } from "@openfield/core/constants";
-import type { Capabilities, PriceModel } from "@openfield/core/schemas";
+import type { Capabilities, PriceModel, ProviderSettingValues, SpeedOffer } from "@openfield/core/schemas";
 import { check, integer, primaryKey, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { flag, json, oneOf } from "./_helpers";
 
@@ -29,6 +29,8 @@ export const providers = sqliteTable(
     lastError: text("last_error", { enum: ERROR_CODES }),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
+    // Company settings the person changed (§0.3). NULL means every default. Added in 0003.
+    settings: json<ProviderSettingValues>("settings"),
   },
   () => [
     check("providers_auth_kind_check", oneOf("auth_kind", AUTH_KINDS)),
@@ -55,6 +57,7 @@ export const models = sqliteTable(
     sortOrder: integer("sort_order").notNull().default(0),
     discoveredAt: text("discovered_at"),
     updatedAt: text("updated_at").notNull(),
+    speeds: json<SpeedOffer[]>("speeds"), // cache of manifest.speeds (§0.3). Added in 0003
   },
   (t) => [
     primaryKey({ columns: [t.providerId, t.modelId] }),

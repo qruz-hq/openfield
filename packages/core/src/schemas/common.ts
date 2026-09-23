@@ -1,7 +1,10 @@
 import { z } from "zod";
 import {
+  ADAPTER_OPS,
   ASPECT_RATIOS,
   BATCH_MAX,
+  BATCH_STATES,
+  ERROR_ACTIONS,
   ERROR_CODES,
   JOB_SET_STATES,
   JOB_SOURCES,
@@ -12,6 +15,7 @@ import {
   OUTPUT_FORMATS,
   REFERENCE_ROLES,
   RESOLUTION_TIERS,
+  SPEED_IDS,
 } from "../constants";
 import { MODEL_ID_RE, PROVIDER_ID_RE } from "../ids";
 
@@ -42,10 +46,14 @@ export const jobStateSchema = z.enum(JOB_STATES);
 export const jobSetStateSchema = z.enum(JOB_SET_STATES);
 export const jobSourceSchema = z.enum(JOB_SOURCES);
 export const errorCodeSchema = z.enum(ERROR_CODES);
+export const errorActionSchema = z.enum(ERROR_ACTIONS);
 export const aspectRatioSchema = z.enum(ASPECT_RATIOS);
 export const resolutionTierSchema = z.enum(RESOLUTION_TIERS);
 export const outputFormatSchema = z.enum(OUTPUT_FORMATS);
 export const referenceRoleSchema = z.enum(REFERENCE_ROLES);
+export const adapterOpSchema = z.enum(ADAPTER_OPS);
+export const speedIdSchema = z.enum(SPEED_IDS);
+export const batchStateSchema = z.enum(BATCH_STATES);
 
 export const batchSchema = z.int().min(1).max(BATCH_MAX);
 export const pixelSizeSchema = z.strictObject({

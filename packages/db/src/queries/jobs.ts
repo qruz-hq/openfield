@@ -5,7 +5,7 @@ import {
   type JobState,
   jobIdempotencyKey,
 } from "@openfield/core";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import type { Executor } from "../client";
 import type { AssetRow, JobRow, JobSetRow, NewJobRow, NewJobSetRow } from "../rows";
 import { jobSets, jobs } from "../schema";
@@ -36,7 +36,9 @@ export type JobPatch = Partial<
     | "errorCode"
     | "errorMessage"
     | "errorReason"
+    | "errorAction"
     | "latencyMs"
+    | "speedUsed"
   >
 >;
 
@@ -148,14 +150,23 @@ export function activeJobSets(db: Executor): JobSetBundle[] {
 
 /**
  * Every unfinished job with its set, in scheduler order: priority DESC, created_at, idx (§0.12).
- * The queue scan and crash recovery (§8.4.5) both start here.
+ * The queue scan and crash recovery (§8.4.5) both start here. `skipBatch` leaves Batch runs to
+ * the batch watcher, which owns them once their provider batch exists.
  */
-export function activeJobs(db: Executor): { job: JobRow; jobSet: JobSetRow }[] {
+export function activeJobs(
+  db: Executor,
+  opts: { skipBatch?: boolean } = {},
+): { job: JobRow; jobSet: JobSetRow }[] {
   return db
     .select({ job: jobs, jobSet: jobSets })
     .from(jobs)
     .innerJoin(jobSets, eq(jobSets.id, jobs.jobSetId))
-    .where(inArray(jobs.status, [...ACTIVE_JOB_STATES]))
+    .where(
+      and(
+        inArray(jobs.status, [...ACTIVE_JOB_STATES]),
+        opts.skipBatch ? ne(jobSets.speed, "batch") : undefined,
+      ),
+    )
     .orderBy(desc(jobSets.priority), asc(jobSets.createdAt), asc(jobs.idx))
     .all();
 }

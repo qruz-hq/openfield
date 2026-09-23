@@ -192,7 +192,8 @@
         "export": "Export",
         "delete": "Delete"
       },
-      "inLine": "{position, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} in line"
+      "inLine": "{position, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} in line",
+      "summaryWithSpeed": "{model} · {aspect} · {resolution} · {speed}"
     },
     "selection": {
       "count": "{count} selected",
@@ -388,13 +389,7 @@
       "setOutside": "This key is set outside Openfield, so it can't be changed here.",
       "works": "{count, plural, =0 {This key works.} one {This key works. # model is ready.} other {This key works. # models are ready.}}",
       "removeTitle": "Remove your {company} key?",
-      "removeBody": "Images you already made stay in your library.",
-      "runsAtOnce": {
-        "label": "Runs at once",
-        "hint": "How many {company} images Openfield makes at the same time.",
-        "fewer": "Fewer at once",
-        "more": "More at once"
-      }
+      "removeBody": "Images you already made stay in your library."
     },
     "models": {
       "title": "Models",
@@ -558,6 +553,83 @@
       "choose": "Choose"
     }
   },
+  "providerSettings": {
+    "open": "Settings",
+    "openFor": "{company} settings",
+    "title": "{company} settings",
+    "panels": "Settings sections",
+    "saveFailed": "Couldn't save this setting. Try again.",
+    "limits": {
+      "label": "Limits",
+      "runsAtOnce": "Runs at once",
+      "runsAtOnceHint": "How many {company} images to make at the same time.",
+      "description": "Openfield's own limits for your {company} key. {company} doesn't see these."
+    },
+    "saved": "Saved",
+    "perImage": "per image",
+    "modelsOnly": "{models} only",
+    "batchNote": "Batch runs keep going at {company} even if you close Openfield, and Openfield lets you know when they're ready. {company} stops any batch that isn't done in {days, plural, one {# day} other {# days}}.",
+    "onlyWhen": "Only used when {field} is {values}.",
+    "notWhen": "Not used when {field} is {values}.",
+    "currentValue": "Your {field} is {value}.",
+    "change": "Change {field}",
+    "on": "On",
+    "off": "Off",
+    "lower": "Lower {field}",
+    "raise": "Raise {field}"
+  },
+  "runsAtOnce": {
+    "fewer": "Fewer at once",
+    "more": "More at once"
+  },
+  "speed": {
+    "names": {
+      "standard": "Standard",
+      "flex": "Flex",
+      "priority": "Priority",
+      "batch": "Batch"
+    },
+    "standardForModel": "{speed} for this model",
+    "tooltip": "Speed: {speed}. Change it in {company} settings.",
+    "wait": {
+      "minutes": "{count} min",
+      "seconds": "{count}s"
+    },
+    "tile": {
+      "busy": "{speed} is busy. Trying again in {wait}.",
+      "sending": "Sending to {company}",
+      "waiting": "Waiting at {company}",
+      "waitingFor": "Waiting for {company}",
+      "fewHours": "Usually done within a few hours",
+      "fewMinutes": "Can take a few minutes",
+      "stopping": "Stopping at {company}",
+      "short": {
+        "waiting": "Waiting",
+        "sending": "Sending",
+        "stopping": "Stopping"
+      }
+    },
+    "cancel": {
+      "title": "Cancel this {speed} run?",
+      "body": "{count, plural, one {The image stops.} =2 {Both images stop together.} other {All # images stop together.}} You may still be charged for work that already started.",
+      "confirm": "Cancel run",
+      "keep": "Keep waiting",
+      "stopping": "Stopping at {company}. You may still be charged for work that already started."
+    },
+    "suffix": "· {speed}",
+    "fallbackHint": "{model} has no {speed}, so it runs at {standard}.",
+    "done": {
+      "ready": "Your batch is ready",
+      "none": "Your batch didn't make any images",
+      "expired": "{company} didn't finish your batch within {hours} hours",
+      "images": "{count, plural, one {# image} other {# images}} from {model}",
+      "some": "{made} of {total} images from {model}",
+      "body": "{title}. {detail}.",
+      "imagesOnly": "{count, plural, one {# image} other {# images}}",
+      "someOnly": "{made} of {total} images",
+      "expiredPlain": "Your batch didn't finish within {hours} hours"
+    }
+  },
   "toast": {
     "saved": "Saved.",
     "copied": "Copied.",
@@ -653,7 +725,14 @@
     "companyOff": "{company} is turned off, so its models can't run.",
     "keyNotPrivate": "Couldn't save your key. This folder can't keep files private.",
     "keyNotSaved": "Couldn't save your key. Check there's free space, then try again.",
-    "errorLog": "Error log"
+    "errorLog": "Error log",
+    "billingOff": "Turn on billing for this key in {console} to make images.",
+    "speedStayedBusy": "{speed} stayed busy for an hour. Try again, or choose Standard in {company} settings.",
+    "speedNotOffered": "{company} doesn't offer {speed} for this model. Choose another speed in {company} settings.",
+    "batchExpired": "{company} didn't finish this within {hours} hours.",
+    "batchOtherKey": "This run was sent with a different {company} key.",
+    "batchGone": "{company} can't find this run anymore.",
+    "batchUnchecked": "Openfield couldn't reach {company} to check on this run."
   },
   "presets": {
     "errors": {

@@ -10,7 +10,7 @@ import {
   usdSchema,
 } from "./common";
 import { jobErrorSchema } from "./errors";
-import { jobSetWithJobsSchema } from "./job";
+import { batchUpdatedSchema, jobSetWithJobsSchema } from "./job";
 import { maintenanceTaskSchema } from "./usage";
 
 // One stream, GET /api/events (§0.6, §8.3.2). Each frame parses as { event, data }.
@@ -21,10 +21,28 @@ const frame = <E extends SseEventType, D extends z.ZodType>(event: E, data: D) =
   z.object({ event: z.literal(event), data });
 
 export const sseEventSchema = z.discriminatedUnion("event", [
-  frame("snapshot", z.object({ activeJobSets: z.array(jobSetWithJobsSchema), serverTime: timestampSchema })),
+  frame(
+    "snapshot",
+    z.object({
+      activeJobSets: z.array(jobSetWithJobsSchema),
+      serverTime: timestampSchema,
+      /** Every active provider batch, plus finished ones no client has heard about yet. */
+      batches: z.array(batchUpdatedSchema).default([]),
+    }),
+  ),
   frame("job_set.created", jobSetWithJobsSchema),
-  /** position: how many runs are ahead of this one, starting at 1. */
-  frame("job.queued", z.object({ ...jobRef, position: z.int().positive().optional() })),
+  frame(
+    "job.queued",
+    z.object({
+      ...jobRef,
+      /** How many runs are ahead of this one, starting at 1. */
+      position: z.int().positive().optional(),
+      /** When a job waiting out a retry or a busy answer goes again, for the countdown. */
+      retryAt: timestampSchema.optional(),
+      /** Waiting out a Flex busy answer, not an ordinary retry. */
+      busy: z.literal(true).optional(),
+    }),
+  ),
   frame("job.started", z.object({ ...jobRef, startedAt: timestampSchema })),
   frame("job.progress", z.object({ ...jobRef, progress: z.number().min(0).max(1) })),
   /** A preview frame from tmp/. Never an asset; the final job.output replaces it. */
@@ -51,6 +69,8 @@ export const sseEventSchema = z.discriminatedUnion("event", [
       durationMs: z.int().nonnegative(),
     }),
   ),
+  /** A provider batch changed state. The one with finished: true drives the toast and notification. */
+  frame("batch.updated", batchUpdatedSchema),
   frame("asset.updated", z.object({ asset: assetListItemSchema })),
   frame("asset.deleted", z.object({ assetIds: z.array(ulidSchema), hard: z.boolean() })),
   frame("folder.updated", z.object({ folderId: ulidSchema, deleted: z.boolean() })),

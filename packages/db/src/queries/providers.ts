@@ -1,4 +1,5 @@
 import type { CredentialSource, ErrorCode } from "@openfield/core/constants";
+import type { ProviderSettingValues } from "@openfield/core/schemas";
 import { asc, eq } from "drizzle-orm";
 import type { Executor } from "../client";
 import type { NewProviderRow, ProviderRow } from "../rows";
@@ -107,4 +108,47 @@ export function listKeyStatus(db: Executor): KeyStatusRow[] {
     .from(providers)
     .orderBy(asc(providers.id))
     .all();
+}
+
+/** The company settings the person changed (§0.3). Empty when every field is at its default. */
+export function getProviderSettings(db: Executor, id: string): ProviderSettingValues {
+  const row = db.select({ settings: providers.settings }).from(providers).where(eq(providers.id, id)).get();
+  return { ...(row?.settings ?? {}) };
+}
+
+export interface ProviderSettingsChange {
+  /** Values that differ from their defaults, already checked against the settings schema. */
+  set?: ProviderSettingValues;
+  /** Fields back at their default: removed from the stored object. */
+  unset?: readonly string[];
+  /** Openfield's Limits panel, stored in providers.concurrency_cap. */
+  concurrencyCap?: number;
+}
+
+/**
+ * PATCH /api/providers/:id/settings in one write. Only changed values are stored, so a default an
+ * adapter later changes reaches everyone who never touched it. Undefined when there's no such provider.
+ */
+export function updateProviderSettings(
+  db: Executor,
+  id: string,
+  change: ProviderSettingsChange,
+  at = nowIso(),
+): ProviderRow | undefined {
+  return db.transaction((tx) => {
+    const current = getProvider(tx, id);
+    if (!current) return undefined;
+    const next: ProviderSettingValues = { ...(current.settings ?? {}), ...(change.set ?? {}) };
+    for (const key of change.unset ?? []) delete next[key];
+    return tx
+      .update(providers)
+      .set({
+        settings: Object.keys(next).length > 0 ? next : null,
+        ...(change.concurrencyCap !== undefined && { concurrencyCap: change.concurrencyCap }),
+        updatedAt: at,
+      })
+      .where(eq(providers.id, id))
+      .returning()
+      .get();
+  });
 }
