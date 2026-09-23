@@ -1,0 +1,686 @@
+{
+  "app": {
+    "name": "Openfield",
+    "nav": {
+      "image": "Image",
+      "assets": "Assets",
+      "canvas": "Canvas",
+      "settings": "Settings",
+      "search": "Search",
+      "theme": "Switch theme",
+      "menu": "Openfield menu",
+      "spentToday": "Spent today"
+    },
+    "menu": {
+      "newCanvas": "New canvas",
+      "openLibrary": "Open library",
+      "presetLibrary": "Style library",
+      "settings": "Settings",
+      "help": "Help",
+      "about": "About"
+    },
+    "loading": "Loading",
+    "reconnecting": "Reconnecting",
+    "skipToContent": "Skip to content",
+    "restarted": "Openfield restarted. Reload the page to keep going.",
+    "reload": "Reload",
+    "notifications": "Notifications"
+  },
+  "actions": {
+    "tryAgain": "Try again",
+    "cancel": "Cancel",
+    "save": "Save",
+    "done": "Done",
+    "undo": "Undo",
+    "close": "Close",
+    "delete": "Delete",
+    "copy": "Copy",
+    "dismiss": "Dismiss",
+    "openSettings": "Open Settings",
+    "changeKey": "Change key",
+    "addKey": "Add a key",
+    "openBilling": "Open billing page",
+    "reuse": "Reuse",
+    "recreate": "Recreate",
+    "details": "Details",
+    "freeUpSpace": "Free up space",
+    "useAsReference": "Use as reference",
+    "show": "Show",
+    "showAll": "Show all images"
+  },
+  "firstRun": {
+    "title": "Let's make your first image",
+    "body": "Add a key from {first} or {second}. It takes a minute.",
+    "addKey": "Add a key",
+    "whereToGetKey": "Where do I get a key?",
+    "steps": {
+      "addKey": "Add a key",
+      "describe": "Describe an image",
+      "generate": "Generate"
+    },
+    "connected": "Connected to {company}.",
+    "startCreating": "Start creating",
+    "bodyOne": "Add a key from {company}. It takes a minute."
+  },
+  "getKey": {
+    "title": "Get a key",
+    "intro": "You only need one key. Either company works.",
+    "openai": {
+      "for": "For GPT Image models",
+      "go": "Go to OpenAI",
+      "step1": "Sign in and add a little credit under Billing.",
+      "step2": "Create a new key.",
+      "step3": "Copy it and paste it in Settings under API keys."
+    },
+    "google": {
+      "for": "For Nano Banana models",
+      "go": "Go to Google AI Studio",
+      "step1": "Sign in with your Google account.",
+      "step2": "Create a new key.",
+      "step3": "Copy it and paste it in Settings under API keys."
+    },
+    "cost": "Keys cost nothing to create. You pay for the images you make.",
+    "howStored": "How keys are stored",
+    "storedBody": "Your key stays on this computer. Only your account on this computer can read it, and it's only sent to the company it belongs to.",
+    "introOne": "You need one key to start."
+  },
+  "empty": {
+    "ready": {
+      "title": "Your first image",
+      "body": "Try one of these, or write your own.",
+      "examples": {
+        "teapot": "A ceramic teapot on a linen tablecloth, soft window light",
+        "forest": "A foggy pine forest at sunrise, seen from above",
+        "portrait": "An old fisherman on a quiet harbor, warm evening light"
+      },
+      "browseStyles": "Browse styles",
+      "tryThis": "Try this"
+    },
+    "library": {
+      "title": "Your images will show up here",
+      "body": "Make one on the Image page, or drop a few files on this window.",
+      "makeImage": "Make an image",
+      "addImages": "Add images"
+    },
+    "folder": {
+      "title": "Nothing in {folder} yet",
+      "body": "Open an image's menu and choose Add to folder, or select a few at once."
+    },
+    "search": {
+      "title": "No matches for “{query}”",
+      "clear": "Clear search",
+      "tryAll": "Try searching all images."
+    },
+    "hiddenFailed": "{count, plural, one {# failed run hidden.} other {# failed runs hidden.}}"
+  },
+  "banner": {
+    "offline": "Couldn't connect to {company}. Runs will fail until it's back.",
+    "reconnecting": "Reconnecting to Openfield."
+  },
+  "feed": {
+    "filters": {
+      "all": "All",
+      "favorites": "Favorites",
+      "allFolders": "All folders",
+      "hideFailed": "Hide failed"
+    },
+    "zoom": {
+      "label": "Grid size",
+      "steps": {
+        "0": "Contact sheet",
+        "1": "Small",
+        "2": "Medium",
+        "3": "Large",
+        "4": "Showcase"
+      },
+      "hideToolbar": "Hide toolbar"
+    },
+    "loadMoreFailed": "Couldn't load more.",
+    "tile": {
+      "generating": "Generating",
+      "cancel": "Cancel",
+      "queued": "Queued",
+      "queuedPosition": "Queued · {position, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} in line",
+      "progress": "{index} of {total}",
+      "summary": "{model} · {aspect} · {resolution}",
+      "images": "{count, plural, one {# image} other {# images}}",
+      "stillWorking": "Still working. Some models take up to 2 minutes.",
+      "failedGroup": "{count, plural, one {# image failed} other {# images failed}}",
+      "interrupted": "Interrupted.",
+      "fileMissing": "File missing.",
+      "locate": "Locate",
+      "approximate": "Approximate",
+      "lastViewed": "Last viewed",
+      "select": "Select",
+      "label": "{prompt} · {model} · {date}",
+      "noPrompt": "No prompt",
+      "recreateInexact": "This model can't make an exact copy. Expect changes.",
+      "details": {
+        "title": "What went wrong",
+        "when": "When",
+        "noMessage": "No other details.",
+        "hints": {
+          "settings": "Try another size or fewer references, or pick a different model.",
+          "tooLarge": "A reference image may be too large. Try a smaller one.",
+          "company": "This usually clears up on its own. Try again in a few minutes, or pick another model.",
+          "unknown": "Try again, or pick another model.",
+          "interrupted": "Openfield stopped before this image was done."
+        }
+      },
+      "actions": {
+        "favorite": "Favorite",
+        "unfavorite": "Remove from favorites",
+        "download": "Download",
+        "recreate": "Recreate",
+        "more": "More",
+        "useAsReference": "Use as reference",
+        "edit": "Edit",
+        "sendToCanvas": "Send to Canvas"
+      },
+      "menu": {
+        "open": "Open",
+        "recreate": "Recreate",
+        "reuse": "Reuse",
+        "useAsReference": "Use as reference",
+        "copyPrompt": "Copy prompt",
+        "copyImage": "Copy image",
+        "addToFolder": "Add to folder",
+        "newFolder": "New folder",
+        "favorite": "Favorite",
+        "saveAsStyle": "Save as style",
+        "showInFinder": "Show in Finder",
+        "export": "Export",
+        "delete": "Delete"
+      },
+      "inLine": "{position, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} in line"
+    },
+    "selection": {
+      "count": "{count} selected",
+      "selectAll": "Select all shown",
+      "clear": "Clear",
+      "downloadZip": "Download .zip",
+      "addToFolder": "Add to folder",
+      "favorite": "Favorite",
+      "recreate": "Recreate",
+      "export": "Export",
+      "delete": "Delete"
+    },
+    "announce": {
+      "started": "{count, plural, one {Generating # image} other {Generating # images}}",
+      "ready": "{count, plural, one {# image ready} other {# images ready}}"
+    },
+    "delete": {
+      "title": "{count, plural, one {Delete # image?} other {Delete # images?}}",
+      "body": "They move to the trash until you empty it. They're also removed from folders and canvases.",
+      "bodyDays": "They move to the trash for {days, plural, one {# day} other {# days}}. They're also removed from folders and canvases.",
+      "confirm": "Delete",
+      "done": "{count, plural, one {Deleted # image.} other {Deleted # images.}}"
+    },
+    "label": "Your images",
+    "favoritesEmpty": {
+      "title": "No favorites yet",
+      "body": "Images you mark as favorites show up here."
+    }
+  },
+  "composer": {
+    "placeholder": "Describe the image you want",
+    "attach": "Add images",
+    "dropOverlay": "Drop images to use as references",
+    "referenceCount": "{count} / {max}",
+    "referenceLimit": "{model} accepts up to {max, plural, one {# reference image} other {# reference images}}.",
+    "referencesNone": "{model} doesn't take reference images",
+    "referencesDropped": "{sent} of {total} references will be sent to {model}. Drag to choose which.",
+    "referenceWontSend": "Won't be sent",
+    "removeReference": "Remove",
+    "rejectedFile": "{name} can't be used. Try a JPG, PNG, WebP or HEIC image.",
+    "fileTooLarge": "{name} is too large. The limit is {size}.",
+    "scrollLeft": "Scroll settings left",
+    "scrollRight": "Scroll settings right",
+    "limited": "Limited controls. Couldn't load this model's settings.",
+    "unsupported": "{model} doesn't support {setting}.",
+    "adjusted": "Adjusted {count, plural, one {# setting} other {# settings}} for {model}: {changes}",
+    "change": "{from} → {to}",
+    "chips": {
+      "model": {
+        "empty": "Pick a model",
+        "search": "Search models",
+        "recent": "Recent",
+        "needsKey": "Needs a key",
+        "addKey": "Add a key",
+        "addKeyFor": "Add a {company} key in Settings",
+        "noResults": "No models match “{query}”",
+        "unknown": "That model isn't available. Using {model} instead.",
+        "each": "{cost} each",
+        "choose": "Choose model"
+      },
+      "aspect": {
+        "label": "Aspect ratio",
+        "auto": "Auto"
+      },
+      "resolution": {
+        "label": "Resolution",
+        "tier": "{tier} · {px}px",
+        "tiers": {
+          "512": "Smallest and fastest",
+          "1K": "Quick drafts",
+          "1.5K": "A little sharper",
+          "2K": "Good for most uses",
+          "4K": "Largest, costs more"
+        }
+      },
+      "quality": {
+        "label": "Quality"
+      },
+      "batch": {
+        "label": "Images",
+        "fewer": "Fewer images",
+        "more": "More images",
+        "emulated": "Each image is made and billed separately."
+      },
+      "enhance": {
+        "label": "Enhance",
+        "on": "On",
+        "off": "Off",
+        "needsKey": "Add an OpenAI or Google key to use this",
+        "native": "Enhanced by the model"
+      },
+      "avoid": {
+        "label": "Avoid",
+        "placeholder": "What to leave out",
+        "emulated": "This model has no Avoid field. Openfield adds it to the prompt instead."
+      },
+      "seed": {
+        "label": "Seed",
+        "randomize": "New seed",
+        "lock": "Keep this seed",
+        "unsupported": "{model} doesn't support seeds."
+      },
+      "background": {
+        "label": "Background",
+        "auto": "Auto",
+        "opaque": "Opaque",
+        "transparent": "Transparent",
+        "keepTransparency": "Saving as PNG to keep transparency."
+      },
+      "referenceStrength": {
+        "label": "Reference strength"
+      },
+      "advanced": {
+        "label": "Advanced",
+        "reset": "Reset",
+        "resetAll": "Reset all"
+      },
+      "toolbar": "Image settings",
+      "value": "{label}: {value}"
+    },
+    "aside": {
+      "style": "Style",
+      "character": "Character",
+      "none": "None",
+      "change": "Change"
+    },
+    "generate": {
+      "label": "Generate",
+      "addKeyFirst": "Add a key first",
+      "addKey": "Add a key",
+      "forModel": "To use {model}",
+      "toMakeImages": "To make images",
+      "queued": "{count} queued",
+      "noModel": "Pick a model first.",
+      "emptyPrompt": "Describe the image first.",
+      "tooManyReferences": "Remove some references first.",
+      "invalidSetting": "Fix the highlighted setting first."
+    },
+    "label": "Make an image",
+    "reused": "Loaded the prompt and model."
+  },
+  "cost": {
+    "about": "About {cost}",
+    "tight": "~{cost}",
+    "atMost": "≤{cost}",
+    "range": "{min}–{max}",
+    "basis": "{count} × {each}",
+    "basisWith": "{count} × {each} ({detail})",
+    "unknown": "Cost unknown",
+    "free": "Free",
+    "withCount": "{cost} · {count, plural, one {# image} other {# images}}",
+    "pricesAsOf": "Prices as of {date}. They may have changed since."
+  },
+  "settings": {
+    "title": "Settings",
+    "rail": {
+      "apiKeys": "API keys",
+      "models": "Models",
+      "defaults": "Defaults",
+      "appearance": "Appearance",
+      "storage": "Storage",
+      "spending": "Spending",
+      "privacy": "Privacy",
+      "help": "Help",
+      "experimental": "Experimental"
+    },
+    "restartNeeded": "Takes effect after you restart Openfield.",
+    "apiKeys": {
+      "title": "API keys",
+      "intro": "Add a key to start making images. Your keys stay on this computer.",
+      "tagline": "Makes and edits images",
+      "status": {
+        "connected": "Connected",
+        "notConnected": "Not connected",
+        "rejected": "Key rejected",
+        "checking": "Checking",
+        "setOutside": "Set outside Openfield"
+      },
+      "field": {
+        "placeholder": "Paste your key",
+        "locked": "Added outside Openfield",
+        "show": "Show key",
+        "hide": "Hide key"
+      },
+      "actions": {
+        "add": "Add a key",
+        "change": "Change key",
+        "check": "Check key",
+        "remove": "Remove key",
+        "getKey": "Get a key"
+      },
+      "rejected": "This key was rejected.",
+      "setOutside": "This key is set outside Openfield, so it can't be changed here.",
+      "works": "{count, plural, =0 {This key works.} one {This key works. # model is ready.} other {This key works. # models are ready.}}",
+      "removeTitle": "Remove your {company} key?",
+      "removeBody": "Images you already made stay in your library.",
+      "runsAtOnce": {
+        "label": "Runs at once",
+        "hint": "How many {company} images Openfield makes at the same time.",
+        "fewer": "Fewer at once",
+        "more": "More at once"
+      }
+    },
+    "models": {
+      "title": "Models",
+      "intro": "The models Openfield can use, and what one image costs at their usual settings.",
+      "yours": "Your models",
+      "list": "Model list",
+      "checkNew": "Check for new models",
+      "neverChecked": "Not checked yet. Openfield checks once a day while a key is set.",
+      "lastChecked": "Last checked {when}.",
+      "checkNow": "Check now",
+      "checkAuto": "Check automatically",
+      "checkAutoHint": "Looks for new models from the companies you have keys for.",
+      "everyDay": "Every day",
+      "checkFailed": "Couldn't update the model list. Showing the saved one.",
+      "notSupported": "Found but not supported",
+      "files": "Your files",
+      "ownList": "Your own model list",
+      "ownListHint": "Add models that aren't in the list.",
+      "ownPrices": "Your own prices",
+      "ownPricesHint": "Use your own prices for cost estimates."
+    },
+    "defaults": {
+      "title": "Defaults",
+      "intro": "What new images start with, and how many Openfield makes at the same time.",
+      "modelDefault": "Model default",
+      "newImages": "New images",
+      "model": "Default model",
+      "modelHint": "New images start with this model.",
+      "aspect": "Aspect ratio",
+      "aspectHint": "Used when the model allows it.",
+      "batch": "Images per run",
+      "batchHint": "How many images each press of Generate makes.",
+      "concurrency": "Runs at once",
+      "concurrencyHint": "How many images Openfield makes at the same time.",
+      "prompt": "Prompt",
+      "enhance": "Enhance",
+      "enhanceHint": "Rewrites your prompt with more detail before a run.",
+      "enhanceModes": {
+        "off": "Off",
+        "preview": "Show me first",
+        "auto": "Apply right away"
+      },
+      "editing": "Editing",
+      "regionalFallback": "Allow approximate area edits",
+      "regionalFallbackHint": "Some models can't edit a single area. Openfield edits the whole image and keeps your area as close as it can."
+    },
+    "appearance": {
+      "title": "Appearance",
+      "intro": "How Openfield looks on this computer.",
+      "look": "Look",
+      "theme": "Theme",
+      "themeHint": "Match your computer, or pick one.",
+      "themes": {
+        "system": "System",
+        "dark": "Dark",
+        "light": "Light"
+      },
+      "gridSize": "Grid size",
+      "gridSizeHint": "How many images fit in a row.",
+      "tips": "Show tips while generating",
+      "tipsHint": "A short tip shows on the first image while it's being made."
+    },
+    "storage": {
+      "title": "Storage",
+      "intro": "Everything is saved on this computer. Nothing is stored online.",
+      "used": "{size} used",
+      "free": "{size} free on this computer",
+      "images": "Images",
+      "thumbnails": "Thumbnails",
+      "trash": "Trash",
+      "library": "Library",
+      "spaceUsed": "Space used",
+      "on": "On",
+      "off": "Off",
+      "location": "Library location",
+      "locationHint": "Open the folder where your images are saved.",
+      "locationValue": "In your home folder",
+      "thumbQuality": "Thumbnail quality",
+      "thumbQualityHint": "Higher looks sharper and takes more space.",
+      "originalsOnly": "Thumbnails are off. Images show at full size, so scrolling may be slower.",
+      "keepDeleted": "Keep deleted images for",
+      "keepDeletedHint": "Leave empty to keep them until you empty the trash.",
+      "days": "{count, plural, one {# day} other {# days}}",
+      "untilEmptied": "Until I empty the trash",
+      "maintenance": "Maintenance",
+      "clearThumbs": "Clear thumbnails",
+      "clearThumbsHint": "They're made again when you need them.",
+      "clear": "Clear",
+      "cleanUp": "Clean up files",
+      "cleanUpHint": "Removes files Openfield no longer uses.",
+      "cleanUpAction": "Clean up",
+      "backUp": "Back up library",
+      "backUpHint": "Saves a copy of your library and its details.",
+      "backUpAction": "Back up",
+      "fixSearch": "Fix search",
+      "fixSearchHint": "Use this if search misses images you know are there.",
+      "fixSearchAction": "Fix",
+      "emptyTrash": "Empty trash",
+      "emptyTrashHint": "{count, plural, =0 {The trash is empty.} one {Deletes # image for good.} other {Deletes # images for good.}}"
+    },
+    "spending": {
+      "title": "Spending",
+      "intro": "Tracked on this computer. Your actual bill may differ.",
+      "ranges": {
+        "today": "Today",
+        "week": "7 days",
+        "month": "30 days",
+        "all": "All time"
+      },
+      "spent": "Spent",
+      "imagesMade": "Images made",
+      "fromRuns": "From {count, plural, one {# run} other {# runs}}",
+      "canceledCharged": "Canceled but charged",
+      "fromCanceled": "From {count, plural, one {# canceled run} other {# canceled runs}}",
+      "byModel": "By model",
+      "limit": "Monthly spending limit",
+      "limitOff": "Off",
+      "setLimit": "Set a limit",
+      "limitReached": "You've passed your monthly limit. Generate anyway?",
+      "export": "Export all runs",
+      "exportHint": "Save a spreadsheet of every run.",
+      "exportAction": "Export CSV"
+    },
+    "privacy": {
+      "title": "Privacy",
+      "intro": "What Openfield sends, and where.",
+      "disclosure": "Openfield sends your prompt, reference images, masks and settings to the company behind the model you pick, using your key. Their terms apply. Openfield stores nothing online and sends nothing anywhere else.",
+      "tracking": "Tracking",
+      "noTracking": "No tracking",
+      "noTrackingHint": "Openfield never sends usage data, crash reports or update checks.",
+      "sites": "Sites Openfield connects to"
+    },
+    "help": {
+      "title": "Help",
+      "intro": "What Openfield records when something goes wrong. Keys are never recorded.",
+      "log": "Log",
+      "problems": "Problems",
+      "noProblems": "No problems so far.",
+      "report": "Report",
+      "logLevel": "How much to record",
+      "logLevelHint": "More detail helps when something keeps failing.",
+      "logLevels": {
+        "error": "Errors only",
+        "warn": "Less",
+        "info": "Normal",
+        "debug": "Everything"
+      },
+      "copyReport": "Copy report",
+      "copyReportHint": "Keys are removed."
+    },
+    "experimental": {
+      "title": "Experimental",
+      "intro": "Features that are still rough. Turn them on if you want to try them.",
+      "section": "Experimental",
+      "earlyModels": "Show early models",
+      "earlyModelsHint": "Adds models that aren't finished yet to the picker.",
+      "canvasFiles": "Also save canvases as files",
+      "canvasFilesHint": "Keeps a copy of each canvas next to your images.",
+      "upscale": "Upscale program",
+      "upscaleHint": "The program Openfield runs to make images larger.",
+      "choose": "Choose"
+    }
+  },
+  "toast": {
+    "saved": "Saved.",
+    "copied": "Copied.",
+    "canceled": "Canceled. You may still be charged for work that already started."
+  },
+  "errors": {
+    "auth_missing": {
+      "reason": "No key for this model.",
+      "action": "Open Settings"
+    },
+    "auth_invalid": {
+      "reason": "This key was rejected.",
+      "action": "Change key"
+    },
+    "auth_forbidden": {
+      "reason": "This key was rejected.",
+      "action": "Change key"
+    },
+    "billing_required": {
+      "reason": "This key is out of credit.",
+      "action": "Open billing page"
+    },
+    "quota_exceeded": {
+      "reason": "This key is out of credit.",
+      "action": "Open billing page"
+    },
+    "rate_limited": {
+      "reason": "Too many requests. Try again in a minute.",
+      "action": "Try again"
+    },
+    "content_refused": {
+      "reason": "The model wouldn't make this.",
+      "action": "Reuse"
+    },
+    "content_flagged_input": {
+      "reason": "The model wouldn't make this.",
+      "action": "Reuse"
+    },
+    "unsupported_param": {
+      "reason": "This model can't do that.",
+      "action": "Reuse"
+    },
+    "capability_unsupported": {
+      "reason": "This model can't do that.",
+      "action": "Reuse"
+    },
+    "invalid_request": {
+      "reason": "These settings didn't work.",
+      "action": "Details"
+    },
+    "payload_too_large": {
+      "reason": "These settings didn't work.",
+      "action": "Details"
+    },
+    "provider_unavailable": {
+      "reason": "The model ran into a problem.",
+      "action": "Details"
+    },
+    "provider_error": {
+      "reason": "The model ran into a problem.",
+      "action": "Details"
+    },
+    "network": {
+      "reason": "Couldn't connect.",
+      "action": "Try again"
+    },
+    "timeout": {
+      "reason": "This took too long.",
+      "action": "Try again"
+    },
+    "disk_full": {
+      "reason": "Couldn't save. Your disk is full.",
+      "action": "Free up space"
+    },
+    "canceled": {
+      "reason": "Canceled. You may still be charged for work that already started.",
+      "action": "Recreate"
+    },
+    "unknown": {
+      "reason": "Something went wrong.",
+      "action": "Details"
+    },
+    "transport": {
+      "bad_request": "That didn't work. Check what you entered and try again.",
+      "not_found": "Couldn't find that.",
+      "conflict": "This changed somewhere else. Reload to see the latest.",
+      "internal": "Openfield ran into a problem. Try again in a moment."
+    },
+    "rateLimitedIn": "Too many requests. Trying again in {seconds}s.",
+    "forbiddenModel": "Your key can't use {model}.",
+    "referenceTooLarge": "This reference image is too large. The limit is {size}.",
+    "imageBlocked": "Image blocked. It came from an unknown site.",
+    "companyOff": "{company} is turned off, so its models can't run.",
+    "keyNotPrivate": "Couldn't save your key. This folder can't keep files private.",
+    "keyNotSaved": "Couldn't save your key. Check there's free space, then try again.",
+    "errorLog": "Error log"
+  },
+  "presets": {
+    "errors": {
+      "slot": "Include {slot} exactly once.",
+      "newerVersion": "This style needs a newer version of Openfield.",
+      "outsideBundle": "This file points outside its folder, so it wasn't imported."
+    }
+  },
+  "canvas": {
+    "errors": {
+      "duplicateNode": "Two nodes share the same id.",
+      "duplicateEdge": "Two connections share the same id.",
+      "missingParent": "This node sits in a frame that doesn't exist.",
+      "missingNode": "This connection points at a node that doesn't exist.",
+      "newerVersion": "This canvas needs a newer version of Openfield."
+    },
+    "empty": {
+      "title": "No canvases yet",
+      "body": "Make images on the Image page.",
+      "goToImage": "Go to Image"
+    }
+  },
+  "assets": {
+    "empty": {
+      "title": "Your images",
+      "body": "Everything you make is on the Image page.",
+      "goToImage": "Go to Image"
+    }
+  }
+}
