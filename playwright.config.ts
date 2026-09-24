@@ -22,6 +22,7 @@ function portFor(suite: string): number {
 const suites = [
   { name: "first-run", testMatch: "m0-first-run.e2e.ts" },
   { name: "guards", testMatch: "guards.e2e.ts" },
+  { name: "canvas", testMatch: "canvas.e2e.ts" },
 ].map((suite) => ({ ...suite, origin: `http://127.0.0.1:${portFor(suite.name)}` }));
 
 export default defineConfig({
