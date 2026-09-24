@@ -13,7 +13,15 @@ import {
 // failed (§2.3, §2.4). An image sorts with the run that made it, so a batch stays together.
 
 export type FeedItem =
-  | { kind: "asset"; key: string; asset: AssetListItem; sort: number; idx: number }
+  | {
+      kind: "asset";
+      key: string;
+      asset: AssetListItem;
+      /** Made by a run that went again after a restart, so the company may have billed it twice. */
+      rerun: boolean;
+      sort: number;
+      idx: number;
+    }
   | {
       kind: "job";
       key: string;
@@ -52,6 +60,8 @@ export function buildFeed({ assets, jobSets, dismissed, includeJobs, hasMoreAsse
     kind: "asset",
     key: `asset:${asset.id}`,
     asset,
+    // From the image itself, so the note stays however old the run is (§2.4).
+    rerun: asset.rerun,
     sort: (asset.jobSetId && setTime.get(asset.jobSetId)) || time(asset.createdAt),
     idx: (asset.jobId && jobIdx.get(asset.jobId)) || 0,
   }));
@@ -106,6 +116,17 @@ export function waitKind(
   // After a reload the stream's busy flag is gone; a Flex job with a next attempt is the same wait.
   if (retry ? retry.busy : !!job.nextAttemptAt && job.status !== "running") return "flex-busy";
   return job.status === "running" || job.status === "submitting" ? "flex" : null;
+}
+
+/**
+ * What a working tile says about a restart (§0.4, design CZsGt and OfTQn): picked up by the
+ * company's id, or sent again because it couldn't be. A rerun is never also resumed.
+ */
+export type RestartNote = "resumed" | "rerun";
+
+export function restartNote(job: Pick<Job, "resumedAt" | "rerunAt">): RestartNote | null {
+  if (job.rerunAt) return "rerun";
+  return job.resumedAt ? "resumed" : null;
 }
 
 /** Jobs in a run that ended without an image: failed, canceled or interrupted. */

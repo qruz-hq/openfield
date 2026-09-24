@@ -171,6 +171,7 @@ export function asset(createdAt: string, extra: Partial<AssetListItem> = {}): As
     prompt: "a teapot",
     approximate: false,
     isFavourite: false,
+    rerun: false,
     createdAt,
     thumbUrl: `/files/thumb/${id}?h=456`,
     fileUrl: `/files/asset/${id}`,

@@ -1,7 +1,7 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
 import type { ErrorAction } from "@openfield/core";
-import { buildFeed, failedAction, jobTileState, waitKind } from "../src/image/feed-items";
+import { buildFeed, failedAction, jobTileState, restartNote, waitKind } from "../src/image/feed-items";
 import { asset, at, jobSet } from "./fixtures";
 
 const none = new Set<string>();
@@ -61,6 +61,27 @@ describe("buildFeed", () => {
     expect(
       buildFeed({ assets: [], jobSets: [run], dismissed: none, includeJobs: false, hasMoreAssets: false }),
     ).toEqual([]);
+  });
+
+  test("an image from a run that went again after a restart carries the note, however old the run", () => {
+    const run = jobSet(at(10), ["succeeded", "succeeded"]);
+    const again = asset(at(13), { jobSetId: run.jobSet.id, jobId: run.jobs[0]!.id, rerun: true });
+    const once = asset(at(14), { jobSetId: run.jobSet.id, jobId: run.jobs[1]!.id });
+    const upload = asset(at(15));
+    // The run itself has dropped out of the loaded runs: the image still says so.
+    const items = buildFeed({
+      assets: [upload, once, again],
+      jobSets: [],
+      dismissed: none,
+      includeJobs: false,
+      hasMoreAssets: false,
+    });
+    const rerun = Object.fromEntries(items.map((i) => [i.key, i.kind === "asset" && i.rerun]));
+    expect(rerun).toEqual({
+      [`asset:${again.id}`]: true,
+      [`asset:${once.id}`]: false,
+      [`asset:${upload.id}`]: false,
+    });
   });
 
   test("runs older than the last loaded image wait for the next page", () => {
@@ -144,5 +165,15 @@ describe("failedAction", () => {
     expect(failedAction(failed(), "provider_unavailable")).toBe("details");
     expect(failedAction(failed(), "unsupported_param")).toBe("reuse");
     expect(failedAction({ status: "interrupted", errorAction: null }, "unknown")).toBe("try-again");
+  });
+});
+
+describe("restartNote", () => {
+  test("a rerun warns, a resumed call picks up, anything else says nothing", () => {
+    expect(restartNote({ resumedAt: null, rerunAt: at(1) })).toBe("rerun");
+    expect(restartNote({ resumedAt: at(1), rerunAt: null })).toBe("resumed");
+    expect(restartNote({ resumedAt: null, rerunAt: null })).toBeNull();
+    // Jobs from a server that doesn't send the fields yet.
+    expect(restartNote({})).toBeNull();
   });
 });

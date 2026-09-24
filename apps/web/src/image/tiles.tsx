@@ -43,6 +43,7 @@ import {
   type LucideIcon,
   RefreshCcw,
   RefreshCw,
+  RotateCcw,
   Settings,
   X,
 } from "lucide-react";
@@ -64,7 +65,15 @@ import { useDismissed, useLive } from "../lib/live";
 import { notify, notifyError } from "../lib/notify";
 import { companyName, logoFor, providerOfKey } from "../lib/provider";
 import { useReuse } from "./composer/use-reuse";
-import { endedWithoutImage, failedAction, jobTileState, type WaitKind, waitKind } from "./feed-items";
+import {
+  endedWithoutImage,
+  failedAction,
+  jobTileState,
+  type RestartNote,
+  restartNote,
+  type WaitKind,
+  waitKind,
+} from "./feed-items";
 
 // Feed / Tile / {Idle, Generating, Queued, Waiting at provider, Failed}. Radius 0: the image is the
 // tile (§2.4).
@@ -87,8 +96,9 @@ export function AssetTile({
   asset,
   rung,
   model,
+  rerun = false,
   style,
-}: TileBox & { asset: AssetListItem; rung: number; model?: string }) {
+}: TileBox & { asset: AssetListItem; rung: number; model?: string; rerun?: boolean }) {
   const image = useAuthedImage(thumbPath(asset, rung));
   const label = t("feed.tile.label", {
     prompt: asset.prompt.trim() ? truncate(asset.prompt, 80) : t("feed.tile.noPrompt"),
@@ -97,7 +107,8 @@ export function AssetTile({
   });
   return (
     <li
-      aria-label={label}
+      // The pill is too short to warn about billing, so the name carries it for a screen reader.
+      aria-label={rerun ? `${label}. ${t("feed.tile.rerunLabel")}` : label}
       data-job-set={asset.jobSetId ?? undefined}
       className={`${box} bg-elevated`}
       style={style}
@@ -105,8 +116,36 @@ export function AssetTile({
       {image.status === "ready" ? (
         <img src={image.src} alt="" className="size-full object-cover" decoding="async" draggable={false} />
       ) : null}
+      {rerun ? <RerunNote className="absolute top-10 left-10" /> : null}
     </li>
   );
+}
+
+/**
+ * Pill / Tile note / Ran again (design MKHsL): the Last viewed badge's treatment, dark in both
+ * themes because it sits on the image. It belongs to the idle tile: hover and selection put the
+ * checkbox in this corner (§2.4). The tile has neither state, nor the Last viewed badge, yet: when
+ * they come, hide the note on hover and selection, and put the eye badge and the note in one row at
+ * 10,10 with an 8px gap instead of placing each on its own.
+ */
+function RerunNote({ className }: { className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={`inline-flex h-24 max-w-[calc(100%-20px)] items-center gap-6 rounded-full bg-overlay px-10 inset-ring inset-ring-overlay-line backdrop-blur-chip ${className ?? ""}`}
+    >
+      <RotateCcw size={12} className="shrink-0 text-overlay-fg-muted" />
+      <span className="min-w-0 truncate text-caption font-medium text-overlay-fg">
+        {t("feed.tile.rerunNote")}
+      </span>
+    </span>
+  );
+}
+
+/** The meta lines a restart puts under the model line, in place of the tile's usual ones. */
+function restartLines(note: RestartNote | null): string[] {
+  if (note === "rerun") return [t("feed.tile.rerunning"), t("feed.tile.chargedTwice")];
+  return note === "resumed" ? [t("feed.tile.resumed")] : [];
 }
 
 const truncate = (text: string, max: number) =>
@@ -197,6 +236,7 @@ function WorkingTile({
   const providerId = model?.providerId ?? providerOfKey(jobSet.model) ?? "";
   const logo = logoFor(providerId);
   const summary = summaryOf(jobSet, job, model, speedName(providerId, jobSet.speed));
+  const restart = restartLines(restartNote(job));
 
   // The tile turns into a canceled one as soon as the cancel lands, so no mutate() callbacks here.
   const onCancel = () =>
@@ -208,7 +248,7 @@ function WorkingTile({
   return (
     <li
       aria-busy="true"
-      aria-label={summary}
+      aria-label={[summary, ...restart].join(". ")}
       data-job-set={jobSet.id}
       className={`${box} bg-elevated`}
       style={style}
@@ -231,17 +271,28 @@ function WorkingTile({
         ) : (
           <span className="text-micro text-text-tertiary">{summary}</span>
         )}
-        <span className="text-micro text-text-secondary">
-          {queued
-            ? t("feed.tile.images", { count: jobSet.batchSize })
-            : t("feed.tile.progress", { index: job.idx + 1, total: jobSet.batchSize })}
-          {!queued && elapsed >= 10 ? (
-            <span className="text-mono-11 text-text-tertiary">{` ${clock(elapsed)}`}</span>
-          ) : null}
-        </span>
-        {!queued && elapsed >= 45 ? (
-          <span className="text-micro text-text-secondary">{t("feed.tile.stillWorking")}</span>
-        ) : null}
+        {restart.length ? (
+          // What happened takes the count line's place (design CZsGt, OfTQn).
+          restart.map((line) => (
+            <span key={line} className="text-micro text-text-secondary">
+              {line}
+            </span>
+          ))
+        ) : (
+          <>
+            <span className="text-micro text-text-secondary">
+              {queued
+                ? t("feed.tile.images", { count: jobSet.batchSize })
+                : t("feed.tile.progress", { index: job.idx + 1, total: jobSet.batchSize })}
+              {!queued && elapsed >= 10 ? (
+                <span className="text-mono-11 text-text-tertiary">{` ${clock(elapsed)}`}</span>
+              ) : null}
+            </span>
+            {!queued && elapsed >= 45 ? (
+              <span className="text-micro text-text-secondary">{t("feed.tile.stillWorking")}</span>
+            ) : null}
+          </>
+        )}
       </div>
       {queued ? null : (
         <ProgressBar
@@ -283,6 +334,8 @@ function WaitingTile({
   const summaryLine = summaryOf(jobSet, job, model, speed);
   const batch = kind === "batch" || kind === "batch-sending";
   const stopping = batch && summary?.stopping === true;
+  // A Batch run that came back after a restart looks the same as before it (§2.4).
+  const restart = batch ? [] : restartLines(restartNote(job));
 
   const status = stopping
     ? t("speed.tile.stopping", { company })
@@ -344,7 +397,7 @@ function WaitingTile({
     <li
       aria-busy="true"
       // A wait can last hours, so moving through the feed says what it's waiting on, not only what it is.
-      aria-label={[status, summaryLine, hint].filter(Boolean).join(". ")}
+      aria-label={[status, summaryLine, ...restart, hint].filter(Boolean).join(". ")}
       data-job-set={jobSet.id}
       className={`${box} @container bg-elevated`}
       style={style}
@@ -393,6 +446,11 @@ function WaitingTile({
         ) : (
           <span className="text-micro text-text-tertiary">{summaryLine}</span>
         )}
+        {restart.map((line) => (
+          <span key={line} className="truncate text-micro text-text-secondary">
+            {line}
+          </span>
+        ))}
         {hint ? <span className="truncate text-micro text-text-secondary">{hint}</span> : null}
       </div>
     </li>
@@ -540,6 +598,10 @@ function FailureDetails({ job, accent }: { job: Job; accent: boolean }) {
       : job.errorCode
         ? HINTS[job.errorCode]
         : undefined;
+  // It may have been billed for the call the restart cut off too (§0.4).
+  const text = [hint ? t(hint) : null, job.rerunAt ? t("feed.tile.details.hints.rerun") : null]
+    .filter(Boolean)
+    .join(" ");
   return (
     <Popover>
       <PopoverTrigger asChild>
@@ -550,7 +612,7 @@ function FailureDetails({ job, accent }: { job: Job; accent: boolean }) {
       <PopoverContent side="top" align="center" className="flex w-320 flex-col gap-10 p-16">
         <p className="text-body-strong text-text-primary">{t("feed.tile.details.title")}</p>
         <p className="text-small leading-[1.45] text-text-secondary">
-          {hint ? t(hint) : t("feed.tile.details.noMessage")}
+          {text || t("feed.tile.details.noMessage")}
         </p>
         {when ? (
           <KeyValueList>

@@ -102,6 +102,7 @@ export function Feed({
                   asset={item.asset}
                   rung={rung}
                   model={modelName(item.asset.providerId, item.asset.modelId)}
+                  rerun={item.rerun}
                   style={style}
                 />
               ) : (

@@ -40,3 +40,32 @@ describe("a new run in the cache", () => {
     expect(cached()).toHaveLength(1);
   });
 });
+
+describe("after a restart", () => {
+  test("job.started with rerun marks the job, so its tile warns it may be charged twice", () => {
+    const run = jobSet(at(0), ["pending", "pending"]);
+    applyEvent({ event: "job_set.created", data: run });
+    const [first, second] = run.jobs;
+    applyEvent({
+      event: "job.started",
+      data: { jobSetId: run.jobSet.id, jobId: first!.id, idx: 0, startedAt: at(2), rerun: true },
+    });
+    applyEvent({
+      event: "job.started",
+      data: { jobSetId: run.jobSet.id, jobId: second!.id, idx: 1, startedAt: at(2) },
+    });
+    const jobs = cached()[0]!.jobs;
+    expect(jobs.map((j) => j.rerunAt ?? null)).toEqual([at(2), null]);
+  });
+
+  test("the server's own rerunAt from the snapshot stays", () => {
+    const run = jobSet(at(0), ["pending"]);
+    run.jobs[0]!.rerunAt = at(1);
+    applyEvent({ event: "snapshot", data: { activeJobSets: [run], serverTime: at(2), batches: [] } });
+    applyEvent({
+      event: "job.started",
+      data: { jobSetId: run.jobSet.id, jobId: run.jobs[0]!.id, idx: 0, startedAt: at(3), rerun: true },
+    });
+    expect(cached()[0]!.jobs[0]!.rerunAt).toBe(at(1));
+  });
+});

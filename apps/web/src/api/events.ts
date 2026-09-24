@@ -43,6 +43,11 @@ function jobSetsCache(): JobSetWithJobs[] {
   return queryClient.getQueryData<JobSetWithJobs[]>(queryKeys.jobSets) ?? [];
 }
 
+const findJob = (jobSetId: string, jobId: string) =>
+  jobSetsCache()
+    .find((s) => s.jobSet.id === jobSetId)
+    ?.jobs.find((job) => job.id === jobId);
+
 /** Names for the finish notice, fetched when this tab hasn't loaded them yet. */
 const names: BatchNameLookups = {
   model: async (key) =>
@@ -102,15 +107,20 @@ export function applyEvent(event: SseEvent) {
       setRetry(jobId, retryAt ? { at: retryAt, busy: busy === true } : undefined);
       return;
     }
-    case "job.started":
-      patchJob(event.data.jobSetId, event.data.jobId, {
+    case "job.started": {
+      const { jobSetId, jobId, startedAt, rerun } = event.data;
+      // The snapshot after a restart carries rerunAt; this covers a tab that loaded the run before it.
+      const rerunAt = rerun ? (findJob(jobSetId, jobId)?.rerunAt ?? startedAt) : undefined;
+      patchJob(jobSetId, jobId, {
         status: "running",
-        startedAt: event.data.startedAt,
+        startedAt,
         nextAttemptAt: null,
+        ...(rerunAt ? { rerunAt } : {}),
       });
-      setPosition(event.data.jobId, undefined);
-      setRetry(event.data.jobId, undefined);
+      setPosition(jobId, undefined);
+      setRetry(jobId, undefined);
       return;
+    }
     case "job.progress":
       patchJob(event.data.jobSetId, event.data.jobId, { progress: event.data.progress });
       return;
