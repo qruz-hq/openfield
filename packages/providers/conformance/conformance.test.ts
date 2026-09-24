@@ -14,19 +14,21 @@ import {
 } from "@openfield/core";
 import { estimate } from "../src/manifest/estimate";
 import { resolveProviderSettings } from "../src/manifest/provider-settings";
-import { offeredSpeeds } from "../src/manifest/speed";
+import { offeredSpeeds, resumesAfterRestart } from "../src/manifest/speed";
 import { normalize } from "../src/normalize";
 import { createModelRegistry } from "../src/registry";
 import { ProviderError } from "../src/types";
 import {
   addImage,
   findBase64,
+  finish,
   generate,
   harness,
   type Kit,
   kits,
   prepare,
   request,
+  run,
   withoutImageBytes,
 } from "./harness";
 
@@ -99,7 +101,7 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
               ...(resolution && { resolution }),
               ...(quality && { quality }),
             });
-            const { normalized } = await generate(kit, manifest, req, h);
+            const { normalized } = await run(kit, manifest, req, h);
             expect(normalized.diagnostics).toEqual([]);
             expect(h.ctx.assets.written).toHaveLength(1);
           }
@@ -144,9 +146,9 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
 
     // A fresh binding and a fresh context stand in for a restarted server.
     const restarted = kit.provider.model(manifest.key);
-    const ctx = harness(kit).ctx;
-    const first = await restarted.poll(stored, ctx);
-    const second = await restarted.poll(stored, ctx);
+    const later = harness(kit);
+    const first = await finish(restarted, stored, later);
+    const second = await restarted.poll(stored, later.ctx);
     expect(first.state).toBe("succeeded");
     expect(second).toEqual(first);
   });
@@ -164,7 +166,7 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
       expect(normalized.jobIds).toHaveLength(n);
       expect(normalized.calls).toHaveLength(manifest.capabilities.batch.native ? 1 : n);
       const images = [];
-      for (const handle of handles) images.push(...((await model.poll(handle, h.ctx)).result?.images ?? []));
+      for (const handle of handles) images.push(...((await finish(model, handle, h)).result?.images ?? []));
       expect(images).toHaveLength(n);
       expect(new Set(images.map((i) => i.assetId)).size).toBe(n);
       expect(new Set(h.ctx.assets.written.map((a) => a.sha256)).size).toBe(n);
@@ -189,7 +191,7 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
         continue;
       }
       if (caps.seed.echoed) {
-        const result = (await model.poll(handles[0]!, h.ctx)).result;
+        const result = (await finish(model, handles[0]!, h)).result;
         expect(result?.images[0]?.seed).toBe(42);
       }
     }
@@ -240,7 +242,7 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
     for (const scenario of ["refused", "blocked", "no_image"] as const) {
       if (!kit.fake.fixtures[scenario]) continue;
       const h = harness(kit, { scenario });
-      const err = await expectError(generate(kit, manifest, request(manifest), h));
+      const err = await expectError(run(kit, manifest, request(manifest), h));
       expect(err.code).toBe("content_refused");
       expect(err.retryable).toBe(false);
       expect(h.ctx.assets.written).toHaveLength(0);
@@ -277,7 +279,8 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
     const manifest = catalog[0]!;
     const h = harness(kit);
     const { handles, model } = await generate(kit, manifest, request(manifest), h);
-    const update = await model.poll(handles[0]!, h.ctx);
+    const update = await finish(model, handles[0]!, h);
+    expect(update.result?.images.length).toBeGreaterThan(0);
     for (const image of update.result?.images ?? []) {
       expect(image.assetId).toBeTruthy();
       expect(image.width).toBeGreaterThan(0);
@@ -298,7 +301,7 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
       const h = harness(kit, { scenario: scenario as never });
       try {
         const { handles, model } = await generate(kit, manifest, request(manifest), h);
-        seen.push(handles, await model.poll(handles[0]!, h.ctx));
+        seen.push(handles, await finish(model, handles[0]!, h));
       } catch (err) {
         seen.push(
           err instanceof ProviderError ? { ...err.toJSON(), message: err.message, stack: err.stack } : err,
@@ -465,16 +468,17 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
       for (const speed of offeredSpeeds(manifest).filter((s) => s !== "batch")) {
         const h = harness(kit);
         const { handles, model } = await generate(kit, manifest, request(manifest), h, { speed });
-        const result = (await model.poll(handles[0]!, h.ctx)).result;
-        expect(result?.speedUsed).toBe(speed);
+        // What was sent, before any status reads.
         golden[speed] = h.sent.map((s) => ({ url: s.url, body: s.body }));
+        const result = (await finish(model, handles[0]!, h)).result;
+        expect(result?.speedUsed).toBe(speed);
       }
       expect(golden).toMatchSnapshot(`${manifest.key} speeds`);
 
       if (offers(manifest, "priority")) {
         const h = harness(kit, { scenario: "priority_standard" });
         const { handles, model } = await generate(kit, manifest, request(manifest), h, { speed: "priority" });
-        expect((await model.poll(handles[0]!, h.ctx)).result?.speedUsed).toBe("standard");
+        expect((await finish(model, handles[0]!, h)).result?.speedUsed).toBe("standard");
       }
     }
   });
@@ -574,6 +578,63 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
       const urls = h.sent.map((sent) => [sent.url, sent.body]);
       const text = JSON.stringify([h.ctx.log.lines, later.ctx.log.lines, saved, done, urls]);
       for (const secret of kit.secrets) expect(text).not.toContain(secret);
+    }
+  });
+
+  test("27. resumable calls pick up by id in a fresh context; the rest end before submit returns", async () => {
+    for (const manifest of catalog) {
+      expect(manifest.resumableSpeeds ?? []).not.toContain("batch" as never);
+      for (const speed of offeredSpeeds(manifest).filter((s) => s !== "batch")) {
+        const h = harness(kit);
+        const { handles, model, normalized } = await generate(kit, manifest, request(manifest), h, { speed });
+        const handle = handles[0]!;
+
+        if (!resumesAfterRestart(manifest, speed)) {
+          // A blocking call holds on until the image is in hand, so nothing it sent keeps running
+          // at the company once submit() returns, and a restart has nothing to pick up.
+          expect(h.ctx.assets.written).toHaveLength(1);
+          expect((await model.poll(handle, h.ctx)).state).toBe("succeeded");
+          continue;
+        }
+
+        // Accepted, not finished: the company's id is there, the image isn't.
+        expect(handle.providerRef).toBeTruthy();
+        expect(h.ctx.assets.written).toHaveLength(0);
+        expect(["queued", "running"]).toContain((await model.poll(handle, h.ctx)).state);
+
+        // Only the stored handle carries over: a fresh binding, context and fake API stand in for a
+        // restarted server, and time moves on.
+        const stored = jobHandleSchema.parse(JSON.parse(JSON.stringify(handle)));
+        const restarted = kit.provider.model(manifest.key);
+        const later = harness(kit);
+        const done = await finish(restarted, stored, later);
+        expect(done.state).toBe("succeeded");
+        expect(done.result?.images).toHaveLength(1);
+        expect(done.result?.speedUsed ?? speed).toBe(speed);
+        expect(later.ctx.assets.written).toHaveLength(1);
+        // Read again, it writes nothing more.
+        expect(await restarted.poll(stored, later.ctx)).toEqual(done);
+        expect(later.ctx.assets.written).toHaveLength(1);
+        // One create call in all, and none after the restart.
+        const creates = (calls: { method: string }[]) => calls.filter((c) => c.method === "POST").length;
+        expect([creates(h.fetch.calls), creates(later.fetch.calls)]).toEqual([1, 0]);
+        // The handle is saved to the library as it is, so it carries no key, token or signed URL:
+        // poll() and cancel() build their auth from ctx.credentials.
+        for (const secret of kit.secrets) expect(JSON.stringify(stored)).not.toContain(secret);
+        // Declared idempotent: the same create sent again, as after an answer that was lost, hands
+        // back the first call instead of starting a second one.
+        if (manifest.idempotentSubmit) {
+          const again = await model.submit(normalized.calls[0]!, h.ctx);
+          expect(again.providerRef).toBe(handle.providerRef);
+        }
+
+        // An id the company doesn't have is gone, not a hiccup to try again.
+        const gone = await expectError(
+          restarted.poll({ ...stored, providerRef: "not-a-real-id" }, harness(kit).ctx),
+        );
+        expect([gone.code, gone.notFound, gone.retryable]).toEqual(["provider_error", true, false]);
+        expect(gone.userMessage).toContain(kit.provider.meta.displayName);
+      }
     }
   });
 

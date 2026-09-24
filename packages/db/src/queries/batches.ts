@@ -185,6 +185,19 @@ export function finishProviderBatch(
     .get();
 }
 
+/**
+ * Drops a batch the company never got: its create was refused, so there's nothing to poll or tidy
+ * up, and its jobs go back to pending to be sent again. Refuses a row that has the company's id.
+ */
+export function deleteProviderBatch(db: Executor, id: string): boolean {
+  const gone = db
+    .delete(providerBatches)
+    .where(and(eq(providerBatches.id, id), isNull(providerBatches.remoteId)))
+    .returning({ id: providerBatches.id })
+    .all();
+  return gone.length > 0;
+}
+
 /** Every batch still in flight, oldest first: the recovery pass polls each one at boot (§8.4.5). */
 export function activeProviderBatches(db: Executor): ProviderBatchRow[] {
   return db.select().from(providerBatches).where(active()).orderBy(asc(providerBatches.createdAt)).all();

@@ -16,7 +16,8 @@ const SECRET_HEADERS = new Set([
 // Google keys start with AIza, or AQ. for the newer auth keys AI Studio makes by default (§6.11).
 const KEY_SHAPES = [/sk-[A-Za-z0-9_-]{16,}/g, /AIza[0-9A-Za-z_-]{20,}/g, /AQ\.[0-9A-Za-z_-]{20,}/g];
 
-export function redact<T>(value: T, secrets: readonly string[] = []): T {
+/** `shapes: false` skips the regex net, for data that must keep working once saved, like a handle. */
+export function redact<T>(value: T, secrets: readonly string[] = [], opts: { shapes?: boolean } = {}): T {
   // Longest first, so a key that contains another is hidden whole. Short strings would hide
   // ordinary words, so anything under 8 characters is left to the regex net.
   const known = [...new Set(secrets.filter((s) => s.length >= 8))].sort((a, b) => b.length - a.length);
@@ -25,7 +26,7 @@ export function redact<T>(value: T, secrets: readonly string[] = []): T {
   const scrubText = (text: string): string => {
     let out = text;
     for (const secret of known) out = out.split(secret).join(HIDDEN);
-    for (const shape of KEY_SHAPES) out = out.replace(shape, HIDDEN);
+    if (opts.shapes !== false) for (const shape of KEY_SHAPES) out = out.replace(shape, HIDDEN);
     return out;
   };
 

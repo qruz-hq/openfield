@@ -19,6 +19,11 @@ export const usageRowSchema = z.object({
   usd: usdSchema,
   /** Canceled after submit: may be billed, no image to show for it. */
   usdDiscarded: usdSchema,
+  /**
+   * Images that ran again after a restart, whatever came of it, so the company may have billed the
+   * call each one replaced too (§0.13). A count, because a row sums many runs.
+   */
+  reruns: z.int().nonnegative().optional(),
 });
 
 export const usageResponseSchema = z.object({

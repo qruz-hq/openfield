@@ -50,6 +50,7 @@ export {
   pricedOp,
   priceFor,
   resolveSpeed,
+  resumesAfterRestart,
   type SpeedTimeouts,
   speedOffer,
   speedTimeouts,

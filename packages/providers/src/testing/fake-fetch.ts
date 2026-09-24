@@ -1,12 +1,16 @@
 import type { FetchLike } from "../types";
 import { googleFake } from "./google";
-import type { FakeRoute, FakeScenario } from "./types";
+import { resumableFake } from "./resumable";
+import { type FakeRoute, type FakeScenario, wait } from "./types";
 
 // OPENFIELD_FAKE_PROVIDERS=1 hands this to every adapter as ctx.fetch, so the whole app runs end
 // to end with no keys, no network and no cost (§6.12). Tests use it with a forced scenario.
 
-/** One fake per built-in adapter (docs/adding-a-provider.md, step 14). */
-export const builtinFakes: readonly FakeRoute[] = [googleFake];
+/**
+ * One fake per built-in adapter (docs/adding-a-provider.md, step 14), plus the test company that
+ * only exists in fake mode (testing/resumable.ts).
+ */
+export const builtinFakes: readonly FakeRoute[] = [googleFake, resumableFake];
 
 export interface FakeFetchOptions {
   /** Forces one outcome for every call. Otherwise a "#fake:<name>" prompt tag picks it. */
@@ -18,8 +22,12 @@ export interface FakeFetchOptions {
   /** Model ids to leave out of model list answers, to test discovery. */
   hiddenModels?: readonly string[];
   routes?: readonly FakeRoute[];
-  /** The clock batch timelines follow. Default Date.now; tests move it by hand. */
+  /** The clock batch and resumable timelines follow. Default Date.now; tests move it by hand. */
   now?: () => number;
+  /** How long a "#fake:slow" call holds its answer. Default 30 seconds. */
+  slowMs?: number;
+  /** How long a "#fake:resume_slow" call to the resumable test model runs. Default 60 seconds. */
+  resumeSlowMs?: number;
 }
 
 export interface FakeCall {
@@ -43,6 +51,8 @@ export function createFakeFetch(opts: FakeFetchOptions = {}): FakeFetch {
     maxEdge: opts.maxEdge ?? 768,
     hiddenModels: opts.hiddenModels ?? [],
     now: opts.now ?? Date.now,
+    slowMs: opts.slowMs ?? 30_000,
+    resumeSlowMs: opts.resumeSlowMs ?? 60_000,
     store: new Map<string, unknown>(),
   };
 
@@ -68,21 +78,4 @@ function pickDelay(delay: FakeFetchOptions["delayMs"] = [900, 2200]): number {
   if (typeof delay === "number") return delay;
   const [min, max] = delay;
   return min + Math.random() * (max - min);
-}
-
-/** Resolves after `ms`, or rejects with the signal's reason, like fetch does on abort. */
-function wait(ms: number, signal: AbortSignal): Promise<void> {
-  if (signal.aborted) return Promise.reject(signal.reason);
-  if (ms <= 0) return Promise.resolve();
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      signal.removeEventListener("abort", onAbort);
-      resolve();
-    }, ms);
-    const onAbort = () => {
-      clearTimeout(timer);
-      reject(signal.reason);
-    };
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
 }

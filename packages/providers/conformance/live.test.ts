@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { newId } from "@openfield/core";
+import { isTerminalState, newId } from "@openfield/core";
 import { normalize } from "../src/normalize";
 import { createTestContext } from "../src/testing/context";
 import type { ProviderError } from "../src/types";
@@ -11,7 +11,9 @@ import { kits, request } from "./harness";
 
 const live = process.env.OPENFIELD_CONFORMANCE === "live";
 
-describe.skipIf(!live).each(kits.map((kit) => [kit.provider.meta.id, kit] as const))(
+describe
+  .skipIf(!live)
+  .each(kits.filter((kit) => kit.live).map((kit) => [kit.provider.meta.id, kit] as const))(
   "live: %s",
   (_id, kit) => {
     const credentials = Object.fromEntries(
@@ -51,7 +53,12 @@ describe.skipIf(!live).each(kits.map((kit) => [kit.provider.meta.id, kit] as con
       const context = ctx();
       const model = kit.provider.model(cheapest.key);
       const handle = await model.submit(normalized.calls[0]!, context);
-      const update = await model.poll(handle, context);
+      // A queue-style call answers later; a blocking one already has its image.
+      let update = await model.poll(handle, context);
+      while (!isTerminalState(update.state)) {
+        await Bun.sleep(update.nextPollAfterMs ?? 2_000);
+        update = await model.poll(handle, context);
+      }
       expect(update.state).toBe("succeeded");
       expect(update.result?.images[0]?.width).toBeGreaterThan(0);
       expect(JSON.stringify(context.log.lines)).not.toContain(Object.values(credentials)[0]);

@@ -87,7 +87,10 @@ function bindModel(manifest: ModelManifest): ImageModel {
     ...manifest,
     ...(offersBatch && { batch: googleBatch(manifest) }),
 
-    // Gemini answers in one blocking call, so the handle already carries the result (§6.7).
+    // Gemini answers in one blocking call, so the handle already carries the result (§6.7). The image
+    // comes back inside the response with no id to fetch it by later, so no speed is listed in
+    // resumableSpeeds: a call cut off by a restart can only run again (§0.4). The Interactions API
+    // can't resume image models either (README.md, "Restarts"). Batch runs resume from their row.
     async submit(req, ctx) {
       if (req.op !== "generate" && req.op !== "edit") {
         throw new ProviderError("capability_unsupported", {
@@ -148,7 +151,8 @@ function bindModel(manifest: ModelManifest): ImageModel {
     async poll(handle: JobHandle): Promise<JobUpdate> {
       const result = handle.resume?.result as JobResult | undefined;
       if (result && Array.isArray(result.images)) return { state: "succeeded", result };
-      // A blocking call that never returned can't be picked up again; the runner marks it interrupted.
+      // A blocking call that never returned has nothing to pick up. The runner never stores this
+      // handle, because no Google speed is resumable, so this only guards against misuse.
       return {
         state: "failed",
         error: new ProviderError("provider_error", { message: "This run has no result to resume" }),

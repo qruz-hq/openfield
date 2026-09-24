@@ -35,6 +35,16 @@ describe("t()", () => {
     expect(t("settings.apiKeys.works", { count: 3 })).toBe("This key works. 3 models are ready.");
   });
 
+  test("restart lines name the company and count images", () => {
+    expect(t("settings.spending.reruns", { count: 1 })).toBe(
+      "Ran 1 image again after a restart. You may be charged twice.",
+    );
+    expect(t("settings.spending.reruns", { count: 3 })).toBe(
+      "Ran 3 images again after a restart. You may be charged twice.",
+    );
+    expect(t("errors.resumeGone", { company: "OpenAI" })).toBe("OpenAI no longer has this image.");
+  });
+
   test("handles ordinals", () => {
     expect(t("feed.tile.queuedPosition", { position: 1 })).toBe("Queued · 1st in line");
     expect(t("feed.tile.queuedPosition", { position: 2 })).toBe("Queued · 2nd in line");

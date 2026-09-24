@@ -43,7 +43,15 @@ export const sseEventSchema = z.discriminatedUnion("event", [
       busy: z.literal(true).optional(),
     }),
   ),
-  frame("job.started", z.object({ ...jobRef, startedAt: timestampSchema })),
+  frame(
+    "job.started",
+    z.object({
+      ...jobRef,
+      startedAt: timestampSchema,
+      /** Sent again after a restart because its call couldn't resume (§0.4). */
+      rerun: z.literal(true).optional(),
+    }),
+  ),
   frame("job.progress", z.object({ ...jobRef, progress: z.number().min(0).max(1) })),
   /** A preview frame from tmp/. Never an asset; the final job.output replaces it. */
   frame(

@@ -1,11 +1,12 @@
 import {
   ACTIVE_JOB_STATES,
   isTerminalState,
+  type JobHandle,
   type JobSetState,
   type JobState,
   jobIdempotencyKey,
 } from "@openfield/core";
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type { Executor } from "../client";
 import type { AssetRow, JobRow, JobSetRow, NewJobRow, NewJobSetRow } from "../rows";
 import { jobSets, jobs } from "../schema";
@@ -39,6 +40,7 @@ export type JobPatch = Partial<
     | "errorAction"
     | "latencyMs"
     | "speedUsed"
+    | "resumable"
   >
 >;
 
@@ -287,4 +289,205 @@ function bundle(db: Executor, sets: JobSetRow[]): JobSetBundle[] {
     jobs: allJobs.filter((j) => j.jobSetId === jobSet.id),
     assets: allAssets.filter((a) => a.jobSetId === jobSet.id),
   }));
+}
+
+// Restarts (§0.4, §8.4.5)
+
+/**
+ * Stores a resumable call's handle the moment submit() returns, before the first poll (§6.7): the
+ * whole handle, the company's id and the state it reported, for every job the call covers, in one
+ * statement. Guarded like any transition, so a cancel that got there first stays canceled. Only for
+ * jobs sent with `resumable: true`; a blocking call's handle is never stored.
+ */
+export function storeJobHandle(
+  db: Executor,
+  jobIds: readonly string[],
+  handle: JobHandle,
+  state: "queued" | "running" = "running",
+  at = nowIso(),
+): JobRow[] {
+  if (jobIds.length === 0) return [];
+  const patch: JobPatch = handle.providerRef ? { providerJobId: handle.providerRef } : {};
+  return db
+    .update(jobs)
+    .set({ ...transitionValues(state, patch, at), handle })
+    .where(and(inArray(jobs.id, [...jobIds]), inArray(jobs.status, [...STARTED_STATES])))
+    .returning()
+    .all();
+}
+
+/**
+ * A resumable call canceled while its create call was out: the handle that came back is kept on the
+ * canceled jobs until the company has been told to stop, so a cancel that doesn't get through before
+ * a restart is still sent after it (canceledWithHandle).
+ */
+export function storeCanceledHandle(
+  db: Executor,
+  jobIds: readonly string[],
+  handle: JobHandle,
+  at = nowIso(),
+): JobRow[] {
+  if (jobIds.length === 0) return [];
+  const patch: JobPatch = handle.providerRef ? { providerJobId: handle.providerRef } : {};
+  return db
+    .update(jobs)
+    .set({ ...patch, handle, updatedAt: at })
+    .where(and(inArray(jobs.id, [...jobIds]), eq(jobs.status, "canceled"), eq(jobs.resumable, true)))
+    .returning()
+    .all();
+}
+
+/** Which of these jobs ran again after a restart, for the images they made (§0.4). */
+export function rerunJobIds(db: Executor, jobIds: readonly (string | null)[]): Set<string> {
+  const ids = [...new Set(jobIds.filter((id): id is string => id !== null))];
+  if (ids.length === 0) return new Set();
+  const rows = db
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(and(inArray(jobs.id, ids), isNotNull(jobs.rerunAt)))
+    .all();
+  return new Set(rows.map((r) => r.id));
+}
+
+/** Marks a job picked up by id after a restart. Its state stays as it was (§0.4). */
+export function markJobResumed(db: Executor, id: string, at = nowIso()): JobRow | undefined {
+  return db
+    .update(jobs)
+    .set({ resumedAt: at, updatedAt: at })
+    .where(and(eq(jobs.id, id), inArray(jobs.status, [...STARTED_STATES]), isNotNull(jobs.handle)))
+    .returning()
+    .get();
+}
+
+/**
+ * Sends a job again after a restart (§8.4.5): back to pending with rerun_at set, attempt 0 and a
+ * clean slate, keeping its idempotency key, seed and frozen request. Refuses a job that was
+ * resumable, since its work may still be alive at the company, and one that already ran again, so
+ * a crash loop can't bill without end. Undefined when the job isn't eligible.
+ */
+export function rerunJob(db: Executor, id: string, at = nowIso()): JobRow | undefined {
+  return db
+    .update(jobs)
+    .set({
+      status: "pending",
+      rerunAt: at,
+      attempt: 0,
+      startedAt: null,
+      finishedAt: null,
+      nextAttemptAt: null,
+      progress: null,
+      providerJobId: null,
+      handle: null,
+      latencyMs: null,
+      speedUsed: null,
+      errorCode: null,
+      errorMessage: null,
+      errorReason: null,
+      errorAction: null,
+      updatedAt: at,
+    })
+    .where(
+      and(
+        eq(jobs.id, id),
+        inArray(jobs.status, [...STARTED_STATES]),
+        eq(jobs.resumable, false),
+        isNull(jobs.rerunAt),
+      ),
+    )
+    .returning()
+    .get();
+}
+
+/**
+ * A resumable call whose create was cut off before the company's id came back, at a company that
+ * honours the idempotency key: back to pending with resumed_at set, so the runner sends the same
+ * create with the same key and gets the first call back instead of starting a second one (§0.4).
+ * It keeps started_at, so its deadline still runs from the first send, and the attempt the cut-off
+ * create spent. Undefined when the job isn't eligible.
+ */
+export function resendJob(db: Executor, id: string, at = nowIso()): JobRow | undefined {
+  return db
+    .update(jobs)
+    .set({
+      status: "pending",
+      resumedAt: at,
+      attempt: sql`max(${jobs.attempt} - 1, 0)`,
+      nextAttemptAt: null,
+      finishedAt: null,
+      updatedAt: at,
+    })
+    .where(
+      and(
+        eq(jobs.id, id),
+        inArray(jobs.status, [...STARTED_STATES]),
+        eq(jobs.resumable, true),
+        isNull(jobs.handle),
+      ),
+    )
+    .returning()
+    .get();
+}
+
+/** What recovery does with one non-Batch job after a restart (§8.4.5). */
+export type RestartPath =
+  /** Nothing left this computer: send it as it is. */
+  | "requeue"
+  /** Picked up by the company's id; nothing is sent again. */
+  | "resume"
+  /** Its create was cut off before the id came back: sent again with the same key to get it back. */
+  | "resend"
+  /** Sent again, once: its call couldn't resume. */
+  | "rerun"
+  /** Couldn't resume and won't run again. */
+  | "interrupt";
+
+/**
+ * §8.4.5's table for one non-Batch job, from its row and whether its model's create honours the
+ * idempotency key (`idempotentSubmit`, from the manifest), so recovery needs no network. Resume
+ * first, run again second, interrupt last. Null for a finished job. Batch runs are the batch
+ * watcher's and resume from their provider_batches row.
+ */
+export function restartPath(
+  job: Pick<JobRow, "status" | "providerJobId" | "resumable" | "handle" | "rerunAt">,
+  opts: { rerunInterrupted: boolean; idempotentSubmit?: boolean },
+): RestartPath | null {
+  if (isTerminalState(job.status)) return null;
+  if (job.status === "pending") return "requeue";
+  if (job.resumable && job.handle) return "resume";
+  // Never left this computer.
+  if (job.status === "queued" && !job.providerJobId) return "requeue";
+  // Cut off before the company's id arrived: the company may still have it, so it never runs again
+  // as a new call. The same create with the same key only asks for that id again.
+  if (job.resumable) return opts.idempotentSubmit ? "resend" : "interrupt";
+  return opts.rerunInterrupted && job.rerunAt === null ? "rerun" : "interrupt";
+}
+
+/**
+ * Resumable calls canceled while nothing was following them (the company off or keyless, or before
+ * a restart picked them up), whose cancel hasn't reached the company yet: a canceled job keeps its
+ * handle until it has (§0.12). Not Batch runs, whose row carries their cancel.
+ */
+export function canceledWithHandle(db: Executor): { job: JobRow; jobSet: JobSetRow }[] {
+  return db
+    .select({ job: jobs, jobSet: jobSets })
+    .from(jobs)
+    .innerJoin(jobSets, eq(jobSets.id, jobs.jobSetId))
+    .where(
+      and(
+        eq(jobs.status, "canceled"),
+        eq(jobs.resumable, true),
+        isNotNull(jobs.handle),
+        ne(jobSets.speed, "batch"),
+      ),
+    )
+    .all();
+}
+
+/** The company has stopped these canceled calls, or no longer has them: nothing is owed there. */
+export function clearCanceledHandles(db: Executor, jobIds: readonly string[], at = nowIso()): void {
+  if (jobIds.length === 0) return;
+  db.update(jobs)
+    .set({ handle: null, updatedAt: at })
+    .where(and(inArray(jobs.id, [...jobIds]), eq(jobs.status, "canceled")))
+    .run();
 }

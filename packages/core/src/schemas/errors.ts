@@ -37,6 +37,11 @@ export const providerErrorDataSchema = z.object({
   hint: z.object({ action: z.enum(ERROR_HINT_ACTIONS), label: z.string() }).optional(),
   /** The company refused for capacity at this speed (Flex). The runner waits it out instead of retrying. */
   busy: z.boolean().optional(),
+  /**
+   * A status read of a resumable call's id the company no longer has (§6.8). Code provider_error,
+   * never retried, and the call is never sent again (§0.4).
+   */
+  notFound: z.boolean().optional(),
 });
 
 /** What a failed job carries over the wire. `message` is detail for the error log, never the tile. */

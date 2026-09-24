@@ -436,3 +436,44 @@ exports[`google 24. speed on the wire: golden payloads per sync speed, and cost 
   ],
 }
 `;
+
+exports[`fake 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: fake:resumable-image 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "size": "1K",
+      },
+      "url": "https://fake.openfield.invalid/v1/images",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "size": "1K",
+      },
+      "url": "https://fake.openfield.invalid/v1/images",
+    },
+  ],
+}
+`;
+
+exports[`fake 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: fake:resumable-image speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "1:1",
+        "prompt": "A red kite over a green hill",
+        "size": "1K",
+      },
+      "url": "https://fake.openfield.invalid/v1/images",
+    },
+  ],
+}
+`;

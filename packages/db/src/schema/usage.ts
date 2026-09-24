@@ -31,6 +31,8 @@ export const usageLog = sqliteTable(
     httpStatus: integer("http_status"),
     speed: text("speed", { enum: SPEED_IDS }), // the speed billed (§0.13). Added in 0003
     simulated: flag("simulated", 0), // fake mode: cost 0, never in a spend total
+    // The image ran again after a restart, so the first call may be billed too (§0.13). Added in 0005
+    rerun: flag("rerun", 0),
   },
   (t) => [
     check("usage_log_outcome_check", oneOf("outcome", USAGE_OUTCOMES)),

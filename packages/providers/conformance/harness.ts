@@ -1,20 +1,24 @@
 import {
   type CredentialValues,
   type GenerateRequest,
+  isTerminalState,
+  type JobHandle,
   type ModelManifest,
   newId,
   type SettingValue,
 } from "@openfield/core";
 import { normalize } from "../src/normalize";
-import { builtinProviders } from "../src/registry";
+import { builtinProviders, fakeOnlyProviders } from "../src/registry";
 import { createTestContext, type TestContext } from "../src/testing/context";
 import { builtinFakes, createFakeFetch } from "../src/testing/fake-fetch";
 import { gradientPng } from "../src/testing/png";
 import type { FakeRoute, FakeScenario } from "../src/testing/types";
-import type { FetchLike, Provider } from "../src/types";
+import type { FetchLike, ImageModel, JobUpdate, Provider } from "../src/types";
 
 // One kit per built-in adapter: the provider, its fake API and a key the suite hunts for in logs.
-// A new adapter joins the suite by being in builtinProviders with a fake in builtinFakes.
+// A new adapter joins the suite by being in builtinProviders with a fake in builtinFakes. The
+// fake-mode test company runs it too, offline only: it's how a resumable adapter is held to the
+// same rules before a real one ships.
 
 export interface Kit {
   provider: Provider;
@@ -22,17 +26,24 @@ export interface Kit {
   credentials: CredentialValues;
   /** Every credential value, for the "no key anywhere" checks. */
   secrets: string[];
+  /** Has a real API behind it, so OPENFIELD_CONFORMANCE=live runs it. */
+  live: boolean;
 }
 
-export const kits: Kit[] = builtinProviders.map((provider) => {
+const kitFor = (provider: Provider, live: boolean): Kit => {
   const fake = builtinFakes.find((f) => f.providerId === provider.meta.id);
   if (!fake)
     throw new Error(`${provider.meta.id} has no fake in src/testing/, so it can't run the suite offline`);
   const credentials = Object.fromEntries(
     provider.credentials.fields.map((f) => [f.name, `conformance-${provider.meta.id}-${f.name}-7f3a9c2e1b`]),
   );
-  return { provider, fake, credentials, secrets: Object.values(credentials) };
-});
+  return { provider, fake, credentials, secrets: Object.values(credentials), live };
+};
+
+export const kits: Kit[] = [
+  ...builtinProviders.map((p) => kitFor(p, true)),
+  ...fakeOnlyProviders.map((p) => kitFor(p, false)),
+];
 
 export interface Sent {
   url: string;
@@ -41,11 +52,21 @@ export interface Sent {
   body: unknown;
 }
 
+/** A clock the fake API and the context both read, moved by hand so timelines take no real time. */
+export interface ManualClock {
+  now(): number;
+  advance(ms: number): void;
+}
+
 export interface Harness {
   ctx: TestContext;
   fetch: ReturnType<typeof createFakeFetch>;
   sent: Sent[];
+  /** Absent when the test passed its own `now`. */
+  clock?: ManualClock;
 }
+
+const EPOCH = Date.parse("2026-09-24T12:00:00.000Z");
 
 export function harness(
   kit: Kit,
@@ -58,12 +79,14 @@ export function harness(
     now?: () => number;
   } = {},
 ): Harness {
+  const clock = opts.now ? undefined : manualClock();
+  const now = opts.now ?? clock!.now;
   const fake = createFakeFetch({
     routes: [kit.fake],
     delayMs: opts.delayMs ?? 0,
     maxEdge: 48,
+    now,
     ...(opts.scenario && { scenario: opts.scenario }),
-    ...(opts.now && { now: opts.now }),
   });
   const sent: Sent[] = [];
   const spy: FetchLike = async (input, init) => {
@@ -75,9 +98,20 @@ export function harness(
   const ctx = createTestContext({
     fetch: spy,
     credentials: opts.credentials ?? kit.credentials,
+    now,
     ...(opts.signal && { signal: opts.signal }),
   });
-  return { ctx, fetch: fake, sent };
+  return { ctx, fetch: fake, sent, ...(clock && { clock }) };
+}
+
+function manualClock(): ManualClock {
+  let at = EPOCH;
+  return {
+    now: () => at,
+    advance: (ms) => {
+      at += ms;
+    },
+  };
 }
 
 function parseBody(body: unknown): unknown {
@@ -143,6 +177,42 @@ export async function generate(
   const handles = [];
   for (const call of normalized.calls) handles.push(await model.submit(call, h.ctx));
   return { normalized, handles, model };
+}
+
+/**
+ * Polls one handle until it ends, moving the harness clock between reads so a queue-style fake
+ * walks its timeline in no real time. A blocking adapter's first poll already ends it.
+ */
+export async function finish(model: ImageModel, handle: JobHandle, h: Harness): Promise<JobUpdate> {
+  if (!h.clock) throw new Error("finish() needs the harness's own clock");
+  for (let i = 0; i < 500; i++) {
+    const update = await model.poll(handle, h.ctx);
+    if (isTerminalState(update.state)) return update;
+    h.clock.advance(2_000);
+  }
+  throw new Error("The call never finished");
+}
+
+/**
+ * Normalizes, submits every call and polls each to its end, as the runner would. Throws what
+ * submit throws, or the first failed call's error, so tests read the same for blocking and
+ * queue-style adapters.
+ */
+export async function run(
+  kit: Kit,
+  manifest: ModelManifest,
+  req: GenerateRequest,
+  h: Harness,
+  stored: Record<string, SettingValue> = {},
+) {
+  const sent = await generate(kit, manifest, req, h, stored);
+  const updates: JobUpdate[] = [];
+  for (const handle of sent.handles) {
+    const update = await finish(sent.model, handle, h);
+    if (update.state !== "succeeded" && update.error) throw update.error;
+    updates.push(update);
+  }
+  return { ...sent, updates };
 }
 
 /** A small real PNG in the asset store, for references and edit bases. */

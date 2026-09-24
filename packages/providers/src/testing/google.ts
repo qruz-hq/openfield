@@ -30,6 +30,7 @@ import {
   type RecordedExchange,
   replay,
   taggedScenario,
+  wait,
 } from "./types";
 
 // A stand-in for generativelanguage.googleapis.com. It checks requests against Google's documented
@@ -66,7 +67,7 @@ export const googleFake: FakeRoute = {
     const failure = forced && fixtures[forced];
 
     if (request.method === "GET" && url.pathname === "/v1beta/models") {
-      if (forced && forced !== "success") return replay(failure ?? serverError);
+      if (forced && forced !== "success" && forced !== "slow") return replay(failure ?? serverError);
       const models = modelsList.response.body.models.filter(
         (m) => !env.hiddenModels.includes(m.name.replace(/^models\//, "")),
       );
@@ -98,6 +99,9 @@ export const googleFake: FakeRoute = {
       // Google documents no wait for Flex; a short Retry-After keeps fake runs quick.
       if (seen % 2 === 0) return replay(flexBusy, flexBusy.response.body, { "retry-after": "2" });
     }
+    // A blocking call held open, so stopping or killing the server lands mid-call. Google keeps no
+    // id for it, so a call cut off here can only run again (§0.4, §6.13).
+    if (scenario === "slow") await wait(env.slowMs, request.signal);
     // Priority over its limits is served, and billed, at Standard without an error.
     const served =
       scenario === "priority_standard" && tier === "priority" ? "standard" : (tier ?? "standard");

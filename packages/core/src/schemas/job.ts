@@ -19,10 +19,14 @@ import {
 
 // Job sets and jobs on the wire (§0.1, §8.3.1). A job set is one submit; a job is one image.
 
-/** What an adapter needs to find its work again after a restart. Stored as JSON. */
+/**
+ * What an adapter needs to find its work again after a restart (§6.7). For a resumable call it is
+ * stored whole on jobs.handle the moment submit() returns, before the first poll. Never sent to the
+ * browser.
+ */
 export const jobHandleSchema = z.object({
   jobId: ulidSchema,
-  /** request_id, prediction id, … */
+  /** The company's id: request id, prediction id, response id. Copied to jobs.provider_job_id. */
   providerRef: z.string().optional(),
   statusUrl: z.url().optional(),
   cancelUrl: z.url().optional(),
@@ -100,6 +104,10 @@ export const jobSchema = z.object({
   speedUsed: speedIdSchema.nullish(),
   /** When a job waiting out a retry or a Flex busy answer goes again. */
   nextAttemptAt: timestampSchema.nullish(),
+  /** Picked up by the company's id after a restart: "Picking up where it left off" (§0.4). */
+  resumedAt: timestampSchema.nullish(),
+  /** Sent again at boot because its call couldn't resume, so it may be charged twice (§0.4). */
+  rerunAt: timestampSchema.nullish(),
 });
 
 export const jobSetSchema = z.object({

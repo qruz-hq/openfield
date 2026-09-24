@@ -40,6 +40,11 @@ const settingValues = {
   showExperimental: z.boolean(),
   canvasFileWriteThrough: z.boolean(),
   upscaleCommandPath: z.string().min(1).max(4096).nullable(),
+  /**
+   * Send an image again at boot, once, when its call was cut off and can't resume (§0.4, §8.4.5).
+   * Read once per boot. Never touches a call that resumes by id or a Batch run.
+   */
+  rerunInterrupted: z.boolean(),
 };
 
 type SettingValues = typeof settingValues;
@@ -66,6 +71,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   showExperimental: false,
   canvasFileWriteThrough: false,
   upscaleCommandPath: null,
+  rerunInterrupted: true,
 };
 
 function withDefaults<S extends z.ZodRawShape>(shape: S, defaults: { [K in keyof S]: z.output<S[K]> }) {

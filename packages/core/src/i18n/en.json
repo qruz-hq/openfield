@@ -164,7 +164,8 @@
           "tooLarge": "A reference image may be too large. Try a smaller one.",
           "company": "This usually clears up on its own. Try again in a few minutes, or pick another model.",
           "unknown": "Try again, or pick another model.",
-          "interrupted": "Openfield stopped before this image was done."
+          "interrupted": "Openfield stopped before this image was done.",
+          "rerun": "It ran again after a restart. You may be charged twice."
         }
       },
       "actions": {
@@ -193,7 +194,12 @@
         "delete": "Delete"
       },
       "inLine": "{position, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} in line",
-      "summaryWithSpeed": "{model} · {aspect} · {resolution} · {speed}"
+      "summaryWithSpeed": "{model} · {aspect} · {resolution} · {speed}",
+      "resumed": "Picking up where it left off",
+      "rerunning": "Running again after a restart",
+      "chargedTwice": "You may be charged twice.",
+      "rerunNote": "Ran again after a restart",
+      "rerunLabel": "Ran again after a restart. You may be charged twice."
     },
     "selection": {
       "count": "{count} selected",
@@ -413,7 +419,7 @@
     },
     "defaults": {
       "title": "Defaults",
-      "intro": "What new images start with, and how many Openfield makes at the same time.",
+      "intro": "What new images start with, how many Openfield makes at once, and what happens to an image a restart cut off.",
       "modelDefault": "Model default",
       "newImages": "New images",
       "model": "Default model",
@@ -434,7 +440,10 @@
       },
       "editing": "Editing",
       "regionalFallback": "Allow approximate area edits",
-      "regionalFallbackHint": "Some models can't edit a single area. Openfield edits the whole image and keeps your area as close as it can."
+      "regionalFallbackHint": "Some models can't edit a single area. Openfield edits the whole image and keeps your area as close as it can.",
+      "restarts": "Restarts",
+      "rerunInterrupted": "Run interrupted images again after a restart",
+      "rerunInterruptedHint": "Only for images that can't pick up where they left off. You may be charged twice."
     },
     "appearance": {
       "title": "Appearance",
@@ -511,7 +520,8 @@
       "limitReached": "You've passed your monthly limit. Generate anyway?",
       "export": "Export all runs",
       "exportHint": "Save a spreadsheet of every run.",
-      "exportAction": "Export CSV"
+      "exportAction": "Export CSV",
+      "reruns": "{count, plural, one {Ran # image again after a restart.} other {Ran # images again after a restart.}} You may be charged twice."
     },
     "privacy": {
       "title": "Privacy",
@@ -732,7 +742,9 @@
     "batchExpired": "{company} didn't finish this within {hours} hours.",
     "batchOtherKey": "This run was sent with a different {company} key.",
     "batchGone": "{company} can't find this run anymore.",
-    "batchUnchecked": "Openfield couldn't reach {company} to check on this run."
+    "batchUnchecked": "Openfield couldn't reach {company} to check on this run.",
+    "resumeGone": "{company} no longer has this image.",
+    "resumeUnchecked": "Openfield couldn't reach {company} to check on this image."
   },
   "presets": {
     "errors": {

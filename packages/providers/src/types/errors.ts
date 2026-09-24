@@ -21,6 +21,11 @@ export interface ProviderErrorOptions {
   hint?: { action: ErrorHintAction; label: string };
   /** The company refused for capacity at this speed (Flex). The runner waits instead of retrying. */
   busy?: boolean;
+  /**
+   * A status read of a resumable call's id the company no longer has (§6.8). Use with
+   * provider_error: the runner fails the job and never sends the call again. See notFoundError().
+   */
+  notFound?: boolean;
   cause?: unknown;
 }
 
@@ -34,6 +39,7 @@ export class ProviderError extends Error {
   readonly field?: string;
   readonly hint?: { action: ErrorHintAction; label: string };
   readonly busy?: boolean;
+  readonly notFound?: boolean;
 
   constructor(code: ErrorCode, opts: ProviderErrorOptions = {}) {
     super(opts.message ?? code, opts.cause === undefined ? undefined : { cause: opts.cause });
@@ -47,6 +53,7 @@ export class ProviderError extends Error {
     if (opts.field !== undefined) this.field = opts.field;
     if (opts.hint !== undefined) this.hint = opts.hint;
     if (opts.busy) this.busy = true;
+    if (opts.notFound) this.notFound = true;
   }
 
   toJSON(): ProviderErrorData {
@@ -60,8 +67,22 @@ export class ProviderError extends Error {
       ...(this.field !== undefined && { field: this.field }),
       ...(this.hint !== undefined && { hint: this.hint }),
       ...(this.busy && { busy: true }),
+      ...(this.notFound && { notFound: true }),
     };
   }
+}
+
+/**
+ * The company answered a status read by id with "not found": the call a restart left behind is gone
+ * (§0.5, §8.4.5). Never retried. `company` is the adapter's meta.displayName.
+ */
+export function notFoundError(company: string, opts: Omit<ProviderErrorOptions, "notFound"> = {}) {
+  return new ProviderError("provider_error", {
+    message: `${company} has no call with this id`,
+    userMessage: t("errors.resumeGone", { company }),
+    ...opts,
+    notFound: true,
+  });
 }
 
 export const isProviderError = (value: unknown): value is ProviderError => value instanceof ProviderError;

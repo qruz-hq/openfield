@@ -283,6 +283,23 @@ export const modelManifestSchema = z
         message: "each speed is offered once",
       })
       .optional(),
+    /**
+     * Sync speeds whose sent calls survive a restart: the company keeps working with no open
+     * connection and answers a status read by id later (§0.4, §6.3). Absent: none. Batch is never
+     * listed, because the batch path always resumes. A change here bumps manifestVersion.
+     */
+    resumableSpeeds: z
+      .array(speedIdSchema.exclude(["batch"]))
+      .refine((ids) => new Set(ids).size === ids.length, { message: "each speed is listed once" })
+      .optional(),
+    /**
+     * submit() sends the idempotency key and the company honours it: a create sent again with the
+     * same key returns the first call instead of starting a second one (§0.4, §6.3). A resumable
+     * create whose answer was lost, on the network or to a restart, is then sent again to get its id
+     * back. Absent: such a create ends the image, since sending it again could bill twice. A change
+     * here bumps manifestVersion.
+     */
+    idempotentSubmit: z.literal(true).optional(),
     source: z.enum(MODEL_SOURCES),
     /** Bumped on any capability or speed change; frozen onto the job set. */
     manifestVersion: z.string().min(1),
@@ -291,7 +308,14 @@ export const modelManifestSchema = z
   .refine((m) => m.key === `${m.providerId}:${m.modelId}`, {
     message: "key must be <providerId>:<modelId>",
     path: ["key"],
-  });
+  })
+  .refine(
+    (m) =>
+      (m.resumableSpeeds ?? []).every(
+        (id) => id === "standard" || m.speeds?.some((o) => o.id === id && o.delivery === "sync"),
+      ),
+    { message: "a resumable speed must be one the model offers", path: ["resumableSpeeds"] },
+  );
 
 /** What resolveControl() returns for one control on one model (§0.3). */
 export const resolvedControlSchema = z.object({

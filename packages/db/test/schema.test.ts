@@ -167,6 +167,10 @@ const COLUMNS: Record<string, string[]> = {
     "error_reason text",
     "speed_used text",
     "error_action text",
+    "handle text",
+    "resumable integer not null default 0",
+    "resumed_at text",
+    "rerun_at text",
   ],
   provider_batches: [
     "id text not null pk",
@@ -363,6 +367,7 @@ const COLUMNS: Record<string, string[]> = {
     "http_status integer",
     "speed text",
     "simulated integer not null default 0",
+    "rerun integer not null default 0",
   ],
   settings: ["key text not null pk", "value text not null", "updated_at text not null"],
 };
@@ -655,18 +660,18 @@ describe("boot (§8.2.4)", () => {
   });
 
   test("every migration is in the journal and applied, newest tag reported", () => {
-    expect(opened.schemaTag).toBe("0004_job_error_action");
-    expect(raw.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 5 });
+    expect(opened.schemaTag).toBe("0005_resume");
+    expect(raw.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 6 });
   });
 
   test("reopening applies nothing twice", () => {
     const again = openDb(file);
-    expect(again.schemaTag).toBe("0004_job_error_action");
-    expect(again.db.$client.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 5 });
+    expect(again.schemaTag).toBe("0005_resume");
+    expect(again.db.$client.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 6 });
     again.close();
   });
 
-  test("0003 keeps existing rows: Standard runs, real spend, no settings", () => {
+  test("0003 and 0005 keep existing rows: Standard runs, real spend, no settings, no restarts", () => {
     // A library last opened at 0002, with a run and its usage row in it.
     const folder = join(dir, "migrations-0002");
     cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
@@ -704,7 +709,7 @@ describe("boot (§8.2.4)", () => {
 
     const upgraded = openDb(path);
     const db = upgraded.db.$client;
-    expect(upgraded.schemaTag).toBe("0004_job_error_action");
+    expect(upgraded.schemaTag).toBe("0005_resume");
     expect(db.query("SELECT speed, cost_actual_usd, request_json FROM job_sets").get()).toEqual({
       speed: "standard",
       cost_actual_usd: 0.134,
@@ -714,10 +719,18 @@ describe("boot (§8.2.4)", () => {
       status: "succeeded",
       speed_used: null,
     });
-    expect(db.query("SELECT cost_usd, speed, simulated FROM usage_log").get()).toEqual({
+    // Every call made before 0005 couldn't resume and never ran again.
+    expect(db.query("SELECT handle, resumable, resumed_at, rerun_at FROM jobs").get()).toEqual({
+      handle: null,
+      resumable: 0,
+      resumed_at: null,
+      rerun_at: null,
+    });
+    expect(db.query("SELECT cost_usd, speed, simulated, rerun FROM usage_log").get()).toEqual({
       cost_usd: 0.134,
       speed: null,
       simulated: 0,
+      rerun: 0,
     });
     expect(db.query("SELECT settings, concurrency_cap FROM providers").get()).toEqual({
       settings: null,

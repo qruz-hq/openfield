@@ -3,6 +3,7 @@ import { MODEL_BADGES } from "@openfield/core/constants";
 import {
   batchHandleSchema,
   capabilitiesSchema,
+  jobHandleSchema,
   normalizedRequestSchema,
   presetObjectSchema,
   priceModelSchema,
@@ -26,6 +27,7 @@ const request = () => normalizedRequestSchema;
 const speeds = () => z.array(speedOfferSchema);
 const settings = () => providerSettingValuesSchema;
 const handle = () => batchHandleSchema;
+const jobHandle = () => jobHandleSchema;
 const graph = () => canvasDocumentSchema;
 
 export const providerRow = createSelectSchema(t.providers, { settings });
@@ -35,8 +37,8 @@ export const newModelRow = createInsertSchema(t.models, { badges, capabilities, 
 
 export const jobSetRow = createSelectSchema(t.jobSets, { requestJson: request });
 export const newJobSetRow = createInsertSchema(t.jobSets, { requestJson: request });
-export const jobRow = createSelectSchema(t.jobs);
-export const newJobRow = createInsertSchema(t.jobs);
+export const jobRow = createSelectSchema(t.jobs, { handle: jobHandle });
+export const newJobRow = createInsertSchema(t.jobs, { handle: jobHandle });
 export const providerBatchRow = createSelectSchema(t.providerBatches, { handle });
 export const newProviderBatchRow = createInsertSchema(t.providerBatches, { handle });
 

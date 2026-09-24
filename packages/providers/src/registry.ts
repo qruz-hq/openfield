@@ -1,6 +1,7 @@
 import type { ModelKey, ModelManifest, ProviderErrorData, ProviderId, RefreshReport } from "@openfield/core";
 import { safeParseModelKey } from "@openfield/core";
 import { createGoogleProvider } from "./google";
+import { createResumableFakeProvider } from "./testing/resumable";
 import {
   type CallContext,
   type ImageModel,
@@ -16,6 +17,17 @@ import {
  * loading and no remote code (§6.12).
  */
 export const builtinProviders: readonly Provider[] = [createGoogleProvider()];
+
+/**
+ * Companies that exist only with OPENFIELD_FAKE_PROVIDERS=1: the test company and its resumable
+ * model (§6.12), so the resume path runs without keys. Never registered outside fake mode.
+ */
+export const fakeOnlyProviders: readonly Provider[] = [createResumableFakeProvider()];
+
+/** The adapters a server registers: the built-ins, plus the test company in fake mode. */
+export function providersFor(opts: { fake: boolean }): readonly Provider[] {
+  return opts.fake ? [...builtinProviders, ...fakeOnlyProviders] : builtinProviders;
+}
 
 export interface RegistryOptions {
   providers?: readonly Provider[];

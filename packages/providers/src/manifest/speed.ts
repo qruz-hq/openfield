@@ -43,6 +43,20 @@ export function offeredSpeeds(manifest: Speeds, op: AdapterOp = "generate"): Spe
   return SPEED_IDS.filter((id) => !resolveSpeed(manifest, id, op).fellBack);
 }
 
+/**
+ * Whether a call sent at `speed` survives a restart (§0.4, §6.3): a Batch run always does, from its
+ * provider batch row, and a sync speed only when the manifest lists it in `resumableSpeeds`. The
+ * runner writes this to jobs.resumable when it sends a call and stores the handle only when it's
+ * true, so a call that can't resume is never polled by an id it doesn't have after a restart.
+ */
+export function resumesAfterRestart(
+  manifest: Pick<ModelManifest, "resumableSpeeds">,
+  speed: SpeedId,
+): boolean {
+  if (speed === "batch") return true;
+  return (manifest.resumableSpeeds as readonly SpeedId[] | undefined)?.includes(speed) ?? false;
+}
+
 /** The adapter op a recorded op prices as. Local and plugin ops fall back to generate. */
 export function pricedOp(op: Op | undefined): AdapterOp {
   return (op && adapterOpFor(op, { hasMask: false, canInpaint: false })) ?? "generate";

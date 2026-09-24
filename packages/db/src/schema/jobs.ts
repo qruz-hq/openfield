@@ -10,10 +10,10 @@ import {
   OPS,
   SPEED_IDS,
 } from "@openfield/core/constants";
-import type { BatchHandle, NormalizedRequest } from "@openfield/core/schemas";
+import type { BatchHandle, JobHandle, NormalizedRequest } from "@openfield/core/schemas";
 import { sql } from "drizzle-orm";
 import { check, index, integer, real, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
-import { json, oneOf } from "./_helpers";
+import { flag, json, oneOf } from "./_helpers";
 import { canvases, canvasRuns } from "./canvas";
 import { providers } from "./providers";
 
@@ -97,6 +97,16 @@ export const jobs = sqliteTable(
     // The failed tile's button when it isn't the code's usual one, such as Try again on a Batch
     // image (§0.5). NULL: the code's own. Added in 0004.
     errorAction: text("error_action", { enum: ERROR_ACTIONS }),
+    // Restarts (§0.4, §6.7). Added in 0005.
+    // The adapter's resume data, written the moment submit() returns for a resumable call and
+    // before the first poll. Never sent to the browser.
+    handle: json<JobHandle>("handle"),
+    // Sent at a speed in the model's resumableSpeeds (§6.3). Written when the call is sent.
+    resumable: flag("resumable", 0),
+    // Picked up by the company's id after a restart: "Picking up where it left off".
+    resumedAt: text("resumed_at"),
+    // Sent again at boot because it couldn't resume. Set once, so a job runs again at most once.
+    rerunAt: text("rerun_at"),
   },
   (t) => [
     unique("jobs_job_set_id_idx_unique").on(t.jobSetId, t.idx),

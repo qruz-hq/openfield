@@ -1,6 +1,6 @@
 import { RESOLUTION_TIER_PX, type ResolutionTier } from "@openfield/core";
 import { gradientPng, hashString, probeImage } from "./png";
-import type { FakeEnv } from "./types";
+import { type FakeEnv, storeMap } from "./types";
 
 // Shared by the fake generateContent, Batch and Files routes: Google's documented tables, request
 // checks, the image a request makes, and small response helpers.
@@ -64,14 +64,7 @@ export const promptOf = (body: GenerateBody) =>
 export const files = (env: FakeEnv) =>
   storeMap<string, { mimeType: string; bytes: Uint8Array; displayName: string }>(env, "google:files");
 
-export function storeMap<K, V>(env: FakeEnv, name: string): Map<K, V> {
-  let map = env.store.get(name) as Map<K, V> | undefined;
-  if (!map) {
-    map = new Map<K, V>();
-    env.store.set(name, map);
-  }
-  return map;
-}
+export { storeMap } from "./types";
 
 /**
  * Checks a generateContent body against Google's tables and works out the image it would make:

@@ -44,6 +44,11 @@ export const assetListItemSchema = z.object({
   prompt: z.string(),
   approximate: z.boolean(),
   isFavourite: z.boolean(),
+  /**
+   * Made by a run that went again after a restart (jobs.rerun_at), so the company may have billed
+   * the call it replaced too (§0.4). The tile's note stays as long as the image is in the feed.
+   */
+  rerun: z.boolean(),
   createdAt: timestampSchema,
   thumbUrl: z.string(),
   fileUrl: z.string(),

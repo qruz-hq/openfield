@@ -13,7 +13,7 @@ Checked on 2026-09-23 against Google's [models](https://ai.google.dev/gemini-api
 ## How it talks to Google
 
 - **Generate and edit:** `POST https://generativelanguage.googleapis.com/v1beta/models/{id}:generateContent` with `generationConfig.responseModalities: ["IMAGE"]` and `generationConfig.imageConfig { aspectRatio, imageSize }`. The prompt is the first part, then the edit base, then references, each as `inlineData { mimeType, data }`.
-- **Why generateContent:** Google's guides now show the newer Interactions API, but say generateContent "remains fully supported". It's stateless (Interactions keeps history unless you opt out), and it's what the PRD specifies.
+- **Why generateContent:** Google's guides now show the newer Interactions API, but say generateContent "remains fully supported". It's stateless (Interactions keeps history unless you opt out), and it's what the PRD specifies. Interactions wouldn't make an image survive a restart either (see Restarts).
 - **Auth:** the `x-goog-api-key` header, never the `?key=` query form.
 - **Hosts:** `generativelanguage.googleapis.com` only. Images arrive inline, so `assetHosts` is empty and an image URL in a response is refused.
 - **Check key:** `GET /v1beta/models`, which is free. It also feeds discovery.
@@ -56,6 +56,23 @@ Chosen only in the company's settings (`settings.ts`, the Speed panel), never in
 - **Saving results:** an image that can't be saved on this computer comes back as that job's own error item, so the other images still land.
 - **Uploads after a lost answer:** if the create call fails on the way, the batch may exist and use the uploads, so they're kept. A `find()` that hits takes them on for cleanup; a second `submit` (sent only after `find()` came back empty) deletes them first.
 
+## Restarts
+
+A Standard, Flex or Priority image **can't be picked up after the server stops**, so no model lists `resumableSpeeds` and the runner never stores their handles (§0.4, §6.3). `generateContent` returns the image inside the HTTP response, with no id to fetch it by later. What Openfield does instead: stopping the server waits for in-flight calls to finish (§0.12), and a call cut off by a crash or a forced stop runs again once at the next boot when "Run interrupted images again after a restart" is on, marked as maybe charged twice. **Batch is the only Google path that survives a restart**: the batch name is stored the moment the create call returns, and the watcher polls it at boot (`batch.ts`, `apps/server/src/runner/batches.ts`).
+
+The Interactions API was the only candidate for a resumable path. A live probe with the owner's key on **2026-09-23/24** ruled it out:
+
+- **Endpoints** (confirmed live): `POST /v1beta/interactions`, `GET /v1beta/interactions/{id}` (optional `stream=true&last_event_id=`), `POST /v1beta/interactions/{id}/cancel`, `DELETE /v1beta/interactions/{id}`, with the header `Api-Revision: 2026-05-20`. `GET /v1beta/interactions` answers 404 "Method not found": there's no list, so an orphaned id can't be found again.
+- **Image requests** take `{model, input, response_format: {type: "image", mime_type: "image/jpeg", aspect_ratio, image_size}}`. Only `image/jpeg` is accepted, `delivery: "uri"` is refused ("Image delivery mode is not supported."), and `image_size` is `512`, `1K`, `2K` or `4K`, case-sensitive.
+- **`background: true` is refused** with a 400, "Model '…' does not support background interactions.", for `gemini-3-pro-image`, `gemini-3.1-flash-image` and `gemini-3.1-flash-lite-image`. Background mode is the only mode in which Google keeps working after the client goes away. The background guide lists only text models and managed agents.
+- **A streamed call is stored only if the client stays connected until it completes.** After a disconnect following `interaction.created`, `GET` by id stayed 404 for the 136 s it was polled (the connected twin finished about 4 s after `created`). The id also arrives together with the first output (26 to 69 s in on a queued call), not at acceptance; no event carries an event id; and `GET ?stream=true` answers 400 "Streaming retrieval of interactions is not supported for this model". Runs that end in an error are never stored.
+- **Cancel** applies only to running background interactions. On a completed non-background one it answers 200 and changes nothing; on an id that was never stored, 404.
+- **Speeds**: `service_tier` exists on Interactions (`flex`, `standard`, `priority`, plus an undocumented `deferred`), but the image model pages list Flex and Priority as not supported, and Batch exists only on `models/{model}:batchGenerateContent`. Stored interactions last 55 days on the paid tier and 1 day on the free tier.
+
+The probe ran the storage and disconnect tests on free-tier text models (`gemini-3.5-flash-lite`, `gemini-3.5-flash`), because the key's project had an image quota of 0: no image was generated and nothing was billed. Those storage rules are per interaction, not per model, and image models refuse background mode before any of that applies.
+
+If Google adds background support for an image model, that speed can move onto Interactions and into `resumableSpeeds`, with no runner change: POST with `background: true`, keep the returned `id` as the handle's `providerRef`, poll `GET /v1beta/interactions/{id}` until `status` is terminal, and read the image from `steps[type=model_output].content[type=image].data` (base64 JPEG). Map a 404 on that read to `notFoundError()`, and keep `DELETE` for cleanup.
+
 ## Verified
 
 - The three model ids and their Nano Banana names (models page).
@@ -97,4 +114,4 @@ Chosen only in the company's settings (`settings.ts`, the Speed panel), never in
 
 ## Fixtures
 
-Hand-made from the documented shapes; see `__fixtures__/README.md`. The fake API is `src/testing/google.ts` (generateContent and model list), `google-batch.ts` (Batch and Files) and `google-common.ts`. In fake mode, prompt tags pick outcomes: `#fake:flex_busy` answers every other Flex call busy (with `Retry-After: 2`, so fake runs stay quick), `#fake:priority_standard` serves Priority at Standard, and a batch finishes in a few seconds unless tagged `#fake:batch_slow` (about 30 seconds, long enough to cancel or restart the server), `#fake:batch_partial`, `#fake:batch_expired` or `#fake:batch_failed`. A fake batch id carries its own plan, so it still answers after a server restart.
+Hand-made from the documented shapes; see `__fixtures__/README.md`. The fake API is `src/testing/google.ts` (generateContent and model list), `google-batch.ts` (Batch and Files) and `google-common.ts`. In fake mode, prompt tags pick outcomes: `#fake:slow` holds a generateContent call open for about 30 seconds, long enough to stop or kill the server mid-call and see it finish or run again, `#fake:flex_busy` answers every other Flex call busy (with `Retry-After: 2`, so fake runs stay quick), `#fake:priority_standard` serves Priority at Standard, and a batch finishes in a few seconds unless tagged `#fake:batch_slow` (about 30 seconds, long enough to cancel or restart the server), `#fake:batch_partial`, `#fake:batch_expired` or `#fake:batch_failed`. A fake batch id carries its own plan, so it still answers after a server restart.

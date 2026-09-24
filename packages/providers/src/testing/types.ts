@@ -24,6 +24,12 @@ export const FAKE_SCENARIOS = [
   "batch_partial",
   "batch_expired",
   "batch_failed",
+  // Restarts (§0.4). Slow holds a blocking Google call open for about 30 seconds, long enough to
+  // stop or kill the server mid-call. The resumable test model finishes in a few seconds unless
+  // tagged resume_slow (about a minute) or resume_gone (slow, and its id is gone after 10 seconds).
+  "slow",
+  "resume_slow",
+  "resume_gone",
 ] as const;
 export type FakeScenario = (typeof FAKE_SCENARIOS)[number];
 
@@ -42,8 +48,12 @@ export interface FakeEnv {
   maxEdge: number;
   /** Model ids to leave out of model list answers, to test discovery. */
   hiddenModels: readonly string[];
-  /** The fake's clock, for batch timelines. */
+  /** The fake's clock, for batch and resumable timelines. */
   now(): number;
+  /** How long a "slow" blocking call holds its answer, in real milliseconds. */
+  slowMs: number;
+  /** How long a "resume_slow" call runs at the test company, on the fake's clock. */
+  resumeSlowMs: number;
   /** Per-fetch state a fake keeps between calls: busy counters, cancels, uploads. */
   store: Map<string, unknown>;
 }
@@ -70,4 +80,31 @@ export function replay(
 export function taggedScenario(text: string): FakeScenario | undefined {
   const tag = /#fake:([a-z_]+)/.exec(text)?.[1];
   return (FAKE_SCENARIOS as readonly string[]).includes(tag ?? "") ? (tag as FakeScenario) : undefined;
+}
+
+/** Resolves after `ms`, or rejects with the signal's reason, like fetch does on abort. */
+export function wait(ms: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) return Promise.reject(signal.reason);
+  if (ms <= 0) return Promise.resolve();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    const onAbort = () => {
+      clearTimeout(timer);
+      reject(signal.reason);
+    };
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+/** A named map in the fake's per-fetch store, made on first use. */
+export function storeMap<K, V>(env: FakeEnv, name: string): Map<K, V> {
+  let map = env.store.get(name) as Map<K, V> | undefined;
+  if (!map) {
+    map = new Map<K, V>();
+    env.store.set(name, map);
+  }
+  return map;
 }

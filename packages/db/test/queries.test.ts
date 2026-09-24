@@ -7,17 +7,21 @@ import {
   activeProviderBatches,
   addToFolder,
   assetVersions,
+  canceledWithHandle,
+  clearCanceledHandles,
   clearFavourite,
   createFolder,
   createJobSet,
   createProviderBatch,
   deleteFolder,
+  deleteProviderBatch,
   deriveJobSetStatus,
   dueProviderBatches,
   feedPage,
   findLiveAssetBySha256,
   finishProviderBatch,
   getAssets,
+  getJob,
   getJobSetBundle,
   getModel,
   getProvider,
@@ -33,6 +37,7 @@ import {
   listModels,
   markBatchCleaned,
   markBatchNotified,
+  markJobResumed,
   type OpenDb,
   openDb,
   providerBatchesForJobSets,
@@ -42,6 +47,9 @@ import {
   recordKeyCheck,
   refreshJobSetStatus,
   removeFromFolder,
+  rerunJob,
+  resendJob,
+  restartPath,
   restoreAsset,
   resumableBatches,
   seedProviders,
@@ -50,6 +58,8 @@ import {
   setModelEnabled,
   setProviderCredential,
   softDeleteAssets,
+  storeCanceledHandle,
+  storeJobHandle,
   transitionJob,
   transitionJobsInSet,
   trashedBefore,
@@ -510,6 +520,16 @@ describe("provider batches", () => {
     expect(polled).toMatchObject({ state: "running", lastPolledAt: "2026-09-23T10:00:30.000Z" });
   });
 
+  test("a batch the company never got can be dropped, one it has can't", () => {
+    const { run, batch } = newBatch();
+    expect(deleteProviderBatch(db(), batch.id)).toBe(true);
+    expect(getProviderBatchForJobSet(db(), run.jobSet.id)).toBeUndefined();
+    const sent = newBatch().batch;
+    recordBatchSubmitted(db(), sent.id, handle, { nextPollAt: "2026-09-23T10:00:30.000Z" });
+    expect(deleteProviderBatch(db(), sent.id)).toBe(false);
+    expect(getProviderBatch(db(), sent.id)?.remoteId).toBe("batches/abc123");
+  });
+
   test("a cancel during the create call keeps its state, and the id is still stored", () => {
     const { batch } = newBatch();
     finishProviderBatch(db(), batch.id, { state: "canceled" });
@@ -605,6 +625,7 @@ describe("usage", () => {
         images: 1,
         usd: 0.134,
         usdDiscarded: 0.134,
+        reruns: 0,
       },
     ]);
   });
@@ -633,7 +654,16 @@ describe("usage", () => {
       simulated: true,
     });
     expect(usageRollup(db(), { from: "2026-09-23" })).toEqual([
-      { day: "2026-09-23", providerId: "google", modelId: "m", runs: 2, images: 1, usd: 0, usdDiscarded: 0 },
+      {
+        day: "2026-09-23",
+        providerId: "google",
+        modelId: "m",
+        runs: 2,
+        images: 1,
+        usd: 0,
+        usdDiscarded: 0,
+        reruns: 0,
+      },
     ]);
     // Even a fake row that carries a cost adds nothing to a total.
     db().$client.run("UPDATE usage_log SET cost_usd = 0.5 WHERE simulated = 1 AND outcome = 'succeeded'");
@@ -650,5 +680,177 @@ describe("usage", () => {
       usd: 0.067,
       usdDiscarded: 0,
     });
+  });
+
+  test("an image that ran again after a restart is counted, and priced like any other", () => {
+    const base = { providerId: "google", modelId: "m", operation: "generate" as const };
+    const plain = insertUsage(db(), { ...base, outcome: "succeeded", costUsd: 0.134 });
+    expect(plain.rerun).toBe(false);
+    const again = insertUsage(db(), { ...base, outcome: "succeeded", costUsd: 0.134, rerun: true });
+    expect(again.rerun).toBe(true);
+    // A rerun that failed, or was cut off again, costs nothing itself, but the call it replaced may
+    // be billed, so it's still a rerun. A plain failure stays out of the rollup.
+    insertUsage(db(), { ...base, outcome: "failed", costUsd: 0, costSource: "unknown", rerun: true });
+    insertUsage(db(), { ...base, outcome: "failed", costUsd: 0, costSource: "unknown" });
+    const [row] = usageRollup(db(), { from: "1970-01-01" });
+    expect(row).toMatchObject({ runs: 2, images: 2, usd: 0.268, reruns: 2 });
+  });
+});
+
+describe("restarts", () => {
+  const handle = (jobId: string) => ({
+    jobId,
+    providerRef: "req_abc",
+    resume: { index: 0 },
+    attempt: 0,
+  });
+
+  /** A job sent at `speed`, as the runner leaves it once the call is on its way. */
+  function sent(resumable: boolean) {
+    const { jobSet, jobs } = newRun(null, 1);
+    const job = transitionJob(db(), jobs[0]!.id, "submitting", { attempt: 1, resumable })!;
+    return { jobSet, job };
+  }
+
+  test("new jobs can't resume and have never run again", () => {
+    const job = newRun(null, 1).jobs[0]!;
+    expect([job.resumable, job.handle, job.resumedAt, job.rerunAt]).toEqual([false, null, null, null]);
+  });
+
+  test("a resumable call's handle is stored with the company's id and state in one write", () => {
+    const { jobSet, jobs } = newRun(null, 2);
+    for (const j of jobs) transitionJob(db(), j.id, "submitting", { resumable: true });
+    const stored = storeJobHandle(
+      db(),
+      jobs.map((j) => j.id),
+      handle(jobs[0]!.id),
+      "queued",
+      "2026-09-24T10:00:00.000Z",
+    );
+    expect(stored.map((j) => [j.status, j.providerJobId, j.handle?.providerRef])).toEqual([
+      ["queued", "req_abc", "req_abc"],
+      ["queued", "req_abc", "req_abc"],
+    ]);
+    // It survives the round trip through SQLite as the same JSON.
+    expect(getJobSetBundle(db(), jobSet.id)?.jobs[0]?.handle).toEqual(handle(jobs[0]!.id));
+    // A job canceled first stays canceled.
+    const other = sent(true).job;
+    transitionJob(db(), other.id, "canceled");
+    expect(storeJobHandle(db(), [other.id], handle(other.id))).toEqual([]);
+  });
+
+  test("resuming keeps the state and says when", () => {
+    const { job } = sent(true);
+    expect(markJobResumed(db(), job.id)).toBeUndefined(); // no handle, nothing to pick up
+    storeJobHandle(db(), [job.id], handle(job.id), "running");
+    const resumed = markJobResumed(db(), job.id, "2026-09-24T10:05:00.000Z");
+    expect([resumed?.status, resumed?.resumedAt]).toEqual(["running", "2026-09-24T10:05:00.000Z"]);
+  });
+
+  test("a rerun starts over once, keeping its key and seed", () => {
+    const { jobSet, jobs } = newRun("01K6BQ9B2D5E8F1G4H6J8K0M2N", 1);
+    const id = jobs[0]!.id;
+    db().$client.run("UPDATE jobs SET seed = 7 WHERE id = ?", [id]);
+    transitionJob(db(), id, "submitting", { attempt: 2 });
+    transitionJob(db(), id, "running", { providerJobId: "resp-1", errorCode: "timeout" });
+    const again = rerunJob(db(), id, "2026-09-24T10:10:00.000Z")!;
+    expect(again).toMatchObject({
+      status: "pending",
+      rerunAt: "2026-09-24T10:10:00.000Z",
+      attempt: 0,
+      startedAt: null,
+      finishedAt: null,
+      nextAttemptAt: null,
+      providerJobId: null,
+      errorCode: null,
+      seed: 7,
+      idempotencyKey: "01K6BQ9B2D5E8F1G4H6J8K0M2N:0",
+    });
+    expect(getJobSetBundle(db(), jobSet.id)?.jobs[0]?.rerunAt).toBe("2026-09-24T10:10:00.000Z");
+    // Sent and cut off again: never a second time.
+    transitionJob(db(), id, "submitting", { attempt: 1 });
+    expect(rerunJob(db(), id)).toBeUndefined();
+  });
+
+  test("a resumable call is never sent again on its own", () => {
+    const { job } = sent(true);
+    expect(rerunJob(db(), job.id)).toBeUndefined();
+    expect(rerunJob(db(), newRun(null, 1).jobs[0]!.id)).toBeUndefined(); // pending: nothing to redo
+  });
+
+  test("restartPath follows §8.4.5: resume first, run again second, interrupt last", () => {
+    const on = { rerunInterrupted: true };
+    const off = { rerunInterrupted: false };
+    const row = (extra: Partial<Parameters<typeof restartPath>[0]>) => ({
+      status: "running" as const,
+      providerJobId: null,
+      resumable: false,
+      handle: null,
+      rerunAt: null,
+      ...extra,
+    });
+    const h = handle(newId());
+    expect(restartPath(row({ status: "pending" }), on)).toBe("requeue");
+    expect(restartPath(row({ status: "queued" }), on)).toBe("requeue");
+    expect(restartPath(row({ resumable: true, handle: h, providerJobId: "req_abc" }), off)).toBe("resume");
+    expect(restartPath(row({ status: "queued", resumable: true, handle: h }), on)).toBe("resume");
+    expect(restartPath(row({ status: "submitting", resumable: true }), on)).toBe("interrupt");
+    // Cut off before the id came back, at a company that honours the key: asked for it again.
+    const sameKey = { ...off, idempotentSubmit: true };
+    expect(restartPath(row({ status: "submitting", resumable: true }), sameKey)).toBe("resend");
+    expect(restartPath(row({ status: "submitting" }), sameKey)).toBe("interrupt");
+    expect(restartPath(row({ status: "submitting" }), on)).toBe("rerun");
+    expect(restartPath(row({}), on)).toBe("rerun");
+    expect(restartPath(row({}), off)).toBe("interrupt");
+    expect(restartPath(row({ rerunAt: "2026-09-24T10:10:00.000Z" }), on)).toBe("interrupt");
+    expect(restartPath(row({ status: "succeeded" }), on)).toBeNull();
+  });
+
+  test("a create cut off before its id came back goes again with the same key, keeping its start", () => {
+    const { job } = sent(true);
+    const again = resendJob(db(), job.id, "2026-09-24T10:20:00.000Z");
+    expect(again).toMatchObject({
+      status: "pending",
+      resumedAt: "2026-09-24T10:20:00.000Z",
+      attempt: 0,
+      startedAt: job.startedAt,
+      idempotencyKey: job.idempotencyKey,
+    });
+    // Only a resumable call with no id yet.
+    const blocking = sent(false).job;
+    expect(resendJob(db(), blocking.id)).toBeUndefined();
+    const stored = sent(true).job;
+    storeJobHandle(db(), [stored.id], handle(stored.id));
+    expect(resendJob(db(), stored.id)).toBeUndefined();
+  });
+
+  test("the id a canceled create brings back stays on the canceled job", () => {
+    const { job } = sent(true);
+    transitionJob(db(), job.id, "canceled");
+    expect(storeCanceledHandle(db(), [job.id], handle(job.id)).map((j) => j.providerJobId)).toEqual([
+      "req_abc",
+    ]);
+    expect(canceledWithHandle(db()).map((r) => r.job.id)).toEqual([job.id]);
+    // Not on a job that's still running: that's storeJobHandle's.
+    const live = sent(true).job;
+    expect(storeCanceledHandle(db(), [live.id], handle(live.id))).toEqual([]);
+  });
+
+  test("a canceled call keeps its handle until the company has been told, and Batch runs are the watcher's", () => {
+    const { job } = sent(true);
+    storeJobHandle(db(), [job.id], handle(job.id));
+    const live = sent(true).job;
+    storeJobHandle(db(), [live.id], handle(live.id));
+    transitionJob(db(), job.id, "canceled");
+    const batch = newRun(null, 1, "batch").jobs[0]!.id;
+    transitionJob(db(), batch, "submitting", { resumable: true });
+    storeJobHandle(db(), [batch], handle(batch));
+    transitionJob(db(), batch, "canceled");
+    expect(canceledWithHandle(db()).map((r) => r.job.id)).toEqual([job.id]);
+
+    // Only a canceled job's handle goes.
+    clearCanceledHandles(db(), [job.id, live.id]);
+    expect(canceledWithHandle(db())).toEqual([]);
+    expect(getJob(db(), live.id)?.handle).toEqual(handle(live.id));
   });
 });

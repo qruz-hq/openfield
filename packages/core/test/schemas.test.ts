@@ -96,6 +96,25 @@ describe("manifest", () => {
     expect(bad([{ ...batch, ops: ["generate"] }])).toBe(true);
   });
 
+  test("resumable speeds: sync speeds the model offers, never Batch, each once", () => {
+    const flex = {
+      id: "flex",
+      price: sampleManifest.price,
+      delivery: "sync",
+      waitMs: { target: 60_000, max: 900_000 },
+    } as const;
+    const ok = (extra: Record<string, unknown>) =>
+      modelManifestSchema.safeParse({ ...sampleManifest, ...extra }).success;
+    expect(ok({ resumableSpeeds: ["standard"] })).toBe(true);
+    expect(ok({ resumableSpeeds: [] })).toBe(true);
+    expect(ok({ speeds: [flex], resumableSpeeds: ["standard", "flex"] })).toBe(true);
+    expect(ok({ resumableSpeeds: ["batch"] })).toBe(false);
+    expect(ok({ resumableSpeeds: ["flex"] })).toBe(false);
+    expect(ok({ resumableSpeeds: ["standard", "standard"] })).toBe(false);
+    const withResume = { ...sampleManifest, resumableSpeeds: ["standard"] };
+    expect(roundTrip(modelManifestSchema, withResume)).toEqual(withResume as never);
+  });
+
   test("list items add what the picker needs", () => {
     const item = modelListItemSchema.parse({ ...sampleManifest, ready: true, enabled: true });
     expect(item.ready).toBe(true);
@@ -222,6 +241,7 @@ describe("settings", () => {
         "showExperimental",
         "canvasFileWriteThrough",
         "upscaleCommandPath",
+        "rerunInterrupted",
       ].sort(),
     );
   });
@@ -232,6 +252,12 @@ describe("settings", () => {
     expect(settingsPatchSchema.safeParse({ theme: "sepia" }).success).toBe(false);
     expect(settingsPatchSchema.safeParse({ colour: "red" }).success).toBe(false);
     expect(settingsPatchSchema.safeParse({ trashRetentionDays: 0 }).success).toBe(false);
+  });
+
+  test("running interrupted images again is on by default and can be turned off", () => {
+    expect(settingsSchema.parse({}).rerunInterrupted).toBe(true);
+    expect(settingsPatchSchema.parse({ rerunInterrupted: false })).toEqual({ rerunInterrupted: false });
+    expect(settingsPatchSchema.safeParse({ rerunInterrupted: "no" }).success).toBe(false);
   });
 
   test("the upscale program can't be set through PATCH", () => {
@@ -297,6 +323,7 @@ const assetItem = {
   prompt: "a teapot",
   approximate: false,
   isFavourite: false,
+  rerun: false,
   createdAt: NOW,
   thumbUrl: `/files/thumb/${ID_C}?h=456`,
   fileUrl: `/files/asset/${ID_C}`,
@@ -328,6 +355,27 @@ describe("job sets and events", () => {
     expect(
       jobSetAcceptedSchema.safeParse({ jobSet, jobs: [job], batch: { ...batch, state: "done" } }).success,
     ).toBe(false);
+  });
+
+  test("a job says when it resumed or ran again after a restart", () => {
+    const resumed = { ...job, status: "running", resumedAt: NOW, rerunAt: null };
+    expect(roundTrip(jobSetAcceptedSchema, { jobSet, jobs: [resumed] }).jobs[0]).toMatchObject({
+      resumedAt: NOW,
+      rerunAt: null,
+    });
+    // Rows from before restarts carry neither.
+    expect(jobSetAcceptedSchema.parse({ jobSet, jobs: [job] }).jobs[0]?.rerunAt).toBeUndefined();
+    const started = parseSseFrame(
+      "job.started",
+      JSON.stringify({ jobSetId: ID_A, jobId: ID_B, idx: 0, startedAt: NOW, rerun: true }),
+    );
+    expect(started?.event === "job.started" && started.data.rerun).toBe(true);
+    expect(
+      parseSseFrame(
+        "job.started",
+        JSON.stringify({ jobSetId: ID_A, jobId: ID_B, idx: 0, startedAt: NOW, rerun: false }),
+      ),
+    ).toBeNull();
   });
 
   test("every event type has a schema", () => {
