@@ -1,9 +1,11 @@
 import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { type CancelResponse, type JobSetsListResponse, parseSseFrame, type SseEvent } from "@openfield/core";
 import { feedPage, getJobSet, getProviderBatchForJobSet, jobsOf, type ProviderBatchRow } from "@openfield/db";
 import { createFakeFetch, type FakeFetch, type FetchLike, ProviderError } from "@openfield/providers/server";
+import { untilAborted } from "../src/runner/batches";
 import {
   completed,
   generate,
@@ -299,11 +301,26 @@ describe("restart", () => {
     const run = await generate(server, { batch: 2 });
     const row = await sentAt(server, run.jobSet.id);
     const home = server.home;
+    // Left at Google, which the stop says it picks up next time.
+    expect(await server.services.runner.stop()).toEqual({ left: 2, cut: { rerun: 0, interrupted: 0 } });
     await server.close({ keepHome: true });
 
     const after = batchFake();
     server = await batchServer(after, { home });
     expect(statuses(server, run.jobSet.id)).toEqual(["queued", "queued"]);
+    // The boot line counts them, and their tiles keep saying they're waiting at Google.
+    const log = (file: string) =>
+      readFileSync(join(home, "logs", file), "utf8")
+        .trim()
+        .split("\n")
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(log("jobs.ndjson").findLast((l) => l.event === "startup.recovery")).toMatchObject({
+      resumed: 0,
+      batched: 2,
+      interrupted: 0,
+    });
+    expect(log("openfield.log").map((l) => l.msg)).toContain("Picking up 2 images where they left off.");
+    expect(jobsOf(server.services.db, run.jobSet.id).map((j) => j.resumedAt)).toEqual([null, null]);
     advance(10_000);
     expect((await completed(server, run.jobSet.id)).status).toBe("succeeded");
     expect(feedPage(server.services.db).items).toHaveLength(2);
@@ -687,5 +704,26 @@ describe("fake mode", () => {
       [0, "batch"],
     ]);
     expect((await server.json<{ totalUsd: number }>("/api/usage")).body.totalUsd).toBe(0);
+  });
+});
+
+describe("a call made while the server stops", () => {
+  test("isn't sent once the stop has begun, and one already out fails without taking the server down", async () => {
+    const stopped = AbortSignal.abort(new DOMException("Shutting down", "AbortError"));
+    let sent = 0;
+    const call = async () => {
+      sent++;
+    };
+    await expect(untilAborted(call, stopped)).rejects.toThrow("Shutting down");
+    expect(sent).toBe(0);
+
+    // Bun exits on an unhandled rejection. The late failure is handled, so this test lives on.
+    let fail: (err: Error) => void = () => {};
+    const out = new Promise<void>((_, reject) => {
+      fail = reject;
+    });
+    await expect(untilAborted(out, stopped)).rejects.toThrow("Shutting down");
+    fail(new ProviderError("canceled", { message: "The request was aborted" }));
+    await Bun.sleep(10);
   });
 });

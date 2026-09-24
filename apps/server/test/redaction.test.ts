@@ -50,6 +50,26 @@ describe("the redaction filter", () => {
       expect(sink).toHaveLength(2);
     }
   });
+
+  test("a handle keeps an id that looks like a key, and loses a loaded key", () => {
+    const secret = "my-very-secret-key-123";
+    const logger = new Logger({ secrets: () => [secret] });
+    const handle = {
+      jobId: "j1",
+      providerRef: "img_eyJ2Ijsk-abcdefghijklmnopqrst",
+      resume: { token: secret },
+    };
+    expect(logger.scrubKeys(handle)).toEqual({ ...handle, resume: { token: "[hidden]" } });
+  });
+
+  test("announced lines print as they are, whatever the level, and reach the log file too", () => {
+    const logger = new Logger({ secrets: () => [], level: "error" });
+    const records: LogRecord[] = [];
+    logger.addSink({ write: (r) => records.push(r) });
+    logger.info("dropped at this level");
+    logger.announce("Openfield stopped.");
+    expect(records).toEqual([expect.objectContaining({ msg: "Openfield stopped.", plain: true })]);
+  });
 });
 
 describe("keys over HTTP", () => {

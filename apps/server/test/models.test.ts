@@ -131,6 +131,44 @@ describe("model registry", () => {
     expect(list.find((m) => m.modelId === "broken")).toBeUndefined();
   });
 
+  test("models.json can't change whether a model picks up after a restart", async () => {
+    server = await startTestServer({ env: { OPENFIELD_FAKE_PROVIDERS: "1" } });
+    const google = server.services.models.get("google:gemini-3.1-flash-image")!;
+    const resumable = server.services.models.get("fake:resumable-image")!;
+    expect(resumable).toMatchObject({ resumableSpeeds: ["standard"], idempotentSubmit: true });
+    const home = server.home;
+    const cases: [label: string, entries: unknown[]][] = [
+      // An entry written only to change a price leaves both fields out.
+      [
+        "a price change",
+        [{ ...google }, { ...resumable, resumableSpeeds: undefined, idempotentSubmit: undefined }],
+      ],
+      // A blocking Google call marked resumable would be lost to a crash instead of running again,
+      // and a queue call marked blocking would be sent a second time instead of picked up.
+      [
+        "a changed claim",
+        [
+          { ...google, resumableSpeeds: ["standard"], idempotentSubmit: true },
+          { ...resumable, resumableSpeeds: [] },
+        ],
+      ],
+    ];
+    for (const [label, entries] of cases) {
+      await server.close({ keepHome: true });
+      writeFileSync(join(home, "models.json"), JSON.stringify(entries));
+      server = await startTestServer({ home, env: { OPENFIELD_FAKE_PROVIDERS: "1" } });
+      const models = server.services.models;
+      expect(models.get("google:gemini-3.1-flash-image"), label).toMatchObject({ source: "user" });
+      expect(models.get("google:gemini-3.1-flash-image")?.resumableSpeeds, label).toBeUndefined();
+      expect(models.get("google:gemini-3.1-flash-image")?.idempotentSubmit, label).toBeUndefined();
+      expect(models.get("fake:resumable-image"), label).toMatchObject({
+        source: "user",
+        resumableSpeeds: ["standard"],
+        idempotentSubmit: true,
+      });
+    }
+  });
+
   test("an unknown company is a 404", async () => {
     server = await startTestServer();
     const res = await server.json("/api/models/refresh", { method: "POST", body: { providerId: "nobody" } });

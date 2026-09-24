@@ -1,5 +1,6 @@
 import {
   type CancelResponse,
+  type ErrorAction,
   type GenerateRequest,
   isTerminalState,
   type JobHandle,
@@ -16,6 +17,8 @@ import {
 } from "@openfield/core";
 import {
   activeJobs,
+  canceledWithHandle,
+  clearCanceledHandles,
   createJobSet,
   type Db,
   getJob,
@@ -28,14 +31,15 @@ import {
   listProviders,
   recordKeyCheck,
   refreshJobSetStatus,
+  restartPath,
+  storeCanceledHandle,
+  storeJobHandle,
   transitionJob,
   updateJob,
 } from "@openfield/db";
-import { estimate, pricedOp, resolveSpeed } from "@openfield/providers/manifest";
+import { estimate, pricedOp, resolveSpeed, resumesAfterRestart } from "@openfield/providers/manifest";
 import {
   type CallContext,
-  errorFromFetchFailure,
-  isProviderError,
   type JobResult,
   type JobUpdate,
   normalize,
@@ -52,11 +56,13 @@ import type { CredentialService } from "../services/credentials";
 import type { BoundModel, ModelService } from "../services/models";
 import type { ProviderSettingsService } from "../services/provider-settings";
 import type { SettingsService } from "../services/settings";
-import { BatchWatcher, untilAborted } from "./batches";
-import { callsFor, Outcomes } from "./outcomes";
-import type { CallContexts } from "./provider-fetch";
+import { asProviderError, BatchWatcher, refused, untilAborted } from "./batches";
+import { batchAction, callsFor, finalReason, Outcomes } from "./outcomes";
+import { type CallContexts, noWrites } from "./provider-fetch";
 import {
+  batchPollDelay,
   busyDelay,
+  MISSES_PAST_DEADLINE,
   pollDelay,
   QUEUE_DEFAULTS,
   type QueueOptions,
@@ -69,6 +75,15 @@ import {
 // One unit is one provider call: a single job on fan-out, every job of a set when the model
 // takes a batch natively, or a whole Batch run's create call. Every state change goes through a
 // guarded transition, so a late result can never overwrite a cancel.
+//
+// Restarts (§0.4): a call the model declares resumable has its handle stored the moment submit()
+// returns, and from then on it's only ever read by that id, never sent again, and ends only on the
+// company's own answer. Before that, a create whose answer was lost goes again only where the
+// company honours the idempotency key (idempotentSubmit), which hands back the first call. At boot
+// the scheduler picks such calls up by id before anything new goes out. Stopping waits for calls
+// that can't resume and leaves resumable ones running at the company for the next start. A Batch
+// run takes the same three steps (store the id before waiting, pick it up by id at boot, fetch
+// instead of resend) through the batch watcher and its provider_batches row.
 
 const IN_FLIGHT: readonly JobState[] = ["submitting", "queued", "running"];
 
@@ -84,9 +99,61 @@ interface Unit {
   bound?: BoundModel;
   call?: NormalizedRequest;
   handle?: JobHandle;
+  /** Sent at a speed that survives a restart (§6.3): its handle is stored before the first poll. */
+  resumable?: boolean;
+  /** A stored handle to pick up by id instead of sending the call (§6.7). */
+  reattach?: JobHandle;
+  /** Left running at the company when the server stopped, for the next start to pick up. */
+  left?: boolean;
+  /**
+   * Canceled while its resumable create call was out. The create isn't cut off, because the id it
+   * brings back is what stops the call at the company.
+   */
+  canceled?: boolean;
+  /** A Batch run's create call, or a lookup of it, is out (set by the batch watcher). */
+  calling?: boolean;
+}
+
+/** A canceled resumable call still to be stopped at the company, once the company can be reached. */
+interface OwedCancel {
+  jobSetId: string;
+  providerId: string;
+  modelKey: string;
+  jobIds: string[];
+  handle: JobHandle;
+  /** Not before this, after a cancel that didn't get through. */
+  after: number;
 }
 
 type Planned = Omit<Unit, "abort" | "id">;
+
+/** What a stop waits for, told once as it starts (§0.12). */
+export interface DrainNotice {
+  /** Images waited for until they're done: calls that can't pick up where they left off. */
+  finishing: number;
+  /** Images whose create call is waited for only until the company's id is stored (Batch, resumable). */
+  confirming: number;
+  /** Canceled images whose cancel is on its way to the company. */
+  stopping: number;
+  /** The companies behind `confirming` and `stopping`, by name. */
+  companies: string[];
+}
+
+export interface StopOptions {
+  /** Longest wait for calls that can't resume. Default: none, each call's own timeout ends it (§0.12). */
+  drainMs?: number;
+  onDrain?: (notice: DrainNotice) => void;
+}
+
+export interface StopReport {
+  /**
+   * Images left running at the company, which the next start picks up where they left off: by id,
+   * by the same create sent again with the same key, or from a Batch run's row.
+   */
+  left: number;
+  /** Images cut off before they were done, by what the next start does with them (§0.4). */
+  cut: { rerun: number; interrupted: number };
+}
 
 export interface RunnerDeps {
   db: Db;
@@ -119,12 +186,28 @@ export class Runner {
   readonly #busy = new Map<string, number>();
   /** Runs already tried again since this server started. */
   readonly #retried = new Set<string>();
+  /** Resumable jobs nothing could follow just now (company off mid-run, a failed loop), and when to look again. */
+  readonly #reattachAfter = new Map<string, number>();
+  /** Jobs left running at the company by this stop. */
+  readonly #left = new Set<string>();
+  /** Canceled resumable calls to stop at the company, by handle, and the ones being sent now. */
+  readonly #owed = new Map<string, OwedCancel>();
+  readonly #sendingOwed = new Set<string>();
+  /** Cancels on their way to the company, for the stop's notice. */
+  readonly #cancelsOut = new Set<{ providerId: string; images: number }>();
+  readonly #forced: Promise<false>;
+  #force: () => void = () => {};
+  #stopped: Promise<StopReport> | undefined;
   #rotation = 0;
   #tickQueued = false;
+  #started = false;
   #stopping = false;
   #heartbeat: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly deps: RunnerDeps) {
+    this.#forced = new Promise<false>((resolve) => {
+      this.#force = () => resolve(false);
+    });
     this.opts = { ...QUEUE_DEFAULTS, ...deps.options };
     const fake = deps.fake ?? false;
     this.outcomes = new Outcomes({ ...deps, fake });
@@ -137,7 +220,12 @@ export class Runner {
     });
   }
 
+  /** Nothing is sent before this: the server calls it once it has its port (§8.4.5). */
   start(): void {
+    if (this.#started || this.#stopping) return;
+    this.#started = true;
+    // Cancels that hadn't reached the company when Openfield last stopped go once it can be reached.
+    for (const { job, jobSet } of canceledWithHandle(this.deps.db)) this.#owe(jobSet, job);
     this.batches.start();
     this.#heartbeat = setInterval(() => this.tick(), this.opts.heartbeatMs);
     this.#heartbeat.unref?.();
@@ -304,7 +392,7 @@ export class Runner {
 
   /** Looks for work soon. Cheap to call often: ticks in the same task are coalesced. */
   tick(): void {
-    if (this.#stopping || this.#tickQueued) return;
+    if (!this.#started || this.#stopping || this.#tickQueued) return;
     this.#tickQueued = true;
     queueMicrotask(() => {
       this.#tickQueued = false;
@@ -329,9 +417,14 @@ export class Runner {
 
     const queues = new Map<string, Planned[]>();
     const grouped = new Map<string, Planned>();
+    const reattach = new Map<string, Planned>();
     const waiting: JobRow[] = [];
     for (const { job, jobSet } of activeJobs(this.deps.db)) {
-      if (job.status !== "pending" || this.#unitOfJob.has(job.id)) continue;
+      if (this.#unitOfJob.has(job.id)) continue;
+      if (job.status !== "pending") {
+        this.#toReattach(job, jobSet, off, reattach);
+        continue;
+      }
       if (job.nextAttemptAt && job.nextAttemptAt > now) continue;
       if (off.has(jobSet.providerId)) continue;
       waiting.push(job);
@@ -354,6 +447,16 @@ export class Runner {
       const queue = queues.get(jobSet.providerId) ?? [];
       queue.push(unit);
       queues.set(jobSet.providerId, queue);
+    }
+
+    this.#sendOwed(off);
+
+    // Already running at the company, so they take their slots first, even past a cap lowered while
+    // the server was down (§0.12).
+    for (const unit of reattach.values()) {
+      this.#launch(unit);
+      busy.set(unit.providerId, (busy.get(unit.providerId) ?? 0) + 1);
+      free--;
     }
 
     const providers = [...queues.keys()];
@@ -391,6 +494,43 @@ export class Runner {
     });
   }
 
+  /**
+   * A resumable call with a stored handle that nothing is following: after a restart, or after its
+   * company was off. Jobs that share one handle (a native batch) go as one unit.
+   */
+  #toReattach(job: JobRow, jobSet: JobSetRow, off: ReadonlySet<string>, into: Map<string, Planned>): void {
+    if (jobSet.speed === "batch" || !job.resumable || !job.handle || !IN_FLIGHT.includes(job.status)) return;
+    const after = this.#reattachAfter.get(job.id);
+    if (after !== undefined && after > Date.now()) return;
+    // A company that's off or has no key leaves it waiting, like a queued run (§8.4.5).
+    if (this.#waitsForCompany(jobSet.providerId, off)) return;
+    this.#reattachAfter.delete(job.id);
+    const key = `${jobSet.id}:${job.handle.providerRef ?? job.handle.jobId}`;
+    const known = into.get(key);
+    if (known) {
+      known.jobIds.push(job.id);
+      return;
+    }
+    into.set(key, {
+      kind: "call",
+      jobSetId: jobSet.id,
+      providerId: jobSet.providerId,
+      modelKey: `${jobSet.providerId}:${jobSet.modelId}`,
+      jobIds: [job.id],
+      reattach: job.handle,
+    });
+  }
+
+  /** Turned off, or no key right now. A company this build doesn't know goes ahead and fails to bind. */
+  #waitsForCompany(providerId: string, off: ReadonlySet<string>): boolean {
+    if (off.has(providerId)) return true;
+    try {
+      return !this.deps.credentials.resolve(providerId).present;
+    } catch {
+      return false;
+    }
+  }
+
   #batchCallCount(): number {
     let total = 0;
     for (const n of this.#batchCalls.values()) total += n;
@@ -426,7 +566,12 @@ export class Runner {
       this.#unitOfJob.set(jobId, unit);
       this.#positions.delete(jobId);
     }
-    const work = unit.kind === "batch" ? this.batches.submit(unit) : this.#run(unit);
+    const work =
+      unit.kind === "batch"
+        ? this.batches.submit(unit)
+        : unit.reattach
+          ? this.#reattach(unit)
+          : this.#run(unit);
     const task = work
       .catch((err) =>
         this.deps.logger.error("A run stopped unexpectedly", { jobSetId: unit.jobSetId, error: err }),
@@ -435,8 +580,31 @@ export class Runner {
         this.#units.delete(unit.id);
         for (const jobId of planned.jobIds) this.#unitOfJob.delete(jobId);
         this.#tasks.delete(task);
+        if (unit.resumable && unit.handle && !this.#stopping) this.#pauseFollowing(unit);
         this.tick();
       });
+    this.#tasks.add(task);
+  }
+
+  /**
+   * A resumable call stopped being followed before it ended (its company was turned off, or the loop
+   * failed): the scheduler picks it up by id again after a pause, instead of at once in a loop.
+   */
+  #pauseFollowing(unit: Unit): void {
+    const at = Date.now() + this.opts.poll.capMs;
+    for (const jobId of unit.jobIds) {
+      const job = getJob(this.deps.db, jobId);
+      if (job && IN_FLIGHT.includes(job.status)) this.#reattachAfter.set(jobId, at);
+    }
+  }
+
+  /** A cancel sent to the company: work stop() waits for that isn't a unit. */
+  #trackCancel(work: Promise<void>, about: { providerId: string; images: number }): void {
+    this.#cancelsOut.add(about);
+    const task = work.finally(() => {
+      this.#tasks.delete(task);
+      this.#cancelsOut.delete(about);
+    });
     this.#tasks.add(task);
   }
 
@@ -446,6 +614,9 @@ export class Runner {
     const { db } = this.deps;
     const set = getJobSet(db, unit.jobSetId);
     if (!set) return;
+    // Written as the call goes out, so a restart knows whether it can pick the call up by id (§6.7).
+    const listed = this.deps.models.get(unit.modelKey);
+    unit.resumable = listed ? resumesAfterRestart(listed, set.requestJson.speed) : false;
 
     const started: JobRow[] = [];
     for (const jobId of unit.jobIds) {
@@ -462,6 +633,7 @@ export class Runner {
           errorMessage: null,
           errorReason: null,
           errorAction: null,
+          resumable: unit.resumable,
         },
         { from: ["pending"] },
       );
@@ -471,13 +643,21 @@ export class Runner {
     if (started.length === 0) return;
     refreshJobSetStatus(db, set.id);
     for (const job of started) {
+      const rerun = job.rerunAt !== null;
       this.deps.events.publish("job.started", {
         jobSetId: set.id,
         jobId: job.id,
         idx: job.idx,
         startedAt: job.startedAt ?? new Date().toISOString(),
+        ...(rerun && { rerun: true as const }),
       });
-      this.deps.jobLog({ event: "job.started", jobId: job.id, jobSetId: set.id, attempt: job.attempt });
+      this.deps.jobLog({
+        event: "job.started",
+        jobId: job.id,
+        jobSetId: set.id,
+        attempt: job.attempt,
+        ...(rerun && { rerun }),
+      });
     }
 
     let bound: BoundModel;
@@ -496,8 +676,7 @@ export class Runner {
     const speed = call.speed;
     const { attemptMs, deadlineMs } = runTimeouts(this.opts, bound.manifest, speed);
 
-    const firstStart = Math.min(...started.map((j) => Date.parse(j.startedAt ?? new Date().toISOString())));
-    const deadlineLeft = deadlineMs - (Date.now() - firstStart);
+    const deadlineLeft = deadlineMs - (Date.now() - firstStart(started));
     if (deadlineLeft <= 0) {
       // Waiting out Flex busy answers until now ends with the busy reason, not a plain timeout.
       const error = unit.jobIds.some((id) => this.#busy.has(id))
@@ -521,10 +700,40 @@ export class Runner {
     if (!ctx) return this.#fail(unit, set, new ProviderError("auth_missing", { message: "No key is set" }));
 
     const t0 = Date.now();
+    let handle: JobHandle;
     try {
-      const handle = await untilAborted(bound.model.submit(call, ctx), signal);
-      unit.handle = handle;
-      if (unit.abort.signal.aborted) return sink.discardAll();
+      handle = await untilAborted(() => bound.model.submit(call, ctx), signal);
+    } catch (err) {
+      if (unit.abort.signal.aborted || unit.canceled) return sink.discardAll();
+      const error = asProviderError(err, signal);
+      // A resumable create that failed on the way (the network, a timeout, a 500) may still have
+      // reached the company, which then makes and bills the image. Sending it again could start a
+      // second one, unless the company honours the idempotency key and hands the first one back. So
+      // it ends here, with Try again, like a Batch create nothing could find (§0.4).
+      if (unit.resumable && !bound.manifest.idempotentSubmit && mayHaveArrived(error)) {
+        return this.#end(unit, set, error, sink, Date.now() - t0);
+      }
+      return this.#fail(unit, set, error, sink, Date.now() - t0);
+    }
+    unit.handle = handle;
+    if (unit.abort.signal.aborted) return sink.discardAll();
+    if (unit.canceled) {
+      // Canceled while the create was out: now there's an id, stop it at the company (§0.12). The
+      // id goes on the canceled jobs first, so a cancel that doesn't get through is still sent after
+      // a restart.
+      sink.discardAll();
+      storeCanceledHandle(db, unit.jobIds, this.deps.logger.scrubKeys(handle));
+      return this.#stopCanceled(unit);
+    }
+    if (unit.resumable) {
+      // Before the first poll: from here on a restart picks the call up by this id (§6.7). The
+      // adapter keeps keys out of it; scrubbing is the second guard, since it's saved as it is.
+      storeJobHandle(db, unit.jobIds, this.deps.logger.scrubKeys(handle), "running");
+      refreshJobSetStatus(db, set.id);
+      return this.#follow(unit, set, bound, call, handle, sink, t0);
+    }
+
+    try {
       for (const jobId of unit.jobIds) {
         transitionJob(db, jobId, "running", handle.providerRef ? { providerJobId: handle.providerRef } : {}, {
           from: ["submitting", "queued"],
@@ -545,15 +754,302 @@ export class Runner {
       return this.#fail(unit, set, error, sink, Date.now() - t0);
     } catch (err) {
       if (unit.abort.signal.aborted) return sink.discardAll();
-      const error = isProviderError(err)
-        ? err
-        : signal.aborted
-          ? errorFromFetchFailure(err, signal)
-          : new ProviderError("unknown", {
-              message: err instanceof Error ? err.message : String(err),
-              cause: err,
+      return this.#fail(unit, set, asProviderError(err, signal), sink, Date.now() - t0);
+    }
+  }
+
+  /** Picks a resumable call up by its stored id (§6.7, §8.4.5). Nothing is sent again. */
+  async #reattach(unit: Unit): Promise<void> {
+    const { db } = this.deps;
+    const set = getJobSet(db, unit.jobSetId);
+    const handle = unit.reattach;
+    if (!set || !handle) return;
+    const jobs = unit.jobIds
+      .map((id) => getJob(db, id))
+      .filter((j): j is JobRow => j !== undefined && IN_FLIGHT.includes(j.status));
+    if (jobs.length === 0) return;
+    unit.jobIds = jobs.map((j) => j.id);
+    unit.resumable = true;
+    unit.handle = handle;
+
+    let bound: BoundModel;
+    try {
+      bound = this.deps.models.bind(unit.modelKey);
+    } catch {
+      // Turned off since the scheduler looked: it waits at the company, and is picked up once it's on.
+      if (getProvider(db, set.providerId)?.enabled === false) return;
+      const error = new ProviderError("capability_unsupported", {
+        message: `${unit.modelKey} isn't available`,
+      });
+      return this.#end(unit, set, error);
+    }
+    unit.bound = bound;
+    const call = this.#callFor(set, bound.manifest, jobs);
+    unit.call = call;
+    this.deps.jobLog({ event: "job.reattached", jobSetId: set.id, jobIds: unit.jobIds });
+    return this.#follow(unit, set, bound, call, handle, this.deps.ingest.sink(), firstStart(jobs));
+  }
+
+  /**
+   * Reads a resumable call by its id until the company gives an answer that ends it (§6.7): the
+   * image, a failure, a refusal, or "no such call". Nothing else ends it, because the company may
+   * still hold the image: a read that fails (the network, a full disk, a rejected key, a garbled
+   * answer) reads the same id again, and the call is never sent again. Past the deadline, a call the
+   * company says is still running is stopped there as a timeout, and reads that keep failing give up
+   * after MISSES_PAST_DEADLINE in a row on the slower batch schedule, as a Batch run does, without
+   * stopping anything at the company. The first read happens whatever the deadline says, because a
+   * finished image is likely billed. Stopping leaves the call to the company.
+   */
+  async #follow(
+    unit: Unit,
+    set: JobSetRow,
+    bound: BoundModel,
+    call: NormalizedRequest,
+    handle: JobHandle,
+    sink: AttemptSink,
+    t0: number,
+  ): Promise<void> {
+    const { attemptMs, deadlineMs } = runTimeouts(this.opts, bound.manifest, call.speed);
+    const jobs = unit.jobIds.map((id) => getJob(this.deps.db, id)).filter((j) => j !== undefined);
+    const since = Math.min(t0, firstStart(jobs));
+    const late = () => Date.now() - since >= deadlineMs;
+    let misses = 0;
+    for (let poll = 0; ; poll++) {
+      if (this.#stopping) return this.#leave(unit, sink);
+      const signal = AbortSignal.any([unit.abort.signal, AbortSignal.timeout(attemptMs)]);
+      const ctx = this.deps.contexts.for(bound.provider, signal, sink, {
+        settings: call.providerSettings,
+        speed: call.speed,
+      });
+      // Turned off, or its key was removed: it waits at the company, like a queued run (§8.4.5).
+      if (!ctx) return sink.discardAll();
+
+      let update: JobUpdate | undefined;
+      let failed: ProviderError | undefined;
+      try {
+        update = await untilAborted(() => bound.model.poll(handle, ctx), signal);
+      } catch (err) {
+        // Canceled, left for the next start, or cut off: the job's state is someone else's now.
+        if (unit.abort.signal.aborted) return sink.discardAll();
+        failed = asProviderError(err, signal);
+      }
+
+      if (failed) {
+        const latencyMs = Date.now() - t0;
+        // The company's own answer about this call: it's gone there, or it refused the image.
+        if (failed.notFound) {
+          return this.#end(unit, set, failed, sink, latencyMs, {
+            reason: failed.userMessage ?? null,
+            action: "try-again",
+          });
+        }
+        if (failed.code === "content_refused") return this.#end(unit, set, failed, sink, latencyMs);
+        // A key put right while the company still holds the image lands it (§0.4).
+        if (failed.code === "auth_invalid") {
+          recordKeyCheck(this.deps.db, set.providerId, { ok: false, code: failed.code });
+        }
+        // A full disk means the image is done and waiting at the company: it never times out here,
+        // as on a Batch run, and lands once there's room.
+        if (failed.code !== "disk_full" && ++misses >= MISSES_PAST_DEADLINE && late()) {
+          return this.#unchecked(unit, set, failed, sink, latencyMs);
+        }
+        this.deps.logger.warn("Couldn't check on an image. Trying again soon", {
+          jobSetId: set.id,
+          code: failed.code,
+        });
+      } else if (update) {
+        misses = 0;
+        this.#progress(unit, update);
+        if (update.state === "succeeded" && update.result) {
+          return this.#succeed(unit, set, bound.manifest, call, update.result, sink, Date.now() - t0);
+        }
+        if (isTerminalState(update.state)) {
+          const error =
+            update.error ??
+            new ProviderError(update.state === "canceled" ? "canceled" : "provider_error", {
+              message: `The run ended as ${update.state} without an image`,
             });
-      return this.#fail(unit, set, error, sink, Date.now() - t0);
+          return this.#end(unit, set, error, sink, Date.now() - t0);
+        }
+        // The company says it's still at it, past the deadline: stop it there.
+        if (late()) return this.#timeUp(unit, set, sink, Date.now() - t0);
+      }
+      const wait =
+        failed && late()
+          ? batchPollDelay(this.opts, Date.now() - since, this.deps.fake ?? false, failed.retryAfterMs)
+          : pollDelay(this.opts, poll, failed ? failed.retryAfterMs : update?.nextPollAfterMs);
+      try {
+        await sleep(wait, unit.abort.signal);
+      } catch {
+        return sink.discardAll();
+      }
+    }
+  }
+
+  /** Stopping: the call keeps going at the company, and the next start picks it up by id. */
+  #leave(unit: Unit, sink?: AttemptSink): void {
+    sink?.discardAll();
+    unit.left = true;
+    for (const jobId of unit.jobIds) this.#left.add(jobId);
+  }
+
+  /**
+   * Ends a resumable call's jobs for good. Never retried: once the company has the call, sending it
+   * again could bill twice (§0.4). A retryable code offers Try again, as on a Batch image.
+   */
+  #end(
+    unit: Unit,
+    set: JobSetRow,
+    error: ProviderError,
+    sink?: AttemptSink,
+    latencyMs?: number,
+    opts: { reason?: string | null; action?: ErrorAction | null } = {},
+  ): void {
+    sink?.discardAll();
+    this.outcomes.fail(set, unit.jobIds, error, {
+      latencyMs,
+      speed: unit.call?.speed ?? set.speed,
+      reason: opts.reason === undefined ? finalReason(error) : opts.reason,
+      action: opts.action === undefined ? batchAction(error) : opts.action,
+    });
+    if (error.code === "auth_invalid" || error.code === "auth_forbidden") {
+      recordKeyCheck(this.deps.db, set.providerId, { ok: false, code: error.code });
+    }
+    this.outcomes.finishSet(set.id);
+  }
+
+  /**
+   * Reads kept failing past the deadline. The call isn't stopped at the company, which never said it
+   * was still running. When the company couldn't be reached, the tile says so in our words;
+   * otherwise it gets the last failure's own copy.
+   */
+  #unchecked(unit: Unit, set: JobSetRow, last: ProviderError, sink: AttemptSink, latencyMs: number): void {
+    if (!last.retryable && last.code !== "unknown") {
+      this.#end(unit, set, last, sink, latencyMs);
+      return;
+    }
+    const company = (unit.bound?.provider ?? this.deps.credentials.provider(set.providerId)).meta.displayName;
+    const reason = t("errors.resumeUnchecked", { company });
+    const error = new ProviderError("timeout", {
+      message: `No answer about the image by its deadline: ${last.message}`,
+      userMessage: reason,
+    });
+    this.#end(unit, set, error, sink, latencyMs, { reason, action: "try-again" });
+  }
+
+  /** The company says it's still running past its deadline: stopped there when the adapter can, then a timeout. */
+  async #timeUp(unit: Unit, set: JobSetRow, sink: AttemptSink, latencyMs: number): Promise<void> {
+    sink.discardAll();
+    await this.#cancelAtCompany(unit);
+    const error = new ProviderError("timeout", { message: "Still running at the company at the deadline" });
+    this.#end(unit, set, error, undefined, latencyMs, { reason: null, action: "try-again" });
+  }
+
+  /**
+   * Asks the company to stop a resumable call, when the adapter can. True once there's nothing left
+   * to stop there: it stopped, it's gone, or the adapter has no cancel. False when it couldn't be
+   * asked or didn't answer.
+   */
+  async #cancelAtCompany(target: {
+    jobSetId: string;
+    jobIds: readonly string[];
+    handle?: JobHandle | undefined;
+    bound?: BoundModel | undefined;
+    call?: NormalizedRequest | undefined;
+  }): Promise<boolean> {
+    const { bound, handle, call } = target;
+    if (!handle || !bound?.model.cancel) return true;
+    const cancel = bound.model.cancel.bind(bound.model);
+    const speed = call?.speed ?? "standard";
+    const { attemptMs } = runTimeouts(this.opts, bound.manifest, speed);
+    const ctx = this.deps.contexts.for(
+      bound.provider,
+      AbortSignal.timeout(attemptMs),
+      noWrites((id) => this.deps.ingest.read(id)),
+      { settings: call?.providerSettings ?? {}, speed },
+    );
+    if (!ctx) return false;
+    try {
+      await untilAborted(() => cancel(handle, ctx), ctx.signal);
+      this.deps.jobLog({ event: "job.stopped_at_company", jobSetId: target.jobSetId, jobIds: target.jobIds });
+      return true;
+    } catch (err) {
+      if (asProviderError(err).notFound) return true;
+      this.deps.logger.warn("Couldn't stop an image at the company", {
+        jobSetId: target.jobSetId,
+        error: err,
+      });
+      return false;
+    }
+  }
+
+  /**
+   * A canceled resumable call, stopped at the company. One that doesn't get through is owed: sent
+   * again once the company can be reached, and after a restart, because the job keeps its handle.
+   */
+  async #stopCanceled(unit: Unit): Promise<void> {
+    if (!unit.resumable || !unit.handle) return;
+    if (await this.#cancelAtCompany(unit)) return clearCanceledHandles(this.deps.db, unit.jobIds);
+    const set = getJobSet(this.deps.db, unit.jobSetId);
+    const job = getJob(this.deps.db, unit.jobIds[0]!);
+    if (set && job) this.#owe(set, { ...job, handle: unit.handle }, Date.now() + this.#owedWait());
+  }
+
+  /**
+   * Remembers a canceled resumable call to stop at the company, unless another job still wants what
+   * it's making (a native batch shares one call).
+   */
+  #owe(set: JobSetRow, job: JobRow, after = 0): void {
+    const handle = job.handle;
+    if (!handle || !job.resumable) return;
+    const ref = handle.providerRef ?? handle.jobId;
+    const sharing = jobsOf(this.deps.db, set.id).filter(
+      (j) => j.handle && (j.handle.providerRef ?? j.handle.jobId) === ref,
+    );
+    if (sharing.some((j) => !isTerminalState(j.status))) return;
+    const key = `${set.id}:${ref}`;
+    this.#owed.set(key, {
+      jobSetId: set.id,
+      providerId: set.providerId,
+      modelKey: `${set.providerId}:${set.modelId}`,
+      jobIds: sharing.length ? sharing.map((j) => j.id) : [job.id],
+      handle,
+      after,
+    });
+    this.tick();
+  }
+
+  /** After a cancel that didn't get through: the longest retry wait, so a company that's down isn't pestered. */
+  #owedWait(): number {
+    return retryDelay(this.opts, this.opts.retryDelaysMs.length);
+  }
+
+  /** Sends owed cancels whose company can be reached now. They take no slot: a cancel is quick. */
+  #sendOwed(off: ReadonlySet<string>): void {
+    const now = Date.now();
+    for (const [key, owed] of this.#owed) {
+      if (this.#sendingOwed.has(key) || owed.after > now || this.#waitsForCompany(owed.providerId, off))
+        continue;
+      const set = getJobSet(this.deps.db, owed.jobSetId);
+      let bound: BoundModel;
+      try {
+        bound = this.deps.models.bind(owed.modelKey);
+      } catch {
+        continue;
+      }
+      this.#sendingOwed.add(key);
+      const sent = this.#cancelAtCompany({ ...owed, bound, call: set?.requestJson }).then((ok) => {
+        if (ok) {
+          this.#owed.delete(key);
+          clearCanceledHandles(this.deps.db, owed.jobIds);
+        } else {
+          owed.after = Date.now() + this.#owedWait();
+        }
+      });
+      this.#trackCancel(
+        sent.finally(() => this.#sendingOwed.delete(key)),
+        { providerId: owed.providerId, images: owed.jobIds.length },
+      );
     }
   }
 
@@ -570,22 +1066,25 @@ export class Runner {
   /** Polls until done. The first check is immediate: a blocking adapter's handle already holds the result. */
   async #watch(unit: Unit, bound: BoundModel, handle: JobHandle, ctx: CallContext): Promise<JobUpdate> {
     for (let poll = 0; ; poll++) {
-      const update = await untilAborted(bound.model.poll(handle, ctx), ctx.signal);
-      if (update.progress !== undefined) {
-        const progress = Math.min(1, Math.max(0, update.progress / 100));
-        for (const jobId of unit.jobIds) {
-          const job = updateJob(this.deps.db, jobId, { progress });
-          if (job)
-            this.deps.events.publish("job.progress", {
-              jobSetId: unit.jobSetId,
-              jobId,
-              idx: job.idx,
-              progress,
-            });
-        }
-      }
+      const update = await untilAborted(() => bound.model.poll(handle, ctx), ctx.signal);
+      this.#progress(unit, update);
       if (isTerminalState(update.state)) return update;
       await sleep(pollDelay(this.opts, poll, update.nextPollAfterMs), ctx.signal);
+    }
+  }
+
+  #progress(unit: Unit, update: JobUpdate): void {
+    if (update.progress === undefined) return;
+    const progress = Math.min(1, Math.max(0, update.progress / 100));
+    for (const jobId of unit.jobIds) {
+      const job = updateJob(this.deps.db, jobId, { progress });
+      if (job)
+        this.deps.events.publish("job.progress", {
+          jobSetId: unit.jobSetId,
+          jobId,
+          idx: job.idx,
+          progress,
+        });
     }
   }
 
@@ -805,8 +1304,10 @@ export class Runner {
     if (isTerminalState(job.status)) return false;
     const unit = this.#unitOfJob.get(job.id);
     this.#busy.delete(job.id);
+    // A resumable call whose company is off or has no key right now is still at the company.
+    const atCompany = job.resumable && job.handle !== null && IN_FLIGHT.includes(job.status);
 
-    if (!unit) {
+    if (!unit && !atCompany) {
       // Not sent yet, so nothing was spent.
       const moved = this.outcomes.cancel(set, job.id, { discarded: false });
       if (!moved) return false;
@@ -814,43 +1315,160 @@ export class Runner {
       return true;
     }
 
-    // In flight. Neither launch adapter can cancel a sync call on the provider's side, so the work
-    // may still be billed: record it at the full estimate, marked discarded, and drop any late result.
-    const manifest = unit.bound?.manifest ?? this.deps.models.get(unit.modelKey);
-    const call = unit.call ?? set.requestJson;
+    // In flight. A blocking call can't be stopped at the company, and a resumable one may be stopped
+    // too late, so either way the work may still be billed: record it at the full estimate, marked
+    // discarded, and drop any late result.
+    const manifest = unit?.bound?.manifest ?? this.deps.models.get(`${set.providerId}:${set.modelId}`);
+    const call = unit?.call ?? set.requestJson;
     const each = manifest ? estimate(manifest, { ...call, batch: 1 }) : undefined;
     const moved = this.outcomes.cancel(set, job.id, { discarded: true, each, speed: call.speed });
     if (!moved) return false;
+    if (!unit) {
+      // Nothing is following it (its company is off or has no key): stopped there once it can be.
+      this.#owe(set, moved);
+      return true;
+    }
 
-    // Abort the call once nothing it's making is still wanted.
+    // Abort the call once nothing it's making is still wanted, and stop it at the company if it can.
     const stillWanted = unit.jobIds.some((id) => {
       const other = getJob(this.deps.db, id);
       return other !== undefined && !isTerminalState(other.status);
     });
-    if (!stillWanted) unit.abort.abort(new DOMException("Canceled", "AbortError"));
+    if (!stillWanted) {
+      if (unit.resumable && !unit.handle) {
+        // Its create is still out, and the id it brings back is what stops it at the company.
+        unit.canceled = true;
+      } else {
+        unit.abort.abort(new DOMException("Canceled", "AbortError"));
+        this.#trackCancel(this.#stopCanceled(unit), {
+          providerId: unit.providerId,
+          images: unit.jobIds.length,
+        });
+      }
+    }
     return true;
   }
 
-  // Shutdown
+  // Stopping (§0.12)
 
   /**
-   * Stops scheduling, gives in-flight calls `drainMs` to finish, then aborts the rest. Aborted
-   * jobs keep their state, so the next boot marks them interrupted (§8.4.5). A Batch run keeps
-   * waiting at the company and resumes from its row.
+   * Nothing new starts. A call that can't resume is waited for until it ends or reaches its own
+   * timeout, so its image is saved. A resumable call is left running at the company once its handle
+   * is stored, for the next start to pick up. `drainMs` caps the wait (tests), and forceStop() ends
+   * it at once: whatever it cuts off keeps its state and takes §0.4's restart paths at the next
+   * start. Safe to call twice.
    */
-  async stop(drainMs = 10_000): Promise<void> {
+  stop(opts: StopOptions = {}): Promise<StopReport> {
+    this.#stopped ??= this.#drain(opts);
+    return this.#stopped;
+  }
+
+  /** A second Ctrl-C: aborts every call now. */
+  forceStop(): void {
+    this.#force();
+  }
+
+  async #drain(opts: StopOptions): Promise<StopReport> {
     this.#stopping = true;
     if (this.#heartbeat) clearInterval(this.#heartbeat);
-    const batches = this.batches.stop(drainMs);
+    // A waiting batch holds no call: a poll, cancel or cleanup in flight is redone at the next start.
+    // A batch create request in flight is a unit here, waited for until its id is stored. One the
+    // company refused, waiting to try again, stops waiting and is sent at the next start.
+    const batches = this.batches.stop(0);
+    for (const unit of this.#units.values()) {
+      if (!unit.resumable || !unit.handle || unit.canceled) continue;
+      this.#leave(unit);
+      unit.abort.abort(new DOMException("Left for the next start", "AbortError"));
+    }
+    opts.onDrain?.(this.#drainNotice());
+
     const all = Promise.allSettled([...this.#tasks]);
-    const drained = await Promise.race([all.then(() => true), sleep(drainMs).then(() => false)]);
+    const cap = opts.drainMs === undefined ? [] : [sleep(opts.drainMs).then(() => false as const)];
+    const drained = await Promise.race([all.then(() => true as const), this.#forced, ...cap]);
+    const cut: Unit[] = [];
     if (!drained) {
-      for (const unit of this.#units.values())
-        unit.abort.abort(new DOMException("Shutting down", "AbortError"));
+      for (const unit of this.#units.values()) {
+        if (unit.left) continue;
+        cut.push(unit);
+        unit.abort.abort(new DOMException("Stopped", "AbortError"));
+      }
       await Promise.race([all, sleep(2_000)]);
     }
     await batches;
+    // First: what it cuts off that picks up next time joins the images left.
+    const paths = this.#restartPaths(cut);
+    const report = { left: this.#left.size + this.batches.atCompany(), cut: paths };
+    this.deps.jobLog({ event: "server.stopped", forced: !drained, ...report });
+    return report;
   }
+
+  /**
+   * What the drain waits for. A Batch create and a resumable create are waited for only until the
+   * company's id is stored, then left there, so they're "confirming", not "finishing". A resumable
+   * create that was canceled meanwhile waits for its id to send the cancel.
+   */
+  #drainNotice(): DrainNotice {
+    const notice: DrainNotice = { finishing: 0, confirming: 0, stopping: 0, companies: [] };
+    const companies = new Set<string>();
+    for (const unit of this.#units.values()) {
+      if (unit.left) continue;
+      const images = unit.jobIds.length;
+      if (unit.kind === "call" && !unit.resumable) {
+        notice.finishing += images;
+        continue;
+      }
+      // A Batch create waiting to try again stops waiting at once.
+      if (unit.kind === "batch" && !unit.calling) continue;
+      if (unit.canceled) notice.stopping += images;
+      else notice.confirming += images;
+      companies.add(unit.providerId);
+    }
+    for (const cancel of this.#cancelsOut) {
+      notice.stopping += cancel.images;
+      companies.add(cancel.providerId);
+    }
+    notice.companies = [...companies].map((id) => this.#companyName(id));
+    return notice;
+  }
+
+  #companyName(providerId: string): string {
+    try {
+      return this.deps.credentials.provider(providerId).meta.displayName;
+    } catch {
+      return providerId;
+    }
+  }
+
+  /** What the next start does with each image a forced stop cut off (§8.4.5). */
+  #restartPaths(cut: readonly Unit[]): StopReport["cut"] {
+    const out = { rerun: 0, interrupted: 0 };
+    const rerunInterrupted = this.deps.settings.get().rerunInterrupted;
+    for (const unit of cut) {
+      // A Batch run's create is looked up by name at the next start.
+      if (unit.kind === "batch") continue;
+      const idempotentSubmit = this.deps.models.get(unit.modelKey)?.idempotentSubmit === true;
+      for (const jobId of unit.jobIds) {
+        const job = getJob(this.deps.db, jobId);
+        const path = job && restartPath(job, { rerunInterrupted, idempotentSubmit });
+        if (path === "rerun") out.rerun++;
+        else if (path === "interrupt") out.interrupted++;
+        else if (path === "resume" || path === "resend") this.#left.add(jobId);
+      }
+    }
+    return out;
+  }
+}
+
+/**
+ * A failed call the company may have taken anyway: one it plainly refused (429, 503, a Flex busy
+ * answer) or rejected (a 4xx, which isn't retryable) left nothing there.
+ */
+const mayHaveArrived = (error: ProviderError) => error.retryable && !error.busy && !refused(error);
+
+/** When the earliest of these jobs started, epoch ms. Now when none has. */
+function firstStart(jobs: readonly Pick<JobRow, "startedAt">[]): number {
+  const times = jobs.map((j) => (j.startedAt ? Date.parse(j.startedAt) : Date.now()));
+  return times.length ? Math.min(...times) : Date.now();
 }
 
 function seedFor(request: NormalizedRequest, calls: NormalizedRequest[], idx: number): number | null {

@@ -11,6 +11,8 @@ export interface LogRecord {
   msg: string;
   scope?: string;
   data?: unknown;
+  /** A line for the person at the terminal, printed as it is (announce()). */
+  plain?: true;
 }
 
 export interface LogSink {
@@ -47,15 +49,41 @@ export class Logger {
     return redact(value, this.#secrets());
   }
 
+  /**
+   * Hides every loaded key and nothing else, for data that must still work once it's saved, like a
+   * call's handle: the regex net for key shapes could break an id that happens to look like one.
+   */
+  scrubKeys<T>(value: T): T {
+    return redact(value, this.#secrets(), { shapes: false });
+  }
+
   log(level: LogLevel, msg: string, data?: unknown, scope?: string): void {
     if (RANK[level] > RANK[this.#level]) return;
-    const record = this.scrub<LogRecord>({
+    this.#write({
       ts: new Date().toISOString(),
       level,
       msg,
       ...(scope && { scope }),
       ...(data !== undefined && { data }),
     });
+  }
+
+  /**
+   * A plain line for the person at the terminal, like what a stop or a restart is doing: printed
+   * without a level, whatever the log level is, and kept in the log file like any other record.
+   */
+  announce(msg: string, data?: unknown): void {
+    this.#write({
+      ts: new Date().toISOString(),
+      level: "info",
+      msg,
+      plain: true,
+      ...(data !== undefined && { data }),
+    });
+  }
+
+  #write(unscrubbed: LogRecord): void {
+    const record = this.scrub(unscrubbed);
     for (const sink of this.#sinks) {
       try {
         sink.write(record);
@@ -88,9 +116,13 @@ export function consoleSink(): LogSink {
     write(record) {
       const scope = record.scope ? ` [${record.scope}]` : "";
       const data = record.data === undefined ? "" : ` ${JSON.stringify(record.data)}`;
-      const line = `${record.level.padEnd(5)}${scope} ${record.msg}${data}`;
-      if (record.level === "error" || record.level === "warn") console.error(line);
-      else console.log(line);
+      const line = record.plain ? record.msg : `${record.level.padEnd(5)}${scope} ${record.msg}${data}`;
+      try {
+        if (record.level === "error" || record.level === "warn") console.error(line);
+        else console.log(line);
+      } catch {
+        // The terminal closed (a hangup): the log file still has it.
+      }
     },
   };
 }

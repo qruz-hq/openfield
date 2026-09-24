@@ -71,6 +71,9 @@ export function toJob(row: JobRow, planned: PixelSize, asset?: AssetRow): Job {
     finishedAt: row.finishedAt,
     speedUsed: row.speedUsed,
     nextAttemptAt: row.nextAttemptAt,
+    // What a restart did, for the tile (§2.4). The stored handle itself never leaves the server.
+    resumedAt: row.resumedAt,
+    rerunAt: row.rerunAt,
   };
 }
 

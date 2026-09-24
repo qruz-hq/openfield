@@ -18,6 +18,7 @@ import {
   isFavourite,
   listFolders,
   referencesOf,
+  rerunJobIds,
   searchAssets,
 } from "@openfield/db";
 import { Hono } from "hono";
@@ -46,8 +47,12 @@ export const assetsRoutes = new Hono<Env>()
     const page = q.q?.trim()
       ? searchAssets(c.var.svc.db, { ...filter, text: q.q })
       : feedPage(c.var.svc.db, filter);
+    const reruns = rerunJobIds(
+      c.var.svc.db,
+      page.items.map((a) => a.jobId),
+    );
     const body: AssetsListResponse = {
-      items: page.items.map((a) => toAssetListItem(a, a.isFavourite)),
+      items: page.items.map((a) => toAssetListItem(a, a.isFavourite, reruns.has(a.jobId ?? ""))),
       nextCursor: page.nextCursor,
     };
     return c.json(body satisfies AssetsListResponse, 200);
@@ -56,14 +61,21 @@ export const assetsRoutes = new Hono<Env>()
     const { db } = c.var.svc;
     const row = getAsset(db, c.req.valid("param").id);
     if (!row) return notFound(c, "That image");
-    const wire = (a: AssetRow) => toAsset(a, isFavourite(db, a.id));
+    const references = referencesOf(db, row.id);
+    const ancestors = ancestorsOf(db, row);
+    const children = childrenOf(db, row.id);
+    const reruns = rerunJobIds(
+      db,
+      [row, ...references, ...ancestors, ...children].map((a) => a.jobId),
+    );
+    const wire = (a: AssetRow) => toAsset(a, isFavourite(db, a.id), reruns.has(a.jobId ?? ""));
     const jobSet = row.jobSetId ? getJobSet(db, row.jobSetId) : undefined;
     const body: AssetDetailResponse = {
       asset: wire(row),
       jobSet: jobSet ? toJobSet(jobSet) : null,
       params: row.params,
-      references: referencesOf(db, row.id).map(wire),
-      lineage: { ancestors: ancestorsOf(db, row).map(wire), children: childrenOf(db, row.id).map(wire) },
+      references: references.map(wire),
+      lineage: { ancestors: ancestors.map(wire), children: children.map(wire) },
       folders: foldersFor(db, row.id),
       isFavourite: isFavourite(db, row.id),
     };

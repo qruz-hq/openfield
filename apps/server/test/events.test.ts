@@ -48,7 +48,7 @@ describe("GET /api/events", () => {
   test("a snapshot lists runs still in progress", async () => {
     server = await startTestServer();
     // With the runner stopped, the run stays pending.
-    await server.services.runner.stop(0);
+    await server.services.runner.stop({ drainMs: 0 });
     const run = await generate(server);
     const res = await server.request("/api/events");
     const [snapshot] = await readFrames(res, (frames) => frames.length > 0);

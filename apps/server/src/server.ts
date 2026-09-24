@@ -10,12 +10,7 @@ import {
   rebuildSearchIndexIfReplaced,
   seedProviders,
 } from "@openfield/db";
-import {
-  builtinProviders,
-  createFakeFetch,
-  type FetchLike,
-  type Provider,
-} from "@openfield/providers/server";
+import { createFakeFetch, type FetchLike, type Provider, providersFor } from "@openfield/providers/server";
 import pkg from "../package.json";
 import { createApp } from "./app";
 import { ConfigStore } from "./config/config-file";
@@ -27,9 +22,10 @@ import { Thumbs } from "./files/thumbs";
 import { mintSessionToken } from "./http/guards";
 import { VITE_ORIGIN } from "./http/spa";
 import { consoleSink, createJobLog, fileSink, Logger, RollingFile } from "./log/logger";
+import { images } from "./log/plural";
 import { CallContexts } from "./runner/provider-fetch";
-import { recover } from "./runner/recovery";
-import { Runner } from "./runner/runner";
+import { type RecoveryReport, recover } from "./runner/recovery";
+import { Runner, type StopOptions, type StopReport } from "./runner/runner";
 import type { QueueOptions } from "./runner/timing";
 import { CredentialService } from "./services/credentials";
 import { batchSnapshot, jobSetViews, markAnnounced } from "./services/job-sets";
@@ -38,7 +34,9 @@ import { defaultCap, ProviderSettingsService } from "./services/provider-setting
 import { SettingsService } from "./services/settings";
 
 // Boot (§0.16): home folder, lock, config, logs, database, services, crash recovery. Nothing here
-// listens on a port, so tests drive the same app through app.request().
+// listens on a port, so tests drive the same app through app.request(). Nothing here sends a call
+// either: start() does, once the caller has its port, so a start that can't listen never cuts off
+// the calls it would have sent (§8.4.5).
 
 export interface ServerOptions {
   /** Defaults to process.env. Tests pass their own so a developer's real keys never leak in. */
@@ -62,10 +60,20 @@ export interface ServerOptions {
 export interface OpenfieldServer {
   app: ReturnType<typeof createApp>;
   services: Services;
+  /**
+   * Starts the queue: says what recovery did, picks up resumed calls by id, then sends waiting
+   * runs. Call it once the listener is bound (§8.4.5). Safe to call twice.
+   */
+  start(): void;
   /** Work that shouldn't hold up boot, like the daily model list check. */
   startBackground(): void;
-  /** Ends event streams, lets running calls finish for up to `drainMs`, then closes the database. */
-  stop(opts?: { drainMs?: number }): Promise<void>;
+  /**
+   * Ends event streams and drains the runner (§0.12): calls that can't resume finish, resumable ones
+   * are left at the company. Then waits for `closing` (the listener) and closes the database.
+   */
+  stop(opts?: StopOptions & { closing?: Promise<unknown> }): Promise<StopReport>;
+  /** A second Ctrl-C: cuts the drain short. The stop() under way then resolves. */
+  forceStop(): void;
 }
 
 /** Another Openfield already runs on this library folder. */
@@ -87,9 +95,12 @@ export async function createServer(opts: ServerOptions = {}): Promise<OpenfieldS
   // Before anything reads the database: only the lock holder may recover or schedule runs.
   const lock = lockLibrary(paths.lock);
   if (!lock) throw new LibraryInUseError();
+  // What a boot that fails part way has opened, closed in reverse. Nothing has been sent by then.
+  const undo: (() => void)[] = [];
   try {
-    return await boot(opts, env, paths, lock, rootModeFixed);
+    return await boot(opts, env, paths, lock, rootModeFixed, undo);
   } catch (error) {
+    for (const step of undo.reverse()) step();
     lock.release();
     throw error;
   }
@@ -101,6 +112,7 @@ async function boot(
   paths: HomePaths,
   lock: LibraryLock,
   rootModeFixed: boolean,
+  undo: (() => void)[],
 ): Promise<OpenfieldServer> {
   const dev = opts.dev ?? env.OPENFIELD_DEV === "1";
   const config = ConfigStore.open(paths.config, paths.configBackup);
@@ -117,6 +129,7 @@ async function boot(
   if (config.modeFixed) logger.warn("config.json was readable by other users. It's private again.");
 
   const opened = openDb(paths.db);
+  undo.push(() => opened.close());
   const { db } = opened;
   // SQLite makes its -wal and -shm files with the database's mode, so this covers all three.
   keepFilePrivate(paths.db, `${paths.db}-wal`, `${paths.db}-shm`);
@@ -127,7 +140,9 @@ async function boot(
   const settings = new SettingsService(db);
   logger.setLevel(settings.get().logLevel);
 
-  const providers = opts.providers ?? builtinProviders;
+  const fake = env.OPENFIELD_FAKE_PROVIDERS === "1";
+  // Fake mode adds the test company, whose model resumes after a restart (§6.12).
+  const providers = opts.providers ?? providersFor({ fake });
   seedProviders(
     db,
     providers.map((p) => ({
@@ -141,8 +156,8 @@ async function boot(
   credentials = new CredentialService(providers, config, env, db);
   credentials.sync();
 
-  const fake = env.OPENFIELD_FAKE_PROVIDERS === "1";
-  const baseFetch: FetchLike = opts.fetch ?? (fake ? createFakeFetch() : (input, init) => fetch(input, init));
+  const baseFetch: FetchLike =
+    opts.fetch ?? (fake ? createFakeFetch(fakeOptions(env)) : (input, init) => fetch(input, init));
   if (fake && !opts.fetch)
     logger.warn(
       'Fake models are on. Nothing goes to a real company and nothing is billed. Any key works, except one containing "invalid".',
@@ -196,14 +211,14 @@ async function boot(
     ...(opts.queue && { options: opts.queue }),
   });
 
-  // Before the listener takes traffic (§8.4.5).
-  const recovery = recover(db, paths);
+  // Before the listener takes traffic (§8.4.5). The setting is read once, here. It only moves jobs
+  // to where the next start would put them anyway, so a start that then can't listen loses nothing.
+  const recovery = recover(db, paths, {
+    rerunInterrupted: settings.get().rerunInterrupted,
+    simulated: fake,
+    idempotentSubmit: (key) => models.get(key)?.idempotentSubmit === true,
+  });
   jobLog({ event: "startup.recovery", ...recovery });
-  if (recovery.interrupted)
-    logger.info(`${recovery.interrupted} image(s) were interrupted when Openfield last stopped`);
-  if (recovery.missingFiles)
-    logger.warn(`${recovery.missingFiles} image file(s) are missing from the library folder`);
-  runner.start();
 
   settings.onChange((next, changed) => {
     if (changed.includes("logLevel")) logger.setLevel(next.logLevel);
@@ -230,7 +245,7 @@ async function boot(
     ingest,
     thumbs,
     runner,
-    viteOrigin: opts.viteOrigin ?? VITE_ORIGIN,
+    viteOrigin: opts.viteOrigin ?? viteOriginFrom(env),
     webDist:
       opts.webDist === undefined
         ? (env.OPENFIELD_WEB_DIST ?? join(import.meta.dir, "../../web/dist"))
@@ -238,30 +253,84 @@ async function boot(
   };
   const app = createApp(services);
   let refreshTimer: ReturnType<typeof setInterval> | undefined;
+  let stopped: Promise<StopReport> | undefined;
+  const stop = async ({ closing, ...drain }: StopOptions & { closing?: Promise<unknown> }) => {
+    if (refreshTimer) clearInterval(refreshTimer);
+    events.close();
+    const report = await runner.stop(drain);
+    await thumbs.idle();
+    await closing;
+    opened.close();
+    lock.release();
+    return report;
+  };
 
+  let started = false;
   return {
     app,
     services,
+    start() {
+      if (started) return;
+      started = true;
+      for (const line of recoveryLines(recovery)) logger.announce(line);
+      if (recovery.missingFiles)
+        logger.warn(`${recovery.missingFiles} image file(s) are missing from the library folder`);
+      // Its first pass picks up resumed calls by id, before anything new is sent (§0.12).
+      runner.start();
+    },
     startBackground() {
       void models.refreshIfStale();
       refreshTimer = setInterval(() => void models.refreshIfStale(), HOUR);
       refreshTimer.unref?.();
     },
-    async stop({ drainMs = 10_000 } = {}) {
-      if (refreshTimer) clearInterval(refreshTimer);
-      events.close();
-      await runner.stop(drainMs);
-      await thumbs.idle();
-      opened.close();
-      lock.release();
+    stop(opts = {}) {
+      stopped ??= stop(opts);
+      return stopped;
+    },
+    forceStop() {
+      runner.forceStop();
     },
   };
+}
+
+/** The boot lines for what recovery did (§8.4.5). Batch runs still at the company count as picked up. */
+function recoveryLines(r: RecoveryReport): string[] {
+  const lines: string[] = [];
+  const resumed = r.resumed + r.batched;
+  const picked = [
+    ...(resumed ? [`Picking up ${images(resumed)} where ${resumed === 1 ? "it" : "they"} left off.`] : []),
+    ...(r.rerun ? [`Running ${images(r.rerun)} again.`] : []),
+  ];
+  if (picked.length) lines.push(picked.join(" "));
+  if (r.interrupted) {
+    lines.push(
+      `${images(r.interrupted)} ${r.interrupted === 1 ? "was" : "were"} interrupted when Openfield last stopped.`,
+    );
+  }
+  return lines;
+}
+
+/**
+ * OPENFIELD_FAKE_SLOW_MS sets how long the slow fakes take ("#fake:slow" on Google and
+ * "#fake:resume_slow" on the test company), so tests of a stop mid-call run in seconds.
+ */
+function fakeOptions(env: Record<string, string | undefined>): { slowMs?: number; resumeSlowMs?: number } {
+  const slowMs = Number(env.OPENFIELD_FAKE_SLOW_MS);
+  return Number.isFinite(slowMs) && slowMs >= 0 && env.OPENFIELD_FAKE_SLOW_MS
+    ? { slowMs, resumeSlowMs: slowMs }
+    : {};
 }
 
 function authKindOf(provider: Provider): AuthKind {
   const required = provider.credentials.fields.filter((f) => f.required);
   if (required.length === 0) return "none";
   return required.length > 1 ? "key_secret_pair" : "api_key";
+}
+
+/** OPENFIELD_VITE_PORT moves Vite off 4318, for tests that run bun dev beside a developer's own. */
+function viteOriginFrom(env: Record<string, string | undefined>): string {
+  const port = Number(env.OPENFIELD_VITE_PORT);
+  return Number.isInteger(port) && port > 0 && port < 65536 ? `http://127.0.0.1:${port}` : VITE_ORIGIN;
 }
 
 function portFrom(env: Record<string, string | undefined>): number | undefined {

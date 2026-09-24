@@ -13,10 +13,15 @@ import type { Env, Services } from "../context";
 import { notFound, onInvalid } from "../http/errors";
 import { toProviderSummary } from "../mappers/provider";
 
+/**
+ * In registry order, like the model picker's groups (§3.4.1), not by id: in fake mode the test company
+ * ("fake") would otherwise come before Google and take first run's key field.
+ */
 function summaries(svc: Services): ProviderSummary[] {
-  return listProviders(svc.db).flatMap((row) => {
-    const provider = svc.providers.find((p) => p.meta.id === row.id);
-    return provider ? [toProviderSummary(row, provider, svc.credentials.status(row.id))] : [];
+  const rows = new Map(listProviders(svc.db).map((row) => [row.id, row]));
+  return svc.providers.flatMap((provider) => {
+    const row = rows.get(provider.meta.id);
+    return row ? [toProviderSummary(row, provider, svc.credentials.status(row.id))] : [];
   });
 }
 

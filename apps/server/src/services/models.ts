@@ -80,7 +80,7 @@ export class ModelService {
 
   /** Builds the list from code and the models table. Runs at boot, before any request. */
   init(): void {
-    const overlay = loadModelsJson(this.opts.modelsJson, this.opts.logger);
+    const overlay = loadModelsJson(this.opts.modelsJson, this.opts.logger).map((m) => this.#fromAdapter(m));
     this.#registry.setOverlay(overlay);
 
     for (const provider of this.opts.providers) {
@@ -237,6 +237,48 @@ export class ModelService {
     return out;
   }
 
+  /**
+   * Whether a call picks up after a restart, and whether its create can be sent again with the same
+   * key, are facts about the adapter's code, not data (§6.3). A models.json entry replaces the whole
+   * manifest, often only to change a price, so both always come from the adapter's own manifest for
+   * that key, and an entry that says otherwise is ignored with a warning. Adding a speed would mark a
+   * blocking call resumable, so a crash would interrupt it instead of running it again; leaving one
+   * out would make the runner drop a live call after a crash and send a second one.
+   */
+  #fromAdapter(manifest: ModelManifest): ModelManifest {
+    const { resumableSpeeds, idempotentSubmit, ...rest } = manifest;
+    const own = this.#adapterManifest(manifest);
+    // Only speeds this entry still offers: a resumable speed must be one the model has.
+    const kept = (own?.resumableSpeeds ?? []).filter(
+      (speed) => speed === "standard" || rest.speeds?.some((o) => o.id === speed && o.delivery === "sync"),
+    );
+    const listed = resumableSpeeds !== undefined && !sameSpeeds(resumableSpeeds, kept);
+    const sameKey = own?.idempotentSubmit === true;
+    if (listed || (idempotentSubmit !== undefined && idempotentSubmit !== sameKey)) {
+      this.opts.logger.warn("A model in models.json can't change whether it picks up after a restart", {
+        model: manifest.key,
+      });
+    }
+    return {
+      ...rest,
+      ...(kept.length > 0 && { resumableSpeeds: kept }),
+      ...(sameKey && { idempotentSubmit: true as const }),
+    };
+  }
+
+  /** The manifest the adapter itself gives this key: its catalog, or a model it recognises. */
+  #adapterManifest(manifest: ModelManifest): ModelManifest | undefined {
+    const provider = this.opts.providers.find((p) => p.meta.id === manifest.providerId);
+    if (!provider) return undefined;
+    const listed = provider.catalog().find((m) => m.key === manifest.key);
+    if (listed || !provider.recognise(manifest.modelId)) return listed;
+    try {
+      return manifestOnly(provider.model(manifest.key));
+    } catch {
+      return undefined;
+    }
+  }
+
   #provider(id: string): Provider {
     const provider = this.opts.providers.find((p) => p.meta.id === id);
     if (!provider)
@@ -306,3 +348,6 @@ function loadModelsJson(file: string, logger: Logger): ModelManifest[] {
   });
   return out;
 }
+
+const sameSpeeds = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((speed) => b.includes(speed));

@@ -161,6 +161,7 @@ export class Outcomes {
         latencyMs,
         speed: speedUsed,
         simulated: this.deps.fake,
+        rerun: job.rerunAt !== null,
       });
       return asset;
     });
@@ -173,7 +174,7 @@ export class Outcomes {
       jobSetId: set.id,
       jobId: job.id,
       idx: job.idx,
-      asset: toAssetListItem(committed, false),
+      asset: toAssetListItem(committed, false, job.rerunAt !== null),
     });
     this.deps.jobLog({
       event: "job.succeeded",
@@ -230,6 +231,7 @@ export class Outcomes {
           httpStatus: error.httpStatus ?? null,
           speed: opts.speed ?? set.speed,
           simulated: this.deps.fake,
+          rerun: job.rerunAt !== null,
         });
         return job;
       });
@@ -292,6 +294,7 @@ export class Outcomes {
         discarded: true,
         speed: opts.speed,
         simulated: this.deps.fake,
+        rerun: row.rerunAt !== null,
       });
       return row;
     });

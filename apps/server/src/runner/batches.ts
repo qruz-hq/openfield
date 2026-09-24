@@ -12,6 +12,7 @@ import {
 import {
   createProviderBatch,
   type Db,
+  deleteProviderBatch,
   dueProviderBatches,
   finishProviderBatch,
   getJob,
@@ -33,7 +34,7 @@ import {
   uncleanedBatches,
   updateProviderBatch,
 } from "@openfield/db";
-import { speedOffer } from "@openfield/providers/manifest";
+import { resumesAfterRestart, speedOffer } from "@openfield/providers/manifest";
 import {
   type BatchApi,
   type BatchUpdate,
@@ -50,7 +51,14 @@ import type { CredentialService } from "../services/credentials";
 import type { BoundModel, ModelService } from "../services/models";
 import { batchAction, callsFor, finalReason, type Outcomes } from "./outcomes";
 import { type CallContexts, noWrites } from "./provider-fetch";
-import { batchPollDelay, type QueueOptions, retryDelay, runTimeouts, sleep } from "./timing";
+import {
+  batchPollDelay,
+  MISSES_PAST_DEADLINE,
+  type QueueOptions,
+  retryDelay,
+  runTimeouts,
+  sleep,
+} from "./timing";
 
 // The batch watcher (§0.4, §8.4.1): a job set at the Batch speed goes to the company as one provider
 // batch. The row is written before the create call and keeps the company's id the moment it
@@ -58,9 +66,6 @@ import { batchPollDelay, type QueueOptions, retryDelay, runTimeouts, sleep } fro
 // A waiting batch holds no concurrency slot; its create, poll, cancel and cleanup calls do (§0.12).
 
 type Terminal = "succeeded" | "failed" | "canceled" | "expired";
-
-/** Checks in a row with no answer from the company before a run past its deadline stops waiting. */
-const MISSES_PAST_DEADLINE = 3;
 
 interface BatchRun {
   bound: BoundModel;
@@ -89,6 +94,8 @@ export interface BatchSubmit {
   jobSetId: string;
   jobIds: string[];
   abort: AbortController;
+  /** True while its create call, or a lookup of it, is out: what a stop waits for (§0.12). */
+  calling?: boolean;
 }
 
 export class BatchWatcher {
@@ -117,11 +124,19 @@ export class BatchWatcher {
     this.#stopping = true;
     if (this.#timer) clearInterval(this.#timer);
     const all = Promise.allSettled([...this.#tasks]);
-    const drained = await Promise.race([all.then(() => true), sleep(drainMs).then(() => false)]);
-    if (drained) return;
-    // Whatever is cut off here resumes from its row at the next boot.
+    await Promise.race([all, sleep(drainMs)]);
+    // Always, even with nothing of its own running: a create waiting to try again is the runner's
+    // unit, and it stops waiting here. Whatever is cut off resumes from its row at the next boot.
     this.#stop.abort(new DOMException("Shutting down", "AbortError"));
     await Promise.race([all, sleep(2_000)]);
+  }
+
+  /** Images of Batch runs still at the company, which the next start picks up from their row. */
+  atCompany(): number {
+    return resumableBatches(this.deps.db).reduce(
+      (n, { jobs }) => n + jobs.filter((j) => j.status !== "pending").length,
+      0,
+    );
   }
 
   // Submit
@@ -168,6 +183,8 @@ export class BatchWatcher {
               errorMessage: null,
               errorReason: null,
               errorAction: null,
+              // Always true: a Batch run resumes from its row, so it never runs again on its own (§0.4).
+              resumable: resumesAfterRestart(run.bound.manifest, "batch"),
             },
             { from: ["pending"] },
           );
@@ -207,15 +224,23 @@ export class BatchWatcher {
     for (let attempt = 1; attempt <= maxAttempts && !handle; attempt++) {
       if (attempt > 1) {
         const wait = retryDelay(this.deps.options, attempt - 1, error?.retryAfterMs);
-        if (!(await this.#pause(wait))) return;
+        if (!(await this.#pause(wait))) {
+          // Stopping. A create the company refused left nothing there, so the next start sends it
+          // again. One that may have reached it stays for the next start to look up by name.
+          if (!unsure) this.#unsend(batch, set, sent, error, wait);
+          return;
+        }
         if (unsure) {
           // Creating a batch isn't idempotent: look it up by name before sending it again (§0.4).
           try {
+            unit.calling = true;
             handle = await this.#find(run, set, batch.displayName);
           } catch (err) {
             error = asProviderError(err);
             if (error.retryable) continue;
             break;
+          } finally {
+            unit.calling = false;
           }
           if (handle) break;
           unsure = false;
@@ -223,19 +248,23 @@ export class BatchWatcher {
         // Canceled while waiting to try again: nothing reached the company, so don't send it now.
         if (getProviderBatch(db, batch.id)?.errorCode === "canceled") break;
       }
-      const ctx = this.#context(run, set, this.#signal(run, unit.abort.signal));
+      // A stop waits for the create, so its id gets stored (§0.12). Only a forced stop cuts it off.
+      const ctx = this.#context(run, set, this.#signal(run, unit.abort.signal, { throughStop: true }));
       if (!ctx) {
         error = new ProviderError("auth_missing", { message: "No key is set" });
         break;
       }
       try {
-        handle = await untilAborted(run.api.submit(reqs, ctx), ctx.signal);
+        unit.calling = true;
+        handle = await untilAborted(() => run.api.submit(reqs, ctx), ctx.signal);
       } catch (err) {
         error = asProviderError(err, ctx.signal);
-        // Cut off by a shutdown: the next boot looks it up by name.
-        if (this.#stopping || unit.abort.signal.aborted) return;
+        // Cut off by a forced stop: the next boot looks it up by name.
+        if (unit.abort.signal.aborted) return;
         if (!error.retryable) break;
-        unsure = true;
+        if (!refused(error)) unsure = true;
+      } finally {
+        unit.calling = false;
       }
     }
     if (!handle && unsure && run.api.find) {
@@ -260,7 +289,10 @@ export class BatchWatcher {
   /** The company has the batch: store its id at once, then wait on the poll schedule. */
   async #submitted(batch: ProviderBatchRow, set: JobSetRow, handle: BatchHandle): Promise<void> {
     const { db } = this.deps;
-    const saved = recordBatchSubmitted(db, batch.id, handle, { nextPollAt: this.#nextPoll(0) });
+    // Saved as it is, so a key that slipped into it is scrubbed first (the adapter keeps them out).
+    const saved = recordBatchSubmitted(db, batch.id, this.deps.logger.scrubKeys(handle), {
+      nextPollAt: this.#nextPoll(0),
+    });
     for (const job of jobsOf(db, set.id)) {
       if (!transitionJob(db, job.id, "queued", {}, { from: ["submitting"] })) continue;
       this.deps.events.publish("job.queued", { jobSetId: set.id, jobId: job.id, idx: job.idx });
@@ -271,6 +303,45 @@ export class BatchWatcher {
     this.deps.jobLog({ event: "batch.submitted", jobSetId: set.id, batchId: batch.id });
     // A cancel that landed while the create call was out goes now that there's an id to stop.
     if (saved.errorCode === "canceled") await this.#sendCancel(saved);
+  }
+
+  /**
+   * Stopping while a create the company refused waits to try again: nothing is at the company, so
+   * the row goes and the jobs wait in pending, and the next start sends the run like any other.
+   * A cancel that came in meanwhile ends it instead.
+   */
+  #unsend(
+    batch: ProviderBatchRow,
+    set: JobSetRow,
+    sent: readonly JobRow[],
+    error: ProviderError | undefined,
+    waitMs: number,
+  ): void {
+    const { db } = this.deps;
+    const cause = error ?? new ProviderError("provider_unavailable", { message: "The create was refused" });
+    if (getProviderBatch(db, batch.id)?.errorCode === "canceled") {
+      this.#createFailed(batch, set, sent, cause);
+      return;
+    }
+    const retryAt = new Date(Date.now() + waitMs).toISOString();
+    db.transaction((tx) => {
+      for (const job of sent) {
+        transitionJob(
+          tx,
+          job.id,
+          "pending",
+          {
+            nextAttemptAt: retryAt,
+            errorCode: cause.code,
+            errorMessage: this.deps.logger.scrub(cause.message),
+          },
+          { from: ["submitting"] },
+        );
+      }
+      deleteProviderBatch(tx, batch.id);
+    });
+    refreshJobSetStatus(db, set.id);
+    this.deps.jobLog({ event: "batch.unsent", jobSetId: set.id, batchId: batch.id });
   }
 
   /** Nothing reached the company, so nothing was spent. */
@@ -348,6 +419,8 @@ export class BatchWatcher {
     // Canceled, or nothing here still wants a result: stop it at the company first.
     if ((row.errorCode === "canceled" || waiting.length === 0) && !this.#canceling.has(row.id)) {
       await this.#sendCancel(row);
+      // The next start polls it again, and sends the cancel if it didn't get through.
+      if (this.#stopping) return;
     }
     const sink = this.deps.ingest.sink();
     const ctx = this.#context(run, set, this.#signal(run), sink);
@@ -355,8 +428,9 @@ export class BatchWatcher {
 
     let update: BatchUpdate;
     try {
+      const handle = row.handle;
       update = await untilAborted(
-        run.api.poll(row.handle, ctx, { harvest: waiting.map((j) => j.id) }),
+        () => run.api.poll(handle, ctx, { harvest: waiting.map((j) => j.id) }),
         ctx.signal,
       );
     } catch (err) {
@@ -648,20 +722,24 @@ export class BatchWatcher {
   }
 
   async #sendCancel(row: ProviderBatchRow): Promise<void> {
-    if (!row.handle || this.#canceling.has(row.id)) return;
+    // Stopping: the row keeps its cancel, and the next start sends it.
+    if (!row.handle || this.#canceling.has(row.id) || this.#stopping) return;
+    const handle = row.handle;
     const set = getJobSet(this.deps.db, row.jobSetId);
     const run = set && this.#bind(set);
     const ctx = set && run && this.#context(run, set, this.#signal(run));
     if (!run || !ctx) return;
     this.#canceling.add(row.id);
     try {
-      await untilAborted(run.api.cancel(row.handle, ctx), ctx.signal);
+      await untilAborted(() => run.api.cancel(handle, ctx), ctx.signal);
     } catch (err) {
       this.#canceling.delete(row.id);
-      this.deps.logger.warn("Couldn't stop a batch at the company. Trying again soon", {
-        jobSetId: row.jobSetId,
-        error: err,
-      });
+      if (!this.#stopping) {
+        this.deps.logger.warn("Couldn't stop a batch at the company. Trying again soon", {
+          jobSetId: row.jobSetId,
+          error: err,
+        });
+      }
     }
     // Poll at once, to harvest whatever finished before it stopped.
     const current = getProviderBatch(this.deps.db, row.id);
@@ -683,7 +761,11 @@ export class BatchWatcher {
     const now = new Date().toISOString();
     for (const { batch } of rows) updateProviderBatch(this.deps.db, batch.id, { nextPollAt: now });
     this.#pollDue();
-    for (const row of uncleanedBatches(this.deps.db)) await this.#inSlot(row, () => this.#cleanup(row));
+    for (const row of uncleanedBatches(this.deps.db)) {
+      // Whatever is left untidied waits for the next start.
+      if (this.#stopping) return;
+      await this.#inSlot(row, () => this.#cleanup(row));
+    }
   }
 
   /** It may have reached the company and nothing could tell yet: look again on the batch schedule. */
@@ -706,10 +788,12 @@ export class BatchWatcher {
       try {
         handle = await this.#find(run, set, row.displayName);
       } catch (err) {
-        this.deps.logger.warn("Couldn't look up a batch at the company. Trying again soon", {
-          jobSetId: set.id,
-          code: asProviderError(err).code,
-        });
+        if (!this.#stopping) {
+          this.deps.logger.warn("Couldn't look up a batch at the company. Trying again soon", {
+            jobSetId: set.id,
+            code: asProviderError(err).code,
+          });
+        }
       }
     }
     if (handle) return this.#submitted(row, set, handle);
@@ -744,17 +828,22 @@ export class BatchWatcher {
   /** Deletes the batch and its uploads at the company once its results are saved. */
   async #cleanup(row: ProviderBatchRow, known?: BatchRun): Promise<void> {
     const { db } = this.deps;
-    if (row.cleanedAt) return;
+    // Stopping: the next start tidies it up (uncleanedBatches).
+    if (row.cleanedAt || this.#stopping) return;
     const set = getJobSet(db, row.jobSetId);
     const run = known ?? (set && this.#bind(set));
     if (!row.handle || (run && !run.api.cleanup)) return void markBatchCleaned(db, row.id);
     if (!set || !run?.api.cleanup) return;
+    const cleanup = run.api.cleanup.bind(run.api);
     const ctx = this.#context(run, set, this.#signal(run));
     if (!ctx) return;
+    const handle = row.handle;
     try {
-      await untilAborted(run.api.cleanup(row.handle, ctx), ctx.signal);
+      await untilAborted(() => cleanup(handle, ctx), ctx.signal);
       markBatchCleaned(db, row.id);
     } catch (err) {
+      // Cut off by the stop: the next start tidies it up (uncleanedBatches), so it isn't news.
+      if (this.#stopping) return;
       this.deps.logger.warn("Couldn't tidy up a finished batch at the company", {
         jobSetId: row.jobSetId,
         error: err,
@@ -769,12 +858,15 @@ export class BatchWatcher {
     if (!run.api.find) return null;
     const ctx = this.#context(run, set, this.#signal(run));
     if (!ctx) throw new ProviderError("auth_missing", { message: "No key is set, or the company is off" });
-    return untilAborted(run.api.find(displayName, ctx), ctx.signal);
+    const find = run.api.find.bind(run.api);
+    return untilAborted(() => find(displayName, ctx), ctx.signal);
   }
 
   /** Runs one call about a batch in a slot, waiting for one to free up (§0.12). */
   async #inSlot(row: ProviderBatchRow, work: () => Promise<void>): Promise<void> {
     for (;;) {
+      // Stopping: nothing new goes out, and the next start redoes it.
+      if (this.#stopping) return;
       const free = this.deps.slots(row.providerId, modelKeyOf(row));
       if (free) {
         try {
@@ -822,10 +914,17 @@ export class BatchWatcher {
     });
   }
 
-  /** One call's signal: its own timeout, the shutdown, and anything the caller adds. */
-  #signal(run: BatchRun, extra?: AbortSignal): AbortSignal {
+  /**
+   * One call's signal: its own timeout, anything the caller adds, and the shutdown unless the call
+   * must run through it.
+   */
+  #signal(run: BatchRun, extra?: AbortSignal, opts: { throughStop?: boolean } = {}): AbortSignal {
     const { attemptMs } = runTimeouts(this.deps.options, run.bound.manifest, "batch");
-    return AbortSignal.any([this.#stop.signal, AbortSignal.timeout(attemptMs), ...(extra ? [extra] : [])]);
+    return AbortSignal.any([
+      ...(opts.throughStop ? [] : [this.#stop.signal]),
+      AbortSignal.timeout(attemptMs),
+      ...(extra ? [extra] : []),
+    ]);
   }
 
   #deadline(row: ProviderBatchRow, run: BatchRun | undefined): number {
@@ -871,6 +970,12 @@ export class BatchWatcher {
 
 const modelKeyOf = (row: ProviderBatchRow) => `${row.providerId}:${row.modelId}`;
 
+/**
+ * The company answered and plainly didn't take the call: too many requests, or overloaded. Anything
+ * else that failed on the way (the network, a timeout, a 500) may have created the batch anyway.
+ */
+export const refused = (error: ProviderError) => error.httpStatus === 429 || error.httpStatus === 503;
+
 function missingResult(state: Terminal): ProviderError {
   if (state === "canceled")
     return new ProviderError("canceled", { message: "Stopped before this image was made" });
@@ -878,7 +983,7 @@ function missingResult(state: Terminal): ProviderError {
   return new ProviderError("provider_error", { message: "The company sent no result for this image" });
 }
 
-function asProviderError(err: unknown, signal?: AbortSignal): ProviderError {
+export function asProviderError(err: unknown, signal?: AbortSignal): ProviderError {
   if (isProviderError(err)) return err;
   if (signal?.aborted) return errorFromFetchFailure(err, signal);
   return new ProviderError("unknown", {
@@ -887,13 +992,27 @@ function asProviderError(err: unknown, signal?: AbortSignal): ProviderError {
   });
 }
 
-/** Stops waiting when the signal fires, even if an adapter ignores it. */
-export function untilAborted<T>(work: Promise<T>, signal: AbortSignal): Promise<T> {
-  if (signal.aborted) return Promise.reject(signal.reason);
+/**
+ * Stops waiting when the signal fires, even if an adapter ignores it. Pass the call as a function,
+ * so nothing is sent once the signal has fired. A call already under way still has its own failure
+ * handled after the wait ends: Bun exits on an unhandled rejection, which would cut off every other
+ * call the server is finishing.
+ */
+export function untilAborted<T>(work: Promise<T> | (() => Promise<T>), signal: AbortSignal): Promise<T> {
+  if (signal.aborted) {
+    if (typeof work !== "function") work.catch(() => {});
+    return Promise.reject(signal.reason);
+  }
+  let running: Promise<T>;
+  try {
+    running = typeof work === "function" ? work() : work;
+  } catch (err) {
+    return Promise.reject(err);
+  }
   return new Promise((resolve, reject) => {
     const onAbort = () => reject(signal.reason);
     signal.addEventListener("abort", onAbort, { once: true });
-    work.then(
+    running.then(
       (value) => {
         signal.removeEventListener("abort", onAbort);
         resolve(value);

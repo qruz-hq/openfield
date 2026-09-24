@@ -31,11 +31,14 @@ export const usageRoutes = new Hono<Env>().get(
         images: 0,
         usd: 0,
         usdDiscarded: 0,
+        reruns: 0,
       };
       into.runs += row.runs;
       into.images += row.images;
       into.usd = round(into.usd + row.usd);
       into.usdDiscarded = round(into.usdDiscarded + row.usdDiscarded);
+      // Images that ran again after a restart: the first call may be billed too (§0.13).
+      into.reruns = (into.reruns ?? 0) + (row.reruns ?? 0);
       grouped.set(key, into);
     }
     const items = [...grouped.values()];

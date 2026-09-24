@@ -31,6 +31,14 @@ export interface QueueOptions {
   batchPollMs?: number;
 }
 
+/**
+ * Checks in a row with no answer from the company before a call that resumes (a Batch run, or a
+ * sync call picked up by id) stops waiting past its deadline. Several, on the slower batch schedule,
+ * so a network that is still coming up at boot never throws away an image that finished while
+ * Openfield was closed.
+ */
+export const MISSES_PAST_DEADLINE = 3;
+
 export const QUEUE_DEFAULTS: QueueOptions = {
   maxAttempts: 3,
   retryDelaysMs: [1_000, 4_000, 15_000],

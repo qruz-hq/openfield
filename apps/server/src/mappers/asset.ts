@@ -13,7 +13,8 @@ import type { AssetRow } from "@openfield/db";
 /** The feed's default rung (§0.10). The client picks others through the same route. */
 const FEED_THUMB = { h: 456 } as const;
 
-export function toAssetListItem(row: AssetRow, isFavourite: boolean): AssetListItem {
+/** `rerun`: the job that made it ran again after a restart (jobs.rerun_at, §0.4). */
+export function toAssetListItem(row: AssetRow, isFavourite: boolean, rerun: boolean): AssetListItem {
   return {
     id: row.id,
     kind: row.kind,
@@ -28,15 +29,16 @@ export function toAssetListItem(row: AssetRow, isFavourite: boolean): AssetListI
     prompt: row.prompt,
     approximate: row.approximate,
     isFavourite,
+    rerun,
     createdAt: row.createdAt,
     thumbUrl: assetThumbUrl(row.id, FEED_THUMB),
     fileUrl: assetFileUrl(row.id),
   };
 }
 
-export function toAsset(row: AssetRow, isFavourite: boolean): Asset {
+export function toAsset(row: AssetRow, isFavourite: boolean, rerun: boolean): Asset {
   return {
-    ...toAssetListItem(row, isFavourite),
+    ...toAssetListItem(row, isFavourite, rerun),
     modality: row.modality as Modality,
     bytes: row.bytes,
     seed: row.seed,

@@ -28,7 +28,7 @@ describe("guards", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; schema: string };
     expect(body.ok).toBe(true);
-    expect(body.schema).toBe("0004_job_error_action");
+    expect(body.schema).toBe("0005_resume");
   });
 
   test("a wrong Host is rejected, even with the token", async () => {

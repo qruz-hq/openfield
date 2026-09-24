@@ -47,6 +47,8 @@ export async function startTestServer(
   });
   const events: TestServer["events"] = [];
   server.services.events.subscribe((event, data) => events.push({ event, data }));
+  // No port here, so the queue starts at once, as index.ts starts it once it's listening.
+  server.start();
 
   const request: TestServer["request"] = (path, init = {}) => {
     const { session, ...rest } = init;

@@ -350,13 +350,35 @@ describe("crash recovery", () => {
     expect(getAsset(server.services.db, asset.id)!.fileState).toBe("ok");
   });
 
-  test("a job cut off mid-call is marked interrupted and never sent again", async () => {
+  test("a Google call cut off mid-call runs again once, since it can't be picked up by id", async () => {
     const gate = gatedFetch();
     server = await startTestServer({ fetch: gate.fetch });
     await saveKey(server);
     const run = await generate(server, { batch: 2 });
     await waitFor(() => gate.state.active === 2);
     // Simulate a crash: the server dies with one job running and one never picked up.
+    transitionJob(server.services.db, run.jobs[1]!.id, "pending", {}, { from: ["submitting", "running"] });
+    const home = server.home;
+    await server.close({ keepHome: true });
+
+    const calls = gatedFetch();
+    calls.release();
+    server = await startTestServer({ home, fetch: calls.fetch });
+    await completed(server, run.jobSet.id);
+    const jobs = jobsOf(server.services.db, run.jobSet.id);
+    expect(jobs.map((j) => j.status)).toEqual(["succeeded", "succeeded"]);
+    expect(jobs.map((j) => j.rerunAt !== null)).toEqual([true, false]);
+    expect(getJobSet(server.services.db, run.jobSet.id)!.status).toBe("succeeded");
+    expect(calls.state.calls).toBe(2);
+  });
+
+  test("with running again turned off, a job cut off mid-call is interrupted and never sent again", async () => {
+    const gate = gatedFetch();
+    server = await startTestServer({ fetch: gate.fetch });
+    await saveKey(server);
+    await server.json("/api/settings", { method: "PATCH", body: { rerunInterrupted: false } });
+    const run = await generate(server, { batch: 2 });
+    await waitFor(() => gate.state.active === 2);
     transitionJob(server.services.db, run.jobs[1]!.id, "pending", {}, { from: ["submitting", "running"] });
     const home = server.home;
     await server.close({ keepHome: true });
