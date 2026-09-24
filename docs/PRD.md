@@ -357,13 +357,19 @@ Every failure card links to the **Error log** (Settings → Help): redacted requ
 |---|---|---|
 | `POST` | `/api/masks` | Upload a painted mask as an internal asset (`multipart/form-data`, PNG, must match the base asset's pixel dimensions) → `{asset}` with `kind='mask'`, `mime='image/png'` |
 | `POST` | `/api/job-sets/:id/recreate` | Replay the frozen `NormalizedRequest` as a new job set (§0.1 **Recreate**) → 202, same shape as `/api/generate` |
-| `POST` | `/api/canvases/:id/run` | `{scope:'node'\|'downstream'\|'all'\|'selection', nodeIds, plan:[{nodeId, typeVersion, fingerprint, model, params, inputs}], dryRun?}` → `{runId, jobSets:[{nodeId, jobSetId}], skipped:[{nodeId, reason:'cached'}], estimate}` |
+| `POST` | `/api/canvases/:id/run` | `{scope:'node'\|'downstream'\|'all'\|'selection', nodeIds, plan:[{nodeId, type, typeVersion, fingerprint, model, params, inputs:[{port, to:'references'\|'base'\|'mask', role?, arity:'single'\|'multi', values:[{kind:'asset', assetId}\|{kind:'node', nodeId, port}]}], calls:[{model, op, prompt, negativePrompt?, enhancePrompt?, size, resolution?, quality?, batch, seed, providerOptions?, label?}], cached:{fingerprint, assetIds}\|null, bypassCache?}], dryRun?, confirmed?}` → `{runId, jobSets:[{nodeId, jobSetId}], skipped:[{nodeId, reason:'cached'}], estimate, jobs, nodes:[{nodeId, jobs, estimate, skipped, blocked}]}`. `inputs[].values` and `cached.assetIds` hold up to `CANVAS_RUN_MAX_JOBS` (1000) ids. `409` with `field:'confirmed'` when it makes more than 32 jobs unconfirmed; `409` when it would make more than 1000 jobs, or names a node already queued or running in a live run on this canvas |
 | `POST` | `/api/canvases/:id/runs/:runId/cancel` | Cancel a whole canvas run |
+| `POST` | `/api/canvases/:id/runs/:runId/nodes/:nodeId/cancel` | A node band's Cancel: that node's job sets and the nodes that read from it; the rest of the run carries on |
+| `GET` | `/api/canvases/:id/runs` | `?since=` → `{runs:[CanvasRunState]}`: every active run, plus runs finished after `since` (a tab re-attaching) |
+| `GET` | `/api/canvases/:id/versions/:vid` | One snapshot with its graph, for Preview |
+| `GET` | `/api/canvas-templates` | Bundled and user templates |
+| `PUT` | `/api/canvases/:id/preview` | `?theme=light\|dark`, body `image/png`: the index card picture in one theme (M4-15) |
+| `GET` | `/files/canvas-preview/:id` | `?theme=light\|dark&v=`: the stored card picture, the other theme when only one exists |
 | `GET`/`POST` | `/api/reference-sets` · `PATCH`/`DELETE` `/api/reference-sets/:id` | §0.8 |
 | `GET`/`POST` | `/api/palettes` · `PATCH`/`DELETE` `/api/palettes/:id` | §0.8 |
 | `GET`/`POST` | `/api/prompts` · `PATCH`/`DELETE` `/api/prompts/:id` | Saved prompts (§5.9) |
 
-`GET /api/assets` default `limit=50` (the measured feed page size), not 60. `POST /api/uploads` accepts `.jpg .jpeg .png .webp .heic` (HEIC transcoded to PNG on ingest).
+`GET /api/assets` default `limit=50` (the measured feed page size), not 60. `POST /api/uploads` accepts `.jpg .jpeg .png .webp .heic` up to 20 MB (HEIC transcoded to PNG on ingest, made smaller if the PNG passes 20 MB).
 
 **One request body.** `POST /api/generate` and `POST /api/edit` take the **same type** — §6.5's `GenerateRequest`, extended. `/api/generate` accepts `op: "generate"` only; `/api/edit` accepts every other `Op`. §8.3.1's nested `params` example is deleted.
 
@@ -586,7 +592,7 @@ fingerprint = sha256(typeId, typeVersion, normalizedParams, modelKey,
                      manifestVersion, [upstream fingerprints in port order])
 ```
 
-A node is `cached` when `fingerprint === result.fingerprint` and every referenced asset still exists. Seed modes `Fixed` and `From input` are offered **only when `seed.supported`**; on models without seeds the node always caches on unchanged inputs and the run pill reads "Each run gives a new result." §7.7's "a node whose seed mode is `random` can never cache" would otherwise make every launch-model node uncacheable.
+A node is `cached` when `fingerprint === result.fingerprint`, every referenced asset still exists, **and it read the images its inputs hand on now**. Upstream fingerprints alone can't say that: on a seedless model an upstream node that runs again (a `⌥`-click, a rerun after a stop or failure, a result file gone missing) makes new images under the same fingerprint. So a result also keeps `inputs`, the sorted ids of the images it read (the server records them per node), and a node is reusable only while those match what its inputs hand on and nothing it reads runs in the same pass; otherwise it renders `stale` with "Inputs changed", and so does everything below it. Seed modes `Fixed` and `From input` are offered **only when `seed.supported`**; on models without seeds the node always caches on unchanged inputs and the run pill reads "Each run gives a new result." §7.7's "a node whose seed mode is `random` can never cache" would otherwise make every launch-model node uncacheable.
 
 **Results that arrive late.** A result carries the fingerprint it was **submitted** with. On arrival the runner compares it to the node's current fingerprint: on a match the node goes `done`; on a mismatch **the asset is still filed in the library** and the node renders `stale` with the chip "Made with older settings · Open · Re-run". Undo and redo never cancel an in-flight run; a node with a run in flight refuses reparenting and deletion, with the toast "Wait for this node to finish, or cancel it."
 
@@ -3245,7 +3251,7 @@ The landing page for the workspace, mirroring the observed index layout.
 - **Card hover / right-click → `⋯` menu**: Open · Rename (inline edit on the card) · Duplicate · Export… · Version history · Delete. Delete is destructive-styled and opens a confirm dialog that echoes the canvas name; it removes the `canvases` row and its `canvas_versions` but **never** the assets it produced (those stay in the library).
 - Double-click opens.
 
-**Preview capture (M4-15).** On save, if the graph bounds changed materially and ≥60 s have passed, capture the preview by temporarily mounting a **second, off-screen `<ReactFlow>` instance** with `onlyRenderVisibleElements={false}` and the LOD bucket forced to full detail (7.10), fitted to the graph bounds, then rasterise it with `html-to-image` (MIT). **Graphs above 150 nodes skip the render entirely** and fall straight through to the fallback chain: newest result image in the graph → generated dot-grid placeholder showing the node count. The result is written to `canvases/previews/<id>.png` and recorded on `canvases.preview_path` (§8.2) — an **internal file, never an `assets` row**, which is what keeps previews out of the user's library.
+**Preview capture (M4-15).** On save, if the graph bounds changed materially or its results changed (images arrived, a node failed), and ≥60 s have passed since the last capture, capture the preview; leaving the editor takes a capture that's due at once (the 60 s floor avoids repeats, it never skips the last change), and opening a canvas whose results are newer than its preview makes one due by temporarily mounting a **second, off-screen `<ReactFlow>` instance** with `onlyRenderVisibleElements={false}` and the LOD bucket forced to full detail (7.10), fitted to the graph bounds, then rasterise it with `html-to-image` (MIT). **Graphs above 150 nodes skip the render entirely** and fall straight through to the fallback chain: newest result image in the graph → generated dot-grid placeholder showing the node count. The result is written to `canvases/previews/<id>.png` and recorded on `canvases.preview_path` (§8.2) — an **internal file, never an `assets` row**, which is what keeps previews out of the user's library. The same render is taken once in each theme (the tokens follow `color-scheme`), the dark one beside it as `<id>.dark.png`, so the index shows every card in the theme it's in.
 
 **Templates tab.** Same grid, each card badged `Template`, primary action *Use template* (duplicates the template document into a new canvas and opens it). v1 ships **four** image-only starter templates, written by us, not copied, and bundled as `apps/server/seed/templates/*.ofcanvas.json`: **From a reference** · **Image edit** · **Storyboard (4 panels)** · **Compare styles** (M4-14; §8.8 row 43). An *Upscale pass* template is deliberately absent — the Upscale node is latent in v1 (7.5, §0.14) and such a template would open `blocked`. Templates are ordinary exported canvas documents, no special format, so a user can drop their own file into `~/.openfield/canvases/templates/` (or import it and hit *Save as template*, 7.8).
 
@@ -3402,7 +3408,7 @@ Choosing a node creates it positioned so that its accepting port lands at the dr
 | Run all | `all` | Top-bar *Run all*, `⌥⌘⏎` | Runs every runnable node in topological order. |
 | Run selection | `selection` | Multi-select context toolbar | Runs the selected nodes plus whatever upstream is needed to satisfy them. |
 
-**Dirty tracking and caching (M4-16).** Each node computes the **fingerprint defined once in §0.11** — the same hash function the composer uses for `paramsHash`, over `typeId`, `typeVersion`, normalized params, `modelKey`, `manifestVersion` and the upstream fingerprints in port order. A node is `cached`, and is returned in the run response's `skipped[]`, when `fingerprint === result.fingerprint` and every referenced asset still exists. Any change to params, model or an upstream fingerprint marks the node `stale` and propagates staleness transitively downstream (visually: the stale dots cascade immediately, before any run). `⌥`-click on a run pill bypasses the cache.
+**Dirty tracking and caching (M4-16).** Each node computes the **fingerprint defined once in §0.11** — the same hash function the composer uses for `paramsHash`, over `typeId`, `typeVersion`, normalized params, `modelKey`, `manifestVersion` and the upstream fingerprints in port order. A node is `cached`, and is returned in the run response's `skipped[]`, when `fingerprint === result.fingerprint`, every referenced asset still exists, and the images it read (`result.inputs`) are the ones its inputs hand on now (§0.11): the server skips a node only when everything it reads is skipped too. Any change to params, model or an upstream fingerprint, or new images from an upstream node, marks the node `stale` and propagates staleness transitively downstream (visually: the stale dots cascade immediately, before any run). `⌥`-click on a run pill bypasses the cache; with *Run from here* it reruns everything below the pressed node too. A node that comes back short (some of its jobs failed or were cut off by a restart) settles `failed`: it keeps the images it made and the first error, and is never reused as a whole set. One that fails without making any image keeps the images it had next to the error, so what reads from it doesn't go stale over a run that changed nothing.
 
 A result carries the fingerprint it was submitted with. On arrival the runner compares it to the node's current fingerprint: on a match the node goes `done`; on a mismatch the asset is still filed in the library and the node renders `stale` with the chip "Made with older settings · Open · Re-run". Undo and redo never cancel an in-flight run; a node with a run in flight refuses reparenting and deletion (the op is rejected with the toast "Wait for this node to finish, or cancel it").
 
@@ -3414,13 +3420,13 @@ A result carries the fingerprint it was submitted with. On arrival the runner co
 - **Multi-model compare**: the Variations node's `Model list` strategy emits one run per model; results render in a labelled grid with the model name under each tile.
 - **Table fan-out** *(v1.1, with the Table node)*: a Table with *r* rows feeding prompt variables produces *r* runs, each with that row's substitutions; the result grid is labelled by the row's first column.
 
-A safety rail: any single run whose fan-out exceeds **32 jobs** requires explicit confirmation regardless of cost.
+A safety rail: any single run whose fan-out exceeds **32 jobs** requires explicit confirmation regardless of cost. No run makes more than **1000 jobs** (`CANVAS_RUN_MAX_JOBS`), confirmed or not: a node whose own fan-out passes it shows a blocker, *Run all* turns off with that reason when the whole canvas would, and the server refuses such a plan before building any of it. A plan can name every node of a document (up to 5000 items); the job cap is what limits a run.
 
-**Concurrency and priority.** Canvas runs enqueue job sets into the **same queue as the composer** — one queue, one set of provider connections, one usage log. Defaults: `globalConcurrency = 4` (§8.4.2), further clamped per provider by `min(providers.concurrency_cap, capabilities.limits.maxConcurrent)`. Scheduling is `job_sets.priority DESC, job_sets.created_at, jobs.idx` with round-robin across providers: composer runs and single-node canvas runs enqueue at priority **10**, run-downstream and run-all at **5**, so a 30-node batch cannot starve a user who just hit Generate. The numbers live in §8.4.2 and §0.12; this section states none of its own. Queued nodes display their position.
+**Concurrency and priority.** Canvas runs enqueue job sets into the **same queue as the composer** — one queue, one set of provider connections, one usage log. Defaults: `globalConcurrency = 4` (§8.4.2), further clamped per provider by `min(providers.concurrency_cap, capabilities.limits.maxConcurrent)`. Scheduling is `job_sets.priority DESC, job_sets.created_at, jobs.idx` with round-robin across providers: composer runs and single-node canvas runs enqueue at priority **10** (a single-node run that brings earlier nodes along with *Run them too* is a batch, at 5), run-downstream and run-all at **5**, so a 30-node batch cannot starve a user who just hit Generate. The numbers live in §8.4.2 and §0.12; this section states none of its own. Queued nodes display their position in the company's queue once their job set is there; a node still waiting on an earlier node in its run just reads *Waiting*.
 
-**Cancellation.** The node's `×` cancels that node's job set (§8.3); the top bar's *Stop* cancels the whole run via `POST /api/canvases/:id/runs/:runId/cancel`. Nodes not yet started go `canceled` synchronously, nothing spent. **Neither launch adapter implements provider-side cancel (§6.13, §6.14), so canceling a run already sent aborts our fetch only: the provider may complete and bill the work, and no asset is produced.** The usage log records it at full estimate with `discarded = 1`, and the node's `canceled` band reads *"Canceled. You may still be charged for work that already started."* (§0.12, §0.13.)
+**Cancellation.** The node's `×` cancels that node, and the nodes that read from it, through `POST /api/canvases/:id/runs/:runId/nodes/:nodeId/cancel`; the rest of the run carries on (§8.3). The top bar's *Stop* cancels the whole run via `POST /api/canvases/:id/runs/:runId/cancel`. Nodes not yet started go `canceled` synchronously, nothing spent, and keep the result they had; so does any canceled node that made no image. Deleting a canvas stops its runs first. A node already queued or running is never sent again: every run scope leaves it, and what reads from it, out of the plan (Run all's price counts only what it would send), and the server refuses a plan that names it. **Neither launch adapter implements provider-side cancel (§6.13, §6.14), so canceling a run already sent aborts our fetch only: the provider may complete and bill the work, and no asset is produced.** The usage log records it at full estimate with `discarded = 1`, and the node's `canceled` band reads *"Canceled. You may still be charged for work that already started."* (§0.12, §0.13.)
 
-**Cost preview (M4-18).** Every run pill shows the estimated cost for that node at its current settings, computed locally from the manifest by the pure `estimate(manifest, req)` function (§0.13) — no round-trip per stepper click. Any multi-node run first opens a confirmation popover, populated by the same run request with `dryRun: true` (which returns `estimate` and `skipped[]` without enqueuing anything):
+**Cost preview (M4-18).** Every run pill shows the estimated cost for that node at its current settings, computed locally from the manifest by the pure `estimate(manifest, req)` function (§0.13) — no round-trip per stepper click. Any multi-node run first opens a confirmation popover, populated by the same run request with `dryRun: true` (which returns `estimate` and `skipped[]` without enqueuing anything). A single-node run whose earlier nodes have to run first asks once, in the same popover, titled *"1 earlier node needs to run first"* with *Run them too*. A plan that offers anything for reuse is dry-run first too, and the popover opens whenever the server counts more jobs than the browser did (an image file gone missing), so nothing is spent unseen:
 
 ```
 Run all: 5 nodes, 8 images
@@ -3432,7 +3438,7 @@ Run all: 5 nodes, 8 images
   Total  About $0.72–0.85            [ Cancel ]  [ Run ]
 ```
 
-Estimates come from the manifest's pricing snapshot (§6, §0.13), always carry `pricedAt`, and are always rendered as estimates — a range for token-priced models and an explicit "Cost unknown" row where a provider publishes no rate. Runs whose estimate exceeds the spend-confirmation threshold (Settings → Spending, §6.17) always require this confirmation, even for a single node. Actual costs, once known, are reconciled into `usage_log` with the canvas and node ids attached (§0.13).
+Estimates come from the manifest's pricing snapshot (§6, §0.13), always carry `pricedAt`, and are always rendered as estimates — a range for token-priced models and an explicit "Cost unknown" row where a provider publishes no rate. Once this month's tracked spend plus a run's estimate reaches the monthly spending limit (Settings → Spending, §6.9, §6.17), every run requires this confirmation, even a single node. Actual costs, once known, are reconciled into `usage_log` with the canvas and node ids attached (§0.13).
 
 ### 7.8 Persistence
 
@@ -3490,7 +3496,7 @@ Estimates come from the manifest's pricing snapshot (§6, §0.13), always carry 
 
 `meta.previewPath` is an internal file relative to `OPENFIELD_HOME` (§0.2, §0.7), **not an asset id** — previews never enter the user's library.
 
-**Storage.** The document of record is the `graph` JSON column of the **`canvases`** row, with snapshots in **`canvas_versions`** and the card image at `preview_path`; §8.2's Drizzle schema owns both tables and this section restates none of it. A Settings toggle additionally write-throughs each save to `~/.openfield/canvases/{id}.json`, so a user can keep their graphs in git.
+**Storage.** The document of record is the `graph` JSON column of the **`canvases`** row, with snapshots in **`canvas_versions`** and the card image at `preview_path`; §8.2's Drizzle schema owns both tables and this section restates none of it. A run writes each node's result into `graph` as the node settles, without moving `graph_version`, so a canvas closed during a run (or renamed from the index meanwhile) opens with its results; open tabs write the same result into their copy, so their next saves don't conflict. A Settings toggle additionally write-throughs each save to `~/.openfield/canvases/{id}.json`, so a user can keep their graphs in git.
 
 **Autosave.** Local state is the source of truth while editing; mutations flow through a single `applyOp(doc, op)` reducer. Saves are **debounced 800 ms** after the last mutation, force-flushed every 10 s while dirty, and flushed on blur, route change and `beforeunload`. The request is `PATCH /api/canvases/:id` (§8.3) carrying the full document plus `graphVersion`; if the server's version has moved (two browser tabs on the same canvas), the save is rejected with `conflict` (§0.5) and the editor shows a non-destructive banner — *"This canvas changed in another tab"* — with **Reload** / **Keep mine**. The save-state chip in the top bar always reflects reality (`Saved` / `Saving…` / `Offline. Retrying…`, with exponential backoff).
 
@@ -3512,7 +3518,7 @@ Estimates come from the manifest's pricing snapshot (§6, §0.13), always carry 
 - **Group into frame** (`⌘G`) creates a Frame sized to the selection + 32px padding and re-parents the selected nodes (`parentId`, `extent: 'parent'`); dragging the frame moves its children; `⇧⌘G` ungroups. Dragging a node onto a frame joins it; dragging it out detaches it.
 - **Copy/paste** (`⌘C` / `⌘X` / `⌘V`) writes the selected sub-graph (nodes + internal edges, `result` stripped) to the clipboard as `application/json` with a `text/plain` fallback carrying the same JSON — so paste works **across canvases and across browser windows**, remapping ids and preserving internal edges. Paste lands at the pointer, or offset +24/+24 when pasted into the same canvas at the same position.
 - **Duplicate** `⌘D` (offset +24/+24) and `⌥`-drag duplicate-drag.
-- **Nudge**: arrows 1px, `⇧`+arrows 10px. **Snapping**: 8px grid, `⌥` to bypass; alignment guides appear when an edge is within 4px of a neighbour's edge or centre.
+- **Nudge**: arrows 1px, `⇧`+arrows 10px. **Snapping**: 8px grid; alignment guides appear, and the node lines up, when an edge or centre is within 4px of a neighbour's edge or centre. Hold `⌘` (`Ctrl` elsewhere) while dragging to bypass both: `⌥` is taken by duplicate-drag.
 - **Delete** `⌫`/`Delete` removes selected nodes and edges; deleting a node deletes its incident edges; deleting a Frame offers *Delete frame only* vs *Delete frame and contents*. A node with a run in flight is not deletable (7.7).
 
 **Keyboard shortcuts.** §2.6 publishes the one global shortcut table; the list below adds only this surface's own bindings. `R` is **Shape**, matching the observed canvas toolbar (§0.9).
@@ -4058,9 +4064,11 @@ export const savedPrompts = sqliteTable("saved_prompts", {
 // packages/db/src/schema/canvas.ts
 import { sql } from "drizzle-orm";
 import { check, index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { CANVAS_RUN_SCOPES, JOB_SET_STATES } from "@openfield/core/constants";
-import type { CanvasGraph } from "@openfield/core/canvas";
+import { CANVAS_RUN_SCOPES, CANVAS_VERSION_KINDS, JOB_SET_STATES } from "@openfield/core/constants";
+import type { CanvasGraph, CanvasRunRecord } from "@openfield/core/canvas";
+import type { CanvasRunNodeState } from "@openfield/core/schemas";
 import { json, oneOf } from "./_helpers";
+import { folders } from "./organisation";
 
 export const canvases = sqliteTable("canvases", {
   id:            text("id").primaryKey(),
@@ -4068,24 +4076,33 @@ export const canvases = sqliteTable("canvases", {
   graph:         json<CanvasGraph>("graph").notNull(),              // {nodes:[], edges:[], viewport:{}}, per canvasDocumentSchema
   graphVersion:  integer("graph_version").notNull().default(1),     // optimistic concurrency token
   schemaVersion: integer("schema_version").notNull().default(1),    // graph JSON shape version, for document migrations
-  previewPath:   text("preview_path"),                              // canvases/previews/<id>.png
+  previewPath:   text("preview_path"),                              // canvases/previews/<id>.png (the dark card beside it as <id>.dark.png)
   createdAt:     text("created_at").notNull(),
   updatedAt:     text("updated_at").notNull(),
-  openedAt:      text("opened_at"),
-  deletedAt:     text("deleted_at"),
+  openedAt:      text("opened_at"),                                 // reserved; nothing writes it yet
+  deletedAt:     text("deleted_at"),                                // reserved; Delete removes the row (§7.3)
+  // Kept on save so the index never parses a graph.
+  nodeCount:     integer("node_count").notNull().default(0),
+  coverAssetId:  text("cover_asset_id"),                            // newest result image still in the library: the card's fallback
+  folderId:      text("folder_id").references(() => folders.id, { onDelete: "set null" }),  // the library folder its images are filed into (§7.1)
 });
 
 export const canvasVersions = sqliteTable("canvas_versions", {
-  id:        text("id").primaryKey(),
-  canvasId:  text("canvas_id").notNull().references(() => canvases.id, { onDelete: "cascade" }),
-  graph:     json<CanvasGraph>("graph").notNull(),
-  label:     text("label"),                                         // 'autosave' | user-typed name
-  createdAt: text("created_at").notNull(),
+  id:           text("id").primaryKey(),
+  canvasId:     text("canvas_id").notNull().references(() => canvases.id, { onDelete: "cascade" }),
+  graph:        json<CanvasGraph>("graph").notNull(),
+  label:        text("label"),                                      // a name the person typed, or null
+  createdAt:    text("created_at").notNull(),
+  kind:         text("kind", { enum: CANVAS_VERSION_KINDS }).notNull().default("auto"),  // auto (pruned to 50) | named | before_delete | before_import | before_template | before_restore
+  nodeCount:    integer("node_count").notNull().default(0),
+  edgeCount:    integer("edge_count").notNull().default(0),
+  coverAssetId: text("cover_asset_id"),
 }, (t) => [
   index("idx_canvas_versions").on(t.canvasId, sql`created_at DESC`),
+  check("canvas_versions_kind_check", oneOf("kind", CANVAS_VERSION_KINDS)),
 ]);
 
-// One row per POST /api/canvases/:id/run, so a multi-node run survives a reload (§0.12, §7.7).
+// One row per POST /api/canvases/:id/run, so a multi-node run survives a reload and a restart (§0.12, §7.7).
 export const canvasRuns = sqliteTable("canvas_runs", {
   id:         text("id").primaryKey(),                              // ULID
   canvasId:   text("canvas_id").notNull().references(() => canvases.id, { onDelete: "cascade" }),
@@ -4093,6 +4110,9 @@ export const canvasRuns = sqliteTable("canvas_runs", {
   status:     text("status", { enum: JOB_SET_STATES }).notNull().default("running"),  // §0.4 JobSetState
   createdAt:  text("created_at").notNull(),
   finishedAt: text("finished_at"),
+  plan:       json<CanvasRunRecord>("plan").notNull().default(sql`'{}'`),         // the plan as sent, launches with their idempotency keys, Stop and per-node cancels
+  nodes:      json<CanvasRunNodeState[]>("nodes").notNull().default(sql`'[]'`),   // the last node states sent on canvas_run.updated
+  priority:   integer("priority").notNull().default(10),            // single node 10, everything else 5 (§0.12)
 }, () => [
   check("canvas_runs_scope_check", oneOf("scope", CANVAS_RUN_SCOPES)),
   check("canvas_runs_status_check", oneOf("status", JOB_SET_STATES)),
@@ -4427,7 +4447,7 @@ All provider traffic originates in this process, and outbound connections are re
 | `PUT`/`DELETE` | `/api/assets/:id/folders/:folderId` | Add to / remove from folder | → `{folders:[]}` |
 | `POST` | `/api/assets/bulk` | Multi-select actions from the feed checkboxes | `{ids:[], action:'delete'\|'favourite'\|'unfavourite'\|'addFolder'\|'removeFolder'\|'download', folderId?}` → `{affected}` |
 | `GET` | `/api/assets/:id/lineage` | Full graph for the lineage view | → `{nodes:[], edges:[]}` |
-| `POST` | `/api/uploads` | Upload a reference image (`multipart/form-data`, accepts `.jpg .jpeg .png .webp .heic`; HEIC is transcoded to PNG on ingest) | → `{asset}` with `kind='uploaded'` |
+| `POST` | `/api/uploads` | Upload a reference image (`multipart/form-data`, accepts `.jpg .jpeg .png .webp .heic` up to 20 MB, the smallest reference limit of the launch models; HEIC is transcoded to PNG on ingest and made smaller if the PNG passes 20 MB). The same bytes uploaded again return that upload (`200`, `duplicate: true`); bytes matching another kind of asset get an uploaded row against the same file | → `{asset, duplicate}` with `kind='uploaded'` |
 | `GET` | `/api/assets/:id/export` | Download with embedded metadata (§8.5.4) | `?format=png\|webp\|jpeg&metadata=1&sidecar=0` → binary, `Content-Disposition: attachment` |
 | `GET` | `/files/asset/:id` | Stream the original (range-capable, immutable cache) | → image bytes |
 | `GET` | `/files/thumb/:id` | WebP thumb, generated on miss; server resolves to the nearest-or-larger rung (§0.10) | `?h=<200\|280\|360\|456\|640>&dpr=1\|2`, or `?p=1440` → image/webp |
@@ -4446,16 +4466,22 @@ All provider traffic originates in this process, and outbound connections are re
 | `PATCH`/`DELETE` | `/api/prompts/:id` | Edit / delete | → prompt / `{ok}` |
 | `GET`/`POST` | `/api/characters` | Character list / create | `{name, descriptor, referenceSetId?, seed?, lockSeed?, injection?, token?}` → character |
 | `PATCH`/`DELETE` | `/api/characters/:id` | Edit / delete | → character |
-| `GET`/`POST` | `/api/canvases` | Canvas index / create | → `[{id, name, previewUrl, updatedAt}]` |
-| `GET` | `/api/canvases/:id` | Full graph | → `{id, name, graph, graphVersion, updatedAt}` |
-| `PATCH` | `/api/canvases/:id` | Autosave. Optimistic concurrency on `graphVersion`; `409` returns the server graph | `{graph?, name?, graphVersion}` → `{graphVersion, updatedAt}` |
+| `GET`/`POST` | `/api/canvases` | Canvas index (`?q=` filters by name) / create (blank, `{templateId}` or an imported `{graph}`) | `{name?, templateId?, graph?}` → `[{id, name, previewUrl, createdAt, updatedAt, nodeCount, coverAssetId, graphVersion}]` / canvas |
+| `GET` | `/api/canvases/:id` | Full graph, with the images it names that aren't in this library (placeholders, §7.8), and when its card picture was taken | → `{id, name, graph, graphVersion, updatedAt, missingAssetIds, previewAt}` |
+| `PATCH` | `/api/canvases/:id` | Autosave. Optimistic concurrency on `graphVersion`; `409` returns the server graph, unless the body's graph and name match what's stored (two tabs that wrote the same run results), which answers `200` with the current version and writes nothing | `{graph?, name?, graphVersion}` → `{graphVersion, updatedAt}` |
 | `POST` | `/api/canvases/:id/duplicate` | Duplicate | → canvas |
-| `DELETE` | `/api/canvases/:id` | Soft delete | → `{ok}` |
-| `GET` | `/api/canvases/:id/versions` | Version history list | → `[{id, label, createdAt}]` |
-| `POST` | `/api/canvases/:id/versions` | Snapshot now (also auto-snapshotted every 5 min of activity, keep last 50) | `{label?}` → version |
-| `POST` | `/api/canvases/:id/versions/:vid/restore` | Restore, snapshotting current first | → canvas |
-| `POST` | `/api/canvases/:id/run` | Run a compiled plan: one node, its downstream, the whole graph or a selection. Job sets carry `source='canvas'` and `canvas_run_id` | `{scope:'node'\|'downstream'\|'all'\|'selection', nodeIds, plan:[{nodeId, typeVersion, fingerprint, model, params, inputs}], dryRun?}` → `{runId, jobSets:[{nodeId, jobSetId}], skipped:[{nodeId, reason:'cached'}], estimate}` |
+| `DELETE` | `/api/canvases/:id` | Stop its runs, then delete the row with its versions, runs and card picture; the images stay in the library (§7.3) | → `{ok}` |
+| `GET` | `/api/canvases/:id/versions` | Version history list | → `[{id, label, kind, createdAt, nodeCount, edgeCount, coverAssetId}]` |
+| `GET` | `/api/canvases/:id/versions/:vid` | One snapshot, for Preview | → version + `{graph}` |
+| `POST` | `/api/canvases/:id/versions` | Snapshot now (the server also snapshots every 5 min of activity). `kind` is `named` (the default) or one of the editor's safety snapshots, `before_delete` / `before_import` / `before_template`; `auto` and `before_restore` are the server's own. The last 50 unnamed snapshots are kept, named ones all | `{label?, kind?}` → version |
+| `POST` | `/api/canvases/:id/versions/:vid/restore` | Restore, snapshotting current first (`before_restore`) | → canvas |
+| `POST` | `/api/canvases/:id/run` | Run a compiled plan: one node, its downstream, the whole graph or a selection. Job sets carry `source='canvas'` and `canvas_run_id`. As each node settles its result is also written into `canvases.graph` (without moving `graph_version`), so a canvas closed during a run opens with it | `{scope:'node'\|'downstream'\|'all'\|'selection', nodeIds, plan:[{nodeId, type, typeVersion, fingerprint, model, params, inputs:[{port, to:'references'\|'base'\|'mask', role?, arity:'single'\|'multi', values:[{kind:'asset', assetId}\|{kind:'node', nodeId, port}]}], calls:[{model, op, prompt, negativePrompt?, enhancePrompt?, size, resolution?, quality?, batch, seed, providerOptions?, label?}], cached:{fingerprint, assetIds}\|null, bypassCache?}], dryRun?, confirmed?}` → `{runId, jobSets:[{nodeId, jobSetId}], skipped:[{nodeId, reason:'cached'}], estimate, jobs, nodes:[{nodeId, jobs, estimate, skipped, blocked}]}`. `inputs[].values` and `cached.assetIds` hold up to `CANVAS_RUN_MAX_JOBS` (1000) ids. `409` with `field:'confirmed'` when it makes more than 32 jobs unconfirmed; `409` when it would make more than 1000 jobs, or names a node already queued or running in a live run on this canvas |
 | `POST` | `/api/canvases/:id/runs/:runId/cancel` | Cancel a whole canvas run | → `{canceled:[jobSetId], notCancelable:[jobSetId]}` |
+| `POST` | `/api/canvases/:id/runs/:runId/nodes/:nodeId/cancel` | A node band's Cancel: that node, and the nodes that read from it, canceled; everything else in the run carries on | → `{canceled:[jobSetId], notCancelable:[jobSetId]}` |
+| `GET` | `/api/canvases/:id/runs` | Active runs, plus runs finished after `since` | `?since=` → `{runs:[CanvasRunState]}` |
+| `GET` | `/api/canvas-templates` | Bundled templates and the user's own (§7.3) | → `[{id, source:'bundled'\|'user', name, nodeCount, graph}]` |
+| `PUT` | `/api/canvases/:id/preview` | The index card picture, in one theme (M4-15); refused past 150 nodes. Plain HTTP: the body is the PNG | `?theme=light\|dark`, `image/png` → `{previewUrl}` |
+| `GET` | `/files/canvas-preview/:id` | The stored card picture: an internal file, never an asset | `?theme=light\|dark&v=` → `image/png` |
 | `GET` | `/api/settings` | All UI/app settings | → `{defaultModel, defaultAspect, feedZoom, globalConcurrency, thumbQuality, trashRetentionDays, …}` |
 | `PATCH` | `/api/settings` | Partial update | `{…}` → settings |
 | `GET` | `/api/settings/keys` | Key **status** only | → `[{providerId, present, source:'env'\|'file', hint:'…a1b2'}]` |
@@ -4533,7 +4559,7 @@ data: {"jobSetId":"01K6BQ8…","status":"succeeded","costActualUsd":0.268,"durat
 
 Event types (§0.6): `snapshot`, `job_set.created`, `job.queued`, `job.started`, `job.progress`, **`job.partial`**, `job.output`, `job.failed`, `job.canceled`, `job_set.completed`, `asset.updated`, `asset.deleted`, `folder.updated`, `models.updated`, `usage.updated`, **`canvas_run.updated`**, `maintenance.progress`.
 
-**Partial frames are written to `tmp/` and served from a volatile thumb path; they are never inserted into `assets`, and each is superseded by the final `job.output`.** This event is what terminates `ImageModel.stream?()` and `capabilities.streaming.partialImages`; without it §6.14's streaming declaration and §7.5's streamed node previews have no wire representation. `canvas_run.updated` carries `{runId, canvasId, status, nodes:[{nodeId, state}]}` and is what lets a reloaded canvas re-attach to a run in flight.
+**Partial frames are written to `tmp/` and served from a volatile thumb path; they are never inserted into `assets`, and each is superseded by the final `job.output`.** This event is what terminates `ImageModel.stream?()` and `capabilities.streaming.partialImages`; without it §6.14's streaming declaration and §7.5's streamed node previews have no wire representation. `canvas_run.updated` carries the whole `CanvasRunState`, `{runId, canvasId, scope, status, createdAt, finishedAt, nodes:[{nodeId, state, fingerprint, jobSetIds, done, total, assetIds, outputs, inputs, costUsd, error, blocked, startedAt, finishedAt}]}`, at most ten a second per run, and is what lets a reloaded canvas re-attach to a run in flight from one frame. `inputs` are the images a node read (sorted), `startedAt` its first job's start, `finishedAt` when it settled; the result a node keeps is built from these fields alone (`resultOfRunNode`), so the server and every open tab write the same one.
 
 Every event carries a monotonically increasing `id`; on reconnect the browser's `EventSource` sends `Last-Event-ID` and the server replies with a fresh `snapshot` rather than a replay log — active state is small and always derivable from the db, so there is nothing to keep an event table for.
 
@@ -4858,7 +4884,9 @@ Five milestones. Each is independently demoable and ends with a working app; not
 18. `M4-18` Run-all cost-preview popover: per-node rows, ranges where pricing is a range, explicit unknown rows, per-node rows summing to the displayed total.
 19. `M4-19` Edit/Inpaint node + mask editor modal, reusing the `M2-05` mask canvas and `POST /api/masks`.
 20. `M4-20` Preset node with merge precedence and lock glyphs (§0.8's resolution order).
-21. `M4-21` Variations node: seed-jitter / prompt-list / model-list strategies, all compiling to `op = 'variation'`. Seed-jitter is offered only where `capabilities.seed.supported`.
+21. `M4-21` Variations node: seed-jitter / prompt-list / model-list strategies, all compiling to `op = 'variation'`. Seed-jitter is offered only where `capabilities.seed.supported`. *As built:* seed jitter is the `same-prompt` strategy (*New takes*): it repeats one request, and the server already picks a new seed per image on models with seeds (§0.11), which is the jitter; on seedless models each take is a fresh try. Documents that say `seed-jitter` read as `same-prompt`.
+
+**Status (feat/canvas build):** M4-01 to M4-18 and M4-21 are built, with `M1-07` (`POST /api/uploads`) brought forward for the Upload node. **M4-19 waits for M2** (the mask canvas and `POST /api/masks`) and **M4-20 waits for M3** (presets): the `image.edit` and `preset` types round-trip in documents, and the Generate node's `preset` port is declared hidden, so each lands as a catalogue entry with nothing teased before then. M4-14 ships three templates (Start from a reference, Storyboard, Compare two styles); *Image edit* lands with M4-19. The Storyboard's panels each build on the one before, so its connections never cross a panel (design MF9Sm). Settings → Experimental carries *Also save canvases as files* (§7.8). The Generate settings show the seed control, disabled with its reason on seedless models and Random / Fixed where seeds are supported; *From input* and *Use last seed* wait for a model with seeds. HEIC uploads go through the operating system's converter (`sips` on macOS, libheif's `heif-dec` / `heif-convert` where installed), since the sharp that ships reads AVIF but not HEVC; elsewhere a HEIC is refused with how to fix it. Not in this build: *Export canvas + images* (zip), *Save as template*, and the detail view's *Open in Canvas* (the detail view is M2). The UI uses the design's names (Generate, Up to date, Run again, Waiting) and the add-node menu has no Quick group, as in the design. **Waiting on other milestones:** the Assets node's Folder mode waits for M3 folders (it picks images one by one today); a done node's *Open* waits for M2's detail view (its menu has *Download*, and a failed one *Copy error* and *Error log*). **Design-led deviations:** Notes draw the design's one tint (the `tint` param is kept for §7.5's six) and Frames have no background tint; the `?` sheet lists the canvas keys as design l9YSIT does, not §2.6's global table beside them; a node added by dropping a connection near the pane's edge is placed with its port on the drop point, then the view moves to show it; the empty index's illustration draws an image placeholder where design O5bcdk has a photo, since nothing is bundled or fetched. **Behaviour this build changed in binding text, for the owner to confirm:** dragging bypasses the grid and guides with `⌘` (`Ctrl`), not `⌥`, which is duplicate-drag (§7.9); M4-21's seed jitter makes new takes and is offered on seedless models too.
 
 ---
 
@@ -4910,7 +4938,7 @@ Five milestones. Each is independently demoable and ends with a working app; not
 | 40 | Assets library: sidebar, favourites count, folders with counts, date groups, group-select | ✅ M3 | Workspaces/teams dropped |
 | 41 | Fixed 6-column grid in the library (distinct from the feed's justified rows) | ✅ M3 | |
 | 42 | Elements + `@`-mention typeahead in the prompt | ✅ M1 | `@` resolves Openfield presets, characters, reference sets and saved references (§3.2/§5.7); the reference product's server-side Elements entity is not reproduced |
-| 43 | Canvas index with templates tab and auto-generated previews | ✅ M4 | Four starter templates authored by us (§7.3) |
+| 43 | Canvas index with templates tab and auto-generated previews | ✅ M4 | Starter templates authored by us (§7.3): three ship with M4 (Start from a reference, Storyboard, Compare two styles); *Image edit* lands with M4-19 |
 | 44 | Canvas editor: React Flow graph, dotted grid, zoom cluster, minimap, toolbar, autosave | ✅ M4 | |
 | 45 | Image Generation node with typed ports, chips, inline prompt, model chip, run button | ✅ M4 | Cost pill shows USD |
 | 46 | Compatibility-filtered node menu on edge drop | ✅ M4 | |
