@@ -75,7 +75,8 @@ test("first run: add a key, make an image, and find it on disk, in SQLite and in
     new URL(res.url()).pathname.startsWith("/files/thumb/"),
   );
   await prompt.press("ControlOrMeta+Enter");
-  await expect(page.locator('main li[aria-busy="true"]')).toBeVisible();
+  // The placeholder and the accepted run's tile can both be busy for a moment as one replaces the other.
+  await expect(page.locator('main li[aria-busy="true"]').first()).toBeVisible();
 
   const tile = page.getByRole("listitem", { name: new RegExp(`^${PROMPT} · Nano Banana Pro · `) });
   await expect(tile.locator("img")).toBeVisible({ timeout: 15_000 });

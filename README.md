@@ -17,6 +17,8 @@ Open <http://127.0.0.1:4317>, go to **Settings > API keys**, paste a key and pic
 
 `bun dev` also runs the web app's dev server on port 4318, beside the app's own 4317, so it doesn't clash with other Vite projects on 5173. If 4318 is taken, it tells you and stops. You always open the app on 4317.
 
+To stop Openfield, press Ctrl-C. Images being made finish first, and it says how many: "Finishing 1 image. Press Ctrl-C again to stop now." A second Ctrl-C stops at once.
+
 ## Requirements
 
 - [Bun](https://bun.sh) 1.3 or newer.
@@ -90,6 +92,18 @@ The speed is chosen only there, not in the composer. A model without the chosen 
 
 A Batch run keeps going at Google even if you close Openfield. Its tiles say "Waiting at Google" and offer **Cancel**, which stops the whole run; the tiles say "Stopping at Google" until Google has. Openfield checks on it after a restart, and when it's done you get a toast and, if you allow it, a system notification. The browser asks once, the first time you send a Batch run.
 
+### Restarts
+
+Stopping Openfield lets running images finish, so a normal stop never loses one. If it stops in the middle of an image anyway, after a crash or a second Ctrl-C, the next start does what it can:
+
+- A Batch run picks up where it left off, because Google keeps it.
+- A Google image at Standard, Flex or Priority can't be picked up again: Google returns it only in the answer to the call that was cut off. It runs again once, and its tile says "Ran again after a restart" because you may be charged twice. To mark it interrupted instead, turn off **Settings > Defaults > Run interrupted images again after a restart**.
+- A model whose company keeps working while Openfield is stopped is picked up by its id instead, and its tile says "Picking up where it left off". Nothing is sent or billed twice. Google's image models don't work this way; fake mode's Resumable test model does (below).
+
+Every stop and what it left behind is also written to `logs/openfield.log` in your library folder.
+
+An image that was interrupted, or cut off again while it ran again, offers **Try again**.
+
 ## Running without keys
 
 ```sh
@@ -112,6 +126,7 @@ To see a failure, put a tag in the prompt, for example `#fake:rate_limited`. The
 | `#fake:foreign_asset` | The image came from a site the adapter didn't declare |
 | `#fake:flex_busy` | Flex is busy on the first try, then the image (set Speed to Flex) |
 | `#fake:priority_standard` | A Priority run served, and billed, at Standard (set Speed to Priority) |
+| `#fake:slow` | A Google image that takes about 30 seconds, long enough to stop or restart Openfield in the middle of it |
 | `#fake:batch_slow` | A Batch run that waits about 30 seconds, long enough to cancel it or restart Openfield |
 | `#fake:batch_partial` | A Batch run where every other image fails |
 | `#fake:batch_expired`, `#fake:batch_failed` | A Batch run that ends with no images |
@@ -119,13 +134,15 @@ To see a failure, put a tag in the prompt, for example `#fake:rate_limited`. The
 
 Without a tag, a fake Batch run finishes a few seconds after it's sent. Fake runs cost nothing: they are logged at $0 and never count toward **Spent today**.
 
+Fake mode also adds a **Test company** with one model, **Resumable test model**, which keeps working through a restart the way a queue-based company would. Add any key for it in **Settings > API keys**. Its image lands a few seconds after you send it; `#fake:resume_slow` makes it take about a minute, and `#fake:resume_gone` also makes the company forget it after 10 seconds, so a restart finds it gone. `OPENFIELD_FAKE_SLOW_MS` sets how long `#fake:slow` and `#fake:resume_slow` take, in milliseconds.
+
 Tags use underscores, not hyphens: an unknown tag is ignored and the run succeeds. The error answers are written from Google's documentation, not recorded from real calls yet ([why](packages/providers/src/google/__fixtures__/README.md)).
 
 ## Scripts
 
 | Command | Does |
 |---|---|
-| `bun dev` | Runs the server and the Vite dev server (port 4318) together. Open <http://127.0.0.1:4317>. |
+| `bun dev` | Runs the server and the Vite dev server (port 4318) together. Open <http://127.0.0.1:4317>. Saving a server file restarts the server once running images are saved. |
 | `bun start` | Runs the server in production mode, serving the built web app. |
 | `bun run build` | Type-checks every workspace, then builds `apps/web` to `apps/web/dist`. |
 | `bun run typecheck` | Type-checks every workspace, the end-to-end tests and `scripts/`. |

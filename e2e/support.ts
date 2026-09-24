@@ -52,10 +52,16 @@ export function queryDb<T>(home: string, sql: string, ...params: (string | numbe
 /**
  * Restarts the suite's server on the same library and port (e2e/serve.ts), and waits until the new
  * one answers. Each server mints its own session token, so the new token is how we know. Returns it.
+ * `crash` kills it with SIGKILL instead of stopping it, so nothing it was doing gets to finish.
  */
-export async function restartServer(request: APIRequestContext, home: string): Promise<string> {
+export async function restartServer(
+  request: APIRequestContext,
+  home: string,
+  opts: { crash?: boolean; timeout?: number } = {},
+): Promise<string> {
   const before = await sessionToken(request);
-  process.kill(Number(readFileSync(join(dirname(home), "serve.pid"), "utf8")), "SIGUSR2");
+  const serve = Number(readFileSync(join(dirname(home), "serve.pid"), "utf8"));
+  process.kill(serve, opts.crash ? "SIGUSR1" : "SIGUSR2");
   let token = before;
   await expect
     .poll(
@@ -63,7 +69,7 @@ export async function restartServer(request: APIRequestContext, home: string): P
         token = await sessionToken(request).catch(() => before);
         return token !== before;
       },
-      { timeout: 30_000 },
+      { timeout: opts.timeout ?? 30_000 },
     )
     .toBe(true);
   return token;

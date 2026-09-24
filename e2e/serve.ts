@@ -6,7 +6,8 @@ import { join } from "node:path";
 // no cost), an empty library in a temp folder that's deleted on exit, and the port from
 // OPENFIELD_PORT. `--build` builds the web app first. Run with Bun: `bun e2e/serve.ts`.
 // SIGUSR2 restarts the server on the same library and port, the way a person quits and reopens
-// it. This script's pid is in serve.pid, beside the library folder (see restartServer in support.ts).
+// it (SIGTERM, so it drains first). SIGUSR1 does the same after a crash: SIGKILL, mid-call if it was
+// busy. This script's pid is in serve.pid, beside the library folder (see restartServer in support.ts).
 
 const root = join(import.meta.dir, "..");
 
@@ -44,15 +45,18 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
   });
 }
 
-process.on("SIGUSR2", async () => {
+async function restart(signal: "SIGTERM" | "SIGKILL") {
   if (stopping || restarting) return;
   restarting = true;
   const old = server;
-  old.kill("SIGTERM");
+  old.kill(signal);
   await old.exited;
   if (!stopping) server = start();
   restarting = false;
-});
+}
+
+process.on("SIGUSR2", () => void restart("SIGTERM"));
+process.on("SIGUSR1", () => void restart("SIGKILL"));
 
 let code: number;
 do {

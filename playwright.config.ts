@@ -29,6 +29,8 @@ const suites: { name: string; testMatch: string; env?: Record<string, string> }[
     testMatch: "key-outside.e2e.ts",
     env: { OPENFIELD_GOOGLE_API_KEY: "AQ.Xy7FakeTfakeEnvKey0123456789abcdefWXYZ" },
   },
+  // Slow fakes that take 8 seconds instead of 30 to 60, long enough to restart the server mid-call.
+  { name: "resume", testMatch: "resume.e2e.ts", env: { OPENFIELD_FAKE_SLOW_MS: "8000" } },
 ];
 const servers = suites.map((suite) => ({ ...suite, origin: `http://127.0.0.1:${portFor(suite.name)}` }));
 

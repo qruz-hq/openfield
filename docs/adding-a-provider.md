@@ -192,11 +192,54 @@ A sync speed (Flex, Priority) usually adds one field to the same payload. Read i
 - If the API honours an idempotency header, send `` `${req.idempotencyKey}:${req.batchIndex}` ``. It stays the same across retries, so a retry can't bill twice.
 - Send the key in a header. Never put it in the URL, where it ends up in logs.
 - **Synchronous APIs:** `submit()` makes the blocking call and returns a handle that already carries the result. The first `poll()` returns `succeeded`.
-- **Queue APIs:** `submit()` returns as soon as the company accepts the job, with `providerRef` or `statusUrl`. Anything needed to resume after a restart goes in `handle.resume`, as plain JSON.
+- **Queue APIs:** `submit()` returns as soon as the company accepts the job, with `providerRef` or `statusUrl`. Anything needed to resume after a restart goes in `handle.resume`, as plain JSON, and the speed goes in `resumableSpeeds` (below).
 - `poll()` must be safe to call again, including after a terminal state.
 - Implement `cancel()` only if the API supports it. Without it the runner stops waiting and tells the person they may still be charged.
 - Report the speed the company says it served as `speedUsed` on the result (Google: `usageMetadata.serviceTier`). A Priority request served at Standard then bills at Standard. Leave it out when the company doesn't say.
 - When the company refuses a slow speed for capacity, throw a `ProviderError` with `busy: true` and `retryable: true`. The runner then waits on its busy schedule instead of spending retries. If your settings let the person switch to Standard instead, resend once without the speed inside the same call and report `speedUsed: "standard"`, so the runner never sees the refusal.
+
+### Resumable calls
+
+An image must never be lost to a restart (§0.4). What Openfield can do when the server stops or crashes mid-call depends on your API, and you tell it per model and speed with `resumableSpeeds` on the manifest.
+
+**List a speed as resumable** when the company keeps working with no open connection and answers a status read by id later: a queue API (fal's request id, Replicate's prediction id) or a background mode (OpenAI's Responses API with `background: true`). All of this must hold at that speed, for every op the model offers there:
+
+1. `submit()` returns as soon as the company has the call and its id, with `providerRef` set and no result. Never wait for the image inside `submit()` at a resumable speed: no `Prefer: wait`, no long poll.
+2. The handle is everything `poll()` and `cancel()` need, in `providerRef` and `handle.resume`, as plain JSON. After a restart it's all they get, in a fresh process with a fresh `CallContext`. It's saved to the library as it is, so never put a key, token or signed URL in `providerRef`, `statusUrl`, `cancelUrl` or `handle.resume`: `poll()` and `cancel()` build their auth from `ctx.credentials`. Conformance 27 checks the handle for the test keys, and the runner hides any loaded key before saving it, but that's a second guard, not the first.
+3. `poll()` writes a finished image through `ctx.assets` once per sink, however often it's called.
+4. A status read of an id the company no longer has throws `notFoundError()` (a `ProviderError` with `notFound: true`), so the runner can tell "gone" from a hiccup.
+
+```ts
+resumableSpeeds: ["standard"],
+```
+
+Implement `cancel()` if the API can: the runner uses it when the person cancels, and when a call is still running at its deadline. Keep sending the idempotency header on the create call.
+
+**Declare `idempotentSubmit: true`** when the company documents that a create sent again with the same idempotency key returns the first request instead of starting a second one, and keeps the key for at least the job's deadline:
+
+```ts
+resumableSpeeds: ["standard"],
+idempotentSubmit: true,
+```
+
+It decides what happens to a create whose answer never came back. With it, the runner sends the same create with the same key and gets the id back, both when the answer is lost on the way (the network, a timeout) and when a restart cut the create off. Without it, sending it again could start and bill a second image, so a create that failed that way ends with **Try again**, and one a restart cut off is interrupted. A create the company plainly refused (429 or 503) is sent again either way. Conformance 27 sends the same create twice when you declare it and expects the same id back.
+
+**List nothing** for a blocking API that returns the image in its answer (Google `generateContent`, OpenAI's `/v1/images/*`). The call dies with the process. Never list `batch`: a Batch run always resumes, from its stored batch handle (step 9). It follows the same three steps (store the id before waiting, pick it up by id at boot, fetch instead of sending again) through the batch watcher and its `provider_batches` row instead of `jobs.handle`.
+
+Both declarations are about your code, so the person can't change them: `resumableSpeeds` and `idempotentSubmit` always come from your manifest, whatever a `models.json` entry for the model says.
+
+What the runner does with it (§6.7):
+
+- It writes whether the call was resumable when it sends it, and stores the handle the moment `submit()` returns, before the first poll. From then on the call is only read by that id, and never sent again, since that could bill twice.
+- Only the company's answer ends it: the image, a terminal failure, `content_refused`, or `notFound`. Anything else your `poll()` throws (a network error, a 429 or 5xx, a rejected key, a full disk while saving the image, an answer you couldn't parse) makes the runner read the same id again. Past the deadline it gives up after three failed reads in a row, and it never cancels a call the company didn't say was still running. So map errors carefully: throw `notFound` only when the company says the id is gone.
+- Stopping (Ctrl-C, SIGTERM, a closed terminal, or `bun dev` restarting after a save) leaves resumable calls running at the company and exits without waiting for them, once their create call has returned the id. It waits for every other call to finish, so its image is saved first.
+- A cancel is sent to the company with `cancel(handle)`, even when it comes in while the create call is still out (the runner waits for the id) or while the company is turned off (it goes once the company is back, after a restart too).
+- At the next start, a resumable call is picked up by its id, and its tile says "Picking up where it left off". A call that couldn't resume runs again once, when the person allows it in **Settings > Defaults**, and its tile and the usage log say it may be charged twice. A resumable call cut off before its id arrived is asked for its id again with the same create and key when you declare `idempotentSubmit`; otherwise it can't be followed and is never sent again, so return from `submit()` the moment you have the id.
+- A cancel that comes in while the create call is out waits for the id, which is saved on the canceled job before the cancel goes, so a cancel that doesn't get through is still sent after a restart.
+
+Check every condition against the company's docs, and live once with your key: a speed listed as resumable that isn't loses the image at the next restart. Say what you checked in your README. Google's README records the probe that ruled out its image models. A change to `resumableSpeeds` bumps `manifestVersion`.
+
+`packages/providers/src/testing/resumable.ts` is a complete resumable adapter with its fake, registered only in fake mode as the "Resumable test model". Use it as the model for yours.
 
 ## 9. Run batches (only for the Batch speed)
 
@@ -275,6 +318,7 @@ Write `packages/providers/src/testing/acme.ts` exporting a `FakeRoute` (see `tes
 - For errors, it replays your fixtures, picked by a `#fake:<name>` tag in the prompt (`FAKE_SCENARIOS`). A key containing "invalid" answers like a rejected key.
 - For success, it makes up a small image of the requested size (`gradientPng()` in `testing/png.ts`), in the company's response format.
 - For speeds, it plays the scenarios in `FAKE_SCENARIOS`: `flex_busy` answers every other Flex call busy, so a second try gets through; `priority_standard` serves a Priority call at Standard.
+- For a resumable speed, the create call answers at once with an id, and a read by id answers queued, then running, then the image a few seconds later. Encode what the call will return in its id, as `testing/resumable.ts` does, so a call sent before a server restart still answers after it.
 - For Batch, it answers create, get, cancel, list and delete, and a batch finishes a few seconds after it's created. Encode what the batch will return in its id, as `testing/google-batch.ts` does, so a batch sent before a server restart still answers after it. `batch_slow` waits long enough to cancel or restart; `batch_partial`, `batch_expired` and `batch_failed` end the way their names say.
 
 Then add it to `builtinFakes` in `packages/providers/src/testing/fake-fetch.ts`.
@@ -298,7 +342,8 @@ It runs offline against your fake and fixtures and checks, among other things, t
 - your settings schema obeys the rules in step 6, and its Speed field lists exactly the speeds your manifests offer;
 - every speed offer is priced and sourced, each sync speed reaches the wire, and `speedUsed` follows what the company served;
 - a Flex busy answer is `busy` under "keep trying" and resent once at Standard under "switch";
-- a batch handle survives a JSON round trip, a harvest writes each image once, items map to their jobs, and cancel and expiry end the right way.
+- a batch handle survives a JSON round trip, a harvest writes each image once, items map to their jobs, and cancel and expiry end the right way;
+- a resumable speed returns an id before the image, a fresh binding and context finish the call from the stored handle with one create call in all, and an unknown id is `notFound`; a speed that isn't resumable returns only with the image in hand.
 
 Then run it once against the real API with your key, and say so in the pull request:
 
@@ -322,6 +367,9 @@ Cover the endpoints, how auth works, the hosts, what you verified and how, known
 - [ ] Prices carry `pricedAt` and `sourceUrl`, or the price is `unknown`. So does every speed offer.
 - [ ] Settings, if any, are data on `Provider.settings`, read from `ctx.settings` and `ctx.speed` on every call.
 - [ ] A model offering Batch has a `batch` path whose handle survives a restart.
+- [ ] Every speed where the company keeps working without an open connection is in `resumableSpeeds`, and `submit()` returns there as soon as the id exists. Blocking calls list nothing.
+- [ ] Handles carry no key, token or signed URL.
+- [ ] `idempotentSubmit` is declared only when the company documents that a repeated idempotency key returns the first request.
 - [ ] Fixtures contain no keys.
 - [ ] `src/testing/<name>.ts` exists and is listed in `builtinFakes`.
 - [ ] All HTTP goes through `ctx.fetch`.
