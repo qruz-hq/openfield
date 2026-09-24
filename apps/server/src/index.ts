@@ -1,4 +1,4 @@
-import { MAX_BODY_BYTES } from "./app";
+import { MAX_REQUEST_BYTES } from "./app";
 import { createServer, LibraryInUseError } from "./server";
 
 // `bun start` and `bun dev` land here. Binds 127.0.0.1 only, never 0.0.0.0 (§6.11).
@@ -18,7 +18,7 @@ try {
     port,
     fetch: server.app.fetch,
     idleTimeout: 60,
-    maxRequestBodySize: MAX_BODY_BYTES,
+    maxRequestBodySize: MAX_REQUEST_BYTES,
   });
 } catch (err) {
   const inUse = (err as { code?: string }).code === "EADDRINUSE";

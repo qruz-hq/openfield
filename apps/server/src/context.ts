@@ -1,5 +1,7 @@
 import type { Db } from "@openfield/db";
 import type { Provider } from "@openfield/providers/server";
+import type { CanvasService } from "./canvas/canvases";
+import type { CanvasRunService } from "./canvas/runs";
 import type { ConfigStore } from "./config/config-file";
 import type { HomePaths } from "./config/home";
 import type { EventHub } from "./events/hub";
@@ -33,6 +35,8 @@ export interface Services {
   ingest: Ingest;
   thumbs: Thumbs;
   runner: Runner;
+  canvases: CanvasService;
+  canvasRuns: CanvasRunService;
   webDist: string | null;
   viteOrigin: string;
 }

@@ -1,0 +1,109 @@
+{
+  "schema": "openfield.canvas/1",
+  "id": "01M37PY5HC6G3R6ER1VGPESMHH",
+  "name": "Start from a reference",
+  "createdAt": "2026-09-24T00:00:00.000Z",
+  "updatedAt": "2026-09-24T00:00:00.000Z",
+  "viewport": {
+    "x": 120,
+    "y": 120,
+    "zoom": 0.8
+  },
+  "nodes": [
+    {
+      "id": "n_prompt",
+      "type": "prompt",
+      "typeVersion": 1,
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "size": {
+        "w": 296,
+        "h": 151
+      },
+      "parentId": null,
+      "collapsed": false,
+      "title": null,
+      "params": {
+        "text": "The subject of the reference image in a new setting: a bright studio, soft shadows, a plain backdrop."
+      },
+      "presetLocks": [],
+      "result": null
+    },
+    {
+      "id": "n_reference",
+      "type": "image.upload",
+      "typeVersion": 1,
+      "position": {
+        "x": 0,
+        "y": 200
+      },
+      "size": {
+        "w": 280,
+        "h": 280
+      },
+      "parentId": null,
+      "collapsed": false,
+      "title": "Reference image",
+      "params": {
+        "assetIds": []
+      },
+      "presetLocks": [],
+      "result": null
+    },
+    {
+      "id": "n_generate",
+      "type": "image.generate",
+      "typeVersion": 1,
+      "position": {
+        "x": 420,
+        "y": 0
+      },
+      "size": {
+        "w": 320,
+        "h": 400
+      },
+      "parentId": null,
+      "collapsed": false,
+      "title": null,
+      "params": {
+        "prompt": "",
+        "size": {
+          "kind": "aspect",
+          "ratio": "3:4"
+        },
+        "batch": 1,
+        "seed": {
+          "mode": "random"
+        },
+        "enhancePrompt": false,
+        "providerOptions": {}
+      },
+      "presetLocks": [],
+      "result": null
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_prompt",
+      "source": "n_prompt",
+      "sourceHandle": "text",
+      "target": "n_generate",
+      "targetHandle": "prompt",
+      "order": 0,
+      "kind": "data"
+    },
+    {
+      "id": "e_reference",
+      "source": "n_reference",
+      "sourceHandle": "images",
+      "target": "n_generate",
+      "targetHandle": "input_images",
+      "order": 0,
+      "kind": "data"
+    }
+  ],
+  "comments": [],
+  "meta": {}
+}

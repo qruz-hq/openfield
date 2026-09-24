@@ -18,6 +18,8 @@ import {
 } from "@openfield/providers/server";
 import pkg from "../package.json";
 import { createApp } from "./app";
+import { CanvasService } from "./canvas/canvases";
+import { CanvasRunService } from "./canvas/runs";
 import { ConfigStore } from "./config/config-file";
 import { ensureLayout, type HomePaths, homePaths, keepFilePrivate, resolveHome } from "./config/home";
 import type { Services } from "./context";
@@ -200,6 +202,21 @@ async function boot(
   if (recovery.missingFiles)
     logger.warn(`${recovery.missingFiles} image file(s) are missing from the library folder`);
   runner.start();
+  const canvases = new CanvasService({ db, paths, models, settings, logger });
+  // After the runner's pass, so interrupted jobs already read as interrupted (§8.4.5). Settled
+  // nodes' results go into the saved canvas, so one closed during the run opens with them.
+  const canvasRuns = new CanvasRunService({
+    db,
+    runner,
+    models,
+    credentials,
+    events,
+    logger,
+    writeResults: (canvasId, nodes, at) => canvases.writeRunResults(canvasId, nodes, at),
+  });
+  canvasRuns.start();
+  const resumedRuns = await canvasRuns.recover();
+  if (resumedRuns) jobLog({ event: "startup.canvas_runs", resumed: resumedRuns });
 
   settings.onChange((next, changed) => {
     if (changed.includes("logLevel")) logger.setLevel(next.logLevel);
@@ -225,6 +242,8 @@ async function boot(
     ingest,
     thumbs,
     runner,
+    canvases,
+    canvasRuns,
     viteOrigin: opts.viteOrigin ?? VITE_ORIGIN,
     webDist:
       opts.webDist === undefined
@@ -244,6 +263,7 @@ async function boot(
     },
     async stop({ drainMs = 10_000 } = {}) {
       if (refreshTimer) clearInterval(refreshTimer);
+      canvasRuns.stop();
       events.close();
       await runner.stop(drainMs);
       await thumbs.idle();

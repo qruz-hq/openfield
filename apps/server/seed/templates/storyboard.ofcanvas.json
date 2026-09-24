@@ -1,0 +1,247 @@
+{
+  "schema": "openfield.canvas/1",
+  "id": "01M37PY5HC6G3R6ER1VGPESMHJ",
+  "name": "Storyboard",
+  "createdAt": "2026-09-24T00:00:00.000Z",
+  "updatedAt": "2026-09-24T00:00:00.000Z",
+  "viewport": {
+    "x": 120,
+    "y": 120,
+    "zoom": 0.8
+  },
+  "nodes": [
+    {
+      "id": "n_story",
+      "type": "prompt",
+      "typeVersion": 1,
+      "position": {
+        "x": 0,
+        "y": 60
+      },
+      "size": {
+        "w": 296,
+        "h": 151
+      },
+      "parentId": null,
+      "collapsed": false,
+      "title": null,
+      "params": {
+        "text": "A lighthouse keeper's last night on the island."
+      },
+      "presetLocks": [],
+      "result": null
+    },
+    {
+      "id": "n_character",
+      "type": "image.upload",
+      "typeVersion": 1,
+      "position": {
+        "x": 0,
+        "y": 260
+      },
+      "size": {
+        "w": 280,
+        "h": 280
+      },
+      "parentId": null,
+      "collapsed": false,
+      "title": "Character",
+      "params": {
+        "assetIds": []
+      },
+      "presetLocks": [],
+      "result": null
+    },
+    {
+      "id": "n_frame",
+      "type": "frame",
+      "typeVersion": 1,
+      "position": {
+        "x": 400,
+        "y": 0
+      },
+      "size": {
+        "w": 1540,
+        "h": 480
+      },
+      "parentId": null,
+      "collapsed": false,
+      "title": "Storyboard",
+      "params": {},
+      "presetLocks": [],
+      "result": null
+    },
+    {
+      "id": "n_panel_1",
+      "type": "image.generate",
+      "typeVersion": 1,
+      "position": {
+        "x": 40,
+        "y": 40
+      },
+      "size": {
+        "w": 320,
+        "h": 400
+      },
+      "parentId": "n_frame",
+      "collapsed": false,
+      "title": null,
+      "params": {
+        "prompt": "Panel 1 of 4. The opening shot.",
+        "size": {
+          "kind": "aspect",
+          "ratio": "16:9"
+        },
+        "batch": 1,
+        "seed": {
+          "mode": "random"
+        },
+        "enhancePrompt": false,
+        "providerOptions": {}
+      },
+      "presetLocks": [],
+      "result": null
+    },
+    {
+      "id": "n_panel_2",
+      "type": "image.generate",
+      "typeVersion": 1,
+      "position": {
+        "x": 420,
+        "y": 40
+      },
+      "size": {
+        "w": 320,
+        "h": 400
+      },
+      "parentId": "n_frame",
+      "collapsed": false,
+      "title": null,
+      "params": {
+        "prompt": "Panel 2 of 4. The same scene a moment later. Something changes.",
+        "size": {
+          "kind": "aspect",
+          "ratio": "16:9"
+        },
+        "batch": 1,
+        "seed": {
+          "mode": "random"
+        },
+        "enhancePrompt": false,
+        "providerOptions": {}
+      },
+      "presetLocks": [],
+      "result": null
+    },
+    {
+      "id": "n_panel_3",
+      "type": "image.generate",
+      "typeVersion": 1,
+      "position": {
+        "x": 800,
+        "y": 40
+      },
+      "size": {
+        "w": 320,
+        "h": 400
+      },
+      "parentId": "n_frame",
+      "collapsed": false,
+      "title": null,
+      "params": {
+        "prompt": "Panel 3 of 4. The same scene. The turning point.",
+        "size": {
+          "kind": "aspect",
+          "ratio": "16:9"
+        },
+        "batch": 1,
+        "seed": {
+          "mode": "random"
+        },
+        "enhancePrompt": false,
+        "providerOptions": {}
+      },
+      "presetLocks": [],
+      "result": null
+    },
+    {
+      "id": "n_panel_4",
+      "type": "image.generate",
+      "typeVersion": 1,
+      "position": {
+        "x": 1180,
+        "y": 40
+      },
+      "size": {
+        "w": 320,
+        "h": 400
+      },
+      "parentId": "n_frame",
+      "collapsed": false,
+      "title": null,
+      "params": {
+        "prompt": "Panel 4 of 4. The same scene. The ending.",
+        "size": {
+          "kind": "aspect",
+          "ratio": "16:9"
+        },
+        "batch": 1,
+        "seed": {
+          "mode": "random"
+        },
+        "enhancePrompt": false,
+        "providerOptions": {}
+      },
+      "presetLocks": [],
+      "result": null
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_story_1",
+      "source": "n_story",
+      "sourceHandle": "text",
+      "target": "n_panel_1",
+      "targetHandle": "prompt",
+      "kind": "data"
+    },
+    {
+      "id": "e_character_1",
+      "source": "n_character",
+      "sourceHandle": "images",
+      "target": "n_panel_1",
+      "targetHandle": "input_images",
+      "order": 0,
+      "kind": "data"
+    },
+    {
+      "id": "e_panel_2",
+      "source": "n_panel_1",
+      "sourceHandle": "images",
+      "target": "n_panel_2",
+      "targetHandle": "input_images",
+      "order": 0,
+      "kind": "data"
+    },
+    {
+      "id": "e_panel_3",
+      "source": "n_panel_2",
+      "sourceHandle": "images",
+      "target": "n_panel_3",
+      "targetHandle": "input_images",
+      "order": 0,
+      "kind": "data"
+    },
+    {
+      "id": "e_panel_4",
+      "source": "n_panel_3",
+      "sourceHandle": "images",
+      "target": "n_panel_4",
+      "targetHandle": "input_images",
+      "order": 0,
+      "kind": "data"
+    }
+  ],
+  "comments": [],
+  "meta": {}
+}
