@@ -174,9 +174,11 @@ describe("cost wording", () => {
   });
 
   test("dates follow the locale, never ISO", () => {
-    expect(formatDate("2026-09-23T12:00:00Z")).toBe("Sep 23, 2026");
+    // Noon on the day where the test runs, so every time zone reads the same date.
+    const day = new Date(2026, 8, 23, 12);
+    expect(formatDate(day)).toBe("Sep 23, 2026");
     setFormatLocale("en-GB");
-    expect(formatDate("2026-09-23T12:00:00Z")).toMatch(/^23 Sept? 2026$/);
+    expect(formatDate(day)).toMatch(/^23 Sept? 2026$/);
     setFormatLocale("en-US");
   });
 

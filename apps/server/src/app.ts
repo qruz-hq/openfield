@@ -1,10 +1,13 @@
-import { Hono } from "hono";
+import { formatBytes, t, UPLOAD_MAX_BYTES } from "@openfield/core";
+import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { Env, Services } from "./context";
 import { envelope, toErrorResponse } from "./http/errors";
 import { crossSiteGuard, hostGuard, responseHeaders, sessionGuard } from "./http/guards";
 import { spaHandler } from "./http/spa";
 import { assetsRoutes } from "./routes/assets";
+import { canvasRunsRoutes } from "./routes/canvas-runs";
+import { canvasesRoutes } from "./routes/canvases";
 import { eventsRoutes } from "./routes/events";
 import { filesRoutes } from "./routes/files";
 import { generateRoutes } from "./routes/generate";
@@ -15,6 +18,7 @@ import { modelsRoutes } from "./routes/models";
 import { providersRoutes } from "./routes/providers";
 import { settingsRoutes } from "./routes/settings";
 import { statsRoutes } from "./routes/stats";
+import { uploadsRoutes } from "./routes/uploads";
 import { usageRoutes } from "./routes/usage";
 
 // App composition (§8.3.3): the guards first, then /api and /files, then the web app.
@@ -31,27 +35,70 @@ const api = new Hono<Env>()
   .route("/", jobSetsRoutes)
   .route("/", assetsRoutes)
   .route("/", usageRoutes)
+  .route("/", uploadsRoutes)
+  .route("/", canvasesRoutes)
+  .route("/", canvasRunsRoutes)
   .route("/", eventsRoutes);
 
 const isBackendPath = (path: string) => /^\/(api|files)(\/|$)/.test(path);
 
-/**
- * Every /api body today is small JSON. Uploads and masks get their own, larger caps when they
- * land (the PRD allows 20 MB references); Bun.serve's limit must then be raised to match.
- */
+/** Most /api bodies are small JSON. */
 export const MAX_BODY_BYTES = 1024 * 1024;
+const CANVAS_DOCUMENT_BYTES = 8 * 1024 * 1024;
+
+/** The routes that take more: an image, a whole canvas document, a run plan or a card preview. */
+export const LARGER_BODIES: { method: string; path: RegExp; maxSize: number; userMessage?: () => string }[] =
+  [
+    // Room for the multipart envelope around the largest image.
+    {
+      method: "POST",
+      path: /^\/api\/uploads$/,
+      maxSize: UPLOAD_MAX_BYTES + 64 * 1024,
+      userMessage: () => t("uploads.tooLarge", { size: formatBytes(UPLOAD_MAX_BYTES) }),
+    },
+    { method: "POST", path: /^\/api\/canvases$/, maxSize: CANVAS_DOCUMENT_BYTES },
+    { method: "PATCH", path: /^\/api\/canvases\/[^/]+$/, maxSize: CANVAS_DOCUMENT_BYTES },
+    // A plan names at most every node of a document, so it fits where the document does.
+    { method: "POST", path: /^\/api\/canvases\/[^/]+\/run$/, maxSize: CANVAS_DOCUMENT_BYTES },
+    { method: "PUT", path: /^\/api\/canvases\/[^/]+\/preview$/, maxSize: 4 * 1024 * 1024 },
+  ];
+
+/**
+ * What Bun.serve lets through. Twice the largest route limit, so a body a little too big still
+ * reaches the route's own limit and gets a reply that says why; past this, Bun answers a bare 413.
+ */
+export const MAX_REQUEST_BYTES = 2 * Math.max(MAX_BODY_BYTES, ...LARGER_BODIES.map((b) => b.maxSize));
+
+const limiters = new Map<(typeof LARGER_BODIES)[number] | null, MiddlewareHandler>();
+function limitFor(route: (typeof LARGER_BODIES)[number] | undefined): MiddlewareHandler {
+  const key = route ?? null;
+  let limiter = limiters.get(key);
+  if (!limiter) {
+    limiter = bodyLimit({
+      maxSize: route?.maxSize ?? MAX_BODY_BYTES,
+      onError: (c) =>
+        c.json(
+          envelope("payload_too_large", "The request body is too large", {
+            userMessage: route?.userMessage?.(),
+          }),
+          413,
+        ),
+    });
+    limiters.set(key, limiter);
+  }
+  return limiter;
+}
+
+const bodyLimits: MiddlewareHandler = (c, next) => {
+  const larger = LARGER_BODIES.find((b) => b.method === c.req.method && b.path.test(c.req.path));
+  return limitFor(larger)(c, next);
+};
 
 export function createApp(svc: Services) {
   const app = new Hono<Env>()
     .use("*", responseHeaders(), hostGuard(svc.port), crossSiteGuard())
     .use("/api/*", sessionGuard(svc.token))
-    .use(
-      "/api/*",
-      bodyLimit({
-        maxSize: MAX_BODY_BYTES,
-        onError: (c) => c.json(envelope("payload_too_large", "The request body is too large"), 413),
-      }),
-    )
+    .use("/api/*", bodyLimits)
     .use("/files/*", sessionGuard(svc.token))
     .use("*", async (c, next) => {
       c.set("svc", svc);

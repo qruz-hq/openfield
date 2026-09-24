@@ -755,16 +755,524 @@
   },
   "canvas": {
     "errors": {
-      "duplicateNode": "Two nodes share the same id.",
-      "duplicateEdge": "Two connections share the same id.",
+      "duplicateNode": "This file lists a node twice.",
+      "duplicateEdge": "This file lists a connection twice.",
       "missingParent": "This node sits in a frame that doesn't exist.",
+      "parentNotFrame": "This node sits inside something that isn't a frame.",
+      "imageCount": "The number of images must be between {min} and {max}.",
+      "badModel": "Its model name can't be read.",
+      "badSize": "Its image size can't be read.",
+      "badSetting": "One of its settings can't be read.",
+      "parentLoop": "These frames sit inside each other in a circle.",
       "missingNode": "This connection points at a node that doesn't exist.",
-      "newerVersion": "This canvas needs a newer version of Openfield."
+      "newerVersion": "This canvas needs a newer version of Openfield.",
+      "interrupted": "Openfield stopped before this finished.",
+      "templateMissing": "That template isn't available anymore.",
+      "confirmJobs": "This makes {count} images. Each one is billed separately.",
+      "tooManyJobs": "A run can make up to {max} images. Run fewer at a time.",
+      "previewTooBig": "Previews are kept for canvases up to {max} nodes."
+    },
+    "names": {
+      "untitled": "Untitled",
+      "copy": "{name} copy"
     },
     "empty": {
       "title": "No canvases yet",
-      "body": "Make images on the Image page.",
-      "goToImage": "Go to Image"
+      "body": "Start from scratch or pick a template.",
+      "newCanvas": "New canvas",
+      "fromTemplate": "Start from a template",
+      "prompt": "Prompt",
+      "generate": "Generate"
+    },
+    "index": {
+      "title": "Canvas",
+      "subtitle": "Build image flows you can run again.",
+      "tabs": {
+        "all": "All canvases",
+        "templates": "Templates"
+      },
+      "search": "Search canvases",
+      "clearSearch": "Clear search",
+      "noMatches": "No matches for \"{query}\".",
+      "loadFailed": "Couldn't load your canvases.",
+      "sort": {
+        "label": "Sort canvases",
+        "lastEdited": "Last edited",
+        "name": "Name",
+        "created": "Created"
+      },
+      "newCanvas": "New canvas",
+      "edited": {
+        "now": "Edited a moment ago",
+        "minutes": "Edited {count} min ago",
+        "hours": "Edited {count, plural, one {# hour} other {# hours}} ago",
+        "yesterday": "Edited yesterday",
+        "days": "Edited {count, plural, one {# day} other {# days}} ago",
+        "date": "Edited {date}"
+      },
+      "card": {
+        "more": "More for {name}",
+        "open": "Open",
+        "rename": "Rename",
+        "renameLabel": "Canvas name",
+        "duplicate": "Duplicate",
+        "export": "Export",
+        "versions": "Version history",
+        "delete": "Delete",
+        "duplicated": "Made a copy: {name}",
+        "openCopy": "Open"
+      },
+      "delete": {
+        "title": "Delete {name}?",
+        "body": "The canvas and its versions are deleted. The images it made stay in your library.",
+        "confirm": "Delete canvas"
+      },
+      "templates": {
+        "search": "Search templates",
+        "badge": "Template",
+        "use": "Use template",
+        "loadFailed": "Couldn't load the templates.",
+        "importLead": "Have a canvas file?",
+        "importAction": "Import it",
+        "from-a-reference": {
+          "name": "Start from a reference",
+          "body": "Upload a photo and make new images from it."
+        },
+        "storyboard": {
+          "name": "Storyboard",
+          "body": "Turn one idea into four panels."
+        },
+        "compare-two-styles": {
+          "name": "Compare two styles",
+          "body": "Run one prompt with two styles side by side."
+        }
+      },
+      "import": {
+        "notCanvas": "This file isn't a canvas.",
+        "tooBig": "This file is too big to open. Canvas files can be up to {size}.",
+        "node": "Node {index}: {message}",
+        "connection": "Connection {index}: {message}",
+        "nodeUnreadable": "Node {index} can't be read.",
+        "connectionUnreadable": "Connection {index} can't be read."
+      }
+    },
+    "editor": {
+      "pane": "Canvas",
+      "loadFailed": "Couldn't open this canvas.",
+      "notFound": "This canvas doesn't exist anymore.",
+      "backToCanvases": "Back to canvases",
+      "menu": {
+        "open": "Openfield menu",
+        "allCanvases": "All canvases",
+        "image": "Image",
+        "settings": "Settings"
+      },
+      "name": {
+        "menu": "Canvas menu",
+        "field": "Canvas name",
+        "versionHistory": "Version history",
+        "rename": "Rename",
+        "duplicate": "Duplicate",
+        "export": "Export",
+        "delete": "Delete"
+      },
+      "delete": {
+        "title": "Delete {name}?",
+        "body": "The canvas and its versions are deleted. The images it made stay in your library.",
+        "confirm": "Delete canvas"
+      },
+      "save": {
+        "saved": "Saved",
+        "saving": "Saving…",
+        "offline": "Offline. Trying again…",
+        "notSaved": "Not saved",
+        "deleted": "This canvas was deleted",
+        "tooBig": "Too big to save. Export it to keep a copy."
+      },
+      "tools": {
+        "label": "Tools",
+        "select": "Select",
+        "pan": "Pan",
+        "note": "Note",
+        "shape": "Shape",
+        "text": "Text",
+        "frame": "Frame",
+        "find": "Find in canvas",
+        "add": "Add node"
+      },
+      "zoom": {
+        "label": "Zoom",
+        "out": "Zoom out",
+        "in": "Zoom in",
+        "level": "Zoom level",
+        "percent": "{value}%",
+        "fit": "Zoom to fit",
+        "selection": "Zoom to selection",
+        "showMinimap": "Show minimap",
+        "hideMinimap": "Hide minimap",
+        "minimap": "Minimap"
+      },
+      "nothingInView": "Nothing in view",
+      "backToNodes": "Back to nodes",
+      "find": {
+        "label": "Find in canvas",
+        "placeholder": "Find in canvas",
+        "count": "{current} of {total}",
+        "none": "No matches",
+        "previous": "Previous match",
+        "next": "Next match",
+        "close": "Close find"
+      },
+      "conflict": {
+        "message": "This canvas changed in another tab.",
+        "keepMine": "Keep mine",
+        "reload": "Reload"
+      },
+      "selection": {
+        "label": "Selection",
+        "alignLeft": "Align left",
+        "alignCenter": "Align center",
+        "alignRight": "Align right",
+        "alignTop": "Align top",
+        "alignMiddle": "Align middle",
+        "alignBottom": "Align bottom",
+        "distributeAcross": "Distribute across",
+        "distributeDown": "Distribute down",
+        "group": "Group into frame",
+        "duplicate": "Duplicate",
+        "run": "Run",
+        "delete": "Delete"
+      },
+      "start": {
+        "prompt": "Prompt",
+        "promptLine": "Write what you want to make",
+        "upload": "Upload",
+        "uploadLine": "Add images from your computer",
+        "template": "Template",
+        "templateLine": "Start from a ready-made canvas",
+        "hint": "Or double-click anywhere to add a node"
+      },
+      "shortcuts": {
+        "title": "Keyboard shortcuts",
+        "tools": "Tools",
+        "run": "Run",
+        "view": "View",
+        "edit": "Edit",
+        "select": "Select",
+        "pan": "Pan",
+        "holdToPan": "Hold to pan",
+        "note": "Note",
+        "shape": "Shape",
+        "text": "Text",
+        "frame": "Frame",
+        "find": "Find in canvas",
+        "add": "Add node",
+        "runSelected": "Run selected",
+        "runFromHere": "Run from here",
+        "runAll": "Run all",
+        "zoomToFit": "Zoom to fit",
+        "zoomToSelection": "Zoom to selection",
+        "actualSize": "Actual size",
+        "zoomIn": "Zoom in",
+        "zoomOut": "Zoom out",
+        "undo": "Undo",
+        "redo": "Redo",
+        "copy": "Copy",
+        "cut": "Cut",
+        "paste": "Paste",
+        "duplicate": "Duplicate",
+        "selectAll": "Select all",
+        "group": "Group into frame",
+        "ungroup": "Ungroup",
+        "delete": "Delete",
+        "clearSelection": "Clear selection",
+        "save": "Save",
+        "saveVersion": "Save version",
+        "nodeMenu": "Node menu",
+        "nodeSettings": "Node settings",
+        "hintLead": "Press",
+        "hintTail": "to open this anytime.",
+        "enter": "enter",
+        "space": "space",
+        "esc": "esc"
+      },
+      "versions": {
+        "title": "Version history",
+        "close": "Close version history",
+        "save": "Save version",
+        "today": "Today",
+        "yesterday": "Yesterday",
+        "current": "Current version",
+        "now": "Now",
+        "counts": "{nodes, plural, one {# node} other {# nodes}} · {edges, plural, one {# connection} other {# connections}}",
+        "withTime": "{time} · {counts}",
+        "withKind": "{kind} · {counts}",
+        "kind": {
+          "before_delete": "Before a big delete",
+          "before_import": "Before an import",
+          "before_template": "Before a template",
+          "before_restore": "Before a restore"
+        },
+        "restore": "Restore",
+        "footnote": "Openfield saves a version every 5 minutes while you work. Versions you name are always kept. Restoring saves your current canvas first, so nothing is lost.",
+        "empty": "No versions yet. Openfield saves one every 5 minutes while you work.",
+        "loadFailed": "Couldn't load versions.",
+        "nameTitle": "Save version",
+        "nameLabel": "Name",
+        "namePlaceholder": "Before new lighting",
+        "saved": "Version saved.",
+        "restored": "Version restored.",
+        "viewing": "Viewing a version from",
+        "readOnly": "Read only",
+        "back": "Back to current",
+        "restoreThis": "Restore this version"
+      },
+      "frame": {
+        "count": "{count, plural, one {# node} other {# nodes}}",
+        "name": "Frame name",
+        "collapse": "Collapse frame",
+        "expand": "Expand frame",
+        "deleteTitle": "Delete this frame?",
+        "deleteBody": "You can keep the nodes inside it, or delete them too.",
+        "deleteFrameOnly": "Delete frame only",
+        "deleteWithContents": "Delete frame and contents"
+      },
+      "annotations": {
+        "note": "Note",
+        "noteLine": "Leave a note on the canvas",
+        "notePlaceholder": "Write a note",
+        "frame": "Frame",
+        "frameLine": "Group nodes under a title",
+        "text": "Text",
+        "textLine": "Add a heading or a label",
+        "textPlaceholder": "Add text",
+        "shape": "Shape",
+        "shapeLine": "Draw a box with a label",
+        "shapePlaceholder": "Add a label"
+      },
+      "a11y": {
+        "pickTarget": "Port picked. Go to another port and press Enter to connect them.",
+        "node": "node",
+        "connection": "connection",
+        "connectionName": "{from} to {to}",
+        "nodeHelp": "Tab goes to the next node and Enter into this one's controls, Esc comes back out. Arrow keys move it. Shift F10 opens its menu.",
+        "nodeHelpLocked": "Tab goes to the next node and Enter into this one's controls, Esc comes back out. Shift F10 opens its menu.",
+        "connectionHelp": "Press Enter to select this connection, then Delete to remove it.",
+        "moved": "Moved {direction, select, up {up} down {down} left {left} other {right}}.",
+        "port": "Connection point"
+      },
+      "edgeMenu": {
+        "label": "Connection menu"
+      },
+      "unknownNode": {
+        "title": "Can't show this node",
+        "body": "This version of Openfield can't open it. It's kept as it is."
+      },
+      "toasts": {
+        "running": "Wait for this node to finish, or cancel it.",
+        "replaced": "Replaced connection",
+        "loop": "That would create a loop.",
+        "saveFailed": "Couldn't save. Openfield keeps trying.",
+        "duplicated": "Canvas duplicated.",
+        "exported": "Canvas exported.",
+        "readOnly": "This is an older version. Restore it to make changes."
+      }
+    },
+    "nodes": {
+      "prompt": {
+        "label": "Prompt",
+        "description": "Write text once, use it anywhere",
+        "placeholder": "Write your prompt",
+        "field": "Prompt text",
+        "count": "{count} / {max}"
+      },
+      "upload": {
+        "label": "Upload",
+        "description": "Add images from your computer",
+        "emptyTitle": "Drop images here",
+        "emptyLine": "JPG, PNG, WebP or HEIC",
+        "choose": "Choose files",
+        "add": "Add images",
+        "uploading": "Uploading {count, plural, one {# image} other {# images}}"
+      },
+      "assets": {
+        "label": "Assets",
+        "description": "Pick images from your library",
+        "emptyTitle": "Pick from your library",
+        "choose": "Choose images",
+        "change": "Change"
+      },
+      "images": {
+        "count": "{count, plural, one {# image} other {# images}}",
+        "remove": "Remove image {index}",
+        "open": "Show image {index}",
+        "missing": "Not in your library"
+      },
+      "generate": {
+        "label": "Generate",
+        "description": "Make images from a prompt",
+        "promptPlaceholder": "Add to the prompt",
+        "promptField": "Prompt for this node",
+        "fromPrompt": "From the Prompt node",
+        "addReference": "Add a reference image",
+        "references": "Reference order",
+        "referencesHint": "The model gets them in this order. Drag one to move it.",
+        "referenceItem": "{name}, {index} of {count}"
+      },
+      "variations": {
+        "label": "Variations",
+        "description": "Try several takes at once",
+        "strategy": "How to vary",
+        "newTakes": "New takes",
+        "promptList": "Prompts",
+        "modelList": "Models",
+        "takes": "Takes",
+        "fewer": "Fewer takes",
+        "more": "More takes",
+        "promptsField": "Prompts, one per line",
+        "promptsPlaceholder": "One prompt per line",
+        "promptsCount": "{count, plural, one {# prompt} other {# prompts}}",
+        "addModel": "Add model",
+        "removeModel": "Remove {model}",
+        "source": "Image {index}"
+      },
+      "ports": {
+        "prompt": "Prompt",
+        "text": "Text",
+        "referenceImages": "Reference images",
+        "image": "Image",
+        "images": "Images",
+        "style": "Style",
+        "many": "{name} ×n",
+        "noReferences": "This model doesn't take reference images"
+      },
+      "connect": {
+        "mismatch": "{from, select, text {Text} image {An image} mask {A mask} preset {A style} other {This}} can't go into {to, select, text {a text} image {an image} mask {a mask} preset {a style} other {this}} input on {node}.",
+        "loop": "That would create a loop."
+      },
+      "label": {
+        "rename": "Rename {name}",
+        "changed": "Inputs changed"
+      },
+      "menu": {
+        "label": "Node menu",
+        "run": "Run",
+        "runFromHere": "Run from here",
+        "settings": "Settings",
+        "duplicate": "Duplicate",
+        "collapse": "Collapse",
+        "expand": "Expand",
+        "rename": "Rename",
+        "delete": "Delete",
+        "download": "Download",
+        "downloadMany": "Download {count} images",
+        "copyError": "Copy error"
+      },
+      "pill": {
+        "run": "Run {name}",
+        "upToDate": "Nothing changed. Hold {alt} and click to make new images.",
+        "newEachRun": "Each run gives a new result.",
+        "fanOut": "Runs {count} times, once for each image coming in"
+      },
+      "state": {
+        "waiting": "Waiting",
+        "position": "{position, selectordinal, one {#st} two {#nd} few {#rd} other {#th}} in line",
+        "generating": "Generating",
+        "cancel": "Cancel",
+        "upToDate": "Up to date",
+        "inputsChanged": "Inputs changed",
+        "olderSettings": "Made with older settings",
+        "runAgain": "Run again",
+        "canceled": "Canceled. You may still be charged for work that already started.",
+        "run": "Run",
+        "editPrompt": "Edit prompt",
+        "refused": "The model wouldn't make this. Try a different prompt."
+      },
+      "blocked": {
+        "noKey": "Add a {company} key to use this model",
+        "noKeyAction": "Add a key",
+        "unavailable": "This model isn't available. Pick another one.",
+        "pickModel": "Pick a model",
+        "companyOff": "{company} is turned off in Settings",
+        "openSettings": "Open Settings",
+        "noPrompt": "Add a prompt or a reference image",
+        "missingInput": "Connect an image to run this",
+        "missingAsset": "An image this node uses isn't in your library",
+        "noReferences": "This model doesn't take reference images",
+        "tooManyReferences": "This model takes up to {max, plural, one {# reference image} other {# reference images}}",
+        "morePrompts": "Add at least {min} prompts, one per line",
+        "moreModels": "Add at least {min} models",
+        "tooManyJobs": "This makes more than {max} images. Use fewer images or takes.",
+        "upstreamFailed": "An earlier node didn't finish",
+        "upstreamBlocked": "An earlier node can't run yet",
+        "loop": "This node is in a loop, or reads from one. Remove a connection to run it."
+      },
+      "collapsed": {
+        "expand": "Expand {name}",
+        "failed": "Didn't finish",
+        "canceled": "Canceled"
+      },
+      "seed": {
+        "random": "Random",
+        "fixed": "Fixed",
+        "value": "Seed number"
+      },
+      "picker": {
+        "title": "Choose images",
+        "search": "Search images",
+        "empty": "No images in your library yet.",
+        "noMatches": "No images match \"{query}\".",
+        "loadFailed": "Couldn't load your images.",
+        "add": "Add {count, plural, =0 {images} one {# image} other {# images}}",
+        "select": "Select image",
+        "loadMore": "Show more"
+      },
+      "inspector": {
+        "close": "Close settings",
+        "model": "Model",
+        "images": "Images",
+        "fewer": "Fewer images",
+        "more": "More images",
+        "run": "Run",
+        "advanced": "Advanced",
+        "changed": "{count, plural, one {# setting changed} other {# settings changed}}"
+      },
+      "addMenu": {
+        "label": "Add node",
+        "search": "Search nodes",
+        "connects": "Connects here",
+        "other": "Other",
+        "groups": {
+          "references": "References",
+          "image": "Image",
+          "utilities": "Utilities"
+        },
+        "noMatches": "No nodes match \"{query}\"."
+      }
+    },
+    "run": {
+      "runAll": "Run all",
+      "stop": "Stop",
+      "progress": "{done} of {total} done",
+      "title": "Run {nodes, plural, one {# node} other {# nodes}} · {images, plural, one {# image} other {# images}}",
+      "detail": "{model} · {settings} × {count}",
+      "detailPlain": "{model} × {count}",
+      "upToDate": "{count, plural, one {# node is up to date} other {# nodes are up to date}}",
+      "about": "About",
+      "total": "Total",
+      "note": "Prices can vary. You pay {companies} directly.",
+      "notInTotal": "{names} {count, plural, one {isn't} other {aren't}} in the total.",
+      "cancel": "Cancel",
+      "run": "Run",
+      "earlier": "{count, plural, one {# earlier node needs to run first} other {# earlier nodes need to run first}}",
+      "runThemToo": "Run them too",
+      "loop": "This canvas has a loop. Remove a connection in it to run.",
+      "nothing": "Fix the marked nodes, then run again.",
+      "busy": "This node is already running.",
+      "busyUpstream": "Wait for the earlier nodes to finish.",
+      "allBusy": "Wait for the running nodes to finish.",
+      "finished": "{name} finished",
+      "jumpToNode": "Jump to node"
     }
   },
   "assets": {
@@ -773,5 +1281,12 @@
       "body": "Everything you make is on the Image page.",
       "goToImage": "Go to Image"
     }
+  },
+  "uploads": {
+    "unsupported": "This file can't be used. Try a JPG, PNG, WebP or HEIC image.",
+    "tooLarge": "This image is over {size}. Try a smaller one.",
+    "heic": "This computer can't open HEIC files. Save it as JPEG or PNG and try again.",
+    "heicTooLarge": "This photo is too large once converted. Save a smaller copy and try again.",
+    "noFile": "Choose an image to upload."
   }
 }

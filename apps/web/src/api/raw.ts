@@ -75,6 +75,9 @@ export async function toApiError(res: Response): Promise<ApiError> {
     const { code, message, retryable, field, userMessage } = parsed.data.error;
     return new ApiError(res.status, code, message, retryable || renewed, field, userMessage);
   }
+  // A body too big for the server at all gets its bare 413, before any route can answer.
+  if (res.status === 413)
+    return new ApiError(413, "payload_too_large", res.statusText || "payload_too_large");
   const code: TransportErrorCode =
     res.status === 404
       ? "not_found"

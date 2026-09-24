@@ -96,11 +96,14 @@ export function toBatchSummary(batch: ProviderBatchRow, jobs: readonly JobRow[])
   };
 }
 
-/** The batch.updated frame and a snapshot entry (§0.6). `counts` overrides the jobs' own tally. */
+/**
+ * The batch.updated frame and a snapshot entry (§0.6). `counts` overrides the jobs' own tally;
+ * `canvasId` comes from the run's job set.
+ */
 export function toBatchUpdated(
   batch: ProviderBatchRow,
   jobs: readonly JobRow[],
-  counts?: BatchCounts,
+  { counts, canvasId }: { counts?: BatchCounts | undefined; canvasId?: string | null | undefined } = {},
 ): BatchUpdated {
   return {
     ...toBatchSummary(batch, jobs),
@@ -109,6 +112,7 @@ export function toBatchUpdated(
     providerId: batch.providerId,
     modelKey: modelKeyOf(batch.providerId, batch.modelId),
     finished: isTerminalBatchState(batch.state),
+    ...(canvasId && { canvasId }),
   };
 }
 

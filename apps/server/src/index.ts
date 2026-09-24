@@ -1,4 +1,4 @@
-import { MAX_BODY_BYTES } from "./app";
+import { MAX_REQUEST_BYTES } from "./app";
 import { images } from "./log/plural";
 import type { DrainNotice, StopReport } from "./runner/runner";
 import { createServer, LibraryInUseError } from "./server";
@@ -34,7 +34,7 @@ try {
     port,
     fetch: server.app.fetch,
     idleTimeout: 60,
-    maxRequestBodySize: MAX_BODY_BYTES,
+    maxRequestBodySize: MAX_REQUEST_BYTES,
   });
 } catch (err) {
   const inUse = (err as { code?: string }).code === "EADDRINUSE";

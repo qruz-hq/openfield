@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { type BatchNameLookups, batchNotice } from "../lib/batch-copy";
 import { announce, useLive } from "../lib/live";
 import { notify } from "../lib/notify";
-import { revealJobSet } from "../lib/reveal";
+import { inCanvas, revealCanvas, revealJobSet } from "../lib/reveal";
 import { systemNotify } from "../lib/system-notify";
 import { queryClient, queryKeys } from "./client";
 import { patchAsset, prependAsset, removeAssets } from "./hooks/assets";
@@ -68,7 +68,11 @@ async function batchFinished(frame: BatchUpdated) {
 
   const set = jobSetsCache().find((s) => s.jobSet.id === frame.jobSetId);
   const copy = await batchNotice(frame, set?.jobs, names);
+  // A canvas run's Show opens its canvas. Already in it, the node shows the result, so there's no Show.
+  const canvasId = frame.canvasId ?? set?.jobSet.canvasId ?? null;
+  const here = canvasId !== null && inCanvas(canvasId);
   const show = () => {
+    if (canvasId) return inCanvas(canvasId) ? undefined : revealCanvas(canvasId);
     // Leave the toast first: the toaster hands focus back to where it came from as it's left,
     // which would otherwise pull focus off the tile Show brings up.
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -78,7 +82,7 @@ async function batchFinished(frame: BatchUpdated) {
     tone: copy.made ? "success" : "danger",
     description: copy.detail,
     duration: 10_000,
-    action: { label: t("actions.show"), onClick: show },
+    ...(!here && { action: { label: t("actions.show"), onClick: show } }),
   });
   systemNotify(copy.body, { tag: frame.jobSetId, onClick: show });
 }
@@ -86,14 +90,34 @@ async function batchFinished(frame: BatchUpdated) {
 function batchUpdated(frame: BatchUpdated) {
   const { state, submittedAt, expiresAt, counts, stopping } = frame;
   patchBatch(frame.jobSetId, { state, submittedAt, expiresAt, counts, stopping });
+  const live = frame.finished
+    ? undefined
+    : { providerId: frame.providerId, state, stopping: stopping === true };
+  useLive.getState().setBatch(frame.jobSetId, live);
   if (frame.finished) void batchFinished(frame);
 }
 
+type FrameListener = (event: SseEvent) => void;
+const listeners = new Set<FrameListener>();
+
+/** Every frame, after the cache has it. The canvas engine follows its runs this way. */
+export function subscribeEvents(listener: FrameListener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 export function applyEvent(event: SseEvent) {
+  applyToCache(event);
+  for (const listener of listeners) listener(event);
+}
+
+function applyToCache(event: SseEvent) {
   const { setPosition, setRetry } = useLive.getState();
   switch (event.event) {
     case "snapshot":
       for (const set of event.data.activeJobSets) upsertJobSet(set);
+      // The snapshot lists every Batch run in flight, so one that ended while offline drops out.
+      useLive.getState().clearBatches();
       for (const batch of event.data.batches) batchUpdated(batch);
       return;
     case "job_set.created":
@@ -170,7 +194,8 @@ export function applyEvent(event: SseEvent) {
       batchUpdated(event.data);
       return;
     default:
-      // Partial previews, folders, canvas runs and maintenance aren't on these screens yet.
+      // Canvas runs reach the canvas engine through subscribeEvents. Partial previews, folders and
+      // maintenance aren't on these screens yet.
       return;
   }
 }

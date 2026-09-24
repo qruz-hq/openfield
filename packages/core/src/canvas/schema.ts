@@ -2,12 +2,14 @@ import { z } from "zod";
 import {
   BATCH_MAX,
   CANVAS_EDGE_KINDS,
+  CANVAS_MAX_NODES,
   CANVAS_NODE_STATES,
   CANVAS_NODE_TYPES,
   CANVAS_SEED_MODES,
 } from "../constants";
 import { t } from "../i18n";
 import {
+  errorCodeSchema,
   modelKeySchema,
   resolutionTierSchema,
   timestampSchema,
@@ -23,7 +25,7 @@ export const CANVAS_SCHEMA_VERSION = 1;
 export const CANVAS_SCHEMA = `openfield.canvas/${CANVAS_SCHEMA_VERSION}` as const;
 
 /** Document-local ids, stable across saves ("n_gen_1", "e_1"). */
-const localIdSchema = z
+export const localIdSchema = z
   .string()
   .min(1)
   .max(64)
@@ -37,14 +39,35 @@ export const canvasViewportSchema = z.object({
   zoom: z.number().min(0.02).max(8),
 });
 
+/** One image a node made, with what it came from, for the labelled result grid. */
+export const canvasOutputSchema = z.object({
+  assetId: ulidSchema,
+  model: modelKeySchema.optional(),
+  /** Which call made it (Variations: the prompt line or model). */
+  call: z.int().nonnegative().optional(),
+  /** Which fanned-out input it came from. */
+  source: z.int().nonnegative().optional(),
+});
+
 export const canvasNodeResultSchema = z.object({
   state: z.enum(CANVAS_NODE_STATES),
   assetIds: z.array(ulidSchema),
+  /** The first job set, kept for older readers. jobSetIds has them all. */
   jobSetId: ulidSchema.nullable(),
+  jobSetIds: z.array(ulidSchema).default([]),
+  outputs: z.array(canvasOutputSchema).default([]),
   /** The fingerprint the result was made with (§0.11). */
   fingerprint: z.string().nullable(),
   costUsd: usdSchema.nullable(),
   ranAt: timestampSchema.nullable(),
+  error: z.object({ code: errorCodeSchema, reason: z.string().optional() }).nullable().default(null),
+  /**
+   * The images it read, sorted. When an earlier node makes new images under the same settings,
+   * they no longer match and the node shows it's out of date. Absent in older documents.
+   */
+  inputs: z.array(ulidSchema).optional(),
+  /** It arrived after the node's settings changed: "Made with older settings" (§0.11). */
+  late: z.boolean().optional(),
 });
 
 // Params stay loose except where §7 pins them down; unknown keys survive a round trip.
@@ -105,7 +128,7 @@ export const canvasDocumentObjectSchema = z.object({
   createdAt: timestampSchema,
   updatedAt: timestampSchema,
   viewport: canvasViewportSchema,
-  nodes: z.array(canvasNodeSchema).max(5000),
+  nodes: z.array(canvasNodeSchema).max(CANVAS_MAX_NODES),
   edges: z.array(canvasEdgeSchema).max(20000),
   comments: z.array(canvasCommentSchema).default([]),
   meta: z
@@ -116,6 +139,20 @@ export const canvasDocumentObjectSchema = z.object({
     })
     .default({}),
 });
+
+/** A bad Generate setting, in words a person can act on (an imported file shows it, §7.8). */
+function paramMessage(field: PropertyKey | undefined): string {
+  switch (field) {
+    case "batch":
+      return t("canvas.errors.imageCount", { min: 1, max: BATCH_MAX });
+    case "model":
+      return t("canvas.errors.badModel");
+    case "size":
+      return t("canvas.errors.badSize");
+    default:
+      return t("canvas.errors.badSetting");
+  }
+}
 
 export const canvasDocumentSchema = canvasDocumentObjectSchema.superRefine((doc, ctx) => {
   const ids = new Set<string>();
@@ -129,20 +166,34 @@ export const canvasDocumentSchema = canvasDocumentObjectSchema.superRefine((doc,
         for (const issue of params.error.issues) {
           ctx.addIssue({
             code: "custom",
-            message: issue.message,
+            message: paramMessage(issue.path[0]),
             path: ["nodes", i, "params", ...issue.path],
           });
         }
       }
     }
   });
+  // Frames nest, but never in a circle: the editor walks up the parents to place a node.
+  const types = new Map(doc.nodes.map((node) => [node.id, node.type]));
+  const parents = new Map(doc.nodes.map((node) => [node.id, node.parentId]));
   doc.nodes.forEach((node, i) => {
-    if (node.parentId !== null && !ids.has(node.parentId)) {
-      ctx.addIssue({
-        code: "custom",
-        message: t("canvas.errors.missingParent"),
-        path: ["nodes", i, "parentId"],
-      });
+    if (node.parentId === null) return;
+    const path = ["nodes", i, "parentId"];
+    if (!ids.has(node.parentId)) {
+      ctx.addIssue({ code: "custom", message: t("canvas.errors.missingParent"), path });
+      return;
+    }
+    if (types.get(node.parentId) !== "frame") {
+      ctx.addIssue({ code: "custom", message: t("canvas.errors.parentNotFrame"), path });
+      return;
+    }
+    const seen = new Set([node.id]);
+    for (let at = parents.get(node.id) ?? null; at !== null; at = parents.get(at) ?? null) {
+      if (seen.has(at)) {
+        ctx.addIssue({ code: "custom", message: t("canvas.errors.parentLoop"), path });
+        return;
+      }
+      seen.add(at);
     }
   });
   const edgeIds = new Set<string>();
@@ -158,6 +209,7 @@ export const canvasDocumentSchema = canvasDocumentObjectSchema.superRefine((doc,
 });
 
 export type CanvasViewport = z.infer<typeof canvasViewportSchema>;
+export type CanvasOutput = z.infer<typeof canvasOutputSchema>;
 export type CanvasNodeResult = z.infer<typeof canvasNodeResultSchema>;
 export type GenerateNodeParams = z.infer<typeof generateNodeParamsSchema>;
 export type CanvasNode = z.infer<typeof canvasNodeSchema>;

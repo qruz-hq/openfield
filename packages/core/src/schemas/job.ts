@@ -75,6 +75,8 @@ export const batchUpdatedSchema = batchSummarySchema.extend({
   modelKey: modelKeySchema,
   /** The frame the browser turns into the finish toast and system notification. */
   finished: z.boolean(),
+  /** A canvas run's canvas, so Show opens it rather than the Image feed. */
+  canvasId: ulidSchema.optional(),
 });
 
 export const jobSchema = z.object({

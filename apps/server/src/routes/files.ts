@@ -1,8 +1,9 @@
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { zValidator } from "@hono/zod-validator";
-import { idParamSchema, thumbQuerySchema } from "@openfield/core";
+import { canvasPreviewQuerySchema, idParamSchema, thumbQuerySchema } from "@openfield/core";
 import { getAsset } from "@openfield/db";
 import { type Context, Hono } from "hono";
+import { previewFile } from "../canvas/files";
 import { absolutePath } from "../config/home";
 import type { Env } from "../context";
 import { Thumbs } from "../files/thumbs";
@@ -13,7 +14,7 @@ import { notFound, onInvalid } from "../http/errors";
 const IMMUTABLE = "public, max-age=31536000, immutable";
 
 export const filesRoutes = new Hono<Env>()
-  .get("/asset/:id", zValidator("param", idParamSchema, onInvalid), (c) => {
+  .get("/asset/:id", zValidator("param", idParamSchema, onInvalid), async (c) => {
     const { db, paths } = c.var.svc;
     const asset = getAsset(db, c.req.valid("param").id);
     const file = asset && absolutePath(paths, asset.path);
@@ -36,10 +37,44 @@ export const filesRoutes = new Hono<Env>()
       }
       return sendFile(c, thumb.file, { type: "image/webp", etag: thumb.etag, cache: IMMUTABLE });
     },
+  )
+  // An index card's preview (M4-15), in the theme asked for: an internal file, never an asset.
+  // Replaced in place, so revalidated.
+  .get(
+    "/canvas-preview/:id",
+    zValidator("param", idParamSchema, onInvalid),
+    zValidator("query", canvasPreviewQuerySchema, onInvalid),
+    async (c) => {
+      const { canvases, paths } = c.var.svc;
+      const relative = canvases.previewPath(c.req.valid("param").id);
+      const file = relative && previewFile(paths, relative, c.req.valid("query").theme ?? "light");
+      if (!file) return notFound(c, "That preview");
+      const stat = statSync(file);
+      return sendFile(c, file, {
+        type: "image/png",
+        etag: `"${Math.trunc(stat.mtimeMs)}-${stat.size}"`,
+        cache: "no-cache",
+      });
+    },
   );
 
-/** Streams a file, with ETag revalidation and single byte ranges for the full-size viewer. */
-function sendFile(c: Context, file: string, opts: { type: string; etag?: string; cache: string }): Response {
+/** Files at most this big are read whole before replying: thumbnails and card previews. */
+const BUFFER_MAX_BYTES = 2 * 1024 * 1024;
+/** A file written this recently is read whole too, whatever its size. */
+const FRESH_MS = 30_000;
+
+/**
+ * Sends a file, with ETag revalidation and single byte ranges for the full-size viewer. Bun 1.3
+ * sometimes never finishes a reply streamed straight from a file written a moment ago (several
+ * fresh thumbnails at once, as when a canvas node finishes), so small and fresh files are read
+ * before the reply goes out. Big originals still stream, so a 40 MB image isn't held in memory
+ * once per request.
+ */
+async function sendFile(
+  c: Context,
+  file: string,
+  opts: { type: string; etag?: string; cache: string },
+): Promise<Response> {
   const headers = new Headers({
     "content-type": opts.type,
     "cache-control": opts.cache,
@@ -51,6 +86,7 @@ function sendFile(c: Context, file: string, opts: { type: string; etag?: string;
   }
   const blob = Bun.file(file);
   const size = blob.size;
+  const buffered = size <= BUFFER_MAX_BYTES || Date.now() - blob.lastModified < FRESH_MS;
   const range = /^bytes=(\d*)-(\d*)$/.exec(c.req.header("range") ?? "");
   if (range && (range[1] || range[2])) {
     const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
@@ -61,8 +97,9 @@ function sendFile(c: Context, file: string, opts: { type: string; etag?: string;
     }
     headers.set("content-range", `bytes ${start}-${end}/${size}`);
     headers.set("content-length", String(end - start + 1));
-    return new Response(blob.slice(start, end + 1), { status: 206, headers });
+    const part = blob.slice(start, end + 1);
+    return new Response(buffered ? await part.arrayBuffer() : part, { status: 206, headers });
   }
   headers.set("content-length", String(size));
-  return new Response(blob, { status: 200, headers });
+  return new Response(buffered ? await blob.arrayBuffer() : blob, { status: 200, headers });
 }

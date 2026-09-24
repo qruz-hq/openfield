@@ -13,3 +13,15 @@ export function useSpentToday() {
     retry: false,
   });
 }
+
+/**
+ * What this computer tracked as spent since the start of the month, canceled-but-charged work
+ * included: the figure the monthly spending limit is checked against (§6.9).
+ */
+export async function fetchSpentThisMonth(): Promise<number> {
+  const start = new Date();
+  start.setDate(1);
+  start.setHours(0, 0, 0, 0);
+  const usage = await call(api.api.usage.$get({ query: { from: start.toISOString(), groupBy: "day" } }));
+  return usage.totalUsd + usage.discardedUsd;
+}

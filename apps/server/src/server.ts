@@ -13,6 +13,8 @@ import {
 import { createFakeFetch, type FetchLike, type Provider, providersFor } from "@openfield/providers/server";
 import pkg from "../package.json";
 import { createApp } from "./app";
+import { CanvasService } from "./canvas/canvases";
+import { CanvasRunService } from "./canvas/runs";
 import { ConfigStore } from "./config/config-file";
 import { ensureLayout, type HomePaths, homePaths, keepFilePrivate, resolveHome } from "./config/home";
 import type { Services } from "./context";
@@ -219,6 +221,25 @@ async function boot(
     idempotentSubmit: (key) => models.get(key)?.idempotentSubmit === true,
   });
   jobLog({ event: "startup.recovery", ...recovery });
+  const canvases = new CanvasService({ db, paths, models, settings, logger });
+  // After the runner's pass, so each node's jobs already sit where §0.4's restart rules put them:
+  // picked up by id, waiting to run again once, or interrupted. Settled nodes' results go into the
+  // saved canvas, so one closed during the run opens with them. Launches recorded but never created
+  // become job sets here; like everything else, they wait for start() to be sent.
+  const canvasRuns = new CanvasRunService({
+    db,
+    runner,
+    models,
+    credentials,
+    providerSettings,
+    events,
+    logger,
+    writeResults: (canvasId, nodes, at) => canvases.writeRunResults(canvasId, nodes, at),
+  });
+  canvasRuns.start();
+  undo.push(() => canvasRuns.stop());
+  const resumedRuns = await canvasRuns.recover();
+  if (resumedRuns) jobLog({ event: "startup.canvas_runs", resumed: resumedRuns });
 
   settings.onChange((next, changed) => {
     if (changed.includes("logLevel")) logger.setLevel(next.logLevel);
@@ -245,6 +266,8 @@ async function boot(
     ingest,
     thumbs,
     runner,
+    canvases,
+    canvasRuns,
     viteOrigin: opts.viteOrigin ?? viteOriginFrom(env),
     webDist:
       opts.webDist === undefined
@@ -256,6 +279,9 @@ async function boot(
   let stopped: Promise<StopReport> | undefined;
   const stop = async ({ closing, ...drain }: StopOptions & { closing?: Promise<unknown> }) => {
     if (refreshTimer) clearInterval(refreshTimer);
+    // Canvas runs stop moving on first, so the drain sends nothing new. Calls it lets finish are
+    // saved as usual, and the next start's recovery brings their nodes up to date.
+    canvasRuns.stop();
     events.close();
     const report = await runner.stop(drain);
     await thumbs.idle();

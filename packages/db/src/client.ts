@@ -41,8 +41,10 @@ export function openDb(file: string): OpenDb {
     // a table, and with enforcement on that DROP would cascade into child rows.
     sqlite.exec("PRAGMA foreign_keys = OFF");
     try {
+      adoptEarlyCanvas(sqlite);
       migrate(db, { migrationsFolder: MIGRATIONS_FOLDER });
     } catch (cause) {
+      if (cause instanceof MigrationError) throw cause;
       throw new MigrationError(findFailingMigration(sqlite), cause);
     }
     const violations = sqlite.query("PRAGMA foreign_key_check").all() as ForeignKeyViolation[];
@@ -80,6 +82,43 @@ function lastAppliedMillis(sqlite: Database): number | null {
 function appliedTag(sqlite: Database): string | null {
   const at = lastAppliedMillis(sqlite);
   return at === null ? null : (readJournal().find((e) => e.when === at)?.tag ?? null);
+}
+
+/**
+ * Before the canvas work was merged, its migration shipped as 0003_canvas, stamped after the 0003
+ * and 0004 it now follows. Drizzle only runs files newer than the last stamp, so a library made
+ * then would skip those two and fail on 0006_canvas, the same file. Run what it skipped and
+ * restamp the canvas row as 0006, all in one transaction.
+ */
+const EARLY_CANVAS_STAMP = 1790185934361;
+
+function adoptEarlyCanvas(sqlite: Database): void {
+  if (lastAppliedMillis(sqlite) === null) return;
+  const rows = sqlite.query(`SELECT created_at AS at FROM ${MIGRATIONS_TABLE}`).all() as {
+    at: number | string;
+  }[];
+  const stamped = new Set(rows.map((row) => Number(row.at)));
+  if (!stamped.has(EARLY_CANVAS_STAMP)) return;
+  const journal = readJournal();
+  const files = readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER });
+  const canvas = files[journal.findIndex((e) => e.tag === "0006_canvas")];
+  if (!canvas) return;
+  sqlite.transaction(() => {
+    for (const [i, file] of files.entries()) {
+      if (file.folderMillis >= canvas.folderMillis || stamped.has(file.folderMillis)) continue;
+      try {
+        for (const statement of file.sql) sqlite.exec(statement);
+      } catch (cause) {
+        throw new MigrationError(journal[i]?.tag ?? null, cause);
+      }
+      sqlite
+        .query(`INSERT INTO ${MIGRATIONS_TABLE} (hash, created_at) VALUES (?, ?)`)
+        .run(file.hash, file.folderMillis);
+    }
+    sqlite
+      .query(`UPDATE ${MIGRATIONS_TABLE} SET hash = ?, created_at = ? WHERE created_at = ?`)
+      .run(canvas.hash, canvas.folderMillis, EARLY_CANVAS_STAMP);
+  })();
 }
 
 /**

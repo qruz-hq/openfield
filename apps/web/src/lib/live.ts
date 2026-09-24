@@ -1,9 +1,18 @@
+import type { BatchState } from "@openfield/core";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { safeStorage } from "./storage";
 
 // Client state that isn't server data: whether the event stream is up, queue positions it
-// reports, failed tiles the person dismissed, and the message for screen readers.
+// reports, Batch runs waiting at a company, failed tiles the person dismissed, and the message
+// for screen readers.
+
+/** A Batch run in flight, from batch.updated. Canvas nodes read it; the feed has its own copy. */
+export interface LiveBatch {
+  providerId: string;
+  state: BatchState;
+  stopping: boolean;
+}
 
 interface LiveState {
   /** The event stream is connected. When it isn't, the feed polls every 2 s. */
@@ -14,6 +23,8 @@ interface LiveState {
   positions: Record<string, number>;
   /** Jobs waiting out a retry, from job.queued: when they go again, and whether Flex was busy. */
   retries: Record<string, { at: string; busy: boolean }>;
+  /** Batch runs not finished yet, by job set id. */
+  batches: Record<string, LiveBatch>;
   /** One polite announcement per run (§2.11). The id makes a repeat message re-announce. */
   announcement: { id: number; text: string };
   /** The server restarted with a new session token, so this page has to reload. */
@@ -21,6 +32,9 @@ interface LiveState {
   setConnected: (connected: boolean, reconnecting?: boolean) => void;
   setPosition: (jobId: string, position: number | undefined) => void;
   setRetry: (jobId: string, retry: { at: string; busy: boolean } | undefined) => void;
+  /** Undefined drops a finished run. */
+  setBatch: (jobSetId: string, batch: LiveBatch | undefined) => void;
+  clearBatches: () => void;
   announce: (text: string) => void;
   expireSession: () => void;
 }
@@ -30,6 +44,7 @@ export const useLive = create<LiveState>((set) => ({
   reconnecting: false,
   positions: {},
   retries: {},
+  batches: {},
   announcement: { id: 0, text: "" },
   sessionExpired: false,
   setConnected: (connected, reconnecting = false) =>
@@ -49,6 +64,15 @@ export const useLive = create<LiveState>((set) => ({
       else delete retries[jobId];
       return { retries };
     }),
+  setBatch: (jobSetId, batch) =>
+    set((s) => {
+      if (!batch && !(jobSetId in s.batches)) return s;
+      const batches = { ...s.batches };
+      if (batch) batches[jobSetId] = batch;
+      else delete batches[jobSetId];
+      return { batches };
+    }),
+  clearBatches: () => set({ batches: {} }),
   announce: (text) => set((s) => ({ announcement: { id: s.announcement.id + 1, text } })),
   expireSession: () => set({ sessionExpired: true }),
 }));

@@ -2,6 +2,7 @@ import type { BatchUpdated, JobSetWithJobs } from "@openfield/core";
 import {
   activeProviderBatches,
   type Db,
+  getJobSet,
   type JobSetBundle,
   jobsOf,
   markBatchNotified,
@@ -21,7 +22,9 @@ export function jobSetViews(db: Db, bundles: readonly JobSetBundle[]): JobSetWit
 /** snapshot.batches: every batch in flight, plus finished ones no tab has heard about yet (§0.6). */
 export function batchSnapshot(db: Db): BatchUpdated[] {
   const rows = [...activeProviderBatches(db), ...unannouncedBatches(db)];
-  return rows.map((row) => toBatchUpdated(row, jobsOf(db, row.jobSetId)));
+  return rows.map((row) =>
+    toBatchUpdated(row, jobsOf(db, row.jobSetId), { canvasId: getJobSet(db, row.jobSetId)?.canvasId }),
+  );
 }
 
 /** A tab got the snapshot, so each finished batch in it has now been announced once. */

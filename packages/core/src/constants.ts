@@ -416,7 +416,54 @@ export const CANVAS_NODE_STATES = [
 ] as const;
 export type CanvasNodeState = (typeof CANVAS_NODE_STATES)[number];
 export const CANVAS_SEED_MODES = ["random", "fixed", "from-input"] as const;
-export const VARIATION_STRATEGIES = ["seed-jitter", "prompt-list", "model-list"] as const;
+/**
+ * Variations strategies (M4-21). same-prompt repeats one request: the server picks a new seed per
+ * image where the model takes seeds (§0.11), which is M4-21's seed jitter, and plain repeats where
+ * it doesn't. Documents from before the rename say "seed-jitter"; the node reads that as same-prompt.
+ */
+export const VARIATION_STRATEGIES = ["same-prompt", "prompt-list", "model-list"] as const;
+export const CANVAS_BLOCK_REASONS = [
+  "no_key",
+  "model_unavailable",
+  "company_off",
+  "missing_input",
+  /** An image it reads isn't in this library (an imported canvas, or deleted since). */
+  "missing_asset",
+  "upstream_failed",
+] as const;
+export type CanvasBlockReason = (typeof CANVAS_BLOCK_REASONS)[number];
+export const CANVAS_INPUT_TARGETS = ["references", "base", "mask"] as const;
+export const CANVAS_PORT_ARITIES = ["single", "multi"] as const;
+export const CANVAS_VERSION_KINDS = [
+  "auto",
+  "named",
+  "before_delete",
+  "before_import",
+  "before_template",
+  "before_restore",
+] as const;
+export type CanvasVersionKind = (typeof CANVAS_VERSION_KINDS)[number];
+export const CANVAS_TEMPLATE_SOURCES = ["bundled", "user"] as const;
+/** A run above this many jobs needs `confirmed: true` (§7.7). */
+export const CANVAS_CONFIRM_JOBS = 32;
+/** No run makes more than this many jobs, confirmed or not, so no node's images outgrow a plan. */
+export const CANVAS_RUN_MAX_JOBS = 1000;
+/** Nodes one canvas document holds. A run plan can name every one of them (most are reused). */
+export const CANVAS_MAX_NODES = 5000;
+/** Index cards come in both themes, so a canvas captured in one still sits right in the other. */
+export const CANVAS_PREVIEW_THEMES = ["light", "dark"] as const;
+export type CanvasPreviewTheme = (typeof CANVAS_PREVIEW_THEMES)[number];
+/** Index cards use a rendered preview only up to this many nodes; bigger canvases show a cover image (M4-15). */
+export const CANVAS_PREVIEW_MAX_NODES = 150;
+/** Snapshots the app takes by itself (automatic and safety ones) kept per canvas. Named ones all stay (§7.8). */
+export const CANVAS_AUTO_VERSIONS_KEPT = 50;
+/** Minimum gap between automatic snapshots (§7.8). */
+export const CANVAS_AUTO_VERSION_MS = 5 * 60_000;
+/**
+ * Largest reference image POST /api/uploads takes: the smallest limit a launch model sets on a
+ * reference (Google's 20 MB, §3.2), so every upload can go to every model.
+ */
+export const UPLOAD_MAX_BYTES = 20_000_000;
 
 // Event stream (§0.6, §8.3.2)
 export const SSE_EVENT_TYPES = [

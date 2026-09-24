@@ -640,6 +640,27 @@ describe("canvas documents", () => {
     expect(result.error?.issues[0]?.path).toEqual(["nodes", 1, "params", "batch"]);
   });
 
+  test("frames nest, but never in a circle, and only frames hold nodes", () => {
+    const frame = (id: string, parentId: string | null) => ({
+      id,
+      type: "frame",
+      typeVersion: 1,
+      position: { x: 0, y: 0 },
+      parentId,
+    });
+    const withNodes = (nodes: unknown[]) =>
+      canvasDocumentSchema.safeParse({ ...canvasDoc, nodes, edges: [] });
+    expect(withNodes([frame("fa", null), frame("fb", "fa")]).success).toBe(true);
+    const self = withNodes([frame("fs", "fs")]);
+    expect(self.error?.issues[0]).toMatchObject({
+      path: ["nodes", 0, "parentId"],
+      message: "These frames sit inside each other in a circle.",
+    });
+    expect(withNodes([frame("fa", "fb"), frame("fb", "fa")]).success).toBe(false);
+    const inPrompt = withNodes([canvasDoc.nodes[0], { ...frame("fc", canvasDoc.nodes[0]!.id) }]);
+    expect(inPrompt.error?.issues[0]?.message).toBe("This node sits inside something that isn't a frame.");
+  });
+
   test("migrate current documents and refuse newer ones", () => {
     expect(migrateCanvasDocument(canvasDoc).id).toBe(ID_A);
     expect(() => migrateCanvasDocument({ ...canvasDoc, schema: "openfield.canvas/9" })).toThrow(

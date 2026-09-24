@@ -1,7 +1,8 @@
-import { canvasDocumentSchema } from "@openfield/core/canvas";
+import { canvasDocumentSchema, canvasRunRecordSchema } from "@openfield/core/canvas";
 import { MODEL_BADGES } from "@openfield/core/constants";
 import {
   batchHandleSchema,
+  canvasRunNodeStateSchema,
   capabilitiesSchema,
   jobHandleSchema,
   normalizedRequestSchema,
@@ -29,6 +30,8 @@ const settings = () => providerSettingValuesSchema;
 const handle = () => batchHandleSchema;
 const jobHandle = () => jobHandleSchema;
 const graph = () => canvasDocumentSchema;
+const runPlan = () => canvasRunRecordSchema;
+const runNodes = () => z.array(canvasRunNodeStateSchema);
 
 export const providerRow = createSelectSchema(t.providers, { settings });
 export const newProviderRow = createInsertSchema(t.providers, { settings });
@@ -75,8 +78,8 @@ export const canvasRow = createSelectSchema(t.canvases, { graph });
 export const newCanvasRow = createInsertSchema(t.canvases, { graph });
 export const canvasVersionRow = createSelectSchema(t.canvasVersions, { graph });
 export const newCanvasVersionRow = createInsertSchema(t.canvasVersions, { graph });
-export const canvasRunRow = createSelectSchema(t.canvasRuns);
-export const newCanvasRunRow = createInsertSchema(t.canvasRuns);
+export const canvasRunRow = createSelectSchema(t.canvasRuns, { plan: runPlan, nodes: runNodes });
+export const newCanvasRunRow = createInsertSchema(t.canvasRuns, { plan: runPlan, nodes: runNodes });
 
 export const usageLogRow = createSelectSchema(t.usageLog, { units: () => usageUnitsSchema });
 export const newUsageLogRow = createInsertSchema(t.usageLog, { units: () => usageUnitsSchema });

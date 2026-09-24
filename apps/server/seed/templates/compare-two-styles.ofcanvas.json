@@ -1,0 +1,179 @@
+{
+  "schema": "openfield.canvas/1",
+  "id": "01M37PY5HC6G3R6ER1VGPESMHK",
+  "name": "Compare two styles",
+  "createdAt": "2026-09-24T00:00:00.000Z",
+  "updatedAt": "2026-09-24T00:00:00.000Z",
+  "viewport": {
+    "x": 120,
+    "y": 120,
+    "zoom": 0.8
+  },
+  "nodes": [
+    {
+      "id": "n_style_a",
+      "type": "image.upload",
+      "typeVersion": 1,
+      "position": {
+        "x": 0,
+        "y": 0
+      },
+      "size": {
+        "w": 280,
+        "h": 280
+      },
+      "parentId": null,
+      "collapsed": false,
+      "title": "Style A",
+      "params": {
+        "assetIds": []
+      },
+      "presetLocks": [],
+      "result": null
+    },
+    {
+      "id": "n_prompt",
+      "type": "prompt",
+      "typeVersion": 1,
+      "position": {
+        "x": 0,
+        "y": 330
+      },
+      "size": {
+        "w": 296,
+        "h": 151
+      },
+      "parentId": null,
+      "collapsed": false,
+      "title": null,
+      "params": {
+        "text": "A quiet harbor town at dawn, fishing boats at rest."
+      },
+      "presetLocks": [],
+      "result": null
+    },
+    {
+      "id": "n_style_b",
+      "type": "image.upload",
+      "typeVersion": 1,
+      "position": {
+        "x": 0,
+        "y": 530
+      },
+      "size": {
+        "w": 280,
+        "h": 280
+      },
+      "parentId": null,
+      "collapsed": false,
+      "title": "Style B",
+      "params": {
+        "assetIds": []
+      },
+      "presetLocks": [],
+      "result": null
+    },
+    {
+      "id": "n_generate_a",
+      "type": "image.generate",
+      "typeVersion": 1,
+      "position": {
+        "x": 440,
+        "y": 0
+      },
+      "size": {
+        "w": 320,
+        "h": 400
+      },
+      "parentId": null,
+      "collapsed": false,
+      "title": null,
+      "params": {
+        "prompt": "Match the style of the reference image.",
+        "size": {
+          "kind": "aspect",
+          "ratio": "1:1"
+        },
+        "batch": 1,
+        "seed": {
+          "mode": "random"
+        },
+        "enhancePrompt": false,
+        "providerOptions": {}
+      },
+      "presetLocks": [],
+      "result": null
+    },
+    {
+      "id": "n_generate_b",
+      "type": "image.generate",
+      "typeVersion": 1,
+      "position": {
+        "x": 440,
+        "y": 440
+      },
+      "size": {
+        "w": 320,
+        "h": 400
+      },
+      "parentId": null,
+      "collapsed": false,
+      "title": null,
+      "params": {
+        "prompt": "Match the style of the reference image.",
+        "size": {
+          "kind": "aspect",
+          "ratio": "1:1"
+        },
+        "batch": 1,
+        "seed": {
+          "mode": "random"
+        },
+        "enhancePrompt": false,
+        "providerOptions": {}
+      },
+      "presetLocks": [],
+      "result": null
+    }
+  ],
+  "edges": [
+    {
+      "id": "e_prompt_a",
+      "source": "n_prompt",
+      "sourceHandle": "text",
+      "target": "n_generate_a",
+      "targetHandle": "prompt",
+      "order": 0,
+      "kind": "data"
+    },
+    {
+      "id": "e_prompt_b",
+      "source": "n_prompt",
+      "sourceHandle": "text",
+      "target": "n_generate_b",
+      "targetHandle": "prompt",
+      "order": 0,
+      "kind": "data"
+    },
+    {
+      "id": "e_style_a",
+      "source": "n_style_a",
+      "sourceHandle": "images",
+      "target": "n_generate_a",
+      "targetHandle": "input_images",
+      "order": 0,
+      "kind": "data"
+    },
+    {
+      "id": "e_style_b",
+      "source": "n_style_b",
+      "sourceHandle": "images",
+      "target": "n_generate_b",
+      "targetHandle": "input_images",
+      "order": 0,
+      "kind": "data"
+    }
+  ],
+  "comments": [],
+  "meta": {}
+}

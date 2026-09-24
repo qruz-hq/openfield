@@ -2,7 +2,9 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
+import { SESSION_HEADER } from "@openfield/core";
 import { feedPage } from "@openfield/db";
+import { LARGER_BODIES, MAX_BODY_BYTES, MAX_REQUEST_BYTES } from "../src/app";
 import { completed, generate, HOST, ORIGIN, saveKey, startTestServer, type TestServer } from "./helpers";
 
 // §0.6: a cross-origin page can't list assets, read key status or cause a thumbnail to be made.
@@ -28,7 +30,7 @@ describe("guards", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; schema: string };
     expect(body.ok).toBe(true);
-    expect(body.schema).toBe("0005_resume");
+    expect(body.schema).toBe("0006_canvas");
   });
 
   test("a wrong Host is rejected, even with the token", async () => {
@@ -114,6 +116,57 @@ describe("guards", () => {
     });
     expect(res.status).toBe(413);
     expect(((await res.json()) as { error: { code: string } }).error.code).toBe("payload_too_large");
+  });
+
+  test("through a real listener, each route takes up to its limit and says so past it", async () => {
+    // app.request() skips Bun.serve, whose own cap answers with a bare 413. It sits above every
+    // route's limit, so a body just past a route's limit still gets that route's reply.
+    const port = 40_000 + Math.floor(Math.random() * 20_000);
+    server = await startTestServer({ port });
+    const listener = Bun.serve({
+      hostname: "127.0.0.1",
+      port,
+      fetch: server.app.fetch,
+      maxRequestBodySize: MAX_REQUEST_BYTES,
+    });
+    try {
+      const send = (method: string, path: string, bytes: number) =>
+        fetch(`http://127.0.0.1:${port}${path}`, {
+          method,
+          // A fresh connection each time: a refused body is never read, so a reused one would be
+          // left mid-stream.
+          headers: {
+            [SESSION_HEADER]: server.token,
+            "content-type": "application/octet-stream",
+            connection: "close",
+          },
+          body: new Uint8Array(bytes),
+        });
+      const routes = [
+        ...LARGER_BODIES.map((b) => ({
+          method: b.method,
+          // "^\/api\/canvases\/[^/]+\/run$" → "/api/canvases/<id>/run"
+          path: b.path.source
+            .replace(/^\^/, "")
+            .replace(/\$$/, "")
+            .replaceAll("\\/", "/")
+            .replace("[^/]+", "01K6BQ8000000000000000CNVS"),
+          maxSize: b.maxSize,
+        })),
+        { method: "PUT", path: "/api/settings/keys/google", maxSize: MAX_BODY_BYTES },
+      ];
+      for (const route of routes) {
+        expect(MAX_REQUEST_BYTES).toBeGreaterThan(route.maxSize);
+        const under = await send(route.method, route.path, route.maxSize - 1);
+        expect(under.status, `${route.method} ${route.path} under`).not.toBe(413);
+        const over = await send(route.method, route.path, route.maxSize + 1);
+        expect(over.status, `${route.method} ${route.path} over`).toBe(413);
+        const body = (await over.json()) as { error: { code: string } };
+        expect(body.error.code).toBe("payload_too_large");
+      }
+    } finally {
+      listener.stop(true);
+    }
   });
 
   test("no response ever carries CORS headers, preflights included", async () => {

@@ -31,6 +31,7 @@ const suites: { name: string; testMatch: string; env?: Record<string, string> }[
   },
   // Slow fakes that take 8 seconds instead of 30 to 60, long enough to restart the server mid-call.
   { name: "resume", testMatch: "resume.e2e.ts", env: { OPENFIELD_FAKE_SLOW_MS: "8000" } },
+  { name: "canvas", testMatch: "canvas.e2e.ts" },
 ];
 const servers = suites.map((suite) => ({ ...suite, origin: `http://127.0.0.1:${portFor(suite.name)}` }));
 

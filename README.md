@@ -104,6 +104,18 @@ Every stop and what it left behind is also written to `logs/openfield.log` in yo
 
 An image that was interrupted, or cut off again while it ran again, offers **Try again**.
 
+## Canvas
+
+Canvas is where you build image flows you can run again. Open **Canvas** in the top bar and start from a blank canvas or a template.
+
+- Add nodes with **+**, `A` or a double-click on empty canvas. Connect them by dragging from one port to another; drop a connection on empty canvas to pick a node that fits it.
+- **Prompt**, **Upload** and **Assets** feed **Generate** and **Variations**, which run at the speed set in each company's settings. Notes, text, shapes and frames help you lay things out.
+- Run one node from its price button, everything after it from the node menu, or the whole canvas with **Run all**, which shows what it will cost first.
+- Nodes whose settings and inputs haven't changed are skipped, so running again costs nothing. Change a prompt and only the nodes after it run again.
+- Every image a canvas makes also shows in the Image feed. Canvases save as you work, keep a version history, and export as `.ofcanvas.json` files. A run keeps going if you close the tab or restart Openfield, and an image a restart cuts off follows the rules in [Restarts](#restarts).
+
+Press `?` in a canvas to see every shortcut.
+
 ## Running without keys
 
 ```sh

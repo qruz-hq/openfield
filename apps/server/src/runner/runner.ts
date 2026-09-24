@@ -239,8 +239,14 @@ export class Runner {
 
   // Creating job sets
 
-  /** POST /api/generate and /api/edit. Returns before any provider call (§8.3.1). */
-  async createJobSet(body: GenerateRequest, opts: { priority?: number } = {}): Promise<JobSetAccepted> {
+  /**
+   * POST /api/generate and /api/edit, and each job set of a canvas run. Returns before any
+   * provider call (§8.3.1).
+   */
+  async createJobSet(
+    body: GenerateRequest,
+    opts: { priority?: number; canvasRunId?: string } = {},
+  ): Promise<JobSetAccepted> {
     const existing = getJobSetByIdempotencyKey(this.deps.db, body.idempotencyKey);
     if (existing) return this.#accepted(existing.id);
 
@@ -265,6 +271,7 @@ export class Runner {
     return this.#insert(manifest, result.request, result.jobIds, result.calls, {
       op: body.op,
       priority: opts.priority ?? 10,
+      canvasRunId: opts.canvasRunId ?? null,
     });
   }
 
@@ -325,7 +332,7 @@ export class Runner {
     request: NormalizedRequest,
     jobIds: string[],
     calls: NormalizedRequest[],
-    meta: { op: Op; priority: number; promptOriginal?: string | null },
+    meta: { op: Op; priority: number; promptOriginal?: string | null; canvasRunId?: string | null },
   ): JobSetAccepted {
     const { providerId, modelId } = parseModelKey(request.model);
     // Priced at the speed this run resolved to (§0.13).
@@ -347,6 +354,7 @@ export class Runner {
         source: request.source,
         canvasId: request.canvas?.canvasId ?? null,
         canvasNodeId: request.canvas?.nodeId ?? null,
+        canvasRunId: meta.canvasRunId ?? null,
         costEstimateUsd: cost.confidence === "unknown" ? null : cost.max,
         speed: request.speed,
       },

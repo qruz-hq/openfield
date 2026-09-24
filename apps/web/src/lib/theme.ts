@@ -18,3 +18,10 @@ export function useThemeSync() {
     if (theme) applyTheme(theme);
   }, [theme]);
 }
+
+/** The theme on screen right now: the setting, or the OS's when it's "system" (dark without one). */
+export function resolvedTheme(): "light" | "dark" {
+  const set = document.documentElement.dataset.theme;
+  if (set === "light" || set === "dark") return set;
+  return window.matchMedia?.("(prefers-color-scheme: light)").matches ? "light" : "dark";
+}

@@ -5,7 +5,6 @@ import {
   isModelKey,
   type ModelListItem,
   newId,
-  type ResolutionTier,
   t,
 } from "@openfield/core";
 import { type ControlResolution, visibleControls } from "@openfield/providers/manifest";
@@ -29,17 +28,17 @@ import { findModel, useModels } from "../../api/hooks/models";
 import { useRunSpeed } from "../../api/hooks/provider-settings";
 import { useSettings } from "../../api/hooks/settings";
 import { errorMessage } from "../../api/raw";
+import { aspectChoices, qualityChoices, resolutionChoices } from "../../lib/control-choices";
 import {
   aspectLabel,
   carryValues,
-  estimateRun,
   expectedSize,
   generateBody,
   generateState,
   qualityLabel,
   resolveValues,
 } from "../../lib/controls";
-import { speedFallbackHint, tightCost } from "../../lib/cost";
+import { speedFallbackHint } from "../../lib/cost";
 import { notify, notifyError } from "../../lib/notify";
 import { companyName } from "../../lib/provider";
 import { askToNotifyOnce } from "../../lib/system-notify";
@@ -236,7 +235,6 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
         const label = resolved.aspect ? aspectLabel(resolved.aspect) : "";
         if (unsupported)
           return <DisabledChip key="aspect" icon={icon} value={label} reason={control.reason ?? ""} />;
-        const ratios = (control.options ?? []) as AspectRatio[];
         return (
           <OptionChip
             key="aspect"
@@ -246,16 +244,10 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
             valueLabel={label}
             width="w-240"
             emulated={control.state === "emulated"}
-            options={ratios.map((ratio) => {
-              const off = control.unavailable?.includes(ratio);
-              return {
-                value: ratio,
-                title: aspectLabel(ratio),
-                leading: <AspectGlyph ratio={ratio} />,
-                disabled: off,
-                subtitle: off ? control.reason : undefined,
-              };
-            })}
+            options={aspectChoices(control).map((choice) => ({
+              ...choice,
+              leading: <AspectGlyph ratio={choice.value} />,
+            }))}
             onChange={(aspect) => composer.setValues({ aspect })}
           />
         );
@@ -264,7 +256,6 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
         const value = resolved.resolution ?? "";
         if (unsupported)
           return <DisabledChip key="resolution" icon={Gauge} value={value} reason={control.reason ?? ""} />;
-        const tiers = (control.options ?? []) as ResolutionTier[];
         return (
           <OptionChip
             key="resolution"
@@ -273,17 +264,7 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
             value={resolved.resolution}
             valueLabel={value}
             width="w-240"
-            options={tiers.map((tier) => ({
-              value: tier,
-              title: tier,
-              subtitle: control.unavailable?.includes(tier)
-                ? control.reason
-                : t(`composer.chips.resolution.tiers.${tier}`),
-              price: picked
-                ? tightCost(estimateRun(picked, { ...resolved, resolution: tier, batch: 1 }, "", speed))
-                : undefined,
-              disabled: control.unavailable?.includes(tier),
-            }))}
+            options={picked ? resolutionChoices(picked, control, resolved, speed) : []}
             onChange={(resolution) => composer.setValues({ resolution })}
           />
         );
@@ -300,15 +281,7 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
             value={resolved.quality}
             valueLabel={value}
             width="w-300"
-            options={(caps.quality?.levels ?? []).map((level) => ({
-              value: level.id,
-              title: level.label,
-              subtitle: control.unavailable?.includes(level.id) ? control.reason : level.hint,
-              price: picked
-                ? tightCost(estimateRun(picked, { ...resolved, quality: level.id, batch: 1 }, "", speed))
-                : undefined,
-              disabled: control.unavailable?.includes(level.id),
-            }))}
+            options={picked ? qualityChoices(picked, control, resolved, speed) : []}
             onChange={(quality) => composer.setValues({ quality })}
           />
         );

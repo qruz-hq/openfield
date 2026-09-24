@@ -102,11 +102,12 @@ export function getAssets(db: Executor, ids: readonly string[]): AssetRow[] {
 }
 
 /** Ingest dedupe: identical bytes already in the live library (§8.5.1). */
-export function findLiveAssetBySha256(db: Executor, sha256: string): AssetRow | undefined {
+/** The oldest live asset with these bytes, optionally of one kind only. */
+export function findLiveAssetBySha256(db: Executor, sha256: string, kind?: AssetKind): AssetRow | undefined {
   return db
     .select()
     .from(assets)
-    .where(and(eq(assets.sha256, sha256), isNull(assets.deletedAt)))
+    .where(and(eq(assets.sha256, sha256), isNull(assets.deletedAt), kind ? eq(assets.kind, kind) : undefined))
     .orderBy(asc(assets.createdAt))
     .get();
 }

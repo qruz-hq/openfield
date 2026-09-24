@@ -11,6 +11,7 @@ import {
   AUTH_KINDS,
   BATCH_STATES,
   CANVAS_RUN_SCOPES,
+  CANVAS_VERSION_KINDS,
   CHARACTER_INJECTIONS,
   COST_SOURCES,
   CREDENTIAL_SOURCES,
@@ -30,6 +31,7 @@ import {
 } from "@openfield/core/constants";
 import { drizzle } from "drizzle-orm/bun-sqlite";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
+import { readMigrationFiles } from "drizzle-orm/migrator";
 import { getTableConfig, SQLiteTable } from "drizzle-orm/sqlite-core";
 import {
   feedPage,
@@ -328,6 +330,9 @@ const COLUMNS: Record<string, string[]> = {
     "updated_at text not null",
     "opened_at text",
     "deleted_at text",
+    "node_count integer not null default 0",
+    "cover_asset_id text",
+    "folder_id text",
   ],
   canvas_versions: [
     "id text not null pk",
@@ -335,6 +340,10 @@ const COLUMNS: Record<string, string[]> = {
     "graph text not null",
     "label text",
     "created_at text not null",
+    "kind text not null default 'auto'",
+    "node_count integer not null default 0",
+    "edge_count integer not null default 0",
+    "cover_asset_id text",
   ],
   canvas_runs: [
     "id text not null pk",
@@ -343,6 +352,9 @@ const COLUMNS: Record<string, string[]> = {
     "status text not null default 'running'",
     "created_at text not null",
     "finished_at text",
+    "plan text not null default '{}'",
+    "nodes text not null default '[]'",
+    "priority integer not null default 10",
   ],
   usage_log: [
     "id integer not null pk",
@@ -425,6 +437,7 @@ const CHECKS: Record<string, [string, readonly string[]] | string> = {
   reference_set_items_role_check: ["role", REFERENCE_SET_ROLES],
   characters_injection_check: ["injection", CHARACTER_INJECTIONS],
   palettes_mode_check: ["mode", PALETTE_MODES],
+  canvas_versions_kind_check: ["kind", CANVAS_VERSION_KINDS],
   canvas_runs_scope_check: ["scope", CANVAS_RUN_SCOPES],
   canvas_runs_status_check: ["status", JOB_SET_STATES],
   usage_log_outcome_check: ["outcome", USAGE_OUTCOMES],
@@ -472,7 +485,7 @@ const FOREIGN_KEYS: Record<string, string[]> = {
   ],
   palettes: ["source_asset_id -> assets.id on delete set null"],
   saved_prompts: ["preset_id -> presets.id on delete set null"],
-  canvases: [],
+  canvases: ["folder_id -> folders.id on delete set null"],
   canvas_versions: ["canvas_id -> canvases.id on delete cascade"],
   canvas_runs: ["canvas_id -> canvases.id on delete cascade"],
   usage_log: [],
@@ -660,18 +673,18 @@ describe("boot (§8.2.4)", () => {
   });
 
   test("every migration is in the journal and applied, newest tag reported", () => {
-    expect(opened.schemaTag).toBe("0005_resume");
-    expect(raw.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 6 });
+    expect(opened.schemaTag).toBe("0006_canvas");
+    expect(raw.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 7 });
   });
 
   test("reopening applies nothing twice", () => {
     const again = openDb(file);
-    expect(again.schemaTag).toBe("0005_resume");
-    expect(again.db.$client.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 6 });
+    expect(again.schemaTag).toBe("0006_canvas");
+    expect(again.db.$client.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 7 });
     again.close();
   });
 
-  test("0003 and 0005 keep existing rows: Standard runs, real spend, no settings, no restarts", () => {
+  test("0003 to 0006 keep existing rows: Standard runs, real spend, no settings, no restarts, canvases", () => {
     // A library last opened at 0002, with a run and its usage row in it.
     const folder = join(dir, "migrations-0002");
     cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
@@ -691,8 +704,21 @@ describe("boot (§8.2.4)", () => {
       [at, at],
     );
     old.run(
-      `INSERT INTO job_sets (id, op, provider_id, model_id, request_json, batch_size, status, created_at, cost_actual_usd)
-       VALUES ('set1', 'generate', 'google', 'gemini-3-pro-image', '{"batch":1}', 1, 'succeeded', ?, 0.134)`,
+      `INSERT INTO canvases (id, name, graph, created_at, updated_at) VALUES ('cv1', 'Old', '{"nodes":[],"edges":[]}', ?, ?)`,
+      [at, at],
+    );
+    old.run(
+      `INSERT INTO canvas_versions (id, canvas_id, graph, label, created_at)
+       VALUES ('ver1', 'cv1', '{"nodes":[],"edges":[]}', 'autosave', ?)`,
+      [at],
+    );
+    old.run(
+      `INSERT INTO canvas_runs (id, canvas_id, scope, status, created_at) VALUES ('run1', 'cv1', 'all', 'succeeded', ?)`,
+      [at],
+    );
+    old.run(
+      `INSERT INTO job_sets (id, op, provider_id, model_id, request_json, batch_size, status, created_at, cost_actual_usd, canvas_id, canvas_run_id)
+       VALUES ('set1', 'generate', 'google', 'gemini-3-pro-image', '{"batch":1}', 1, 'succeeded', ?, 0.134, 'cv1', 'run1')`,
       [at],
     );
     old.run(
@@ -709,7 +735,7 @@ describe("boot (§8.2.4)", () => {
 
     const upgraded = openDb(path);
     const db = upgraded.db.$client;
-    expect(upgraded.schemaTag).toBe("0005_resume");
+    expect(upgraded.schemaTag).toBe("0006_canvas");
     expect(db.query("SELECT speed, cost_actual_usd, request_json FROM job_sets").get()).toEqual({
       speed: "standard",
       cost_actual_usd: 0.134,
@@ -736,11 +762,91 @@ describe("boot (§8.2.4)", () => {
       settings: null,
       concurrency_cap: 3,
     });
+    // 0006 rebuilds canvas_versions: old versions become auto ones with no counts yet.
+    expect(
+      db.query("SELECT id, label, kind, node_count, edge_count, cover_asset_id FROM canvas_versions").get(),
+    ).toEqual({
+      id: "ver1",
+      label: "autosave",
+      kind: "auto",
+      node_count: 0,
+      edge_count: 0,
+      cover_asset_id: null,
+    });
+    expect(db.query("SELECT node_count, cover_asset_id, folder_id FROM canvases").get()).toEqual({
+      node_count: 0,
+      cover_asset_id: null,
+      folder_id: null,
+    });
+    expect(db.query("SELECT plan, nodes, priority FROM canvas_runs").get()).toEqual({
+      plan: "{}",
+      nodes: "[]",
+      priority: 10,
+    });
+    expect(db.query("SELECT canvas_id, canvas_run_id FROM job_sets").get()).toEqual({
+      canvas_id: "cv1",
+      canvas_run_id: "run1",
+    });
     // The rebuilt tables keep their indexes and their links to each other.
     expect(db.query("PRAGMA foreign_key_check").all()).toEqual([]);
+    expect(db.query("SELECT name FROM sqlite_master WHERE name = 'idx_canvas_versions'").get()).toEqual({
+      name: "idx_canvas_versions",
+    });
     expect(() => db.run("DELETE FROM job_sets WHERE id = 'set1'")).not.toThrow();
     expect(db.query("SELECT count(*) AS n FROM jobs").get()).toEqual({ n: 0 });
     upgraded.close();
+  });
+
+  test("a library that ran the canvas migration as 0003 before the merge catches up", () => {
+    // 0000 to 0002, then today's 0006_canvas file under the stamp it had as 0003_canvas.
+    const folder = join(dir, "migrations-early-canvas");
+    cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
+    const journalPath = join(folder, "meta/_journal.json");
+    const journal = JSON.parse(readFileSync(journalPath, "utf8")) as { entries: { tag: string }[] };
+    journal.entries = journal.entries.filter((e) => e.tag < "0003");
+    writeFileSync(journalPath, JSON.stringify(journal));
+
+    const path = join(dir, "early-canvas.db");
+    const old = new Database(path, { create: true });
+    old.run("PRAGMA foreign_keys = OFF");
+    migrate(drizzle({ client: old }), { migrationsFolder: folder });
+    const tags = (
+      JSON.parse(readFileSync(join(MIGRATIONS_FOLDER, "meta/_journal.json"), "utf8")) as {
+        entries: { tag: string }[];
+      }
+    ).entries.map((e) => e.tag);
+    const canvas = readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER })[tags.indexOf("0006_canvas")]!;
+    for (const statement of canvas.sql) old.run(statement);
+    old.run("INSERT INTO __drizzle_migrations (hash, created_at) VALUES (?, ?)", [
+      canvas.hash,
+      1790185934361,
+    ]);
+    const at = "2026-09-20T10:00:00.000Z";
+    old.run(
+      `INSERT INTO canvases (id, name, graph, node_count, created_at, updated_at)
+       VALUES ('cv1', 'Mine', '{"nodes":[],"edges":[]}', 3, ?, ?)`,
+      [at, at],
+    );
+    old.close();
+
+    const upgraded = openDb(path);
+    const db = upgraded.db.$client;
+    expect(upgraded.schemaTag).toBe("0006_canvas");
+    expect(db.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 7 });
+    expect(db.query("SELECT name FROM sqlite_master WHERE name = 'provider_batches'").get()).toEqual({
+      name: "provider_batches",
+    });
+    expect(
+      db.query("SELECT count(*) AS n FROM pragma_table_info('jobs') WHERE name = 'handle'").get(),
+    ).toEqual({
+      n: 1,
+    });
+    expect(db.query("SELECT name, node_count FROM canvases").get()).toEqual({ name: "Mine", node_count: 3 });
+    upgraded.close();
+    // And the next boot has nothing left to do.
+    const again = openDb(path);
+    expect(again.schemaTag).toBe("0006_canvas");
+    again.close();
   });
 
   test("a failing migration rolls back and names the file", () => {
@@ -850,12 +956,24 @@ describe("search (§8.2.3)", () => {
 });
 
 describe("feed pagination (§8.2.2)", () => {
+  // A database of its own: rows other tests add (in any order) would change what the pages hold.
+  let feedDir: string;
+  let feed: OpenDb;
+  beforeAll(() => {
+    feedDir = mkdtempSync(join(tmpdir(), "openfield-feed-"));
+    feed = openDb(join(feedDir, "openfield.db"));
+  });
+  afterAll(() => {
+    feed.close();
+    rmSync(feedDir, { recursive: true, force: true });
+  });
+
   test("pages are newest first, stable across ties and unaffected by new rows", () => {
     const ids: string[] = [];
     for (let i = 0; i < 120; i++) {
       const id = `P${String(i).padStart(3, "0")}`;
       ids.push(id);
-      insertAsset(opened.db, {
+      insertAsset(feed.db, {
         id,
         kind: "generated",
         path: `assets/${id}.png`,
@@ -868,7 +986,7 @@ describe("feed pagination (§8.2.2)", () => {
         createdAt: `2026-09-23T11:00:${String(Math.floor(i / 10)).padStart(2, "0")}.000Z`,
       });
     }
-    const expected = raw
+    const expected = feed.db.$client
       .query("SELECT id FROM assets WHERE deleted_at IS NULL ORDER BY created_at DESC, id DESC")
       .all()
       .map((r) => (r as { id: string }).id);
@@ -877,13 +995,13 @@ describe("feed pagination (§8.2.2)", () => {
     let cursor: string | null = null;
     let pages = 0;
     do {
-      const page = feedPage(opened.db, { cursor });
+      const page = feedPage(feed.db, { cursor });
       expect(page.items.length).toBeLessThanOrEqual(50);
       seen.push(...page.items.map((a) => a.id));
       cursor = page.nextCursor;
       if (pages++ === 0) {
         // A newer image arriving mid-scroll must not shift later pages.
-        insertAsset(opened.db, {
+        insertAsset(feed.db, {
           id: "P999",
           kind: "generated",
           path: "assets/P999.png",
@@ -900,7 +1018,7 @@ describe("feed pagination (§8.2.2)", () => {
     expect(pages).toBe(3);
     expect(seen).toEqual(expected);
     expect(new Set(seen).size).toBe(seen.length);
-    expect(feedPage(opened.db).items[0]?.id).toBe("P999");
+    expect(feedPage(feed.db).items[0]?.id).toBe("P999");
   });
 });
 

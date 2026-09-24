@@ -1,6 +1,7 @@
 export type { Page, PageQuery } from "./_util";
 export * from "./assets";
 export * from "./batches";
+export * from "./canvas";
 export * from "./jobs";
 export * from "./lineage";
 export * from "./models";

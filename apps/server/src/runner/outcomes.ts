@@ -1,6 +1,7 @@
 import {
   type CostEstimate,
   type CostSource,
+  canvasSource,
   type ErrorAction,
   errorCopy,
   isTerminalState,
@@ -130,6 +131,8 @@ export class Outcomes {
           ? (getAsset(tx, base, { includeDeleted: true })?.rootAssetId ?? base)
           : staged.assetId,
         op: set.op,
+        // Drives "Open in Canvas" in the detail view (§7.1).
+        opParams: call.canvas ? { source: canvasSource(call.canvas.canvasId, call.canvas.nodeId) } : null,
         maskAssetId: call.mask?.assetId ?? null,
         generative: true,
       });

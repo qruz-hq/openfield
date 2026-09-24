@@ -43,6 +43,13 @@
       "when": 1790188913841,
       "tag": "0005_resume",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790211127313,
+      "tag": "0006_canvas",
+      "breakpoints": true
     }
   ]
 }

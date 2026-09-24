@@ -884,11 +884,10 @@ export class BatchWatcher {
    * tab has it (§2.4).
    */
   #publish(row: ProviderBatchRow, counts?: BatchCounts): void {
-    const frame = toBatchUpdated(
-      row,
-      jobsOf(this.deps.db, row.jobSetId),
-      row.finishedAt ? undefined : counts,
-    );
+    const frame = toBatchUpdated(row, jobsOf(this.deps.db, row.jobSetId), {
+      counts: row.finishedAt ? undefined : counts,
+      canvasId: getJobSet(this.deps.db, row.jobSetId)?.canvasId,
+    });
     const c = frame.counts;
     const key = JSON.stringify([frame.state, frame.stopping, c?.total, c?.succeeded, c?.failed, c?.pending]);
     if (!frame.finished && this.#sent.get(row.id) === key) return;

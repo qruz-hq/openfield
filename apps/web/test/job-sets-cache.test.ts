@@ -1,10 +1,11 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { beforeEach, describe, expect, test } from "bun:test";
-import type { JobSetWithJobs } from "@openfield/core";
+import type { BatchUpdated, JobSetWithJobs } from "@openfield/core";
 import { queryClient, queryKeys } from "../src/api/client";
 import { applyEvent } from "../src/api/events";
 import { addJobSet } from "../src/api/hooks/job-sets";
 import { waitKind } from "../src/image/feed-items";
+import { useLive } from "../src/lib/live";
 import { at, jobSet } from "./fixtures";
 
 // The feed's cache as the stream and the 202 race to fill it (§2.3): whichever lands last, a job
@@ -67,5 +68,37 @@ describe("after a restart", () => {
       data: { jobSetId: run.jobSet.id, jobId: run.jobs[0]!.id, idx: 0, startedAt: at(3), rerun: true },
     });
     expect(cached()[0]!.jobs[0]!.rerunAt).toBe(at(1));
+  });
+});
+
+describe("Batch runs in flight", () => {
+  const frame = (jobSetId: string, over: Partial<BatchUpdated> = {}): BatchUpdated => ({
+    jobSetId,
+    providerId: "google",
+    modelKey: "google:gemini-3-pro-image",
+    state: "queued",
+    submittedAt: at(1),
+    expiresAt: at(2),
+    finished: false,
+    ...over,
+  });
+
+  test("canvas nodes see a run until it ends, and each snapshot starts the list over", () => {
+    const first = jobSet(at(0), ["running"]).jobSet.id;
+    const second = jobSet(at(1), ["running"]).jobSet.id;
+    applyEvent({ event: "batch.updated", data: frame(first, { canvasId: first }) });
+    expect(useLive.getState().batches[first]).toEqual({
+      providerId: "google",
+      state: "queued",
+      stopping: false,
+    });
+    applyEvent({ event: "batch.updated", data: frame(first, { state: "canceled", finished: true }) });
+    expect(useLive.getState().batches[first]).toBeUndefined();
+
+    applyEvent({ event: "batch.updated", data: frame(second, { stopping: true }) });
+    expect(useLive.getState().batches[second]?.stopping).toBe(true);
+    // It ended while the stream was down: the next snapshot no longer lists it.
+    applyEvent({ event: "snapshot", data: { activeJobSets: [], serverTime: at(3), batches: [] } });
+    expect(useLive.getState().batches).toEqual({});
   });
 });
