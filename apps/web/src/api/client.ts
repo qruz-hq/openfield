@@ -52,4 +52,9 @@ export const queryKeys = {
   jobSets: ["job-sets"] as const,
   usageToday: ["usage", "today"] as const,
   stats: ["stats"] as const,
+  canvases: ["canvases"] as const,
+  canvas: (id: string) => ["canvases", id] as const,
+  canvasVersions: (id: string) => ["canvases", id, "versions"] as const,
+  canvasRuns: (id: string) => ["canvases", id, "runs"] as const,
+  canvasTemplates: ["canvas-templates"] as const,
 };

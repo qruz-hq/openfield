@@ -5,6 +5,7 @@ import { Link, Navigate, useParams } from "react-router";
 import { ApiKeysPane } from "./api-keys-pane";
 import { AppearancePane } from "./appearance-pane";
 import { DefaultsPane } from "./defaults-pane";
+import { ExperimentalPane } from "./experimental-pane";
 import { HelpPane } from "./help-pane";
 import { ModelsPane } from "./models-pane";
 import { PANES } from "./panes";
@@ -13,7 +14,7 @@ import { SpendingPane } from "./spending-pane";
 import { StoragePane } from "./storage-pane";
 
 // Settings / Shell: rail, a hairline, then the pane with its header (§6.17). A pane with nothing
-// that works yet stays off the rail (§0.15): Experimental joins once one of its switches does something.
+// that works yet stays off the rail (§0.15); Experimental joined with the canvas file switch.
 
 const CONTENT: Partial<Record<string, ComponentType>> = {
   "api-keys": ApiKeysPane,
@@ -24,6 +25,7 @@ const CONTENT: Partial<Record<string, ComponentType>> = {
   spending: SpendingPane,
   privacy: PrivacyPane,
   help: HelpPane,
+  experimental: ExperimentalPane,
 };
 
 const SHOWN = PANES.filter((p) => CONTENT[p.slug]);

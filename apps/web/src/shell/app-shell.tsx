@@ -14,6 +14,8 @@ export function AppShell() {
   useThemeSync();
   const { pathname } = useLocation();
   const onImage = pathname.startsWith("/image");
+  // The canvas editor brings its own top bar, and its toolbar owns the bottom 60 px.
+  const inEditor = /^\/canvas\/[^/]+/.test(pathname);
 
   return (
     <div className="flex h-dvh min-w-0 flex-col bg-surface">
@@ -23,7 +25,7 @@ export function AppShell() {
       >
         {t("app.skipToContent")}
       </a>
-      <TopNav />
+      {inEditor ? null : <TopNav />}
       <main id="main" tabIndex={-1} className="relative flex min-h-0 flex-1 flex-col outline-none">
         <Outlet />
       </main>
@@ -33,8 +35,9 @@ export function AppShell() {
       <Toaster
         position={toasterPosition.position}
         gap={toasterPosition.gap}
-        // On the Image page toasts sit 12 above the composer (bottom 170).
-        offset={onImage ? 170 : toasterPosition.offset}
+        // On the Image page toasts sit 12 above the composer (bottom 170); in the canvas editor,
+        // 12 above its toolbar (bottom 72).
+        offset={onImage ? 170 : inEditor ? 72 : toasterPosition.offset}
         // Every toast renders the design's Toast itself (lib/notify.tsx).
         toastOptions={{ unstyled: true }}
         containerAriaLabel={t("app.notifications")}

@@ -5,10 +5,15 @@ import { api, call, queryClient, queryKeys } from "../client";
 export type AssetFilter = "all" | "favourites";
 export type AssetPages = InfiniteData<AssetsListResponse, string | null>;
 
-/** The feed's images, newest first, 50 a page (§2.3). */
-export function useAssets(filter: AssetFilter) {
+/**
+ * The feed's images, newest first, 50 a page (§2.3). `q` searches them (the canvas library picker);
+ * a search is cached under its own key, beside the feed's.
+ */
+export function useAssets(filter: AssetFilter, opts: { q?: string; enabled?: boolean } = {}) {
+  const q = opts.q?.trim() || undefined;
   return useInfiniteQuery({
-    queryKey: queryKeys.assets(filter),
+    queryKey: q ? ([...queryKeys.assets(filter), "q", q] as const) : queryKeys.assets(filter),
+    enabled: opts.enabled ?? true,
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) =>
       call(
@@ -18,6 +23,7 @@ export function useAssets(filter: AssetFilter) {
               limit: String(ASSET_PAGE_SIZE),
               ...(pageParam ? { cursor: pageParam } : {}),
               ...(filter === "favourites" ? { favourite: "1" as const } : {}),
+              ...(q ? { q } : {}),
             },
           },
           { init: { signal } },

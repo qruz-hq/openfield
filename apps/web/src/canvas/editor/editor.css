@@ -1,0 +1,177 @@
+/* The canvas pane on top of React Flow's base styles. Every colour is an --of- token (§7.4). */
+
+.of-canvas .react-flow {
+  --xy-background-color: var(--of-canvas);
+  --xy-background-pattern-color: var(--of-grid-dot);
+  --xy-handle-background-color: transparent;
+  --xy-resize-background-color: transparent;
+  --xy-selection-background-color: transparent;
+  --xy-selection-border: none;
+  font-family: var(--font-sans);
+}
+
+/* Marquee (design doZgF xkvEO): 1 px $accent-line, radius 2, an $accent-soft tint at 45%. */
+.of-canvas .react-flow__selection {
+  border: 1px solid var(--of-accent-line);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--of-accent-soft) 45%, transparent);
+}
+
+/* The box React Flow draws around a multi-selection: invisible, only there to drag the group. */
+.of-canvas .react-flow__nodesselection-rect {
+  border: none;
+  background: transparent;
+}
+
+.of-canvas .react-flow__node {
+  cursor: default;
+}
+
+.of-canvas .react-flow__node:focus-visible {
+  outline: 2px solid var(--of-accent);
+  outline-offset: 4px;
+  border-radius: 14px;
+}
+
+/* In a multi-selection the accent outlines say it all; no second ring on the node that has focus. */
+.of-canvas[data-multi] .react-flow__node.selected:focus-visible {
+  outline: none;
+}
+
+/* Note fill (design LFiZS): two $accent-soft layers, which on the dark pane is bone at 15%. In the
+   light theme $accent is near black, so the same layers turn into a grey slab; a warm sticky tint
+   takes their place there. */
+.of-canvas {
+  --of-note: light-dark(#ece3cf, #e9e3d827);
+}
+
+/* The off-screen card picture is taken once per theme (preview-capture.tsx). */
+.of-capture[data-paint="light"] {
+  color-scheme: light;
+}
+
+.of-capture[data-paint="dark"] {
+  color-scheme: dark;
+}
+
+/* Find (⌘F): the match in focus is ringed. */
+.of-canvas .react-flow__node.of-find-hit {
+  outline: 2px solid var(--of-accent);
+  outline-offset: 6px;
+  border-radius: 16px;
+}
+
+/* Pan tool and Space: the whole pane grabs, nodes included. */
+.of-canvas.of-tool-pan .react-flow__node {
+  pointer-events: none;
+}
+
+.of-canvas.of-tool-pan .react-flow__pane {
+  cursor: grab;
+}
+
+.of-canvas.of-tool-place .react-flow__pane {
+  cursor: crosshair;
+}
+
+/* Selection handles (design ENaei c0Iy0): 8 px, $accent-fg with a 1.5 px $accent line, radius 2. */
+.of-canvas .react-flow__resize-control.handle.of-resize-handle {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--of-accent);
+  border-radius: 2px;
+  background: var(--of-accent-fg);
+}
+
+.of-canvas .react-flow__resize-control.line.of-resize-line {
+  border-color: transparent;
+}
+
+.of-canvas .react-flow__resize-control.line.left.of-resize-line,
+.of-canvas .react-flow__resize-control.line.right.of-resize-line {
+  width: 8px;
+}
+
+.of-canvas .react-flow__resize-control.line.top.of-resize-line,
+.of-canvas .react-flow__resize-control.line.bottom.of-resize-line {
+  height: 8px;
+}
+
+/* Annotation arrow handles: hidden until a note is hovered, or an arrow is on its way. */
+.of-canvas .react-flow__handle.of-arrow-handle {
+  width: 10px;
+  height: 10px;
+  min-width: 0;
+  min-height: 0;
+  border: 1.5px solid var(--of-accent);
+  border-radius: 999px;
+  background: var(--of-accent-fg);
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+}
+
+.of-canvas .react-flow__node:hover .react-flow__handle.of-arrow-handle-source {
+  opacity: 1;
+}
+
+.of-canvas .react-flow__handle.of-arrow-handle-target.of-arrow-handle-live {
+  opacity: 0.6;
+}
+
+.of-canvas .react-flow__handle.of-arrow-handle-target.of-arrow-handle-live:hover,
+.of-canvas .react-flow__handle.of-arrow-handle-target.of-arrow-handle-live.connectingto {
+  opacity: 1;
+}
+
+.of-canvas .react-flow__handle.of-unknown-port {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--of-border-strong);
+  border-radius: 999px;
+  background: var(--of-elevated-2);
+}
+
+/* Edges (design Z73S2). */
+.of-canvas .react-flow__edge-path.of-edge {
+  stroke: var(--of-border-strong);
+  stroke-width: 1.5;
+}
+
+.of-canvas .react-flow__edge-path.of-edge.of-edge-active {
+  stroke: var(--of-accent);
+  stroke-width: 2.5;
+}
+
+.of-canvas .react-flow__edge-path.of-arrow,
+.of-canvas .of-arrow {
+  stroke: var(--of-text-tertiary);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+}
+
+.of-canvas .react-flow__edge-path.of-arrow.of-arrow-selected {
+  stroke: var(--of-text-secondary);
+}
+
+.of-canvas .of-pending {
+  stroke: var(--of-accent-line);
+  stroke-width: 1.5;
+  stroke-dasharray: 6 5;
+}
+
+.of-canvas .of-pending-ring {
+  fill: none;
+  stroke: var(--of-accent);
+  stroke-width: 1.5;
+}
+
+/* The preview capture renders off screen; nothing in it reacts. */
+.of-canvas.of-capture {
+  pointer-events: none;
+}
+
+/* Ports reached with ⌥↑/↓. */
+.of-canvas .react-flow__handle:focus-visible {
+  outline: 2px solid var(--of-accent);
+  outline-offset: 2px;
+}

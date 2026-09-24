@@ -35,7 +35,21 @@ function jobSetsCache(): JobSetWithJobs[] {
   return queryClient.getQueryData<JobSetWithJobs[]>(queryKeys.jobSets) ?? [];
 }
 
+type FrameListener = (event: SseEvent) => void;
+const listeners = new Set<FrameListener>();
+
+/** Every frame, after the cache has it. The canvas engine follows its runs this way. */
+export function subscribeEvents(listener: FrameListener): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 export function applyEvent(event: SseEvent) {
+  applyToCache(event);
+  for (const listener of listeners) listener(event);
+}
+
+function applyToCache(event: SseEvent) {
   const setPosition = useLive.getState().setPosition;
   switch (event.event) {
     case "snapshot":

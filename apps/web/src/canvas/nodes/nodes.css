@@ -1,0 +1,68 @@
+/*
+ * Node parts that sit on React Flow's own elements. React Flow's stylesheet isn't in a cascade
+ * layer, so Tailwind utilities can't restyle its handles; these rules are plain CSS with one class
+ * more than React Flow's. Every colour is an --of- token.
+ */
+
+/* Ports (design pUPWt: e9iPX text, U0AR8 image, X7Ckd mask): 24 px circles centred on the edge. */
+.of-port.react-flow__handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--of-border-strong);
+  border-radius: 12px;
+  background: var(--of-elevated-2);
+  color: var(--of-text-secondary);
+  cursor: crosshair;
+  z-index: 1;
+  transition:
+    opacity 120ms ease-out,
+    border-color 120ms ease-out,
+    color 120ms ease-out;
+}
+
+/* A connection is on its way and this port takes it (E3h6t, jCsAP): 2 px accent ring. */
+.of-port.react-flow__handle.of-port-ready {
+  border: 2px solid var(--of-accent);
+  color: var(--of-accent);
+}
+
+/* It doesn't (Uz1no, HNtYP): faded, and hover can't wake it. */
+.of-port.react-flow__handle.of-port-dimmed {
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+/* The model can't use what comes in here: greyed, but the tooltip still says why. */
+.of-port.react-flow__handle.of-port-off {
+  opacity: 0.35;
+}
+
+.of-port.react-flow__handle:focus-visible {
+  outline: 2px solid var(--of-accent);
+  outline-offset: 2px;
+}
+
+.of-port.react-flow__handle > svg {
+  pointer-events: none;
+}
+
+/* Collapsed cards keep every handle for their edges; only the first of each side shows. */
+.of-port.react-flow__handle.of-port-stacked {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Blocked band (lJ9Zj): $border-strong hairlines at 60%, rising to the right. */
+.of-blocked-stripes {
+  background-image: repeating-linear-gradient(
+    135deg,
+    transparent 0 6px,
+    color-mix(in srgb, var(--of-border-strong) 60%, transparent) 6px 7px
+  );
+}

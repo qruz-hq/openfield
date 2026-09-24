@@ -10,8 +10,11 @@
  * Theme resolution: dark by default. Light applies for data-theme="light", or when the OS
  * prefers light and the person hasn't picked dark. Each token is light-dark(light, dark).
  * Where a dark value differs from design.pen, the WCAG contrast gate moved it (test/contrast.test.ts).
+ * An element with data-paint gets the tokens again, so a subtree can be painted in one theme on its
+ * own (the canvas card pictures are taken in both); the tokens resolve where they're declared.
  */
-:root {
+:root,
+[data-paint] {
   color-scheme: dark;
 
   --of-surface: light-dark(#f6f4f0, #0e1012);

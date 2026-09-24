@@ -9,10 +9,11 @@ type Rgba = [number, number, number, number];
 
 const css = await Bun.file(new URL("../src/styles.css", import.meta.url)).text();
 
+/** The block that declares the tokens (`:root, [data-paint] { … }`). */
 function rootBlock(source: string): string {
-  const start = source.indexOf(":root {");
+  const start = source.lastIndexOf("{", source.indexOf("--of-surface:"));
   let depth = 0;
-  for (let i = source.indexOf("{", start); i < source.length; i++) {
+  for (let i = start; i >= 0 && i < source.length; i++) {
     if (source[i] === "{") depth++;
     if (source[i] === "}" && --depth === 0) return source.slice(start, i);
   }
