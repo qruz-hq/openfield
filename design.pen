@@ -20082,7 +20082,7 @@
       "type": "frame",
       "id": "P07R6",
       "x": 10560,
-      "y": -4251,
+      "y": -4820,
       "name": "Components · Settings and overlays",
       "width": 2880,
       "fill": "$surface",
@@ -20118,6 +20118,415 @@
               "fontFamily": "Inter",
               "fontSize": 13,
               "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "RUtEg",
+          "name": "Section · Resume (v3)",
+          "width": "fill_container",
+          "fill": "$surface",
+          "layout": "vertical",
+          "gap": 20,
+          "children": [
+            {
+              "type": "frame",
+              "id": "P11bpf",
+              "name": "Section header",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Kl7bC",
+                  "name": "Title row",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "alignItems": "end",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "GYBGg",
+                      "name": "Section title",
+                      "fill": "$text-primary",
+                      "content": "Restarts",
+                      "fontFamily": "Inter",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "N30zq",
+                      "name": "Section note",
+                      "fill": "$text-tertiary",
+                      "content": "An image in progress when Openfield stops either picks up where it left off, or runs again if the model can't do that. Running again can charge twice, so there's a setting for it.",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "mkNB7",
+                  "name": "Hairline",
+                  "fill": "$border",
+                  "width": "fill_container",
+                  "height": 1
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "OEtvu",
+              "name": "Row · Tiles, log and setting",
+              "width": "fill_container",
+              "gap": 48,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "Qnan2",
+                  "name": "Cell · Ran again pill",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "MKHsL",
+                      "name": "Pill / Tile note / Ran again",
+                      "reusable": true,
+                      "height": 24,
+                      "fill": "#0E1012B8",
+                      "cornerRadius": 999,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "effect": {
+                        "type": "background_blur",
+                        "radius": 8
+                      },
+                      "gap": 6,
+                      "padding": [
+                        0,
+                        10
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "YI7M2",
+                          "name": "Icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "rotate-ccw",
+                          "library": "lucide",
+                          "fill": "$text-secondary"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Yf4Wy",
+                          "name": "Label",
+                          "fill": "$text-primary",
+                          "content": "Ran again after a restart",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "DLGEV",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Pill / Tile note / Ran again · on the image, top left, 10 from each edge",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "AvfBS",
+                  "name": "Cell · Picking up tile",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "id": "CZsGt",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "C7ZNs",
+                      "name": "Feed / Tile / Generating / Picking up",
+                      "descendants": {
+                        "M9qrU/c7xP4I": {
+                          "content": "GPT Image 2.5 Flare · 3:4 · 2K"
+                        },
+                        "BjhHF": {
+                          "content": "Picking up where it left off"
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "FNTZt",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Feed / Tile / Generating / Picking up · resumed by id after a restart",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "OOfxt",
+                  "name": "Cell · Running again tile",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "id": "OfTQn",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "C7ZNs",
+                      "name": "Feed / Tile / Generating / Ran again",
+                      "descendants": {
+                        "PGjmm": {
+                          "type": "frame",
+                          "id": "ahkKq",
+                          "x": 12,
+                          "y": 381,
+                          "name": "Meta",
+                          "layout": "vertical",
+                          "gap": 4,
+                          "children": [
+                            {
+                              "id": "JeAb6",
+                              "type": "ref",
+                              "ref": "FHnjB",
+                              "name": "Model",
+                              "descendants": {
+                                "v60Neh": {
+                                  "id": "BhBXg",
+                                  "type": "ref",
+                                  "ref": "mAItT",
+                                  "name": "Glyph"
+                                },
+                                "c7xP4I": {
+                                  "content": "Nano Banana Pro · 3:4 · 2K",
+                                  "fill": "$text-tertiary"
+                                },
+                                "X7uHn4": {
+                                  "enabled": false
+                                }
+                              }
+                            },
+                            {
+                              "type": "text",
+                              "id": "d5zvb",
+                              "name": "Note",
+                              "fill": "$text-secondary",
+                              "content": "Running again after a restart",
+                              "fontFamily": "Inter",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "type": "text",
+                              "id": "a7vyS",
+                              "name": "Charge",
+                              "fill": "$text-secondary",
+                              "content": "You may be charged twice.",
+                              "fontFamily": "Inter",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "KBeg6",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Feed / Tile / Generating / Ran again · couldn't resume, so it runs again",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "WL9z0",
+                  "name": "Cell · Ran again tile",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "nygdB",
+                      "name": "Feed / Tile / Ran again",
+                      "reusable": true,
+                      "clip": true,
+                      "width": 346,
+                      "height": 456,
+                      "layout": "none",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "WGfTF",
+                          "x": 0,
+                          "y": 0,
+                          "name": "Image",
+                          "metadata": {
+                            "type": "unsplash",
+                            "username": "sample_in_photography",
+                            "link": "https://unsplash.com/@sample_in_photography",
+                            "author": "Lucia Macedo"
+                          },
+                          "width": 346,
+                          "height": 456,
+                          "fill": {
+                            "type": "image",
+                            "enabled": true,
+                            "url": "https://images.unsplash.com/photo-1641671331342-d895eb52077f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzI2Mjh8&ixlib=rb-4.1.0&q=80&w=1080",
+                            "mode": "fill"
+                          }
+                        },
+                        {
+                          "id": "DvHAz",
+                          "type": "ref",
+                          "ref": "MKHsL",
+                          "name": "Note",
+                          "x": 10,
+                          "y": 10
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "bWc3b",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Feed / Tile / Ran again · idle; hides on hover like Last viewed",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "M60o4",
+                  "name": "Column · Setting and log",
+                  "layout": "vertical",
+                  "gap": 32,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "mNIH0",
+                      "name": "Cell · Restarts setting",
+                      "width": 840,
+                      "layout": "vertical",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "id": "xVWNy",
+                          "type": "ref",
+                          "ref": "AhZCK",
+                          "name": "Section · Restarts",
+                          "width": "fill_container",
+                          "descendants": {
+                            "YObYT/Fmac4": {
+                              "content": "RESTARTS"
+                            },
+                            "mzmIA": {
+                              "children": [
+                                {
+                                  "id": "nLjpY",
+                                  "type": "ref",
+                                  "ref": "g4l0ro",
+                                  "name": "Run interrupted images again",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "VFmQc/m8pUt3": {
+                                      "content": "Run interrupted images again after a restart"
+                                    },
+                                    "VFmQc/XqZMy": {
+                                      "content": "Only for images that can't pick up where they left off. You may be charged twice."
+                                    }
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "id": "Js06K",
+                          "name": "Caption",
+                          "fill": "$text-tertiary",
+                          "content": "Settings / Section + Settings / Row / Toggle · Settings > Defaults, on by default",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "r4AT5q",
+                      "name": "Cell · Usage log row",
+                      "layout": "vertical",
+                      "gap": 10,
+                      "children": [
+                        {
+                          "id": "t4wxxV",
+                          "type": "ref",
+                          "ref": "dKbXU",
+                          "name": "Run 00:52 · ran again",
+                          "descendants": {
+                            "n3eqfD": {
+                              "content": "00:52"
+                            },
+                            "eFeCI": {
+                              "id": "Ixhno",
+                              "type": "ref",
+                              "ref": "mAItT",
+                              "name": "Glyph"
+                            },
+                            "TBZ4H": {
+                              "content": "Ran 1 image again after a restart. You may be charged twice."
+                            },
+                            "Dm6j2/oxJ1P": {
+                              "content": "Done"
+                            },
+                            "tKGeT": {
+                              "content": "$0.134"
+                            }
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "id": "Y6Wmu",
+                          "name": "Caption",
+                          "fill": "$text-tertiary",
+                          "content": "Help / Log row · Spending > Recent runs, message only (no new component)",
+                          "fontFamily": "Inter",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
             }
           ]
         },
@@ -34614,6 +35023,37 @@
                       ]
                     }
                   }
+                },
+                {
+                  "id": "K9xpR",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · Restarts",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "RESTARTS"
+                    },
+                    "mzmIA": {
+                      "children": [
+                        {
+                          "id": "N2tb4l",
+                          "type": "ref",
+                          "ref": "g4l0ro",
+                          "name": "Run interrupted images again",
+                          "width": "fill_container",
+                          "descendants": {
+                            "VFmQc/m8pUt3": {
+                              "content": "Run interrupted images again after a restart"
+                            },
+                            "VFmQc/XqZMy": {
+                              "content": "Only for images that can't pick up where they left off. You may be charged twice."
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
                 }
               ]
             }
@@ -37282,7 +37722,209 @@
       "width": 1440,
       "height": 900,
       "fill": "$surface",
-      "layout": "none"
+      "layout": "none",
+      "children": [
+        {
+          "id": "PZUvj",
+          "type": "ref",
+          "ref": "iWLBJ",
+          "name": "Nav",
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "descendants": {
+            "m6sb75/rt5Ia": {
+              "content": "$0.00"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "CndDM",
+          "x": 0,
+          "y": 44,
+          "name": "Empty feed",
+          "width": 1440,
+          "height": 694,
+          "layout": "vertical",
+          "gap": 56,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "id": "qGaZQ",
+              "type": "ref",
+              "ref": "xhSY1",
+              "name": "Welcome",
+              "descendants": {
+                "f5QPPm": {
+                  "content": "Let's make your first image"
+                },
+                "IPwPu": {
+                  "type": "frame",
+                  "id": "IZcQq",
+                  "name": "Line",
+                  "gap": 6,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "R9wLo",
+                      "name": "Lead",
+                      "fill": "$text-secondary",
+                      "content": "Add a key from",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "id": "MgYdY",
+                      "type": "ref",
+                      "ref": "EWyRS",
+                      "name": "OpenAI glyph"
+                    },
+                    {
+                      "type": "text",
+                      "id": "nlvOA",
+                      "name": "OpenAI",
+                      "fill": "$text-primary",
+                      "content": "OpenAI",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "K6Wbo",
+                      "name": "Or",
+                      "fill": "$text-secondary",
+                      "content": "or",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "id": "p9SLT6",
+                      "type": "ref",
+                      "ref": "mAItT",
+                      "name": "Google glyph"
+                    },
+                    {
+                      "type": "text",
+                      "id": "I0ejoI",
+                      "name": "Google",
+                      "fill": "$text-primary",
+                      "content": "Google.",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "d1nzI",
+                      "name": "Tail",
+                      "fill": "$text-secondary",
+                      "content": "It takes a minute.",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                "UKvjI": {
+                  "id": "fScly",
+                  "type": "ref",
+                  "ref": "fqDVw",
+                  "name": "Primary"
+                },
+                "pxd66": {
+                  "id": "b9AIe",
+                  "type": "ref",
+                  "ref": "uOqX1",
+                  "name": "Secondary",
+                  "descendants": {
+                    "f1jqy": {
+                      "content": "Where do I get a key?"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "qfOQQ",
+              "name": "Steps",
+              "gap": 16,
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "hpis8",
+                  "type": "ref",
+                  "ref": "eseVl",
+                  "name": "Step 1",
+                  "descendants": {
+                    "isrZp": {
+                      "content": "1"
+                    },
+                    "fmhqs": {
+                      "content": "Add a key"
+                    }
+                  }
+                },
+                {
+                  "id": "t1FVU",
+                  "type": "ref",
+                  "ref": "Br1F6",
+                  "name": "Connector"
+                },
+                {
+                  "id": "MCoSs",
+                  "type": "ref",
+                  "ref": "uI5VQ",
+                  "name": "Step 2",
+                  "descendants": {
+                    "ox0bi": {
+                      "content": "2"
+                    },
+                    "a7WueA": {
+                      "content": "Describe an image"
+                    }
+                  }
+                },
+                {
+                  "id": "kf2zJ",
+                  "type": "ref",
+                  "ref": "Br1F6",
+                  "name": "Connector"
+                },
+                {
+                  "id": "d4cKnt",
+                  "type": "ref",
+                  "ref": "uI5VQ",
+                  "name": "Step 3",
+                  "descendants": {
+                    "ox0bi": {
+                      "content": "3"
+                    },
+                    "a7WueA": {
+                      "content": "Generate"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "wjNPG",
+          "type": "ref",
+          "ref": "X8MbHO",
+          "name": "Composer",
+          "x": 160,
+          "y": 738
+        }
+      ]
     },
     {
       "type": "frame",
@@ -44451,7 +45093,131 @@
       "width": 1440,
       "height": 900,
       "fill": "$surface",
-      "layout": "none"
+      "layout": "none",
+      "children": [
+        {
+          "id": "a14r1V",
+          "type": "ref",
+          "ref": "WmrBz",
+          "name": "Nav",
+          "x": 0,
+          "y": 0,
+          "width": 1440
+        },
+        {
+          "id": "o142P3",
+          "type": "ref",
+          "ref": "PPlzK",
+          "name": "Sidebar",
+          "x": 0,
+          "y": 44,
+          "descendants": {
+            "KBvYe": {
+              "id": "PfLH0",
+              "type": "ref",
+              "ref": "e0i6b",
+              "name": "All images",
+              "width": "fill_container",
+              "descendants": {
+                "VbR25": {
+                  "icon": "image"
+                },
+                "tKvFC": {
+                  "content": "All images"
+                },
+                "YXDug": {
+                  "content": "248"
+                }
+              }
+            },
+            "ebCUl": {
+              "id": "h6ejCO",
+              "type": "ref",
+              "ref": "PDRCJ",
+              "name": "Folder · Client A",
+              "width": "fill_container",
+              "descendants": {
+                "vzfjR": {
+                  "icon": "folder"
+                },
+                "jmxp5": {
+                  "content": "Client A"
+                },
+                "gVD6l": {
+                  "content": "0"
+                }
+              }
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "YN1Sn",
+          "x": 256,
+          "y": 44,
+          "name": "Main",
+          "clip": true,
+          "width": 1184,
+          "height": 856,
+          "layout": "vertical",
+          "padding": [
+            0,
+            25
+          ],
+          "children": [
+            {
+              "id": "sz86L",
+              "type": "ref",
+              "ref": "z1cgnV",
+              "name": "Header",
+              "width": "fill_container",
+              "descendants": {
+                "lldR8": {
+                  "content": "Client A"
+                },
+                "xJ6up": {
+                  "content": "0"
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "lpbCP",
+              "name": "Body",
+              "width": "fill_container",
+              "height": "fill_container",
+              "layout": "vertical",
+              "padding": [
+                0,
+                0,
+                64,
+                0
+              ],
+              "justifyContent": "center",
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "Rk4Jb",
+                  "type": "ref",
+                  "ref": "hEaXC",
+                  "name": "Empty state",
+                  "descendants": {
+                    "AT0Je": {
+                      "content": "This folder is empty"
+                    },
+                    "R07zv": {
+                      "content": "Add images from an image's menu, or select several and choose Add to folder."
+                    },
+                    "BYhfR": {
+                      "enabled": false
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
     },
     {
       "type": "frame",
@@ -44730,6 +45496,216 @@
       "fill": "$surface",
       "layout": "none",
       "children": [
+        {
+          "id": "Fp2Lj",
+          "type": "ref",
+          "ref": "iWLBJ",
+          "name": "Nav",
+          "x": 0,
+          "y": 0,
+          "width": 1440,
+          "descendants": {
+            "m6sb75/rt5Ia": {
+              "content": "$0.00"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "U7l9z",
+          "x": 0,
+          "y": 44,
+          "name": "Empty feed",
+          "width": 1440,
+          "height": 694,
+          "layout": "vertical",
+          "gap": 56,
+          "justifyContent": "center",
+          "alignItems": "center",
+          "children": [
+            {
+              "id": "ht0KL",
+              "type": "ref",
+              "ref": "xhSY1",
+              "name": "Welcome",
+              "descendants": {
+                "f5QPPm": {
+                  "content": "Let's make your first image"
+                },
+                "IPwPu": {
+                  "type": "frame",
+                  "id": "B2JcwN",
+                  "name": "Line",
+                  "gap": 6,
+                  "justifyContent": "center",
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "IUmmz",
+                      "name": "Lead",
+                      "fill": "$text-secondary",
+                      "content": "Add a key from",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "id": "e7Puz",
+                      "type": "ref",
+                      "ref": "EWyRS",
+                      "name": "OpenAI glyph"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Ogh2k",
+                      "name": "OpenAI",
+                      "fill": "$text-primary",
+                      "content": "OpenAI",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "wAgqp",
+                      "name": "Or",
+                      "fill": "$text-secondary",
+                      "content": "or",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "id": "r0yjfi",
+                      "type": "ref",
+                      "ref": "mAItT",
+                      "name": "Google glyph"
+                    },
+                    {
+                      "type": "text",
+                      "id": "lwtYU",
+                      "name": "Google",
+                      "fill": "$text-primary",
+                      "content": "Google.",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "500"
+                    },
+                    {
+                      "type": "text",
+                      "id": "e5OaLB",
+                      "name": "Tail",
+                      "fill": "$text-secondary",
+                      "content": "It takes a minute.",
+                      "fontFamily": "Inter",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                "UKvjI": {
+                  "id": "F0CBs1",
+                  "type": "ref",
+                  "ref": "fqDVw",
+                  "name": "Primary"
+                },
+                "pxd66": {
+                  "id": "dHivE",
+                  "type": "ref",
+                  "ref": "uOqX1",
+                  "name": "Secondary",
+                  "descendants": {
+                    "f1jqy": {
+                      "content": "Where do I get a key?"
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "type": "frame",
+              "id": "t01q4",
+              "name": "Steps",
+              "gap": 16,
+              "alignItems": "center",
+              "children": [
+                {
+                  "id": "PYUxq",
+                  "type": "ref",
+                  "ref": "eseVl",
+                  "name": "Step 1",
+                  "descendants": {
+                    "isrZp": {
+                      "content": "1"
+                    },
+                    "fmhqs": {
+                      "content": "Add a key"
+                    }
+                  }
+                },
+                {
+                  "id": "X3YPa",
+                  "type": "ref",
+                  "ref": "Br1F6",
+                  "name": "Connector"
+                },
+                {
+                  "id": "ciEmz",
+                  "type": "ref",
+                  "ref": "uI5VQ",
+                  "name": "Step 2",
+                  "descendants": {
+                    "ox0bi": {
+                      "content": "2"
+                    },
+                    "a7WueA": {
+                      "content": "Describe an image"
+                    }
+                  }
+                },
+                {
+                  "id": "t1L7j",
+                  "type": "ref",
+                  "ref": "Br1F6",
+                  "name": "Connector"
+                },
+                {
+                  "id": "VQofY",
+                  "type": "ref",
+                  "ref": "uI5VQ",
+                  "name": "Step 3",
+                  "descendants": {
+                    "ox0bi": {
+                      "content": "3"
+                    },
+                    "a7WueA": {
+                      "content": "Generate"
+                    }
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "K6Dsny",
+          "type": "ref",
+          "ref": "X8MbHO",
+          "name": "Composer",
+          "x": 160,
+          "y": 738
+        },
+        {
+          "type": "rectangle",
+          "id": "M9ZSuY",
+          "x": 0,
+          "y": 0,
+          "name": "Scrim",
+          "fill": "$scrim",
+          "width": 1440,
+          "height": 900
+        },
         {
           "id": "DA36j",
           "type": "ref",
@@ -66877,538 +67853,6 @@
               ]
             }
           }
-        }
-      ]
-    },
-    {
-      "id": "PZUvj",
-      "type": "ref",
-      "ref": "iWLBJ",
-      "name": "Nav",
-      "x": 9480,
-      "y": 13103,
-      "width": 1440,
-      "descendants": {
-        "m6sb75/rt5Ia": {
-          "content": "$0.00"
-        }
-      }
-    },
-    {
-      "type": "frame",
-      "id": "CndDM",
-      "x": 9480,
-      "y": 13147,
-      "name": "Empty feed",
-      "width": 1440,
-      "height": 694,
-      "layout": "vertical",
-      "gap": 56,
-      "justifyContent": "center",
-      "alignItems": "center",
-      "children": [
-        {
-          "id": "qGaZQ",
-          "type": "ref",
-          "ref": "xhSY1",
-          "name": "Welcome",
-          "descendants": {
-            "f5QPPm": {
-              "content": "Let's make your first image"
-            },
-            "IPwPu": {
-              "type": "frame",
-              "id": "IZcQq",
-              "name": "Line",
-              "gap": 6,
-              "justifyContent": "center",
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "text",
-                  "id": "R9wLo",
-                  "name": "Lead",
-                  "fill": "$text-secondary",
-                  "content": "Add a key from",
-                  "fontFamily": "Inter",
-                  "fontSize": 15,
-                  "fontWeight": "normal"
-                },
-                {
-                  "id": "MgYdY",
-                  "type": "ref",
-                  "ref": "EWyRS",
-                  "name": "OpenAI glyph"
-                },
-                {
-                  "type": "text",
-                  "id": "nlvOA",
-                  "name": "OpenAI",
-                  "fill": "$text-primary",
-                  "content": "OpenAI",
-                  "fontFamily": "Inter",
-                  "fontSize": 15,
-                  "fontWeight": "500"
-                },
-                {
-                  "type": "text",
-                  "id": "K6Wbo",
-                  "name": "Or",
-                  "fill": "$text-secondary",
-                  "content": "or",
-                  "fontFamily": "Inter",
-                  "fontSize": 15,
-                  "fontWeight": "normal"
-                },
-                {
-                  "id": "p9SLT6",
-                  "type": "ref",
-                  "ref": "mAItT",
-                  "name": "Google glyph"
-                },
-                {
-                  "type": "text",
-                  "id": "I0ejoI",
-                  "name": "Google",
-                  "fill": "$text-primary",
-                  "content": "Google.",
-                  "fontFamily": "Inter",
-                  "fontSize": 15,
-                  "fontWeight": "500"
-                },
-                {
-                  "type": "text",
-                  "id": "d1nzI",
-                  "name": "Tail",
-                  "fill": "$text-secondary",
-                  "content": "It takes a minute.",
-                  "fontFamily": "Inter",
-                  "fontSize": 15,
-                  "fontWeight": "normal"
-                }
-              ]
-            },
-            "UKvjI": {
-              "id": "fScly",
-              "type": "ref",
-              "ref": "fqDVw",
-              "name": "Primary"
-            },
-            "pxd66": {
-              "id": "b9AIe",
-              "type": "ref",
-              "ref": "uOqX1",
-              "name": "Secondary",
-              "descendants": {
-                "f1jqy": {
-                  "content": "Where do I get a key?"
-                }
-              }
-            }
-          }
-        },
-        {
-          "type": "frame",
-          "id": "qfOQQ",
-          "name": "Steps",
-          "gap": 16,
-          "alignItems": "center",
-          "children": [
-            {
-              "id": "hpis8",
-              "type": "ref",
-              "ref": "eseVl",
-              "name": "Step 1",
-              "descendants": {
-                "isrZp": {
-                  "content": "1"
-                },
-                "fmhqs": {
-                  "content": "Add a key"
-                }
-              }
-            },
-            {
-              "id": "t1FVU",
-              "type": "ref",
-              "ref": "Br1F6",
-              "name": "Connector"
-            },
-            {
-              "id": "MCoSs",
-              "type": "ref",
-              "ref": "uI5VQ",
-              "name": "Step 2",
-              "descendants": {
-                "ox0bi": {
-                  "content": "2"
-                },
-                "a7WueA": {
-                  "content": "Describe an image"
-                }
-              }
-            },
-            {
-              "id": "kf2zJ",
-              "type": "ref",
-              "ref": "Br1F6",
-              "name": "Connector"
-            },
-            {
-              "id": "d4cKnt",
-              "type": "ref",
-              "ref": "uI5VQ",
-              "name": "Step 3",
-              "descendants": {
-                "ox0bi": {
-                  "content": "3"
-                },
-                "a7WueA": {
-                  "content": "Generate"
-                }
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "wjNPG",
-      "type": "ref",
-      "ref": "X8MbHO",
-      "name": "Composer",
-      "x": 9640,
-      "y": 13841
-    },
-    {
-      "id": "Fp2Lj",
-      "type": "ref",
-      "ref": "iWLBJ",
-      "name": "Nav",
-      "x": 26520,
-      "y": 17508,
-      "width": 1440,
-      "descendants": {
-        "m6sb75/rt5Ia": {
-          "content": "$0.00"
-        }
-      }
-    },
-    {
-      "type": "frame",
-      "id": "U7l9z",
-      "x": 26520,
-      "y": 17552,
-      "name": "Empty feed",
-      "width": 1440,
-      "height": 694,
-      "layout": "vertical",
-      "gap": 56,
-      "justifyContent": "center",
-      "alignItems": "center",
-      "children": [
-        {
-          "id": "ht0KL",
-          "type": "ref",
-          "ref": "xhSY1",
-          "name": "Welcome",
-          "descendants": {
-            "f5QPPm": {
-              "content": "Let's make your first image"
-            },
-            "IPwPu": {
-              "type": "frame",
-              "id": "B2JcwN",
-              "name": "Line",
-              "gap": 6,
-              "justifyContent": "center",
-              "alignItems": "center",
-              "children": [
-                {
-                  "type": "text",
-                  "id": "IUmmz",
-                  "name": "Lead",
-                  "fill": "$text-secondary",
-                  "content": "Add a key from",
-                  "fontFamily": "Inter",
-                  "fontSize": 15,
-                  "fontWeight": "normal"
-                },
-                {
-                  "id": "e7Puz",
-                  "type": "ref",
-                  "ref": "EWyRS",
-                  "name": "OpenAI glyph"
-                },
-                {
-                  "type": "text",
-                  "id": "Ogh2k",
-                  "name": "OpenAI",
-                  "fill": "$text-primary",
-                  "content": "OpenAI",
-                  "fontFamily": "Inter",
-                  "fontSize": 15,
-                  "fontWeight": "500"
-                },
-                {
-                  "type": "text",
-                  "id": "wAgqp",
-                  "name": "Or",
-                  "fill": "$text-secondary",
-                  "content": "or",
-                  "fontFamily": "Inter",
-                  "fontSize": 15,
-                  "fontWeight": "normal"
-                },
-                {
-                  "id": "r0yjfi",
-                  "type": "ref",
-                  "ref": "mAItT",
-                  "name": "Google glyph"
-                },
-                {
-                  "type": "text",
-                  "id": "lwtYU",
-                  "name": "Google",
-                  "fill": "$text-primary",
-                  "content": "Google.",
-                  "fontFamily": "Inter",
-                  "fontSize": 15,
-                  "fontWeight": "500"
-                },
-                {
-                  "type": "text",
-                  "id": "e5OaLB",
-                  "name": "Tail",
-                  "fill": "$text-secondary",
-                  "content": "It takes a minute.",
-                  "fontFamily": "Inter",
-                  "fontSize": 15,
-                  "fontWeight": "normal"
-                }
-              ]
-            },
-            "UKvjI": {
-              "id": "F0CBs1",
-              "type": "ref",
-              "ref": "fqDVw",
-              "name": "Primary"
-            },
-            "pxd66": {
-              "id": "dHivE",
-              "type": "ref",
-              "ref": "uOqX1",
-              "name": "Secondary",
-              "descendants": {
-                "f1jqy": {
-                  "content": "Where do I get a key?"
-                }
-              }
-            }
-          }
-        },
-        {
-          "type": "frame",
-          "id": "t01q4",
-          "name": "Steps",
-          "gap": 16,
-          "alignItems": "center",
-          "children": [
-            {
-              "id": "PYUxq",
-              "type": "ref",
-              "ref": "eseVl",
-              "name": "Step 1",
-              "descendants": {
-                "isrZp": {
-                  "content": "1"
-                },
-                "fmhqs": {
-                  "content": "Add a key"
-                }
-              }
-            },
-            {
-              "id": "X3YPa",
-              "type": "ref",
-              "ref": "Br1F6",
-              "name": "Connector"
-            },
-            {
-              "id": "ciEmz",
-              "type": "ref",
-              "ref": "uI5VQ",
-              "name": "Step 2",
-              "descendants": {
-                "ox0bi": {
-                  "content": "2"
-                },
-                "a7WueA": {
-                  "content": "Describe an image"
-                }
-              }
-            },
-            {
-              "id": "t1L7j",
-              "type": "ref",
-              "ref": "Br1F6",
-              "name": "Connector"
-            },
-            {
-              "id": "VQofY",
-              "type": "ref",
-              "ref": "uI5VQ",
-              "name": "Step 3",
-              "descendants": {
-                "ox0bi": {
-                  "content": "3"
-                },
-                "a7WueA": {
-                  "content": "Generate"
-                }
-              }
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "id": "K6Dsny",
-      "type": "ref",
-      "ref": "X8MbHO",
-      "name": "Composer",
-      "x": 26680,
-      "y": 18246
-    },
-    {
-      "type": "rectangle",
-      "id": "M9ZSuY",
-      "x": 26520,
-      "y": 17508,
-      "name": "Scrim",
-      "fill": "$scrim",
-      "width": 1440,
-      "height": 900
-    },
-    {
-      "id": "a14r1V",
-      "type": "ref",
-      "ref": "WmrBz",
-      "name": "Nav",
-      "x": 28080,
-      "y": 17508,
-      "width": 1440
-    },
-    {
-      "id": "o142P3",
-      "type": "ref",
-      "ref": "PPlzK",
-      "name": "Sidebar",
-      "x": 28080,
-      "y": 17552,
-      "descendants": {
-        "KBvYe": {
-          "id": "PfLH0",
-          "type": "ref",
-          "ref": "e0i6b",
-          "name": "All images",
-          "width": "fill_container",
-          "descendants": {
-            "VbR25": {
-              "icon": "image"
-            },
-            "tKvFC": {
-              "content": "All images"
-            },
-            "YXDug": {
-              "content": "248"
-            }
-          }
-        },
-        "ebCUl": {
-          "id": "h6ejCO",
-          "type": "ref",
-          "ref": "PDRCJ",
-          "name": "Folder · Client A",
-          "width": "fill_container",
-          "descendants": {
-            "vzfjR": {
-              "icon": "folder"
-            },
-            "jmxp5": {
-              "content": "Client A"
-            },
-            "gVD6l": {
-              "content": "0"
-            }
-          }
-        }
-      }
-    },
-    {
-      "type": "frame",
-      "id": "YN1Sn",
-      "x": 28336,
-      "y": 17552,
-      "name": "Main",
-      "clip": true,
-      "width": 1184,
-      "height": 856,
-      "layout": "vertical",
-      "padding": [
-        0,
-        25
-      ],
-      "children": [
-        {
-          "id": "sz86L",
-          "type": "ref",
-          "ref": "z1cgnV",
-          "name": "Header",
-          "width": "fill_container",
-          "descendants": {
-            "lldR8": {
-              "content": "Client A"
-            },
-            "xJ6up": {
-              "content": "0"
-            }
-          }
-        },
-        {
-          "type": "frame",
-          "id": "lpbCP",
-          "name": "Body",
-          "width": "fill_container",
-          "height": "fill_container",
-          "layout": "vertical",
-          "padding": [
-            0,
-            0,
-            64,
-            0
-          ],
-          "justifyContent": "center",
-          "alignItems": "center",
-          "children": [
-            {
-              "id": "Rk4Jb",
-              "type": "ref",
-              "ref": "hEaXC",
-              "name": "Empty state",
-              "descendants": {
-                "AT0Je": {
-                  "content": "This folder is empty"
-                },
-                "R07zv": {
-                  "content": "Add images from an image's menu, or select several and choose Add to folder."
-                },
-                "BYhfR": {
-                  "enabled": false
-                }
-              }
-            }
-          ]
         }
       ]
     }
