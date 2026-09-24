@@ -81,6 +81,8 @@ One word per concept. These are the only spellings, in code, in the schema and i
 | **Speed** | How fast, and at what price, a provider serves a model: `standard`, `flex`, `priority` or `batch` (§0.3). In code the axis is `speed` everywhere, because `price.tiers` already means resolution tiers | tier, service tier (except `serviceTier` on Google's wire) |
 | **Provider settings** | The panels of settings an adapter declares for its company, plus Openfield's own Limits panel, shown in the company's settings modal (§0.3, §6.17) | advanced settings, provider config |
 | **Provider batch** | One batch job at the provider that carries every job of one job set running at the Batch speed (§0.4). Row: `provider_batches` | batch job, job set (the image count stays `batch` on the request) |
+| **Resume** | Picking a sent call back up by the provider's id after the server restarts, and fetching its result instead of sending it again (§0.4). Only calls the adapter declares resumable (`resumableSpeeds`, §6.3) and Batch runs resume. Columns `jobs.handle`, `jobs.resumable`, `jobs.resumed_at`. UI: "Picking up where it left off" | re-attach (in UI copy), rehydrate, reconnect |
+| **Rerun** | The runner sending an interrupted image again, once, at boot, because its call could not resume (§0.4, §8.4.5). Setting `rerunInterrupted`, columns `jobs.rerun_at` and `usage_log.rerun`. UI: "Running again after a restart", "Ran again after a restart". Not one of the three iteration actions below, and never a button | retry (that is a new attempt inside one run, §0.4), Recreate (the person's action), resubmit |
 
 **The three iteration actions.** The walkthrough recorded a tile "Recreate" icon, a menu "Regenerate", a menu "Reuse", and a detail-panel pair `[Recreate | Reference]`. Openfield ships exactly three actions and no other names. **`Re-run` and `Regenerate` are deleted as names for these three actions, in code and in UI copy.** The one surviving use of `Re-run` is the canvas node's own re-execution action and run pill (§0.11, §7.5) — it never names an action on an asset or a job set.
 
@@ -370,10 +372,21 @@ export type JobSetState = JobState | "partial";   // some jobs succeeded, some f
 pending → submitting → (queued)* → running → succeeded | failed
    ↓           ↓           ↓          ↓
         canceled (any non-terminal)     |
-        interrupted (restart, non-resumable adapter)
+        interrupted (restart: the call couldn't resume and won't run again)
 ```
 
-A job whose adapter cannot resume after a restart is marked **`interrupted`**, shown as "Interrupted." with **Try again**, and is **never auto-resubmitted** (double-billing risk). §6.7's "marked `failed` with `provider_error`" is deleted.
+No state is added for restarts. A resumed job keeps its `queued`/`running` state, and a rerun goes back to `pending`. Two timestamps and a flag on the job record what happened (§8.2).
+
+**Restarts: resume first, then run again, then interrupt.** An image must never be lost to a restart when Openfield can prevent it. Stopping the server drains in-flight calls first (§0.12), so the rules below matter only after a crash, a forced stop (a second Ctrl-C) or a call that outlived its timeout. At boot, every job that had been sent takes the first path that applies (§8.4.5 has the full table):
+
+1. **Resume by id.** The call was resumable and its handle is stored (`jobs.resumable = 1`, `jobs.handle` not NULL). The runner re-attaches, polls the provider by id and saves the result as if nothing happened. The job keeps its state, `jobs.resumed_at` is set, and nothing is sent again or billed again. A call is resumable only when its adapter lists the call's speed in the model's `resumableSpeeds` (§6.3): the provider keeps working with no open connection and answers a status read by id later. The runner stores the handle **the moment the provider's id exists, before it waits for the result** (§6.7).
+2. **Batch runs resume from their row** (below). They are resumable by construction.
+3. **Run again.** The call could not resume (`jobs.resumable = 0`: every blocking call, including every Google Standard, Flex and Priority call, §6.13), the setting `rerunInterrupted` is on (the default, §6.17), and the job has never run again (`jobs.rerun_at` NULL). The job goes back to `pending` with `rerun_at` set, `attempt` 0, its deadline restarted and the same idempotency key (§0.2), and the scheduler sends the frozen request again like any queued job. A company that honours idempotency keys then returns the first result instead of billing twice. Google doesn't, so the first call may already have been billed: the tile and the usage log say the image ran again after a restart and may be charged twice (§2.4, §0.13). A rerun asks for no spend-guard confirm, because the person confirmed the run when they started it.
+4. **Otherwise `interrupted`**, shown as "Interrupted." with **Try again**. This covers: the setting off; a job that already ran again once and was cut off again; a resumable call whose id never arrived, because the create call was cut off and Openfield can't tell whether the company has it, at a company that doesn't honour idempotency keys; and a Batch run whose create call `find()` can't locate. Every job interrupted at boot had been sent, so it writes a `usage_log` row at no known cost (§0.13).
+
+A resumable call whose id never arrived, at a company that honours idempotency keys (the manifest's `idempotentSubmit`, §6.3), isn't interrupted: it goes back to `pending` with `resumed_at` set, and the runner sends the same create with the same key, which hands back the first call's id instead of starting a second one. It keeps `started_at`, so its deadline still runs from the first send.
+
+Two rules hold throughout. **A resumable call never runs again on its own**: its work may still be alive at the company, so sending it again could bill twice for one image. Asking for its id again with the same create and key, where the company honours the key, isn't a new run. The same holds live: a resumable create that fails in a way that doesn't say whether the company took it (the network, a timeout) is sent again only where the company honours the key, or when the company plainly refused it (429, 503); otherwise it fails with **Try again**. **A job runs again at most once**, so a crash loop can't bill without end. §6.7's "marked `failed` with `provider_error`" is deleted.
 
 **Operations.** One snake_case union, used byte-identically by `job_sets.op`, `assets.op`, `usage_log.operation` and §4.9's operation record:
 
@@ -407,7 +420,8 @@ export type AdapterOp = "generate" | "edit" | "inpaint" | "outpaint" | "upscale"
 | Retry | Only `retryable` codes (§0.5). `maxAttempts` 3 (1 + 2 retries), full-jitter backoff 1 s / 4 s / 15 s ±20 %, `Retry-After` always wins. Flex busy answers follow their own schedule, and Batch runs are never retried automatically (below) |
 | Timeout | §0.12, per speed |
 | Idempotency | `` `${idempotencyKey}:${jobIdx}` ``, reused on every attempt |
-| Durability | Handles in SQLite; on boot, resumable jobs re-attach, non-resumable become `interrupted`. Batch runs resume from the stored provider batch id (below) |
+| Durability | Handles in SQLite, written the moment the provider's id exists and before the wait. On boot: resumable jobs re-attach by id, Batch runs resume from the stored provider batch id (below), calls that couldn't resume run again once when `rerunInterrupted` is on, and the rest become `interrupted` (above) |
+| Stopping | Drains: in-flight calls that can't resume finish first, resumable ones are left running at the company (§0.12) |
 | Cancellation | §0.12 |
 
 **Speeds in the lifecycle.** No new `JobState` is added. Each speed maps onto the existing states, and a job set carries its resolved speed in `job_sets.speed` (§8.2) so every surface can tell them apart.
@@ -469,7 +483,7 @@ export type ErrorCode =
 
 When an adapter's `userMessage` says more than the row above (for example "Image blocked. It came from an unknown site."), the runner stores it on the job as `error_reason` and the tile shows it instead; retryable codes keep the row's copy, because their "trying again" wording is stale once the retries are spent. When the primary action differs from the code's row, the runner stores it as `error_action` (one of `open-settings`, `change-key`, `open-billing`, `try-again`, `reuse`, `details`, `free-up-space`, `recreate`), and the tile offers that button instead. The failed tile's **Details** shows only our copy (what to try, and when it happened), never the code or the provider's message.
 
-Reasons that speeds and billing add, stored as `error_reason` in the same way:
+Reasons that speeds, billing and restarts add, stored as `error_reason` in the same way:
 
 | Case | Code | Tile reason (our copy) | Primary action |
 |---|---|---|---|
@@ -481,6 +495,9 @@ Reasons that speeds and billing add, stored as `error_reason` in the same way:
 | A batch passed its deadline while a different key was saved (§0.4) | `auth_forbidden` | "This run was sent with a different Google key." | Try again |
 | The company refuses to show a batch to the key it was sent with | `auth_forbidden` | "Google can't find this run anymore." | Try again |
 | A batch passed its deadline and three checks in a row got no answer (§0.4) | `timeout` | "Openfield couldn't reach Google to check on this run." | Try again |
+| A call resumed after a restart that the company no longer has: its status read answers not found (§8.4.5) | `provider_error` | "OpenAI no longer has this image." | Try again |
+| A call resumed after a restart that is still running past its deadline, canceled at the company when the adapter can (§8.4.5) | `timeout` | The code's row | Try again |
+| A resumable call past its deadline whose status reads failed three times in a row, never canceled at the company (§6.7) | `timeout` | "Openfield couldn't reach OpenAI to check on this image." | Try again |
 
 Company and speed names in these strings come from `meta.displayName` and the speed option's label, never hardcoded.
 
@@ -594,6 +611,8 @@ export interface Diagnostic { level: "error" | "warning"; field?: string; code: 
 `snapshot` · `job_set.created` · `job.queued` · `job.started` · `job.progress` · **`job.partial`** · `job.output` · `job.failed` · `job.canceled` · `job_set.completed` · **`batch.updated`** · `asset.updated` · `asset.deleted` · `folder.updated` · `models.updated` · `usage.updated` · `canvas_run.updated` · `maintenance.progress`.
 
 `batch.updated` carries `{jobSetId, providerId, modelKey, state, submittedAt, expiresAt, counts?, stopping?, finished}` whenever a provider batch changes state (§0.4). `modelKey` lets the finish notice name the model when the run isn't loaded in the tab; `stopping: true` means a cancel was sent and the company hasn't stopped yet. The frame with `finished: true` is the one the browser turns into the finish toast and system notification (§2.4). `snapshot` gains `batches`: every active provider batch, plus finished ones whose notice no client has received yet. `job.queued` gains `retryAt?` (ISO) and `busy?: true` when a job goes back to wait out a retry or a Flex busy answer; the tile's "Trying again in 2 min." countdown reads them.
+
+**Restarts on the wire** (§0.4). The job shape (`jobSchema`) gains `resumedAt` and `rerunAt`, both nullable ISO timestamps from `jobs.resumed_at` and `jobs.rerun_at`, so `snapshot`, `GET /api/job-sets` and every frame that carries a job tell the tile what happened. `job.started` gains `rerun?: true` when the job being sent is a rerun. `jobs.handle` never leaves the server. The usage rollup row (`usageRowSchema`) gains `reruns: number`, a count, because one row sums many runs: the images in it that ran again after a restart, whatever came of them (§0.13). The asset list item (`assetListItemSchema`) gains `rerun: boolean`, from the `jobs.rerun_at` of the job that made it, so the tile's note doesn't depend on which runs are loaded (§2.4).
 
 ```
 event: job.partial
@@ -773,7 +792,9 @@ A node is `cached` when `fingerprint === result.fingerprint` and every reference
 | Flex busy backoff | 30 s, 60 s, 120 s, then every 300 s, ±20 % | `Retry-After` wins. Busy answers don't count toward `maxAttempts` (§0.4) |
 | Batch poll schedule | every 30 s for the first 10 min, every 2 min until 1 h, then every 5 min | `nextPollAfterMs` wins. Every active batch is polled once at boot. In fake mode (`OPENFIELD_FAKE_PROVIDERS=1`) every step is 1 s |
 | Batch deadline | provider expiry + 6 h | Google expires a batch 48 h after creation (§0.4) |
-| Slots | n/a | A Flex call holds a concurrency slot for its whole length, because it is an open call. A waiting batch holds none: only its create, poll, cancel and cleanup calls count, while they run, under the same global and per-provider caps as any run. A due poll that finds every slot taken waits for the next heartbeat, so the boot check of every active batch goes a few at a time |
+| Slots | n/a | A Flex call holds a concurrency slot for its whole length, because it is an open call. A waiting batch holds none: only its create, poll, cancel and cleanup calls count, while they run, under the same global and per-provider caps as any run. A due poll that finds every slot taken waits for the next heartbeat, so the boot check of every active batch goes a few at a time. A resumable call holds its slot while Openfield waits on it, like any sync call. Calls re-attached at boot take their slots before anything new is sent, even past a cap lowered while the server was down, because they are already running at the company |
+| Stop drain | each in-flight call's own remaining attempt timeout | No overall cap. See **Stopping drains** below |
+| Dev restart debounce | 300 ms after the last change | `scripts/dev.ts` (§0.16) |
 
 OpenAI's `limits.requestTimeoutMs` is raised to **180 000** in §6.14: the research records complex prompts taking up to ~2 minutes, and 150 000 leaves no headroom.
 
@@ -790,9 +811,21 @@ OpenAI's `limits.requestTimeoutMs` is raised to **180 000** in §6.14: the resea
 
 **Batch runs are the exception: they cancel at the provider (step 3).** Cancel on any tile of a Batch run cancels the whole provider batch, after a confirm that names the image count (§2.4). The runner calls `batch.cancel()`, keeps polling until the provider reports a terminal state, and harvests whatever finished first: those images are saved like any other result, because they are likely billed. Every image without a result becomes `canceled` and writes a `usage_log` row at the Batch estimate with `discarded = 1`, since the provider doesn't document whether canceled work is billed. Until the provider stops, the sent images are **stopping**: the cancel response lists them under `stopping`, `batch.updated` carries `stopping: true`, the tiles say "Stopping at Google" and stop offering Cancel, and the toast says "Stopping at Google. You may still be charged for work that already started." Each tile then ends with its image or as canceled, with the verbatim copy.
 
-**Crash recovery** (§8.4.5) is unchanged in shape and uses §0.4's states: `queued` → re-enqueue; `submitting`/`running` with a `provider_job_id` and a pollable adapter → resume the watcher (not re-billed); otherwise → `interrupted`, never auto-resubmitted. Two speed rules sit on top:
-- **Batch runs resume.** A `provider_batches` row with a provider id and an active state resumes polling at boot, and its `queued`/`running` jobs stay as they are. A row still in `submitting` with no provider id is looked up by display name with `batch.find()`: found, its id is stored and polling resumes; not found, its jobs become `interrupted`. A lookup that can't run (no key, the company off, the network down) keeps the row in `submitting` and tries again on the batch schedule until the deadline.
-- **Flex calls don't resume.** A Flex job that was in flight is an open call that died with the process, so it becomes `interrupted` like any other sync call.
+**Stopping drains, it doesn't cut.** Ctrl-C, `SIGTERM`, `SIGHUP` (the terminal closed) and a dev restart (§0.16, a message from `bun dev` over its IPC channel) all start the same stop. There is no HTTP route for it, because anything that can reach the server could then stop it. The root `bun start` runs the server as the script's own command, not through `bun --filter` or a nested `bun run`, whose wrappers exit on the first Ctrl-C and leave the server draining out of sight; `apps/server/test/process.test.ts` runs `bun start` in its own process group to keep it that way.
+
+1. **Nothing new starts.** The scheduler stops sending, and `pending` jobs (waiting for a slot, or in a retry backoff) stay `pending` for the next boot. The listener stops taking connections and the event stream closes, so an open tab shows its reconnecting state and catches up from `snapshot` after the restart.
+2. **A call that can't resume is waited for**, until it finishes or reaches its own remaining attempt timeout within the job deadline: up to 120 s at Standard on Google, 900 s at Flex. Its result is saved like any other (ingest, usage log), so the image is in the library at the next boot. A retryable failure while draining starts no new attempt: the job goes back to `pending` with its backoff, as it would between attempts, and the next boot sends it.
+3. **A resumable call is not waited for.** Once its handle is stored the runner stops polling and leaves the job `queued` or `running`, and the next boot re-attaches (§0.4). A resumable create call still in flight is waited for until it returns the provider's id and the handle is stored, then left. It's announced, because a second Ctrl-C then would cut it off before the id arrives.
+4. **Batch runs** hold no call while they wait. An in-flight batch create request is waited for, as in 3, so its id is stored, and is announced the same way. A create the company refused (429 or 503) that is waiting to try again stops waiting: nothing is at the company, so its `provider_batches` row is deleted and its jobs go back to `pending` with their backoff, and the next boot sends the run like any other. One whose failure leaves it unsure (the network, a timeout, a 500) keeps its row for the next boot to look up by name. A poll or a harvest in flight is dropped and harvested again at boot, and cancel or cleanup calls in flight are dropped and redone by the watcher at boot.
+5. **The server says what it's doing** in plain lines, then exits with code 0 once the last call it waits for has ended. Each line also goes to `logs/openfield.log`, and the stop writes one `server.stopped` event to `logs/jobs.ndjson` with what it left and cut off, so a later question ("why did this image run twice?") has an answer:
+   - one line for what the drain waits for, its parts joined in this order, then "Press Ctrl-C again to stop now.": "Finishing 1 image." ("Finishing 3 images.") for images that can't resume, waited for until they're done; "Waiting for Test company to confirm 1 image." for resumable or Batch creates waited for until the company's id is stored; "Asking Test company to stop 1 image." for cancels on their way. Several companies read "each company". On a dev restart, which nobody pressed Ctrl-C for, the line ends "before restarting. The app is back after that." instead ("Finishing 1 image before restarting. The app is back after that."), because the listener is closed while it waits. Nothing is printed when there's nothing to wait for;
+   - "1 image will pick up where it left off next time." ("3 images will…") when resumable calls or Batch runs were left at the company;
+   - "Openfield stopped." at the end.
+6. **A second Ctrl-C, or a second `SIGTERM`, stops at once.** Every call is aborted and the process exits with code 1. It counts only when it arrives at least 150 ms after the first, because `bun run` passes a copy of the first one on within a few milliseconds. The calls it cuts off take §0.4's restart paths at the next boot, and the server says so in one line: "Stopped. 1 image will run again when Openfield starts.", or with `rerunInterrupted` off "Stopped. 1 image was interrupted." A crash or a `SIGKILL` leaves the same state without the line.
+
+**Crash recovery** (§8.4.5) uses §0.4's states and restart paths: `pending` jobs, and `queued` ones with no provider id (they never left this computer), are re-enqueued as they are; a sent call resumes by id when it was resumable, runs again once when it wasn't and `rerunInterrupted` is on, and is otherwise `interrupted`. Two speed rules sit on top:
+- **Batch runs resume.** A `provider_batches` row with a provider id and an active state resumes polling at boot, and its `queued`/`running` jobs stay as they are. A row still in `submitting` with no provider id is looked up by display name with `batch.find()`: found, its id is stored and polling resumes; not found, its jobs become `interrupted`, never run again, because a batch is resumable (§0.4). A lookup that can't run (no key, the company off, the network down) keeps the row in `submitting` and tries again on the batch schedule until the deadline.
+- **Flex calls don't resume.** A Flex job that was in flight is an open call that died with the process, so it runs again at Flex, or becomes `interrupted`, like any other call that couldn't resume.
 
 **Canvas execution split, stated once at the top of §7.7:**
 
@@ -837,7 +870,9 @@ export interface CostActual { currency: "USD"; amount: number;
 - Higgsfield: `price.kind = "unknown"` at launch. The only evidence for an estimate endpoint is a third-party blog with no path, request or response shape recorded, and the product's private `/fnf/job-sets/costs` is out of bounds (§1.11). The Generate button reads "Cost unknown". Upgrade to `provider_estimate` + `confidence: "estimated"` only after a live probe confirms the path and response shape; `"exact"` requires a documented public endpoint.
 - OpenAI: whether `POST /v1/images/generations` returns a `usage` block is **unconfirmed** and is part of the same live probe as mask polarity. Until then the adapter ships `confidence: "estimated"` and the Usage screen marks those rows `~`.
 
-**`usage_log` — one row per terminal outcome, success, failure and cancel alike.** §8.2's table gains the columns §6.9's row spec needs: `estimate_min REAL, estimate_max REAL, price_as_of TEXT, discarded INTEGER NOT NULL DEFAULT 0, batch_index INTEGER, size TEXT, quality TEXT`, and `cost_source` values become `'reconciled' | 'estimated' | 'unknown'`. Migration 0003 adds `speed TEXT` and `simulated INTEGER NOT NULL DEFAULT 0` (§8.2).
+**`usage_log` — one row per terminal outcome, success, failure and cancel alike.** §8.2's table gains the columns §6.9's row spec needs: `estimate_min REAL, estimate_max REAL, price_as_of TEXT, discarded INTEGER NOT NULL DEFAULT 0, batch_index INTEGER, size TEXT, quality TEXT`, and `cost_source` values become `'reconciled' | 'estimated' | 'unknown'`. Migration 0003 adds `speed TEXT` and `simulated INTEGER NOT NULL DEFAULT 0`, and migration 0005 adds `rerun INTEGER NOT NULL DEFAULT 0` (§8.2).
+
+**A rerun is flagged, never guessed at** (§0.4). The call cut off by a restart has no outcome Openfield can know, so it writes no row, and nothing about it reaches a total. The rerun writes its own row at its terminal outcome, priced like any other, with `rerun = 1`. Every job recovery marks `interrupted` writes one, because it had been sent and there is no image: `failed`, cost 0, `cost_source 'unknown'`, with `rerun = 1` when it was a rerun cut off again, since two calls may then be billed. The rollup counts every `rerun = 1` row in `reruns`, failed ones included (a plain failure stays out of the rollup), and Settings → Spending shows "Ran 1 image again after a restart. You may be charged twice." under Images made whenever that count is above 0. The per-row Spending line for a failed or canceled rerun and the CSV export's `rerun` column come with the M3 usage screen, which has per-row lines and the export.
 
 §2.4's "Cost is never logged for a failed job" and §8.4.3's "every terminal outcome writes a row" are reconciled as: **a failed job writes a `usage_log` row with `cost_usd = 0` and `cost_source = 'unknown'`; no cost is ever added to a spend total for a failure.** A canceled-after-submit job writes a row at full estimate with `discarded = 1`, which is what the Usage screen's "Canceled but charged" line sums.
 
@@ -863,6 +898,7 @@ Prices always carry `pricedAt` and `sourceUrl`, are never presented as authorita
 | Presets, reference sets, characters, palettes, saved prompts, JSON import/export | M3 | §0.8 |
 | Cost estimate + usage log + CSV | M3 | §0.13 |
 | **Provider settings and speed** | M0.5 | Adapter-declared settings in a per-company modal with Openfield's Limits panel (§0.3, §6.17). Speed (Standard, Flex, Priority, Batch, as each model offers) chosen only there, priced per speed everywhere (§0.13). Batch runs survive restarts and end with a toast and a system notification (§0.4, §2.4) |
+| **Restarts** | M0.6 | No image lost to a restart (§0.4): stopping drains in-flight calls (§0.12), resumable calls pick up by id at boot (§6.7), calls that can't resume run again once when the Defaults setting allows it (§6.17), and `bun dev` restarts the server gracefully instead of with `bun --watch` (§0.16) |
 | Canvas | M4 | §7, minus the rows below |
 | **Settings surface — new §6.17** | M0→M3 | Left-rail IA: API keys · Models · Defaults · Appearance · Storage · Spending · Privacy · Help · Experimental, with one table listing every setting, its `settings` key, its default and the section that specifies it. Eleven sections currently write requirements into a screen no section owns |
 | **First run — new §2.10** | M0 | launch → no-key empty state → Keys → paste key → Check key → default model auto-selected → composer focused. G5/S1 gate on exactly this path |
@@ -940,6 +976,7 @@ Every word a person sees in Openfield follows this section, including every quot
 | preset, character, folder, reference | fingerprint, idempotency, normalize, seed jitter |
 | Speed, with the company's own names: Standard, Flex, Batch, Priority | tier, service tier, tier id, SLA, async job |
 | Waiting at Google (a Batch run in progress) | pending, queued at provider, batch job |
+| Picking up where it left off, Ran again after a restart | resumed, re-attached, rerun, resubmitted, crash recovery |
 
 "Company" appears only where the person has to pick or identify who holds a key (Settings, the Info row, model picker groups). "Seed" appears only as the label of the Seed control itself.
 
@@ -959,6 +996,7 @@ Every word a person sees in Openfield follows this section, including every quot
 | Flex is busy. Trying again in 2 min. | 503 from provider, backing off |
 | Half price. Ready within a day, often sooner. | Async batch inference at 50% cost, 24h SLA |
 | Your batch is ready. 4 images from Nano Banana Pro. | Batch job completed successfully! |
+| Running again after a restart. You may be charged twice. | Job resubmitted after crash recovery (double-billing risk) |
 
 ---
 
@@ -1052,6 +1090,8 @@ apps/web        src/api/client.ts: hc<AppType>() ─▶ TanStack Query hooks
 | Wire schemas (API, SSE, errors, settings, manifest, request, cost, preset envelopes, provider settings) | `packages/core/src/schemas/` (provider settings: `provider-settings.ts`) |
 | Speed and provider-settings helpers (`resolveSpeed`, `priceFor`, `resolveProviderSettings`) and Openfield's Limits panel | `packages/providers/src/manifest/speed.ts`, `packages/providers/src/manifest/provider-settings.ts` · the Limits panel: `packages/core/src/schemas/provider-settings.ts` |
 | Batch behaviour interface (§6.7) · the batch watcher | `packages/providers/src/types/batch.ts` · `apps/server/src/runner/batches.ts` |
+| Crash recovery (§8.4.5) · the stop drain (§0.12) · the dev watcher (above) | `apps/server/src/runner/recovery.ts` · `Runner.stop()` in `apps/server/src/runner/runner.ts`, called from `apps/server/src/index.ts` · `scripts/dev.ts` |
+| The fake resumable model (§6.12) | `packages/providers/src/testing/resumable.ts` |
 | Company settings modal · one panel's fields | `apps/web/src/settings/provider-settings-modal.tsx` · `apps/web/src/settings/settings-panel.tsx` |
 | Enum constants | `packages/core/src/constants.ts` |
 | Canvas document schema and document migrations (R14) | `packages/core/src/canvas/` |
@@ -1074,7 +1114,7 @@ apps/web        src/api/client.ts: hc<AppType>() ─▶ TanStack Query hooks
 | Command | Does |
 |---|---|
 | `bun install` | Installs every workspace. There is no postinstall build, and a `sharp` binary that fails to load never fails the install or the boot (§8.5.2) |
-| `bun dev` | Starts `apps/server` (watch mode, `127.0.0.1:4317`) and `apps/web` (Vite, `127.0.0.1:4318`, `strictPort`) together, and stops both on exit. Open `http://127.0.0.1:4317`. In dev the server proxies every path outside `/api` and `/files` to Vite and injects the session token into `index.html`, and Vite's HMR socket connects to 4318 directly. The app has one origin, so the four guards (§0.6) behave the same in dev and production. Vite sits on 4318, beside the server, rather than its usual 5173, so `bun dev` never clashes with another Vite project; the port is set in `scripts/dev.ts`, `apps/web/vite.config.ts` and the server's dev proxy (`apps/server/src/http/spa.ts`), and `scripts/dev.ts` says plainly when it is taken |
+| `bun dev` | Runs `scripts/dev.ts`, which starts `apps/server` (`127.0.0.1:4317`) and `apps/web` (Vite, `127.0.0.1:4318`, `strictPort`) together, restarts the server gracefully when its sources change (below), and stops both on exit. Open `http://127.0.0.1:4317`. In dev the server proxies every path outside `/api` and `/files` to Vite and injects the session token into `index.html`, and Vite's HMR socket connects to 4318 directly. The app has one origin, so the four guards (§0.6) behave the same in dev and production. Vite sits on 4318, beside the server, rather than its usual 5173, so `bun dev` never clashes with another Vite project; the port is set in `scripts/dev.ts`, `apps/web/vite.config.ts` and the server's dev proxy (`apps/server/src/http/spa.ts`), and `scripts/dev.ts` says plainly when it is taken |
 | `bun run typecheck` | Type-checks every workspace by running each workspace's own `tsc` |
 | `bun run build` | Runs `bun run typecheck`, then the Vite build of `apps/web` to `apps/web/dist` |
 | `bun start` | Runs `apps/server` in production mode. It serves `apps/web/dist` and injects the token into `index.html` |
@@ -1083,6 +1123,15 @@ apps/web        src/api/client.ts: hc<AppType>() ─▶ TanStack Query hooks
 | `bun run lint` · `bun run e2e` | Biome over the repo · the Playwright suites in `e2e/` |
 
 S1's three commands (`bun install`, `bun dev`, open the URL) are exactly the first two rows plus the URL `bun dev` prints.
+
+**Dev restarts never lose an image.** The server does not run under `bun --watch`: Bun's watch mode hard-restarts the process on every save, which kills in-flight image calls, and a Google call can't be picked up again (§6.13). `scripts/dev.ts` watches the server's sources itself and restarts it with the same drain as Ctrl-C (§0.12):
+1. **What it watches.** `apps/server/src`, `packages/core/src`, `packages/providers/src`, `packages/db/src` and `packages/db/migrations`, recursively (check recursive `fs.watch` on the installed Bun for macOS and Linux). It ignores `node_modules`, `*.test.ts`, dotfiles and editor temp files. Changes under `apps/web` and `packages/ui` belong to Vite's hot reload and never restart the server.
+2. **Debounce.** It restarts 300 ms after the last change, so a save that touches several files, or a formatter pass, restarts once.
+3. **Graceful stop.** It asks the server over the IPC channel it opens when it spawns it (`Bun.spawn`'s `ipc`, one JSON message: `restart`, `quit` or `now`), and prints "Restarting the server." Not a signal: on Windows a signal kills the process outright, and `Subprocess.kill("SIGUSR2")` sends Linux's number on macOS. The server takes `restart` as the same stop as Ctrl-C, but says "Finishing 1 image before restarting. The app is back after that.", because nobody pressed Ctrl-C and pressing it now stops `bun dev`, and the page is away until the new server listens. The server drains: calls that can't resume finish first and their images are saved, and resumable calls are left running for the new server to pick up. Changes made while it drains fold into the one pending restart. `bun dev` never kills a draining server on its own. The decisions (debounce, folding, waiting after a failed start) live in `scripts/dev-supervisor.ts`, with tests, and `scripts/dev.test.ts` runs `scripts/dev.ts` itself with Vite and a watch folder of its own (`OPENFIELD_VITE_PORT` and `OPENFIELD_DEV_WATCH`, which only tests set). If `bun dev` is killed without a chance to stop its children, the server stops the way Ctrl-C does once its IPC channel closes, and Vite stops once it sees `bun dev` gone (`OPENFIELD_DEV_PARENT`), so the next `bun dev` finds its ports free.
+4. **Start again.** The new server starts once the old one has exited, because the port and the library lock allow one at a time. A server that fails to start (a syntax error, a failed migration) prints its error, and `bun dev` waits for the next change instead of exiting. Vite keeps running throughout, and an open tab reconnects on its own.
+5. **Stopping `bun dev`.** Ctrl-C stops Vite and drains the server, however long that takes; during a restart's drain it says "Stopping once the server finishes. Press Ctrl-C again to stop now." A second Ctrl-C stops both at once (§0.12). The ports stay 4317 and 4318. Vite runs with `clearScreen: false`, so it never wipes the server's URL line. On that second Ctrl-C the root `bun run` wrapper exits at once, so the shell prompt can come back just before the server's last line; the state is right either way.
+
+`apps/server`'s own `dev` script runs the server once in dev mode, with no watch.
 
 ---
 ## 1. Overview, goals and users
@@ -1446,6 +1495,18 @@ The Batch Cancel confirm reads **"Cancel this Batch run?"** with the body "Both 
 - The system notification uses the browser's `Notification` API, titled "Openfield", with the title and detail joined as one line: "Your batch is ready. 4 images from Nano Banana Pro." It is tagged with the job set id, so a repeat replaces rather than stacks, and clicking it focuses the tab and does what Show does.
 - **Permission is asked once**: the first time a Batch run is submitted, inside that Generate click, because browsers only ask from a user gesture. The ask is remembered per browser in local storage. When permission is denied or the API is missing, only the toast shows. There is no error and no second ask.
 - The live region (§2.11) announces that same line once per run.
+
+**After a restart** (§0.4, design `CZsGt`, `OfTQn`, `nygdB`, `MKHsL`). The job's `resumedAt` and `rerunAt` (§0.6) pick the variant. Each keeps the tile's usual geometry.
+
+| Case | What the tile shows |
+|---|---|
+| Resumed by id, still running | The normal generating tile for its speed. Its second meta line reads "Picking up where it left off" until the image lands. A resumed Batch tile is the Batch waiting tile, unchanged |
+| Running again after a restart | The normal generating tile, with two meta lines under the model line: "Running again after a restart" and "You may be charged twice." (design `OfTQn`) |
+| Ran again after a restart, done | The image, with a note in the top-left corner: a 24-tall pill, `rotate-ccw` 12px and "Ran again after a restart" (design `MKHsL`, the Last viewed badge's treatment). Like that badge it shows only while the tile is idle, because hover and selection put the checkbox in that corner. When the tile is also Last viewed, the note sits after the eye badge, 8px apart. It stays for as long as the image is in the feed |
+| Ran again and failed or was canceled | The failed or canceled tile, whose Details adds "It ran again after a restart. You may be charged twice." |
+| Interrupted | The failed tile's layout with the reason "Interrupted." and **Try again**; Details says "Openfield stopped before this image was done." |
+
+The tile's accessible name ends with the note ("Ran again after a restart. You may be charged twice."), so the billing warning reaches a screen reader too.
 
 **Failed.** The reference product never surfaced a failure to us, so the failed tile is Openfield's own design. A failed job keeps its tile at the requested aspect ratio: `--of-danger-soft` fill, 1px `--of-danger` at 40%, centred 20px alert glyph, a one-line plain-language reason in `--of-t-body` (§0.5's copy; the provider's own message is never shown on the tile and lives in the Error log), and a button row: **Try again** (accent ghost) · **Reuse** (loads the job's settings into the composer, §0.1) · **Details** (opens the Error log with the redacted payload, HTTP status and provider code) · dismiss ×.
 
@@ -2633,6 +2694,14 @@ export interface ModelManifest {
   capabilities: Capabilities;
   price: PriceModel;           // the Standard price
   speeds?: SpeedOffer[];       // other speeds this model offers, each with its own price (§0.3); absent: Standard only
+  /** Sync speeds whose sent calls survive a restart: the provider keeps working with no open
+   *  connection and answers poll() by id later (§0.4). Absent: none. Batch is never listed,
+   *  because the batch path always resumes. */
+  resumableSpeeds?: Exclude<SpeedId, "batch">[];
+  /** submit() sends the idempotency key and the provider honours it: the same create sent
+   *  again returns the first call. A resumable create whose answer was lost is then sent
+   *  again to get its id back (§0.4). */
+  idempotentSubmit?: true;
   source: "static" | "discovered" | "user";
   manifestVersion: string;     // bumped on any capability or speed change; frozen onto the job set
   fetchedAt: string;           // ISO; the UI shows "Prices as of …"
@@ -2661,6 +2730,14 @@ export interface ImageModel extends ModelManifest {
 ```
 
 **Sync speeds need no new method.** Standard, Flex and Priority go through `submit`/`poll`: the adapter reads `ctx.speed` and maps it onto the provider's own field, and reports the speed actually served in `JobResult.speedUsed` (§6.6).
+
+**Resumable calls need no new method either.** A model lists a speed in `resumableSpeeds` only when all of this holds at that speed, for every op the model offers there:
+1. `submit()` returns as soon as the provider has accepted the call and given its id, never after the result: the handle carries `providerRef` and no result.
+2. The provider keeps working with no open connection, and `poll(handle)` reads the call's state and result by id.
+3. The handle is everything `poll()` and `cancel()` need. It survives `JSON.parse(JSON.stringify(handle))`, and `poll()` works from it in a fresh process with a fresh `CallContext` built from the frozen request (conformance 27, §6.12).
+4. A status read of an id the provider no longer has maps to a `ProviderError` with `notFound: true` (§6.8), so the runner can tell "gone" from a transient failure.
+
+What the runner does with it (§6.7): it records `jobs.resumable` from the declaration when it sends the call, stores the handle the moment `submit()` returns and before the first poll, and at boot re-attaches by polling that handle. A blocking API (Google `generateContent`, OpenAI `/v1/images/*`) lists nothing: its `submit()` holds the call open until the result, so the call dies with the process. The declaration is data rather than a method so the conformance suite can check it. An override can't change it: `resumableSpeeds` and `idempotentSubmit` always come from the adapter's own manifest for that key (limited to the speeds the entry still offers), and a `models.json` entry that says otherwise is ignored with a warning. An entry written only to change a price leaves both out, and marking a blocking call resumable would turn a crash's rerun into an interrupted image, while withdrawing a speed would make the runner drop a live call after a crash and send a second one. `idempotentSubmit` is declared only when the provider documents that a repeated key returns the first request, for at least the job deadline; conformance 27 sends the same create twice and expects one call. The handle is saved as it is, so it never carries a key, token or signed URL (conformance 27 checks for the kit's keys, and the runner hides any loaded key before saving it). A change to either bumps `manifestVersion`.
 
 **`estimate()` is not a method.** Cost before the run is the pure function `estimate(manifest, req)` exported from `@openfield/providers/manifest` (§6.9, §0.16), because the browser cannot call a method on an `ImageModel` and an HTTP round-trip per batch-stepper click is unacceptable.
 
@@ -2920,9 +2997,11 @@ export type JobState =
 
 export type JobSetState = JobState | "partial";   // some jobs succeeded, some failed
 
+/** Stored whole on jobs.handle the moment submit() returns for a resumable call (§6.3), so
+ *  poll() can pick the call up by id after a restart. Never sent to the browser. */
 export interface JobHandle {
   jobId: string;                    // ULID, per §8.2
-  providerRef?: string;             // request_id / prediction id
+  providerRef?: string;             // request_id / prediction id / response id; copied to jobs.provider_job_id
   statusUrl?: string;
   cancelUrl?: string;
   /** Anything the adapter needs to resume after a server restart. JSON-serialisable. */
@@ -2987,6 +3066,14 @@ Each item's result goes through the adapter's existing response and error mapper
 
 **Lifecycle.** `pending → submitting → (queued)* → running → succeeded | failed`, with `canceled` reachable from any non-terminal state and `interrupted` reachable on restart. Synchronous providers are modelled identically: `submit()` performs the blocking HTTP call, resolves with a handle already carrying the result, and the first `poll()` returns `succeeded`. The runner therefore has exactly one code path for OpenAI's blocking `/v1/images/generations` and for a queue-based provider.
 
+**Resumable calls: persist, re-attach, fetch.** One path serves every call that can outlive the process (§0.4), and a Batch run takes the same three steps through its own row:
+1. **Persist.** When the runner sends a call it writes `jobs.resumable` from `resumesAfterRestart(manifest, speed)`, the model's `resumableSpeeds` and the call's resolved speed (§6.3). For a resumable call, the moment `submit()` returns, and before the first poll, one transaction writes `jobs.handle` (the whole `JobHandle`), `jobs.provider_job_id` (`handle.providerRef`) and the state `running`: the call is at the company, and the first poll says whether it's still queued there. A Batch run's jobs take `resumable` from the same function (always true for `batch`), and its `provider_batches` row is written before the create call, with its `remote_id` and `handle` the moment the call returns (§0.4).
+2. **Re-attach.** At boot, recovery (§8.4.5) sets `jobs.resumed_at` on every non-Batch job with `resumable = 1`, a stored handle and a non-terminal state, and leaves its state as it was. The runner's first scheduling pass finds those jobs among the active ones (`activeJobs()`), binds the model, and builds a fresh `CallContext` from the frozen request (§0.3). Re-attached calls take their slots first (§0.12). The batch watcher is the Batch branch of this step: it polls every active row once at boot.
+3. **Fetch.** The runner polls the stored handle on the §0.4 schedule, starting at once. The first read happens whatever the deadline says, because a finished result is likely billed and the provider keeps it only for a while: a `succeeded` update goes through ingest exactly like a live one. **Only the company's own answer ends the job**: the image, a terminal failure, a refusal (`content_refused`), or a read that answers `notFound`, which fails the job with `provider_error` and the reason "OpenAI no longer has this image." (§0.5). Past the deadline, a call the company says is still running is canceled there when the adapter implements `cancel()`, and fails with `timeout`. **A failed read never sends the call again and never cancels it**: the network, a 429 or 5xx, a full disk while saving, a rejected key (recorded as a failed key check, so a key put right lands the image) or a garbled answer all read the same handle again, on the poll schedule before the deadline and on the batch schedule after it. Past the deadline the job gives up after three failed reads in a row, as a Batch run does, with "Openfield couldn't reach OpenAI to check on this image." when the company couldn't be reached and the last failure's own copy otherwise, and **Try again**. A full disk never gives up: the image waits at the company until there's room. That holds live as well as after a restart.
+4. **Cancel.** A canceled resumable call is stopped at the company with `cancel(handle)`. One canceled while its create call is out isn't cut off: the id the create brings back is what the cancel needs, and it's written onto the canceled jobs before the cancel is sent, so a cancel that doesn't get through is still sent after a restart. One canceled while nothing follows it (its company off or keyless) keeps its handle until the cancel gets through, and the runner sends it once the company can be reached, after a restart too.
+
+Fake mode has one resumable model, so the resume path and the rerun path are both testable without keys (§6.12).
+
 **Runner rules.**
 
 | Concern | Rule |
@@ -2997,7 +3084,8 @@ Each item's result goes through the adapter's existing response and error mapper
 | Timeout | Per-attempt timeout = `limits.requestTimeoutMs` (default 120 000 generate, 300 000 upscale); whole-job deadline `jobDeadlineMs` 900 000, then `timeout` + cancel. These two values are canonical; §8.4.2's `jobTimeoutMs` is deleted. At a speed whose offer sets `requestTimeoutMs` (Flex), that value is the attempt timeout, and Flex and Batch have their own deadlines and schedules (§0.12) |
 | Speed | The runner sets `ctx.speed` and `ctx.settings` from the frozen request. A `busy: true` error applies the Flex busy policy (§0.4); a Batch job set takes the provider batch path above instead of `submit`/`poll` |
 | Cancellation | §0.12. Neither launch adapter implements provider-side cancel for a sync call, so every v1 cancellation of one aborts the fetch, marks `canceled`, discards any late result and writes a `usage_log` row at full estimate with `discarded = 1`. Batch runs are the exception: they cancel at the provider through `batch.cancel()`, whole run at once. The copy is verbatim: *"Canceled. You may still be charged for work that already started."* |
-| Durability | Handles live in SQLite. On restart the runner re-attaches to every resumable non-terminal job and resumes polling; **jobs whose adapter cannot resume are marked `interrupted` (§8.4.5); they are never auto-resubmitted** (double-billing risk). Provider batches always resume from `provider_batches.handle` (§0.12) |
+| Durability | Handles live in SQLite, written before the wait (below). On restart the runner re-attaches to every resumable job by id, provider batches resume from `provider_batches.handle`, calls that couldn't resume run again once when `rerunInterrupted` is on, and the rest are marked `interrupted` (§0.4, §8.4.5). A resumable call never runs again on its own (double-billing risk) |
+| Stopping | Drains (§0.12): calls that can't resume finish first, resumable ones are left for the next boot |
 | Idempotency | `idempotencyKey` is the **client-supplied job-set key** (§0.2); per-attempt provider headers are `` `${idempotencyKey}:${jobIdx}` ``, stable across retries, so a retried timeout cannot double-bill on providers that honour the header |
 
 **Events to the browser.** One SSE stream, **`GET /api/events`** (§8.3.2 owns it; `GET /api/jobs/stream` does not exist). The event types this section depends on are `job.queued`, `job.started`, `job.progress`, **`job.partial`**, `job.output`, `job.failed`, `job.canceled` and `job_set.completed`. `job.partial` is what terminates `ImageModel.stream?()` and `capabilities.streaming.partialImages` — partial frames are written to `tmp/`, served from a volatile thumb path, never inserted into `assets`, and superseded by the final `job.output` (§0.6). Placeholder tiles (Generating pill + Cancel pill, aspect-ratio-correct) subscribe to the same stream.
@@ -3024,6 +3112,8 @@ export class ProviderError extends Error {
   hint?: { action: "open-settings" | "open-model-picker" | "edit-prompt" | "retry"; label: string };
   busy?: boolean;            // the provider refused for capacity at this speed (Flex): the runner
                              // applies the busy policy instead of the retry budget (§0.4)
+  notFound?: boolean;        // a status read of a resumable call's id the provider no longer has:
+                             // code provider_error, never retried (§0.4, §8.4.5)
 }
 ```
 
@@ -3177,6 +3267,8 @@ Adapter folder names `types` and `manifest` are reserved (§0.16).
 
 **HTTP goes through `ctx.fetch`, never the global `fetch`.** The server passes a wrapped fetch (timeout, redacting log, host allow-list), tests pass a stub, and `OPENFIELD_FAKE_PROVIDERS=1` makes the server pass a fetch that replays each adapter's `__fixtures__`, so the whole app runs end to end with no keys and no network. That switch is for development and e2e only, and the server logs it at boot.
 
+**A resumable model in fake mode.** No built-in adapter resumes a sync call yet (§6.13, §6.14), so fake mode adds one test company, and only fake mode: provider `fake` ("Test company"), host `fake.openfield.invalid` (the `.invalid` name never resolves, so a real fetch fails loudly), one model `fake:resumable-image` ("Resumable test model") with `resumableSpeeds: ["standard"]`, `idempotentSubmit: true` (its create sends the idempotency key, and the fake answers a repeated key with the first call for as long as the process runs), a Standard price, and `cancel()`. It lives in `packages/providers/src/testing/resumable.ts`, as an adapter plus its fake route, and goes through `ctx.fetch` like any adapter. Its create call answers at once with an id, and a status read by id answers `queued`, then `running`, then the image, over a few seconds. The id carries its own plan (when it was made, the size, the seed), like the fake batch ids, so it still answers after a server restart with no stored state. `#fake:` prompt tags add `resume_slow` (about 60 s, long enough to restart the server mid-run) and `resume_gone` (slow too, and the id answers not found from 10 s after it was made, so a server restarted mid-run finds the image gone). The Google fakes stay blocking and non-resumable, so a slow Google fake (`#fake:slow`, about 30 s) exercises the drain and the rerun path. `OPENFIELD_FAKE_SLOW_MS` sets how long `#fake:slow` and `#fake:resume_slow` take, so tests of a restart mid-call run in seconds; the resumable id carries its own end time, so a server started with another value still agrees. The test company never appears outside fake mode, and its key card comes after the built-in companies' (cards follow registry order).
+
 **Registration** is static in v1: `packages/providers/src/registry.ts` exports `builtinProviders = [openai(), google(), higgsfield()]`, re-exported by `@openfield/providers/server`. No dynamic plugin loading, no `eval`, no remote adapter fetch; adding an adapter means a PR. (Third-party loadable adapters are deliberately deferred; see §6.16.)
 
 **Capability declaration rules.**
@@ -3222,6 +3314,7 @@ Adapter folder names `types` and `manifest` are reserved (§0.16).
 | 24 | Speed on the wire: golden payloads for each offered sync speed (Google: top-level `serviceTier`, absent at Standard); `speedUsed` read from the response fixture, including a Priority answer served at Standard |
 | 25 | Flex busy: a busy fixture raises `busy: true` when the setting says keep trying, and with "switch to Standard" the adapter resends once without the speed and reports `speedUsed: "standard"` |
 | 26 | Batch round trip on fixtures: the `BatchHandle` survives `JSON.parse(JSON.stringify(h))`; `poll` is idempotent after a terminal state and writes assets only for `harvest`; a partial batch maps each item to its job id; `cancel` then `poll` harvests what finished; expiry maps unfinished items to `timeout` |
+| 27 | Resumable calls (§6.3): for each speed in `resumableSpeeds`, `submit()` resolves with `providerRef` set and no result before the provider has finished; after `JSON.parse(JSON.stringify(handle))`, `poll()` with a fresh `CallContext` reaches `succeeded` with the image and writes it once; an id the provider no longer has raises `notFound: true`; `batch` is never listed. A model that lists nothing is checked for the opposite: its `submit()` resolves only with the result in hand, so nothing it sends keeps running at the provider after the call ends |
 
 **Worked skeleton.**
 
@@ -3401,6 +3494,15 @@ Panel descriptions (design Sge12, dPjv7): Speed "How quickly Google makes your i
 - **Expiry.** A batch unfinished after 48 h is `BATCH_STATE_EXPIRED` with no results, which maps every unfinished job to `timeout`. Google's target is 24 h and usually much sooner.
 - **Webhooks** need a public HTTPS address, so a `127.0.0.1` app polls instead (§0.12's schedule; Google publishes no poll limit).
 
+**Restarts: a sync Google image can't be resumed, so the adapter declares no `resumableSpeeds`.** `generateContent` returns the image inside the HTTP response, with no id to fetch it by later, so a Standard, Flex or Priority call that is in flight when the server dies is gone. The Interactions API was the only candidate for a resumable path, and a live probe with the owner's key on 2026-09-24 ruled it out:
+- Endpoints confirmed: `POST /v1beta/interactions`, `GET /v1beta/interactions/{id}` (with optional `stream=true&last_event_id=`), `POST /v1beta/interactions/{id}/cancel`, `DELETE /v1beta/interactions/{id}`, with the header `Api-Revision: 2026-05-20`. There is no list endpoint, so an orphaned id can't be found again.
+- An image request takes `{model, input, response_format: {type: "image", mime_type: "image/jpeg", aspect_ratio, image_size}}`. Only `image/jpeg` is accepted, `delivery: "uri"` is refused, and sizes are `512`, `1K`, `2K`, `4K`, case-sensitive.
+- **`background: true` is refused** with a 400 ("Model … does not support background interactions") for `gemini-3-pro-image`, `gemini-3.1-flash-image` and `gemini-3.1-flash-lite-image`. Background mode is the only mode in which Google keeps working after the client goes away.
+- **A streamed call is stored only if the client stays connected until it completes.** After a disconnect following `interaction.created`, `GET` by id stayed 404 for the 136 s it was polled. The id also arrives together with the first output (26 to 69 s in), not at acceptance; no event carries an event id; and `GET ?stream=true` is refused for these models. Failed runs are never stored.
+- `service_tier` exists on Interactions (`flex`, `standard`, `priority`), but the image model pages list Flex and Priority as unsupported, and Batch exists only on `models/{model}:batchGenerateContent`. Stored interactions last 55 days on the paid tier.
+
+So Google stays on `generateContent`, and its restart story is: the stop drain lets in-flight calls finish (§0.12), a call cut off by a crash runs again once when `rerunInterrupted` allows it (§0.4), and **Batch is the only Google path that survives a restart**, from the stored batch name (`batch.ts` above, `apps/server/src/runner/batches.ts`). If Google adds background support for an image model, the adapter can move that speed onto Interactions and list it in `resumableSpeeds`: POST with `background: true`, keep the returned id in the handle, and read the image from the completed interaction's `steps[type=model_output].content[type=image].data`. That is a manifest and adapter change, with no runner change. The probe's full notes belong in `packages/providers/src/google/README.md`.
+
 **Errors and keys.** A 429 `RESOURCE_EXHAUSTED` whose `QuotaFailure` names a `free_tier` metric with `quotaValue` `"0"` (message "limit: 0") means billing is off: `billing_required`, not retryable, with the userMessage "Turn on billing for this key in Google AI Studio to make images." (§0.5). This shape comes from community reports, not Google's docs (§6.18). A `quotaId` containing `PerDay` is `quota_exceeded`, and `PerMinute` is `rate_limited`. Keys start with `AIza` or `AQ.` (§6.11).
 
 **Known gaps.** No seed ⇒ Recreate replays the request, not the image, and the Info panel says *"This model can't make an exact copy. Expect changes."* (§0.1). No native negative prompt — Openfield appends it as an `Avoid: …` instruction and the chip shows `~` (§0.8). No transparent background. Mask-based inpainting is not exposed, so masked edits on Gemini go through the regional fallback with the **Approximate** badge (§0.9) and the canvas Inpaint node is unavailable on these models. Batch is client fan-out, so cost scales exactly linearly and a partial batch failure leaves a mixed job set (allowed: each job tile fails independently, and the job set is `partial`). Per-request image count is not wired in v1. The Batch *speed* is wired (above), and is unrelated to the image count: a Batch run of four images is one provider batch of four requests.
@@ -3462,6 +3564,8 @@ Common: `ops.textToImage/imageEdit/inpaint/outpaint: true`, `ops.upscale/removeB
 
 **Known gaps.** Seed unconfirmed. `n` ceilings per quality/size unclear — we cap at 4 and surface any provider rejection as `invalid_request` naming the batch field. Maximum reference-image count undocumented (we declare 4). Mask polarity and the `usage` block are both unconfirmed and both close with `M2-15`. No character-identity feature. Long runs can approach two minutes; the placeholder tile shows its "Still working" line on the §2.4 schedule.
 
+**Restarts (`M1-01`).** `/v1/images/generations` and `/v1/images/edits` are blocking calls with no id to fetch later, so on that path the adapter lists no `resumableSpeeds`, and a call cut off by a crash follows the rerun rule (§0.4). OpenAI's Responses API has a background mode (`background: true`, then `GET /v1/responses/{id}` and `POST /v1/responses/{id}/cancel`), which is the resumable path. M1 checks against OpenAI's docs whether image generation runs in background mode for these models, how long a background response is kept, and whether a response id arrives at acceptance. If all three hold, the Standard call moves to background mode and the manifest lists `resumableSpeeds: ["standard"]`, with the handle carrying the response id (§6.3). If any fails, OpenAI stays blocking, and §6.18 records why.
+
 ### 6.15 Launch adapter — Higgsfield (conditional, experimental)
 
 This adapter is built in M3 (`M3-16`) against the real public API, using the owner's key. The facts below are from research and are verified with that key in M3; anything the key can't reach stays undeclared. If the public API isn't reachable with a user key, the adapter is present but `meta.stable: false` and hidden behind Settings → Experimental. Openfield is fully functional without it, and nothing in the product depends on it.
@@ -3491,8 +3595,10 @@ This adapter is built in M3 (`M3-16`) against the real public API, using the own
 Three extensions are designed for now and shipped later. Nothing in §6.2–§6.9 changes to accommodate them; that is the test of the design.
 
 - **fal.ai** — a *schema-driven* adapter. Its queue states (`IN_QUEUE → IN_PROGRESS → COMPLETED`) map 1:1 onto `queued/running/succeeded`; submit/status/result/cancel map onto `submit/poll/cancel`. Each model publishes a JSON input schema, so `listModels()` can build a `Capabilities` object automatically via a **schema→capability inference table** (`image_size` enum → `size.mode:"enum"`; `num_images` → `batch.max`; `seed` → `seed.supported`; `negative_prompt` → `negativePrompt`), with a hand-written override map for the models we curate. Anything not inferable lands in `extraSchema` and is rendered by the generic Advanced form (§3.4.7).
-- **Replicate** — same shape via `POST /v1/predictions` + `GET /v1/predictions/{id}`, states `starting/processing/succeeded/failed/canceled` mapping directly onto ours, and per-model `openapi_schema` feeding the same inference table. Its 60-second synchronous mode is an optimisation inside `submit()`, invisible to the runner.
+- **Replicate** — same shape via `POST /v1/predictions` + `GET /v1/predictions/{id}`, states `starting/processing/succeeded/failed/canceled` mapping directly onto ours, and per-model `openapi_schema` feeding the same inference table. Its 60-second synchronous mode goes unused, because it holds the prediction id back until the wait ends (below).
 - **Generic OpenAI-compatible endpoint** — a provider whose credential schema adds a required `baseUrl`, reusing the OpenAI request/response mappers wholesale. Because it points at an arbitrary host, it is `meta.stable: false`, its `networkHosts` and `assetHosts` are derived from the user's own `baseUrl`, and Settings shows an explicit warning that prompts and images go to that host. Capabilities default to the conservative manifest and are edited by the user in `~/.openfield/models.json`.
+
+**Both queue adapters resume after a restart.** fal's request id and Replicate's prediction id arrive when the call is accepted, and both keep working with no open connection, so each lists `resumableSpeeds: ["standard"]` and the runner picks their runs up by id at boot (§6.3, §6.7). That rules out Replicate's synchronous wait for a resumable call: the id must reach the runner before any wait, so `submit()` creates the prediction without `Prefer: wait` and returns.
 
 Both queue adapters also fill the capability slots no launch adapter declares — `ops.upscale`, `ops.removeBackground`, `ops.decomposeLayers` — which re-enables the corresponding edit tools (§4.8) and the canvas Upscale node (§7.5) without any UI work.
 
@@ -3516,6 +3622,8 @@ Rules that hold across every pane: secrets are write-only (§6.11); everything t
 - **Other ways in.** A failed tile whose company refused the chosen speed offers **Google settings**, which opens this modal on the API keys pane (§0.5).
 - **Storage.** Company panels live in `providers.settings`, a JSON object of only the values the person changed. The Limits panel's "Runs at once" lives in `providers.concurrency_cap` (§8.2). Neither is a `settings`-table key, because the fields come from each adapter rather than from `settingsSchema`.
 
+**Restarts in Defaults** (design `Ff82G`, section `K9xpR`). The last section of the Defaults pane, captioned "Restarts", holds one toggle row: **"Run interrupted images again after a restart"**, with the description "Only for images that can't pick up where they left off. You may be charged twice." It is on by default. Recovery reads it once at boot (§8.4.5), so turning it off applies to the next restart, and it never touches a call that resumes by id or a Batch run, which pick up where they left off either way (§0.4).
+
 | Pane | Setting | `settings` key | Default | Specified in |
 |---|---|---|---|---|
 | API keys | Your keys (per provider, write-only; env-var badge when overridden) | *(none — `config.json`, mode 0600)* | unset | §6.11 |
@@ -3534,6 +3642,7 @@ Rules that hold across every pane: secrets are write-only (§6.11); everything t
 | Defaults | Runs at once | `globalConcurrency` | `4` | §0.12, §8.4.2 |
 | Defaults | Enhance: default mode and model | `enhanceMode`, `enhancerModel` | `off`, unset | §3.4.3 |
 | Defaults | Allow approximate area edits (one-time explainer) | `regionalFallback` | `true` | §0.9, §4.6 |
+| Defaults | Run interrupted images again after a restart | `rerunInterrupted` | `true` | §0.4, §8.4.5 |
 | Appearance | Theme | `theme` | `system` | §2.2 |
 | Appearance | Grid size | `feedZoom` | `3` | §0.10, §2.3 |
 | Appearance | Show tips while generating | `tipsCard` | `true` | §2.4, §2.9 |
@@ -3571,6 +3680,8 @@ Every item below is a **provider fact we could not verify**, and each names the 
 - **Whether Google bills a Flex request it refuses as busy**, and **whether batch requests finished before a cancel are billed**. Google's docs are silent on both. Openfield records neither as spend on a refusal and records canceled batch items as billed-but-discarded (§0.12). Closed by **`M0.5-12`** where the live session can observe it; otherwise stays open.
 - **Size of an inline batch result.** Google documents no cap on a `GET /v1beta/batches/{id}` response carrying N inline 4K images. Measured in **`M0.5-12`**; if it is too large, results switch to file output.
 - **Google key and error shapes from community sources.** The `AQ.` key prefix (§6.11) and the free-tier "limit 0" 429 body that means billing is off (§6.13) are documented only in community reports. Both nets are deliberately loose; confirmed or adjusted in **`M0.5-12`**.
+- ~~Whether a Google image call can be picked up after a restart.~~ **Closed by the live Interactions API probe of 2026-09-24: it can't.** Background mode is refused for all three image models, and a streamed call cut off early is never stored (§6.13). Google Standard, Flex and Priority stay blocking, and only Batch survives a restart.
+- **OpenAI background mode for images**: whether GPT Image generation runs in the Responses API's background mode, how long a background response is kept, and whether its id arrives at acceptance. Decides whether OpenAI Standard lists `resumableSpeeds` (§6.14). Closed by **`M1-01`**.
 
 ---
 ## 7. Canvas
@@ -4152,8 +4263,8 @@ import { sql } from "drizzle-orm";
 import { check, index, integer, real, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 import { ACTIVE_BATCH_STATES, ACTIVE_JOB_STATES, BATCH_STATES, ERROR_CODES, JOB_SET_STATES, JOB_SOURCES,
          JOB_STATES, OPS, SPEED_IDS } from "@openfield/core/constants";
-import type { BatchHandle, NormalizedRequest } from "@openfield/core/schemas";
-import { json, oneOf } from "./_helpers";
+import type { BatchHandle, JobHandle, NormalizedRequest } from "@openfield/core/schemas";
+import { flag, json, oneOf } from "./_helpers";
 import { providers } from "./providers";
 import { canvases, canvasRuns } from "./canvas";
 
@@ -4227,6 +4338,16 @@ export const jobs = sqliteTable("jobs", {
                                                                       // until the job ends. Migration 0003
   errorAction:    text("error_action", { enum: ERROR_ACTIONS }),      // the failed tile's button when it isn't §0.5's
                                                                       // row for the code; NULL: the row's. Migration 0004
+  // Restarts (§0.4, §6.7). Migration 0005.
+  handle:         json<JobHandle>("handle"),                          // the adapter's resume data, written the moment
+                                                                      // submit() returns for a resumable call and before
+                                                                      // the first poll; never sent to the browser
+  resumable:      flag("resumable", 0),                               // sent at a speed in the model's resumableSpeeds
+                                                                      // (§6.3); written when the call is sent
+  resumedAt:      text("resumed_at"),                                 // re-attached by id after a restart; the tile says
+                                                                      // "Picking up where it left off"
+  rerunAt:        text("rerun_at"),                                   // sent again at boot because it couldn't resume;
+                                                                      // set once, so a job runs again at most once
 }, (t) => [
   unique("jobs_job_set_id_idx_unique").on(t.jobSetId, t.idx),
   check("jobs_status_check", oneOf("status", JOB_STATES)),
@@ -4558,6 +4679,8 @@ export const usageLog = sqliteTable("usage_log", {
   httpStatus:  integer("http_status"),
   speed:       text("speed", { enum: SPEED_IDS }),                    // the speed billed (§0.13). Migration 0003
   simulated:   flag("simulated", 0),                                  // written in fake mode: cost 0, never in a total
+  rerun:       flag("rerun", 0),                                      // the image ran again after a restart and may be
+                                                                      // charged twice (§0.13). Migration 0005
 }, (t) => [
   check("usage_log_outcome_check", oneOf("outcome", USAGE_OUTCOMES)),
   check("usage_log_cost_source_check", oneOf("cost_source", COST_SOURCES)),
@@ -4796,6 +4919,12 @@ Soft delete fires no trigger and none is added (§0.7). The rebuild after a rest
 `packages/db/test/schema.test.ts` gains the new CHECK lists (checked against `SPEED_IDS` and `BATCH_STATES`), the new index, and `provider_batches`' foreign keys (`job_set_id` cascades, `provider_id` references `providers`).
 
 **Migration 0004, job error action.** One generated `ALTER TABLE jobs ADD error_action text` (`0004_job_error_action.sql`), nullable and with no CHECK, like `error_code`: the failed tile's button when it isn't §0.5's row for the code.
+
+**Migration 0005, restarts** (`M0.6-02`). A generated migration, made with `bun run db:generate --name=resume` after the schema edits above, so the file is `0005_resume.sql`. It holds only `ALTER TABLE … ADD` statements and no table rebuild, because none of the new columns has a CHECK:
+- `jobs.handle` (JSON, nullable), `jobs.resumable` (`integer NOT NULL DEFAULT 0`), `jobs.resumed_at` and `jobs.rerun_at` (text, nullable);
+- `usage_log.rerun` (`integer NOT NULL DEFAULT 0`).
+
+Existing rows come out as calls that can't resume and have never run again, which is true of every call made before this migration. `packages/db/test/schema.test.ts` gains the five columns and their defaults. The recovery scan reuses `idx_jobs_active`, so no index is added.
 
 #### 8.2.4 Migrations on boot
 
@@ -5074,6 +5203,8 @@ Retry only on the four `retryable` codes of §0.5 — `network`, `timeout`, `rat
 
 Backoff is exponential with full jitter: 1 s, 4 s, 15 s (±20 %). A `Retry-After` header always wins over the computed delay. `jobs.attempt` and `jobs.next_attempt_at` persist the schedule so a restart mid-backoff resumes correctly; `jobs.idempotency_key` is reused on every attempt, so a retry can never bill twice. When some jobs in a set succeed and others exhaust retries, the set lands in `partial`, the feed shows the successful tiles plus an inline error tile per failure with a one-click **Try again** that calls `POST /api/job-sets/:id/retry {onlyFailed:true}`.
 
+A resumable call is never sent again to retry a failed status read: once its handle is stored, a failed `poll()` reads the same handle again, and only the company's own answer ends the job (§6.7), so the idempotency key is never needed. A rerun after a restart starts over at `attempt` 0 with a fresh deadline, and it is not an attempt of the old run (§0.4).
+
 Two speeds change this (§0.4). A Flex busy answer (`busy: true`) requeues the job on the busy backoff without spending an attempt, until the Flex deadline. A Batch run is never retried by the runner, whatever the code: a failed item fails its job, and **Try again** sends the failed images as a new run, at the speed frozen on the request, which is a new provider batch.
 
 Every terminal outcome — success, failure, cancel — writes a `usage_log` row. **A failed job writes a row with `cost_usd = 0` and `cost_source = 'unknown'`; no cost is ever added to a spend total for a failure** (§0.13). A job canceled after submit writes a row at full estimate with `discarded = 1`, which is what the Usage screen's "Canceled but charged" line sums.
@@ -5093,21 +5224,26 @@ Every terminal outcome — success, failure, cancel — writes a `usage_log` row
 
 #### 8.4.5 Crash recovery
 
-On boot, after `openDb()` has applied migrations (§8.2.4), the recovery pass runs before the HTTP listener accepts traffic:
+On boot, after `openDb()` has applied migrations (§8.2.4), the recovery pass runs before the HTTP listener accepts traffic. Nothing is sent until the listener has its port: the runner and the batch watcher start only then (`OpenfieldServer.start()`), so a start that can't bind its port changes rows only the way the next start would anyway, and never sends a call it then cuts off. A rerun such a start left `pending` counts as a rerun at the start that sends it. **It resumes first, runs again second, and interrupts last** (§0.4): an image is never lost to a restart when Openfield can prevent it, and never billed twice when it can avoid that. It reads `rerunInterrupted` (§6.17) once, at the start of the pass.
 
 | State found | Action |
 |---|---|
-| `jobs.status IN ('pending','queued')` | Re-enqueue as-is |
-| `status IN ('submitting','running')` **with** `provider_job_id` **and** adapter supports status polling | Resume a watcher from the provider's status endpoint; the run is not re-billed |
-| `status IN ('submitting','running')` **without** a `provider_job_id`, or adapter is fire-and-forget | Mark `interrupted`; the job set shows "Interrupted." with a one-click **Try again**. Never auto-resubmit: that risks double-billing. This includes a Flex call that was in flight: the open call died with the process |
+| `jobs.status = 'pending'`, or `'queued'` with no `provider_job_id` | Re-enqueue as it is: nothing left this computer. A retry backoff keeps its `next_attempt_at` |
+| Non-Batch job in `submitting`, `queued` or `running` with `resumable = 1` and a `handle` | **Resume by id** (§6.7): set `resumed_at`, keep the state, hand the handle to the runner, which polls it at once, whatever the deadline, and saves the result. Not sent again, not billed again. A status read answering `notFound` fails the job with "OpenAI no longer has this image." and **Try again** (§0.5); one the company says is still running past its deadline is canceled there when the adapter can, and fails with `timeout`. Reads that fail (the network still coming up, a rejected key) never end it early: past the deadline it takes three in a row on the batch schedule, and it is never canceled for them |
+| Non-Batch job in `submitting`, `queued` or `running` with `resumable = 1` and no `handle`, whose model declares `idempotentSubmit` | **Ask again**: set `resumed_at` and move the job to `pending`, keeping `started_at`, its idempotency key and the attempt the cut-off create spent. The runner sends the same create with the same key, and the company hands back the first call's id instead of starting a second one |
+| Non-Batch job in `submitting`, `queued` or `running` with `resumable = 1` and no `handle`, otherwise | Mark `interrupted`: the create call was cut off before the company's id arrived, so Openfield can't tell whether the company has it. Never run again, because the call was resumable. The tile offers **Try again**, and a usage row is written: `failed`, cost 0, `cost_source 'unknown'` (§0.13) |
+| Non-Batch job in `submitting` or `running` with `resumable = 0`, `rerun_at` NULL, and `rerunInterrupted` on | **Run again**: set `rerun_at`, move the job to `pending` with `attempt` 0, `started_at`, `next_attempt_at` and the error fields cleared, keeping its idempotency key, frozen request and seed. The scheduler sends it like any queued job, with a fresh deadline and no spend-guard confirm, and `job.started` carries `rerun: true`. Every blocking call lands here: every Google Standard, Flex and Priority call (§6.13), and OpenAI's Images API (§6.14) |
+| Non-Batch job in `submitting` or `running` with `resumable = 0`, and `rerun_at` set or `rerunInterrupted` off | Mark `interrupted`. The tile shows "Interrupted." with **Try again**; when it had already run again, Details adds "It ran again after a restart. You may be charged twice." A usage row is written in the same transaction: `failed`, cost 0, `cost_source 'unknown'`, with `rerun = 1` when it had run again (§0.13) |
 | `provider_batches` with a `remote_id` and an active state | Poll it at once and resume the watcher on the §0.12 schedule. Its jobs keep their `queued`/`running` state and are **not** interrupted: the run lives at the provider, not in this process |
-| `provider_batches` in `submitting` without a `remote_id` | `batch.find(display_name)`. Found: store the id and resume as above. Not found, or the adapter has no `find`: mark the row `failed` and its jobs `interrupted`. The lookup couldn't run (no key, the company off, the network down): keep the row and look again on the batch schedule until the deadline |
+| `provider_batches` in `submitting` without a `remote_id` | `batch.find(display_name)`. Found: store the id and resume as above. Not found, or the adapter has no `find`: mark the row `failed` and its jobs `interrupted`, never run again (a batch is resumable). The lookup couldn't run (no key, the company off, the network down): keep the row and look again on the batch schedule until the deadline |
 | A finished `provider_batches` row with `notified_at` NULL | Keep it for the next client's `snapshot` (§8.3.2); run `batch.cleanup()` if `cleaned_at` is NULL |
 | `canvas_runs` with a non-terminal status | Recompute from its job sets; emit `canvas_run.updated` so a reopened canvas re-attaches |
 | `job_sets` with all jobs terminal but a non-terminal set status | Recompute set status from its jobs |
 | Asset rows whose file is absent | `file_state='missing'`; tile renders a broken-file state reading "File missing." with **Locate** and **Delete** |
 
-A `startup.recovery` line is written to `logs/jobs.ndjson` with the counts, and a `snapshot` event reflects the result to the first client that connects.
+A `startup.recovery` line is written to `logs/jobs.ndjson` with the counts (`requeued`, `resumed`, `batched`, `rerun`, `interrupted`, `jobSets`, `missingFiles`; `batched` counts the images of Batch runs still at the company), and a `snapshot` event reflects the result to the first client that connects. When anything resumed or runs again, the server also prints one plain line at boot, without a log level, and keeps it in `logs/openfield.log`: "Picking up 2 images where they left off. Running 1 image again." (each half only when its count is above 0; the first half counts Batch images still at the company too, whose tiles keep saying they're waiting there).
+
+The recovery pass decides from the job row and the model's manifest (`idempotentSubmit`), so it needs no network: the adapter is bound later, when the runner re-attaches or sends. A company that is off or has no key leaves a resumed job waiting to be polled and a rerun waiting in `pending`, exactly like a queued run (§6.18), and neither fails for it.
 
 #### 8.4.6 SSE, not polling — and why
 
@@ -5122,7 +5258,7 @@ We use **one Server-Sent Events stream**, `GET /api/events`, for these reasons:
 
 **Fallback.** If `EventSource` fails to connect twice in a row, or the stream errors, the client degrades to polling `GET /api/job-sets?status=active` every 2 s and shows a subtle "Reconnecting…" indicator. A backgrounded tab keeps the stream open (SSE is cheap when idle) but throttles thumbnail decoding, not the stream.
 
-**Acceptance criteria.** (a) With the stream connected, a completed image appears in the feed within 250 ms of the server writing its asset row. (b) Killing and restarting the server mid-generation leaves the UI reconnected and correct within 5 s, with no duplicate tiles. (c) Ten queued job sets produce no more than `globalConcurrency` simultaneous outbound provider requests, verified in the request log.
+**Acceptance criteria.** (a) With the stream connected, a completed image appears in the feed within 250 ms of the server writing its asset row. (b) Killing and restarting the server mid-generation leaves the UI reconnected and correct within 5 s, with no duplicate tiles. (c) Ten queued job sets produce no more than `globalConcurrency` simultaneous outbound provider requests, verified in the request log. (d) In fake mode, Ctrl-C during a slow Google call prints "Finishing 1 image. Press Ctrl-C again to stop now.", saves the image and exits 0; a second Ctrl-C exits at once. (e) Killing the server (`SIGKILL`) during that call runs the image again at the next boot, once, and its tile and usage row say so; with `rerunInterrupted` off it is `interrupted` instead. (f) Killing the server during a call to the fake resumable model, then starting it again, lands the image from the same id: the fake saw exactly one create call. (g) Saving a server source file under `bun dev` while an image is running restarts the server only after that image is saved.
 
 ---
 
@@ -5214,7 +5350,7 @@ C2PA signing is explicitly out of scope for v1 — noted as a v1.1 candidate, no
 
 ### 8.7 Delivery plan
 
-Six milestones: M0.5 was inserted after M0 shipped, for provider settings and speed. Each is independently demoable and ends with a working app; nothing is "integrated later". Tasks are ordered and sized to become GitHub issues verbatim.
+Seven milestones: M0.5 was inserted after M0 shipped, for provider settings and speed, and M0.6 after it, for restarts. Each is independently demoable and ends with a working app; nothing is "integrated later". Tasks are ordered and sized to become GitHub issues verbatim.
 
 #### M0 — Skeleton, settings, one adapter end-to-end
 
@@ -5257,6 +5393,21 @@ Six milestones: M0.5 was inserted after M0 shipped, for provider settings and sp
 12. `M0.5-12` **Live probe, blocking release but not merge**, with a billed Google key: one Flex and one Priority request to `gemini-3-pro-image`, reading `usageMetadata.serviceTier`; one small Batch run; a busy refusal if one can be provoked; the size of an inline 4K batch result; the `AQ.` prefix and the free-tier 429 body. Fixtures recorded, §6.13 and §6.18 updated, and Pro's `speeds` trimmed if Google rejects or ignores Flex or Priority.
 13. `M0.5-13` **Dev port**: Vite on 4318 with `strictPort` in `scripts/dev.ts`, `apps/web/vite.config.ts` (server, HMR and preview) and `VITE_ORIGIN` in `apps/server/src/http/spa.ts`; the guards test's dev origin; README, CONTRIBUTING and §0.16.
 14. `M0.5-14` **E2E** in fake mode: the modal from each card state, Speed changing the Generate label, a Batch run surviving a server restart and finishing with a toast, notification permission denied degrading to the toast alone, and Spent today staying $0.00.
+
+#### M0.6 Restarts
+
+**Definition of done:** in fake mode, Ctrl-C during a slow Google image prints "Finishing 1 image. Press Ctrl-C again to stop now.", and the image is in the library when the server exits. Killing the server during a slow Google image and starting it again shows the tile running again with "You may be charged twice.", then the image with the "Ran again after a restart" note, and the Spending row says the same; killed again during that rerun, the tile ends "Interrupted." with Try again. Killed during a run of the fake resumable model, the restarted server shows "Picking up where it left off" and lands the image from the same id, with one create call. With "Run interrupted images again after a restart" off, a killed Google image ends as interrupted, with Try again. Under `bun dev`, saving a server file while an image runs restarts the server only after the image is saved, and the app stays on 4317 with Vite on 4318.
+
+1. `M0.6-01` **Contracts** (`packages/core`): `resumableSpeeds` on the manifest schema (§6.3); `resumedAt` and `rerunAt` on `jobSchema`, `rerun` on `job.started` and on the asset list item, `reruns` on the usage rollup row (§0.6); `rerunInterrupted` in `settingsSchema`, default `true` (§6.17); `ProviderError.notFound` (§6.8); i18n strings for every UI line in §0.5, §0.13, §2.4 and §6.17 that this milestone adds. The server's terminal lines (§0.12, §8.4.5, §0.16) stay in the server, in the same voice.
+2. `M0.6-02` **Database**: migration 0005 (§8.2.3), query helpers to store a handle, mark a job resumed or rerun, and scan for recovery, and the schema test.
+3. `M0.6-03` **Runner**: `jobs.resumable` written at send, the handle stored before the first poll, failed reads that re-read the handle and never resend, the re-attach entry point with the first read ahead of the deadline check, and re-attached calls taking their slots first (§6.7, §0.12).
+4. `M0.6-04` **Recovery** (`apps/server/src/runner/recovery.ts`): the §8.4.5 table, the boot line and the `startup.recovery` counts.
+5. `M0.6-05` **Stop drain** (`Runner.stop()`, the batch watcher, `apps/server/src/index.ts`): §0.12's six steps and its lines, with no fixed drain cap, and a second Ctrl-C that stops at once.
+6. `M0.6-06` **Dev watcher** (`scripts/dev.ts`, `apps/server/package.json`): no `bun --watch`; watch, debounce, graceful restart, wait for the next change after a failed start, and no deadline on the drain (§0.16).
+7. `M0.6-07` **Fake resumable model** (`packages/providers/src/testing/resumable.ts`), registered only in fake mode, with `#fake:resume_slow` and `#fake:resume_gone`; a `#fake:slow` Google scenario of about 30 s; conformance test 27 (§6.12).
+8. `M0.6-08` **UI**: the §2.4 restart states (design `CZsGt`, `OfTQn`, `nygdB`, `MKHsL`), the Defaults row (design `Ff82G`, section `K9xpR`), and the Spending line for reruns (§0.13; the per-row line and the CSV column come with the M3 usage screen).
+9. `M0.6-09` **Google README**: the Interactions API probe's findings and date (§6.13).
+10. `M0.6-10` **Tests and E2E** in fake mode: unit tests for each §8.4.5 row and the drain steps, and e2e for the definition of done except the `bun dev` path, which gets a scripted smoke test.
 
 #### M1 — Feed and composer parity
 
@@ -5430,7 +5581,7 @@ Six milestones: M0.5 was inserted after M0 shipped, for provider settings and sp
 | R2 | **Model capability drift** — a model gains/loses aspect ratios, quality tiers or reference-image support | High / Medium | Capability manifests are data, not code paths; runtime discovery refreshes them where the provider allows (`models.source='discovered'`), shipped manifests are the fallback, and unknown parameters are passed through a `providerOptions` escape hatch. The UI renders from the manifest, so a new quality tier appears without a release |
 | R3 | **Model IDs and prices in our docs go stale** | Certain / Low | Every price carries `pricedAt` and `sourceUrl`; the UI labels estimates "Prices as of `<date>`" and never presents one as authoritative. No model id is hardcoded in the view layer — the registry is the only source. Our research snapshot (2026-09-23) is explicitly a snapshot |
 | R4 | **Cost surprises** — token-priced models (OpenAI) make per-image cost unpredictable | Medium / High | Estimates show a `min`–`max` range with `confidence` and a human-readable `basis` string disclosed (§0.13); actuals are recorded from response usage where returned and marked `~` where not; optional monthly soft budget warns at 80 % and requires confirmation past 100 %; the usage panel and CSV make spend auditable, including the "Canceled but charged" line |
-| R5 | **Double-billing on retry or restart** | Low / High | Client-supplied `idempotencyKey` deduplicates resubmits; recovery **never** auto-resubmits a job that may already be running (§8.4.5); cancellation is honest about work already started |
+| R5 | **Double-billing on retry or restart**, set against losing an image to a restart | Low / High | Client-supplied `idempotencyKey` deduplicates resubmits where the company honours it. Stopping drains in-flight calls, so a normal stop or dev restart bills once (§0.12). A resumable call is picked up by id and **never** sent again on its own; a Batch run resumes from its row. Only a call that can't resume is sent again, once, after a crash or forced stop, behind a Defaults setting that is on by default, with the tile and the usage log saying it may be charged twice (§0.4, §8.4.5). Cancellation is honest about work already started |
 | R6 | **Large local libraries** (100k+ assets) | Medium / Medium | Keyset pagination with partial indices (no `OFFSET` anywhere); FTS5 external-content index; thumbs content-addressed and regenerable; `VACUUM INTO` backups; measured target: feed first page <50 ms at 100k rows, enforced by a seeded benchmark in CI |
 | R7 | **Browser memory with thousands of images** | High / High | Windowed virtualiser rendering ±2 viewports; `loading="lazy"`, `decoding="async"`, a bounded concurrent-decode pool; thumbs sized to the zoom step so the browser never holds oversized bitmaps; object URLs revoked on unmount; a soak test scrolls 5 000 tiles and asserts a renderer-memory ceiling |
 | R8 | **Thumbnail CPU spikes** starving the UI | Medium / Low | Worker pool capped at `cores − 2`, generation deprioritised behind live job ingest, single-flight locking, on-demand generation for non-default rungs |
@@ -5520,6 +5671,7 @@ Rolled up from the per-section lists after reconciliation. Each item is a decisi
 - **Billing of refused Flex requests and of batch items finished before a cancel**: undocumented. **`M0.5-12`** where observable (§6.18).
 - **Inline batch result size** with 4K images: undocumented. Measured in **`M0.5-12`** (§6.18).
 - **The `AQ.` key prefix and the free-tier "limit 0" 429 body** rest on community sources. Confirmed in **`M0.5-12`** (§6.18).
+- **OpenAI background mode for images** decides whether OpenAI Standard calls resume after a restart. Closed by **`M1-01`** (§6.14, §6.18). Google's answer is settled: sync image calls can't resume (§6.13).
 
 **§7**
 
