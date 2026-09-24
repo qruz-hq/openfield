@@ -10,6 +10,7 @@ import {
   ASSET_KINDS,
   AUTH_KINDS,
   CANVAS_RUN_SCOPES,
+  CANVAS_VERSION_KINDS,
   CHARACTER_INJECTIONS,
   COST_SOURCES,
   CREDENTIAL_SOURCES,
@@ -291,6 +292,9 @@ const COLUMNS: Record<string, string[]> = {
     "updated_at text not null",
     "opened_at text",
     "deleted_at text",
+    "node_count integer not null default 0",
+    "cover_asset_id text",
+    "folder_id text",
   ],
   canvas_versions: [
     "id text not null pk",
@@ -298,6 +302,10 @@ const COLUMNS: Record<string, string[]> = {
     "graph text not null",
     "label text",
     "created_at text not null",
+    "kind text not null default 'auto'",
+    "node_count integer not null default 0",
+    "edge_count integer not null default 0",
+    "cover_asset_id text",
   ],
   canvas_runs: [
     "id text not null pk",
@@ -306,6 +314,9 @@ const COLUMNS: Record<string, string[]> = {
     "status text not null default 'running'",
     "created_at text not null",
     "finished_at text",
+    "plan text not null default '{}'",
+    "nodes text not null default '[]'",
+    "priority integer not null default 10",
   ],
   usage_log: [
     "id integer not null pk",
@@ -379,6 +390,7 @@ const CHECKS: Record<string, [string, readonly string[]] | string> = {
   reference_set_items_role_check: ["role", REFERENCE_SET_ROLES],
   characters_injection_check: ["injection", CHARACTER_INJECTIONS],
   palettes_mode_check: ["mode", PALETTE_MODES],
+  canvas_versions_kind_check: ["kind", CANVAS_VERSION_KINDS],
   canvas_runs_scope_check: ["scope", CANVAS_RUN_SCOPES],
   canvas_runs_status_check: ["status", JOB_SET_STATES],
   usage_log_outcome_check: ["outcome", USAGE_OUTCOMES],
@@ -421,7 +433,7 @@ const FOREIGN_KEYS: Record<string, string[]> = {
   ],
   palettes: ["source_asset_id -> assets.id on delete set null"],
   saved_prompts: ["preset_id -> presets.id on delete set null"],
-  canvases: [],
+  canvases: ["folder_id -> folders.id on delete set null"],
   canvas_versions: ["canvas_id -> canvases.id on delete cascade"],
   canvas_runs: ["canvas_id -> canvases.id on delete cascade"],
   usage_log: [],
@@ -609,14 +621,14 @@ describe("boot (§8.2.4)", () => {
   });
 
   test("every migration is in the journal and applied, newest tag reported", () => {
-    expect(opened.schemaTag).toBe("0002_job_error_reason");
-    expect(raw.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 3 });
+    expect(opened.schemaTag).toBe("0003_canvas");
+    expect(raw.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 4 });
   });
 
   test("reopening applies nothing twice", () => {
     const again = openDb(file);
-    expect(again.schemaTag).toBe("0002_job_error_reason");
-    expect(again.db.$client.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 3 });
+    expect(again.schemaTag).toBe("0003_canvas");
+    expect(again.db.$client.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 4 });
     again.close();
   });
 
@@ -727,12 +739,24 @@ describe("search (§8.2.3)", () => {
 });
 
 describe("feed pagination (§8.2.2)", () => {
+  // A database of its own: rows other tests add (in any order) would change what the pages hold.
+  let feedDir: string;
+  let feed: OpenDb;
+  beforeAll(() => {
+    feedDir = mkdtempSync(join(tmpdir(), "openfield-feed-"));
+    feed = openDb(join(feedDir, "openfield.db"));
+  });
+  afterAll(() => {
+    feed.close();
+    rmSync(feedDir, { recursive: true, force: true });
+  });
+
   test("pages are newest first, stable across ties and unaffected by new rows", () => {
     const ids: string[] = [];
     for (let i = 0; i < 120; i++) {
       const id = `P${String(i).padStart(3, "0")}`;
       ids.push(id);
-      insertAsset(opened.db, {
+      insertAsset(feed.db, {
         id,
         kind: "generated",
         path: `assets/${id}.png`,
@@ -745,7 +769,7 @@ describe("feed pagination (§8.2.2)", () => {
         createdAt: `2026-09-23T11:00:${String(Math.floor(i / 10)).padStart(2, "0")}.000Z`,
       });
     }
-    const expected = raw
+    const expected = feed.db.$client
       .query("SELECT id FROM assets WHERE deleted_at IS NULL ORDER BY created_at DESC, id DESC")
       .all()
       .map((r) => (r as { id: string }).id);
@@ -754,13 +778,13 @@ describe("feed pagination (§8.2.2)", () => {
     let cursor: string | null = null;
     let pages = 0;
     do {
-      const page = feedPage(opened.db, { cursor });
+      const page = feedPage(feed.db, { cursor });
       expect(page.items.length).toBeLessThanOrEqual(50);
       seen.push(...page.items.map((a) => a.id));
       cursor = page.nextCursor;
       if (pages++ === 0) {
         // A newer image arriving mid-scroll must not shift later pages.
-        insertAsset(opened.db, {
+        insertAsset(feed.db, {
           id: "P999",
           kind: "generated",
           path: "assets/P999.png",
@@ -777,7 +801,7 @@ describe("feed pagination (§8.2.2)", () => {
     expect(pages).toBe(3);
     expect(seen).toEqual(expected);
     expect(new Set(seen).size).toBe(seen.length);
-    expect(feedPage(opened.db).items[0]?.id).toBe("P999");
+    expect(feedPage(feed.db).items[0]?.id).toBe("P999");
   });
 });
 

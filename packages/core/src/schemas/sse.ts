@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { CANVAS_NODE_STATES, type SseEventType } from "../constants";
+import type { SseEventType } from "../constants";
 import { assetListItemSchema } from "./asset";
+import { canvasRunStateSchema } from "./canvas";
 import {
   jobSetStateSchema,
   modelKeySchema,
@@ -64,15 +65,8 @@ export const sseEventSchema = z.discriminatedUnion("event", [
     }),
   ),
   frame("usage.updated", z.object({ jobSetId: ulidSchema.optional() })),
-  frame(
-    "canvas_run.updated",
-    z.object({
-      runId: ulidSchema,
-      canvasId: ulidSchema,
-      status: jobSetStateSchema,
-      nodes: z.array(z.object({ nodeId: z.string(), state: z.enum(CANVAS_NODE_STATES) })),
-    }),
-  ),
+  /** The whole run state, so a reloaded tab re-attaches from one frame. At most 10 a second per run. */
+  frame("canvas_run.updated", canvasRunStateSchema),
   frame(
     "maintenance.progress",
     z.object({
