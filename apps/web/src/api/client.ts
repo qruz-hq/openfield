@@ -51,7 +51,11 @@ export const queryKeys = {
   assets: (filter: "all" | "favourites") => ["assets", filter] as const,
   allAssets: ["assets"] as const,
   jobSets: ["job-sets"] as const,
+  /** Every spending figure. A finished run refreshes all of them. */
+  usage: ["usage"] as const,
   usageToday: ["usage", "today"] as const,
+  usageMonth: ["usage", "month"] as const,
+  usageSeries: (query: Record<string, string>) => ["usage", "series", query] as const,
   stats: ["stats"] as const,
   canvases: ["canvases"] as const,
   canvas: (id: string) => ["canvases", id] as const,

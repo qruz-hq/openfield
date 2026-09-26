@@ -20,6 +20,7 @@ import {
   feedPage,
   findLiveAssetBySha256,
   finishProviderBatch,
+  firstUsageAt,
   getAssets,
   getJob,
   getJobSetBundle,
@@ -69,6 +70,7 @@ import {
   updateJob,
   updateProviderSettings,
   upsertModels,
+  usageMinutes,
   usageRollup,
   writeSettings,
 } from "../src";
@@ -694,6 +696,88 @@ describe("usage", () => {
     insertUsage(db(), { ...base, outcome: "failed", costUsd: 0, costSource: "unknown" });
     const [row] = usageRollup(db(), { from: "1970-01-01" });
     expect(row).toMatchObject({ runs: 2, images: 2, usd: 0.268, reruns: 2 });
+  });
+
+  test("the spending chart's minutes carry size, quality and where each run started", () => {
+    const canvasRun = createJobSet(db(), {
+      jobSet: {
+        id: newId(),
+        op: "generate",
+        providerId: "google",
+        modelId: "m",
+        requestJson: { resolution: "2K", quality: "high" } as NormalizedRequest,
+        source: "canvas",
+      },
+      jobs: [{ id: newId(), idx: 0 }],
+    }).jobSet;
+    const composerRun = newRun(null, 1).jobSet;
+    const base = { providerId: "google", modelId: "m", operation: "generate" as const };
+    insertUsage(db(), {
+      ...base,
+      jobSetId: canvasRun.id,
+      ts: "2026-09-19T23:41:05.000Z",
+      outcome: "succeeded",
+      costUsd: 0.134,
+    });
+    insertUsage(db(), {
+      ...base,
+      jobSetId: canvasRun.id,
+      ts: "2026-09-19T23:41:40.000Z",
+      outcome: "canceled",
+      discarded: true,
+      costUsd: 0.134,
+    });
+    insertUsage(db(), {
+      ...base,
+      jobSetId: composerRun.id,
+      ts: "2026-09-20T08:00:00.000Z",
+      outcome: "succeeded",
+      costUsd: 0.067,
+      quality: "low",
+    });
+    // Outside the range asked for.
+    insertUsage(db(), { ...base, ts: "2026-09-21T08:00:00.000Z", outcome: "succeeded", costUsd: 1 });
+
+    expect(usageMinutes(db(), { from: "2026-09-19", to: "2026-09-21" })).toEqual([
+      {
+        minute: "2026-09-19T23:41",
+        providerId: "google",
+        modelId: "m",
+        resolution: "2K",
+        quality: "high",
+        source: "canvas",
+        runs: 2,
+        images: 1,
+        usd: 0.134,
+        usdDiscarded: 0.134,
+        reruns: 0,
+        canceled: 1,
+      },
+      {
+        minute: "2026-09-20T08:00",
+        providerId: "google",
+        modelId: "m",
+        resolution: null,
+        quality: "low",
+        source: "composer",
+        runs: 1,
+        images: 1,
+        usd: 0.067,
+        usdDiscarded: 0,
+        reruns: 0,
+        canceled: 0,
+      },
+    ]);
+    // Without a range: everything, and a row whose job set is gone still counts, as "somewhere".
+    expect(usageMinutes(db(), {}).at(-1)).toMatchObject({ minute: "2026-09-21T08:00", source: null, usd: 1 });
+  });
+
+  test("knows when tracking started, ignoring plain failures", () => {
+    expect(firstUsageAt(db())).toBeNull();
+    const base = { providerId: "google", modelId: "m", operation: "generate" as const };
+    insertUsage(db(), { ...base, ts: "2026-09-01T10:00:00.000Z", outcome: "failed", costUsd: 0 });
+    insertUsage(db(), { ...base, ts: "2026-09-02T10:00:00.000Z", outcome: "succeeded", costUsd: 0.1 });
+    expect(firstUsageAt(db())).toBe("2026-09-02T10:00:00.000Z");
   });
 });
 

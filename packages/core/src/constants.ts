@@ -323,6 +323,15 @@ export type CostSource = (typeof COST_SOURCES)[number];
 export const USAGE_OUTCOMES = ["succeeded", "failed", "canceled"] as const;
 export type UsageOutcome = (typeof USAGE_OUTCOMES)[number];
 export const USAGE_GROUP_BY = ["day", "model", "provider"] as const;
+/** Settings > Spending chart steps. `hour` is only for a single day. Weeks start on Monday. */
+export const USAGE_STEPS = ["hour", "day", "week", "month"] as const;
+export type UsageStep = (typeof USAGE_STEPS)[number];
+/** What the spending chart splits by: model, company, size and quality, or where it was made. */
+export const USAGE_SERIES_GROUPS = ["model", "provider", "size", "place"] as const;
+export type UsageGrouping = (typeof USAGE_SERIES_GROUPS)[number];
+/** Where an image was made, folded from job_sets.source: Recreate counts as the Image page. */
+export const USAGE_PLACES = ["image", "edit", "canvas", "other"] as const;
+export type UsagePlace = (typeof USAGE_PLACES)[number];
 export const DEFAULT_CURRENCY = "USD";
 
 // Assets and files (§0.7, §8.2)

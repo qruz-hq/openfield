@@ -1,7 +1,8 @@
+import type { JobSource } from "@openfield/core/constants";
 import { and, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
 import type { Executor } from "../client";
 import type { NewUsageLogRow, UsageLogRow } from "../rows";
-import { usageLog } from "../schema";
+import { jobSets, usageLog } from "../schema";
 import { type Draft, nowIso } from "./_util";
 
 /**
@@ -37,36 +38,85 @@ export interface UsageRollupRow {
   reruns: number;
 }
 
+// Fake-mode rows count as runs and images but never toward a spend total (§0.13).
+const cost = sql`CASE WHEN ${usageLog.simulated} = 1 THEN 0 ELSE coalesce(${usageLog.costUsd}, 0) END`;
+const figures = {
+  runs: sql<number>`sum(${usageLog.outcome} IN ('succeeded', 'canceled'))`,
+  images: sql<number>`sum(${usageLog.outcome} = 'succeeded')`,
+  usd: sql<number>`sum(CASE WHEN ${usageLog.outcome} = 'succeeded' THEN ${cost} ELSE 0 END)`,
+  usdDiscarded: sql<number>`sum(CASE WHEN ${usageLog.discarded} = 1 THEN ${cost} ELSE 0 END)`,
+  reruns: sql<number>`sum(${usageLog.rerun} = 1)`,
+};
+// A failed run costs nothing, but a failed rerun still counts as one: the call it replaced may be
+// billed.
+const counted = or(inArray(usageLog.outcome, ["succeeded", "canceled"]), eq(usageLog.rerun, true));
+
 /**
  * The cost panel's rollup by day and model (§8.2.2). Fake-mode rows count as runs and images but
  * never toward any spend total (§0.13).
  */
 export function usageRollup(db: Executor, q: { from: string; to?: string }): UsageRollupRow[] {
   const day = sql<string>`substr(${usageLog.ts}, 1, 10)`;
-  const cost = sql`CASE WHEN ${usageLog.simulated} = 1 THEN 0 ELSE coalesce(${usageLog.costUsd}, 0) END`;
-  const usd = sql<number>`sum(CASE WHEN ${usageLog.outcome} = 'succeeded' THEN ${cost} ELSE 0 END)`;
+  return db
+    .select({ day, providerId: usageLog.providerId, modelId: usageLog.modelId, ...figures })
+    .from(usageLog)
+    .where(and(gte(usageLog.ts, q.from), q.to ? lt(usageLog.ts, q.to) : undefined, counted))
+    .groupBy(day, usageLog.providerId, usageLog.modelId)
+    .orderBy(desc(day), desc(figures.usd))
+    .all();
+}
+
+export interface UsageMinuteRow extends Omit<UsageRollupRow, "day"> {
+  /** "2026-09-19T23:41", UTC. The caller moves it onto the viewer's clock. */
+  minute: string;
+  /** The resolution the run asked for, such as "2K". */
+  resolution: string | null;
+  quality: string | null;
+  /** Where the run was started. Null only for a row whose job set is gone. */
+  source: JobSource | null;
+  /** Runs canceled after they were sent. */
+  canceled: number;
+}
+
+/**
+ * Settings > Spending's raw material (§6.9): the log summed per UTC minute and per everything the
+ * chart can split by, so the server can put each minute on the viewer's own day without SQLite
+ * knowing any time zone. Same rules as the rollup.
+ */
+export function usageMinutes(db: Executor, q: { from?: string; to?: string }): UsageMinuteRow[] {
+  const minute = sql<string>`substr(${usageLog.ts}, 1, 16)`;
+  const resolution = sql<string | null>`json_extract(${jobSets.requestJson}, '$.resolution')`;
+  const quality = sql<
+    string | null
+  >`coalesce(${usageLog.quality}, json_extract(${jobSets.requestJson}, '$.quality'))`;
   return db
     .select({
-      day,
+      minute,
       providerId: usageLog.providerId,
       modelId: usageLog.modelId,
-      runs: sql<number>`sum(${usageLog.outcome} IN ('succeeded', 'canceled'))`,
-      images: sql<number>`sum(${usageLog.outcome} = 'succeeded')`,
-      usd,
-      usdDiscarded: sql<number>`sum(CASE WHEN ${usageLog.discarded} = 1 THEN ${cost} ELSE 0 END)`,
-      reruns: sql<number>`sum(${usageLog.rerun} = 1)`,
+      resolution,
+      quality,
+      source: jobSets.source,
+      ...figures,
+      canceled: sql<number>`sum(${usageLog.outcome} = 'canceled' AND ${usageLog.discarded} = 1)`,
     })
     .from(usageLog)
+    .leftJoin(jobSets, eq(jobSets.id, usageLog.jobSetId))
     .where(
-      and(
-        gte(usageLog.ts, q.from),
-        q.to ? lt(usageLog.ts, q.to) : undefined,
-        // A failed run costs nothing, but a failed rerun still counts as one: the call it replaced
-        // may be billed.
-        or(inArray(usageLog.outcome, ["succeeded", "canceled"]), eq(usageLog.rerun, true)),
-      ),
+      and(q.from ? gte(usageLog.ts, q.from) : undefined, q.to ? lt(usageLog.ts, q.to) : undefined, counted),
     )
-    .groupBy(day, usageLog.providerId, usageLog.modelId)
-    .orderBy(desc(day), desc(usd))
+    .groupBy(minute, usageLog.providerId, usageLog.modelId, resolution, quality, jobSets.source)
+    .orderBy(minute)
     .all();
+}
+
+/** When the first run that counts was logged, or null when none has been. */
+export function firstUsageAt(db: Executor): string | null {
+  return (
+    db
+      .select({ at: sql<string | null>`min(${usageLog.ts})` })
+      .from(usageLog)
+      .where(counted)
+      .get()?.at ?? null
+  );
 }

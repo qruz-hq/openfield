@@ -48,6 +48,19 @@
   /* Edge of an unchecked checkbox or radio. border-strong is too faint for 3:1. */
   --of-control-line: light-dark(#14161a80, #ffffff5c);
   --of-shadow: light-dark(#14161a1f, #00000080);
+  /*
+   * Chart series, given out in this order and never by rank. The first is the accent; the rest are
+   * soft hues stepped per theme so neighbours stay apart with colour blindness (dataviz validator,
+   * adjacent ΔE 13.5 dark, 19 light) and every one clears 3:1 on a card. Other is the fold-in gray.
+   */
+  --of-chart-1: var(--of-accent);
+  --of-chart-2: light-dark(#8c415b, #a95b75);
+  --of-chart-3: light-dark(#a78838, #ad8e3e);
+  --of-chart-4: light-dark(#4078b0, #5e97d0);
+  --of-chart-5: light-dark(#8d4826, #c77d5b);
+  --of-chart-6: light-dark(#9b7bbf, #9878bc);
+  --of-chart-7: light-dark(#286e3c, #60a46f);
+  --of-chart-other: light-dark(#80858c, #6b6f76);
 
   /* Things that sit on images stay dark in both themes. */
   --of-overlay: #0e1012b8;
@@ -125,6 +138,14 @@
   --color-overlay-scrim: var(--of-overlay-scrim);
   --color-overlay-check: var(--of-overlay-check);
   --color-status-fill: var(--of-status-fill);
+  --color-chart-1: var(--of-chart-1);
+  --color-chart-2: var(--of-chart-2);
+  --color-chart-3: var(--of-chart-3);
+  --color-chart-4: var(--of-chart-4);
+  --color-chart-5: var(--of-chart-5);
+  --color-chart-6: var(--of-chart-6);
+  --color-chart-7: var(--of-chart-7);
+  --color-chart-other: var(--of-chart-other);
 
   --shadow-*: initial;
   --shadow-popover: var(--of-shadow-popover);

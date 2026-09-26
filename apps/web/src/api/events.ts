@@ -63,7 +63,7 @@ const names: BatchNameLookups = {
 async function batchFinished(frame: BatchUpdated) {
   if (announced.has(`batch:${frame.jobSetId}`)) return;
   announced.add(`batch:${frame.jobSetId}`);
-  void queryClient.invalidateQueries({ queryKey: queryKeys.usageToday });
+  void queryClient.invalidateQueries({ queryKey: queryKeys.usage });
   if (frame.state === "canceled") return;
 
   const set = jobSetsCache().find((s) => s.jobSet.id === frame.jobSetId);
@@ -176,7 +176,7 @@ function applyToCache(event: SseEvent) {
         costActualUsd: event.data.costActualUsd,
       });
       announceFinished(event.data.jobSetId, event.data.status);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.usageToday });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.usage });
       return;
     case "asset.updated":
       patchAsset(event.data.asset);
@@ -188,7 +188,7 @@ function applyToCache(event: SseEvent) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.models });
       return;
     case "usage.updated":
-      void queryClient.invalidateQueries({ queryKey: queryKeys.usageToday });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.usage });
       return;
     case "batch.updated":
       batchUpdated(event.data);

@@ -134,6 +134,14 @@ const pairs: Pair[] = [
     where: `unchecked checkbox edge on ${bg}`,
   })),
   { fg: "danger", on: ["surface"], min: UI, where: "invalid field ring" },
+  ...["chart-1", "chart-2", "chart-3", "chart-4", "chart-5", "chart-6", "chart-7", "chart-other"].map(
+    (fg) => ({
+      fg,
+      on: ["elevated"],
+      min: UI,
+      where: `${fg} line, bar or legend swatch in a card`,
+    }),
+  ),
 ];
 
 describe("contrast", () => {

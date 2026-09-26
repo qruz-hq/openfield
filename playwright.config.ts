@@ -33,6 +33,7 @@ const suites: { name: string; testMatch: string; env?: Record<string, string> }[
   { name: "resume", testMatch: "resume.e2e.ts", env: { OPENFIELD_FAKE_SLOW_MS: "8000" } },
   { name: "canvas", testMatch: "canvas.e2e.ts" },
   { name: "assets", testMatch: "assets.e2e.ts" },
+  { name: "spending", testMatch: "spending.e2e.ts" },
 ];
 const servers = suites.map((suite) => ({ ...suite, origin: `http://127.0.0.1:${portFor(suite.name)}` }));
 

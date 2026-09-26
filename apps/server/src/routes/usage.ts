@@ -1,17 +1,23 @@
 import { zValidator } from "@hono/zod-validator";
-import { DEFAULT_CURRENCY, type UsageResponse, type UsageRow, usageQuerySchema } from "@openfield/core";
-import { usageRollup } from "@openfield/db";
+import {
+  DEFAULT_CURRENCY,
+  type UsageResponse,
+  type UsageRow,
+  type UsageSeriesResponse,
+  usageQuerySchema,
+  usageSeriesQuerySchema,
+} from "@openfield/core";
+import { firstUsageAt, usageMinutes, usageRollup } from "@openfield/db";
 import { Hono } from "hono";
 import type { Env } from "../context";
 import { onInvalid } from "../http/errors";
+import { buildUsageSeries } from "../services/usage-series";
 
 const round = (usd: number) => Math.round(usd * 1e6) / 1e6;
 
 // Tracked on this computer; the bill from each company is the real figure (§6.9).
-export const usageRoutes = new Hono<Env>().get(
-  "/usage",
-  zValidator("query", usageQuerySchema, onInvalid),
-  (c) => {
+export const usageRoutes = new Hono<Env>()
+  .get("/usage", zValidator("query", usageQuerySchema, onInvalid), (c) => {
     const { from, to, groupBy } = c.req.valid("query");
     const rows = usageRollup(c.var.svc.db, { from: from ?? "1970-01-01T00:00:00.000Z", ...(to && { to }) });
 
@@ -49,5 +55,19 @@ export const usageRoutes = new Hono<Env>().get(
       currency: DEFAULT_CURRENCY,
     };
     return c.json(body satisfies UsageResponse, 200);
-  },
-);
+  })
+  // Settings > Spending: by hour, day, week or month on the viewer's clock, split one of four ways.
+  .get("/usage/series", zValidator("query", usageSeriesQuerySchema, onInvalid), (c) => {
+    const { from, to, tz, step, groupBy } = c.req.valid("query");
+    const { db } = c.var.svc;
+    const body = buildUsageSeries(usageMinutes(db, { ...(from && { from }), ...(to && { to }) }), {
+      from,
+      to,
+      now: new Date(),
+      tz,
+      step,
+      groupBy,
+      firstAt: firstUsageAt(db),
+    });
+    return c.json(body satisfies UsageSeriesResponse, 200);
+  });

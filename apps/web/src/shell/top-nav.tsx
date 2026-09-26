@@ -3,6 +3,7 @@ import { BrandLockup, IconButton, SpendPill, TopNavItem } from "@openfield/ui";
 import { Settings } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import { useSpentToday } from "../api/hooks/usage";
+import { useSpendingPrefs } from "../settings/spending/prefs";
 
 // App / Nav: 44 tall, hairline at the bottom. Only screens that work get a link (§0.15).
 
@@ -16,6 +17,7 @@ export function TopNav() {
   const { pathname } = useLocation();
   const onSettings = pathname.startsWith("/settings");
   const spent = useSpentToday();
+  const showToday = useSpendingPrefs((s) => s.showToday);
 
   return (
     <header className="relative z-30 flex h-44 w-full shrink-0 items-center justify-between gap-16 bg-surface px-16">
@@ -33,10 +35,17 @@ export function TopNav() {
       </div>
       <div className="flex items-center gap-8">
         {spent.data ? (
-          <SpendPill
-            label={t("app.nav.spentToday")}
-            amount={formatMoney(spent.data.totalUsd, spent.data.currency)}
-          />
+          // Opens Settings > Spending on today's figures (§2.1).
+          <Link
+            to="/settings/spending"
+            onClick={showToday}
+            className="rounded-full [&>span]:transition-shadow hover:[&>span]:inset-ring-border-strong"
+          >
+            <SpendPill
+              label={t("app.nav.spentToday")}
+              amount={formatMoney(spent.data.totalUsd, spent.data.currency)}
+            />
+          </Link>
         ) : null}
         <IconButton asChild icon={Settings} label={t("app.nav.settings")} active={onSettings}>
           <Link to="/settings/api-keys" aria-current={onSettings ? "page" : undefined} />
