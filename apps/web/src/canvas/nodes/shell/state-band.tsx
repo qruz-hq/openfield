@@ -1,22 +1,23 @@
 import { ERROR_PRIMARY_ACTION, type ErrorCode, errorCopy, t } from "@openfield/core";
 import { Button, cn, ProgressBar, Spinner } from "@openfield/ui";
-import { Check, CircleAlert, Clock3, Info, KeyRound, RefreshCw } from "lucide-react";
+import { Check, CircleAlert, Clock3, Info, KeyRound, Play } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useProviders } from "../../../api/hooks/keys";
-import { type LiveBatch, useLive } from "../../../lib/live";
 import { companyName, providerOfKey } from "../../../lib/provider";
 import type { NodeBlocker, NodeDisplay } from "../../engine/types";
 import { useCanvasActions, useCanvasStoreApi, useNodeResult, useNodeRuntime } from "../../store/context";
-import { blockerCopy } from "./blocker-copy";
+import { blockerCopy, companyOf } from "./blocker-copy";
+import { type CompanyWait, useCompanyWait } from "./company-wait";
 import { focusNodeSoon } from "./focus";
 import { useRunNode } from "./use-node";
 
 // Canvas / State / * (design RkANM, SZYCt, rQEK8, EiZcq, hdJBU, w9r4d, lJ9Zj): one band across the
-// bottom of a node's preview, and its action. Only runnable nodes have one.
+// bottom of a node's preview, and its action. Only runnable nodes have one. Same words as the
+// Generate card: Stop for a run under way, Cancel for one waiting, Run again after a cancel.
 
 /** Seconds since a run started, ticking while it's on screen. */
-function useElapsed(since: string | null, active: boolean): number {
+export function useElapsed(since: string | null, active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (!active) return;
@@ -26,20 +27,23 @@ function useElapsed(since: string | null, active: boolean): number {
   return since ? Math.max(0, Math.floor((now - Date.parse(since)) / 1000)) : 0;
 }
 
-const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+export const clock = (seconds: number) =>
+  `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
 export interface StateBandProps {
   id: string;
   display: NodeDisplay;
   /** The node's model, for the failed band's billing link. */
   model: string | null;
+  /** The node's name, for the Stop button's accessible name ("Stop Variations"). */
+  name: string;
 }
 
-export function StateBand({ id, display, model }: StateBandProps) {
+export function StateBand({ id, display, model, name }: StateBandProps) {
   switch (display.state) {
     case "queued":
     case "running":
-      return <BusyBand id={id} running={display.state === "running"} />;
+      return <BusyBand id={id} name={name} running={display.state === "running"} />;
     case "blocked":
       return display.blocker ? <BlockedBand id={id} blocker={display.blocker} /> : null;
     case "failed":
@@ -55,34 +59,38 @@ export function StateBand({ id, display, model }: StateBandProps) {
   }
 }
 
-function useCancel(id: string) {
+export function useCancel(id: string) {
   const store = useCanvasStoreApi();
   return () => void store.getState().runController.cancelNode(id);
 }
 
-/** The node's Batch run while it's at the company, which can take hours (§2.4). */
-function useBatchWait(id: string): LiveBatch | undefined {
-  const jobSetIds = useNodeRuntime(id)?.jobSetIds;
-  return useLive((s) => jobSetIds?.map((jobSetId) => s.batches[jobSetId]).find(Boolean));
+function BusyBand({ id, name, running }: { id: string; name: string; running: boolean }) {
+  const wait = useCompanyWait(id);
+  if (wait) return <CompanyBand id={id} wait={wait} />;
+  return running ? <GeneratingBand id={id} name={name} /> : <WaitingBand id={id} />;
 }
 
-function BusyBand({ id, running }: { id: string; running: boolean }) {
-  const batch = useBatchWait(id);
-  if (batch) return <BatchBand id={id} batch={batch} />;
-  return running ? <GeneratingBand id={id} /> : <WaitingBand id={id} />;
-}
-
-/** The Waiting band in the Image tab's Batch words: no timer or bar, as there's no progress to show. */
-function BatchBand({ id, batch }: { id: string; batch: LiveBatch }) {
-  const company = companyName(useProviders().data, batch.providerId);
+/**
+ * The Waiting band in the Image tab's Batch and Flex words: no timer or bar, as there's no progress
+ * to show.
+ */
+function CompanyBand({ id, wait }: { id: string; wait: CompanyWait }) {
+  const company = companyName(useProviders().data, wait.providerId);
   const cancel = useCancel(id);
-  const status = batch.stopping
+  const batch = wait.speed === "batch" ? wait : null;
+  const status = batch?.stopping
     ? t("speed.tile.stopping", { company })
-    : batch.state === "submitting"
+    : batch?.state === "submitting"
       ? t("speed.tile.sending", { company })
-      : t("speed.tile.waiting", { company });
+      : batch
+        ? t("speed.tile.waiting", { company })
+        : t("speed.tile.waitingFor", { company });
   // Nothing to promise while the run is being sent or stopped.
-  const hint = batch.stopping || batch.state === "submitting" ? null : t("speed.tile.fewHours");
+  const hint = !batch
+    ? t("speed.tile.fewMinutes")
+    : batch.stopping || batch.state === "submitting"
+      ? null
+      : t("speed.tile.fewHours");
   return (
     <div className="flex w-full items-center gap-8 bg-accent-soft py-10 pr-8 pl-12">
       <Clock3 size={14} aria-hidden className="shrink-0 text-text-secondary" />
@@ -90,7 +98,7 @@ function BatchBand({ id, batch }: { id: string; batch: LiveBatch }) {
         <span className="truncate text-small font-medium text-text-primary">{status}</span>
         {hint ? <span className="truncate text-caption text-text-tertiary">{hint}</span> : null}
       </div>
-      {batch.stopping ? null : (
+      {batch?.stopping ? null : (
         <Button variant="ghost" size="s" className="nodrag" onClick={cancel}>
           {t("canvas.nodes.state.cancel")}
         </Button>
@@ -120,7 +128,7 @@ function WaitingBand({ id }: { id: string }) {
   );
 }
 
-function GeneratingBand({ id }: { id: string }) {
+function GeneratingBand({ id, name }: { id: string; name: string }) {
   const runtime = useNodeRuntime(id);
   const elapsed = useElapsed(runtime?.startedAt ?? null, true);
   const cancel = useCancel(id);
@@ -134,8 +142,14 @@ function GeneratingBand({ id }: { id: string }) {
         <span className="text-small font-medium text-text-primary">{t("canvas.nodes.state.generating")}</span>
         <span className="text-mono-12 text-text-tertiary">{clock(elapsed)}</span>
         <span className="h-1 flex-1" />
-        <Button variant="ghost" size="s" className="nodrag" onClick={cancel}>
-          {t("canvas.nodes.state.cancel")}
+        <Button
+          variant="ghost"
+          size="s"
+          aria-label={t("canvas.nodes.card.stopNamed", { name })}
+          className="nodrag"
+          onClick={cancel}
+        >
+          {t("canvas.nodes.card.stop")}
         </Button>
       </div>
       <ProgressBar value={share ?? undefined} className="w-full" />
@@ -166,7 +180,7 @@ function ChangedBand({ id, late }: { id: string; late: boolean }) {
       <Button
         variant="ghost-accent"
         size="s"
-        icon={RefreshCw}
+        icon={Play}
         className="nodrag"
         onClick={(event) => {
           void run("node", { anchor: event.currentTarget });
@@ -179,7 +193,13 @@ function ChangedBand({ id, late }: { id: string; late: boolean }) {
   );
 }
 
-function FailedBand({ id, model }: { id: string; model: string | null }) {
+/** What went wrong with a failed node, and the one thing to do about it. */
+export interface FailureFix {
+  message: string;
+  action: { label: string; kind: "try_again" | "edit_prompt" | "other"; run: () => void };
+}
+
+export function useFailureFix(id: string, model: string | null): FailureFix {
   const result = useNodeResult(id);
   const runtime = useNodeRuntime(id);
   const run = useRunNode(id);
@@ -192,38 +212,44 @@ function FailedBand({ id, model }: { id: string; model: string | null }) {
   const refused = code === "content_refused" || code === "content_flagged_input";
   const message = refused ? t("canvas.nodes.state.refused") : (error?.reason ?? copy.reason);
   const consoleUrl = providers?.find((p) => p.id === providerOfKey(model ?? ""))?.meta.consoleUrl;
-  const [expanded, setExpanded] = useState(false);
 
-  const fix = ((): { label: string; run: () => void } => {
-    const again = {
-      label: t("actions.tryAgain"),
-      run: () => {
-        void run("node");
-        focusNodeSoon(id);
-      },
-    };
+  const again = {
+    label: t("actions.tryAgain"),
+    kind: "try_again" as const,
+    run: () => {
+      void run("node");
+      focusNodeSoon(id);
+    },
+  };
+  const other = (label: string, go: () => void) => ({ label, kind: "other" as const, run: go });
+  const action = ((): FailureFix["action"] => {
     switch (ERROR_PRIMARY_ACTION[code]) {
       case "open-settings":
       case "change-key":
-        return {
-          label: copy.action,
-          run: () => navigate("/settings/api-keys", { state: { focusKey: true } }),
-        };
+        return other(copy.action, () => navigate("/settings/api-keys", { state: { focusKey: true } }));
       case "open-billing":
-        return consoleUrl
-          ? { label: copy.action, run: () => window.open(consoleUrl, "_blank", "noopener") }
-          : again;
+        return consoleUrl ? other(copy.action, () => window.open(consoleUrl, "_blank", "noopener")) : again;
       case "free-up-space":
-        return { label: copy.action, run: () => navigate("/settings/storage") };
+        return other(copy.action, () => navigate("/settings/storage"));
       case "reuse":
         // The same request would fail the same way: change it first.
         return refused
-          ? { label: t("canvas.nodes.state.editPrompt"), run: () => actions.openInspector(id) }
-          : { label: t("canvas.nodes.blocked.pickModel"), run: () => actions.openInspector(id) };
+          ? {
+              label: t("canvas.nodes.state.editPrompt"),
+              kind: "edit_prompt",
+              run: () => actions.openInspector(id),
+            }
+          : other(t("canvas.nodes.blocked.pickModel"), () => actions.openInspector(id));
       default:
         return again;
     }
   })();
+  return { message, action };
+}
+
+function FailedBand({ id, model }: { id: string; model: string | null }) {
+  const { message, action: fix } = useFailureFix(id, model);
+  const [expanded, setExpanded] = useState(false);
 
   return (
     <div className="flex w-full items-center gap-8 bg-danger-soft py-10 pr-8 pl-12 shadow-[inset_0_1px_0_var(--of-danger-line)]">
@@ -253,7 +279,7 @@ function CanceledBand({ id }: { id: string }) {
   return (
     <div className="flex w-full items-center gap-8 bg-elevated-2 py-10 pr-8 pl-12">
       <p className="min-w-0 flex-1 text-caption leading-[1.45] text-text-secondary">
-        {t("canvas.nodes.state.canceled")}
+        {t("canvas.nodes.card.charged")}
       </p>
       <Button
         variant="ghost"
@@ -264,27 +290,43 @@ function CanceledBand({ id }: { id: string }) {
           focusNodeSoon(id);
         }}
       >
-        {t("canvas.nodes.state.run")}
+        {t("canvas.nodes.state.runAgain")}
       </Button>
     </div>
   );
 }
 
-function BlockedBand({ id, blocker }: { id: string; blocker: NodeBlocker }) {
+/** A blocker's fix: add a key, open Settings or pick another model, where one helps. */
+export function useBlockerFix(id: string, blocker: NodeBlocker) {
   const providers = useProviders().data;
   const navigate = useNavigate();
   const actions = useCanvasActions();
   const copy = blockerCopy(blocker, providers);
-  const Icon = blocker.kind === "no_key" || blocker.kind === "company_off" ? KeyRound : Info;
   const onFix = () => {
     if (copy.fix === "add_key") navigate("/settings/api-keys", { state: { focusKey: true } });
     else if (copy.fix === "open_settings") navigate("/settings/api-keys");
     else if (copy.fix === "pick_model") actions.openInspector(id);
   };
+  return { copy, onFix };
+}
+
+/** What a blocked node says: a missing key in the card's words ("No Google key yet."), else the blocker's own. */
+export function useBlockedMessage(blocker: NodeBlocker): string {
+  const providers = useProviders().data;
+  return blocker.kind === "no_key"
+    ? t("canvas.nodes.card.noKey", { company: companyOf(providers, blocker.model) })
+    : blockerCopy(blocker, providers).message;
+}
+
+function BlockedBand({ id, blocker }: { id: string; blocker: NodeBlocker }) {
+  const { copy, onFix } = useBlockerFix(id, blocker);
+  const message = useBlockedMessage(blocker);
+  // The key icon only for a missing key, like the card's pill.
+  const Icon = blocker.kind === "no_key" ? KeyRound : Info;
   return (
     <div className="of-blocked-stripes flex w-full items-center gap-8 bg-elevated-2 py-10 pr-8 pl-12">
       <Icon size={14} aria-hidden className="shrink-0 text-text-secondary" />
-      <p className="min-w-0 flex-1 text-small leading-[1.35] font-medium text-text-primary">{copy.message}</p>
+      <p className="min-w-0 flex-1 text-small leading-[1.35] font-medium text-text-primary">{message}</p>
       {copy.action ? (
         <Button variant="secondary" size="s" className="nodrag" onClick={onFix}>
           {copy.action}

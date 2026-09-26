@@ -1,9 +1,9 @@
 import type { AssetKind, FileState, Modality } from "@openfield/core/constants";
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, isNull, lt, ne, type SQL, sql } from "drizzle-orm";
 import type { Executor } from "../client";
 import type { AssetRow, NewAssetRow } from "../rows";
-import { assetFolders, assets, favourites } from "../schema";
-import { type Draft, nowIso, olderThan, type Page, type PageQuery, pageSize, toPage } from "./_util";
+import { assets, favourites } from "../schema";
+import { type Draft, nowIso, olderThan, type PageQuery } from "./_util";
 
 export type FeedItem = AssetRow & { isFavourite: boolean };
 
@@ -21,11 +21,12 @@ export interface FeedQuery extends PageQuery {
 
 export const isFavouriteExpr = sql<boolean>`(${favourites.assetId} IS NOT NULL)`.mapWith((v) => v === 1);
 
-/** Filters shared by the feed and search. Always live assets only. */
+/** Filters shared by the feed and search. Always live assets only, and never masks (§8.3). */
 export function feedFilters(q: FeedQuery): SQL[] {
   const where: (SQL | undefined)[] = [
     isNull(assets.deletedAt),
     eq(assets.modality, q.modality ?? "image"),
+    ne(assets.kind, "mask"),
     q.modelId ? eq(assets.modelId, q.modelId) : undefined,
     q.providerId ? eq(assets.providerId, q.providerId) : undefined,
     q.kind ? eq(assets.kind, q.kind) : undefined,
@@ -34,37 +35,6 @@ export function feedFilters(q: FeedQuery): SQL[] {
     olderThan(assets.createdAt, assets.id, q.cursor),
   ];
   return where.filter((c): c is SQL => c !== undefined);
-}
-
-/**
- * One page of the feed or library, newest first, keyset-paged on (created_at, id) (§8.2.2).
- * Width and height come with every row so the client can lay out rows before any image loads.
- */
-export function feedPage(db: Executor, q: FeedQuery = {}): Page<FeedItem> {
-  const limit = pageSize(q.limit);
-  let query = db
-    .select({ asset: assets, isFavourite: isFavouriteExpr })
-    .from(assets)
-    .leftJoin(favourites, eq(favourites.assetId, assets.id))
-    .$dynamic();
-  if (q.folderId) {
-    query = query.innerJoin(
-      assetFolders,
-      and(eq(assetFolders.assetId, assets.id), eq(assetFolders.folderId, q.folderId)),
-    );
-  }
-  const where = feedFilters(q);
-  if (q.favouritesOnly) where.push(isNotNull(favourites.assetId));
-  const rows = query
-    .where(and(...where))
-    .orderBy(desc(assets.createdAt), desc(assets.id))
-    .limit(limit + 1)
-    .all();
-  return toPage(
-    rows.map((r) => ({ ...r.asset, isFavourite: r.isFavourite })),
-    limit,
-    (a) => a,
-  );
 }
 
 /** An original is its own lineage root, so rootAssetId defaults to the asset's id. */

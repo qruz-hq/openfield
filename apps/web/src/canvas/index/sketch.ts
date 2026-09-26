@@ -63,13 +63,14 @@ const DEFAULT_SIZES: Record<string, { w: number; h: number }> = {
 const FALLBACK_SIZE = { w: 280, h: 280 };
 const COLLAPSED_HEIGHT = 56;
 
-// Visible ports in rail order (canvas plan §1). Types this build doesn't define (Edit, Style)
-// take their ports from the edges that touch them.
-const PORTS: Record<string, { in: readonly string[]; out: readonly string[] }> = {
+// Visible ports in rail order (canvas plan §1); null is a slot kept empty for a port still to
+// come (Generate's style input). Types this build doesn't define (Edit, Style) take their ports
+// from the edges that touch them.
+const PORTS: Record<string, { in: readonly (string | null)[]; out: readonly (string | null)[] }> = {
   prompt: { in: ["text"], out: ["text"] },
   "image.upload": { in: [], out: ["images"] },
   "image.asset": { in: [], out: ["images"] },
-  "image.generate": { in: ["prompt", "input_images"], out: ["images"] },
+  "image.generate": { in: ["prompt", "input_images", null], out: ["images"] },
   "image.variations": { in: ["image", "prompt"], out: ["images"] },
   note: { in: [], out: [] },
   frame: { in: [], out: [] },
@@ -151,7 +152,7 @@ interface Placed {
   y: number;
   w: number;
   h: number;
-  ports: { in: string[]; out: string[] };
+  ports: { in: (string | null)[]; out: (string | null)[] };
 }
 
 /** Rects inside a node, in node units relative to its top-left. */
@@ -382,10 +383,12 @@ export function sketchLayout(
     drawNode(p);
     if (!detailed) continue;
     for (const side of ["in", "out"] as const) {
-      const ys = p.node.collapsed ? p.ports[side].map(() => p.h / 2) : rail(p.ports[side].length, p.h);
-      for (const y of ys) {
+      const list = p.ports[side];
+      const ys = p.node.collapsed ? list.map(() => p.h / 2) : rail(list.length, p.h);
+      ys.forEach((y, i) => {
+        if (list[i] === null) return;
         shapes.push(toBox(p, { kind: "port", cx: side === "in" ? 0 : p.w, cy: y, r: PORT_RADIUS }));
-      }
+      });
     }
   }
   return { scale, shapes };

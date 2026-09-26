@@ -21,10 +21,21 @@ const ICONS: Partial<Record<PortType, LucideIcon>> = {
 
 type PortLook = "idle" | "ready" | "dimmed";
 
+/** A selected link lights the ports at both of its ends (design vaCAK). */
+function attachedToSelected(state: CanvasState, nodeId: string, port: PortSpec): boolean {
+  for (const edgeId of state.selection.edgeIds) {
+    const edge = state.doc.edges[edgeId];
+    if (edge?.kind !== "data") continue;
+    if (port.direction === "out" && edge.source === nodeId && edge.sourceHandle === port.id) return true;
+    if (port.direction === "in" && edge.target === nodeId && edge.targetHandle === port.id) return true;
+  }
+  return false;
+}
+
 /** How a port looks while a connection is in flight. Cheap when nothing is being dragged. */
 function lookFor(state: CanvasState, nodeId: string, port: PortSpec): PortLook {
   const pending = state.ui.connecting;
-  if (!pending) return "idle";
+  if (!pending) return attachedToSelected(state, nodeId, port) ? "ready" : "idle";
   if (pending.nodeId === nodeId) return pending.handleId === port.id ? "idle" : "dimmed";
   if (pending.handleType === "source") {
     if (port.direction !== "in" || portFlow(pending.portType, port.type) === "no") return "dimmed";
@@ -84,6 +95,18 @@ export const Port = memo(function Port({ nodeId, port, offset, off, stacked, con
 /** Offsets from the vertical middle for a rail of `count` ports (the rail rule of railOffsets). */
 export const railOffset = (index: number, count: number): number => (index - (count - 1) / 2) * PORT_SPACING;
 
+/**
+ * One rail's visible ports with their offsets from the vertical middle. A hidden port that keeps
+ * its slot leaves a gap where it will go (PortSpec.keepSlot).
+ */
+export function railLayout(
+  ports: readonly PortSpec[],
+  direction: PortSpec["direction"],
+): { port: PortSpec; offset: number }[] {
+  const rail = ports.filter((p) => p.direction === direction && (!p.hidden || p.keepSlot));
+  return rail.flatMap((port, i) => (port.hidden ? [] : [{ port, offset: railOffset(i, rail.length) }]));
+}
+
 export interface PortRailsProps {
   nodeId: string;
   ports: readonly PortSpec[];
@@ -95,16 +118,13 @@ export interface PortRailsProps {
 
 /** Both rails of a node, visible ports only. */
 export function PortRails({ nodeId, ports, connectable, off, collapsed = false }: PortRailsProps) {
-  const visible = ports.filter((p) => !p.hidden);
-  const inputs = visible.filter((p) => p.direction === "in");
-  const outputs = visible.filter((p) => p.direction === "out");
-  const rail = (list: PortSpec[]) =>
-    list.map((port, i) => (
+  const rail = (direction: PortSpec["direction"]) =>
+    railLayout(ports, direction).map(({ port, offset }, i) => (
       <Port
         key={`${port.direction}-${port.id}`}
         nodeId={nodeId}
         port={port}
-        offset={collapsed ? 0 : railOffset(i, list.length)}
+        offset={collapsed ? 0 : offset}
         off={off?.[port.id] ?? null}
         stacked={collapsed && i > 0}
         connectable={connectable}
@@ -112,8 +132,8 @@ export function PortRails({ nodeId, ports, connectable, off, collapsed = false }
     ));
   return (
     <>
-      {rail(inputs)}
-      {rail(outputs)}
+      {rail("in")}
+      {rail("out")}
     </>
   );
 }

@@ -1,6 +1,7 @@
 import { t } from "@openfield/core";
 import { Spinner } from "@openfield/ui";
 import { createBrowserRouter, Navigate, useLocation } from "react-router";
+import "./assets/live";
 import { ImagePage } from "./image/image-page";
 import { DEFAULT_PANE } from "./settings/panes";
 import { SettingsPage } from "./settings/settings-page";
@@ -28,6 +29,13 @@ export const router = createBrowserRouter([
     children: [
       { path: "/", element: <ToImage /> },
       { path: "/image", element: <ImagePage /> },
+      // The library's four views share one page, so the sidebar stays put between them (§2.8). Its
+      // code loads when it's first opened.
+      ...["/assets", "/assets/favourites", "/assets/trash", "/assets/folder/:folderId"].map((path) => ({
+        path,
+        lazy: async () => ({ Component: (await import("./assets/assets-page")).AssetsPage }),
+        HydrateFallback: EditorLoading,
+      })),
       // ?tab=templates opens the Templates tab. Canvas code loads only when it's opened.
       {
         path: "/canvas",

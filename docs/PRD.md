@@ -665,7 +665,14 @@ Acceptance: *a cross-origin page cannot list assets, read key status, or cause a
 
 Consequently **§6.13's Gemini `output.format` row becomes "not exposed ⇒ `output.formats: ["jpeg"]`, chip hidden."** (JPEG is the only image output type the generateContent reference documents, checked at M0-07; the stored bytes are whatever Google returns.) Format conversion happens only on export (§8.5.4), where the dialog warns: *"Changing the format may remove the hidden AI watermark."*
 
-**Deletes.** Soft delete sets `deleted_at`; the asset leaves every feed and every query filters `deleted_at IS NULL`. **The FTS row is retained on soft delete** (no trigger fires on `deleted_at`, and none is added); hard delete removes it via the `assets_ad` trigger. §8.6's claim "FTS row is removed" is deleted.
+**Deletes.** Soft delete sets `deleted_at`; the asset leaves every feed and every query filters `deleted_at IS NULL`. **The FTS row is retained on soft delete** (no trigger fires on `deleted_at`, and none is added); hard delete removes it via the `assets_ad` trigger. §8.6's claim "FTS row is removed" is deleted. **Soft delete also keeps the asset's `asset_folders` and `favourites` rows.** They are invisible while the asset is in the Trash (every count and listing joins through `deleted_at IS NULL`), and Restore puts the image back in every folder it was in, still favourited if it was. Only a hard delete (Delete for good, Empty trash, or the optional retention purge) removes them, through the cascades in §8.2.
+
+**Folders are a tree of labels, not places on disk (M3a, §2.8).** `folders.parent_id` nests folders with no depth limit (`NULL` = top level). `asset_folders` is many-to-many, so one image can sit in any number of folders, like tags; filing never moves or copies a file, and nothing in a lineage chain or a canvas changes when filing changes. The rules every surface and route follows:
+- **Counts are what's directly inside.** A folder's `count` is the number of live images filed in that folder itself, not in its subfolders. Its subfolder count is the number of folders whose `parent_id` is its id. Opening a folder lists exactly the images counted.
+- **Adding keeps other folders.** Add to folder (menu, picker, bulk, drag) only inserts `asset_folders` rows; an image already in the target is left alone. **Remove from folder** deletes the one row for the folder being viewed and never touches the image's other folders.
+- **Moving refuses cycles.** A folder can move to the top level or under any folder except itself and its own descendants. The server checks this in the same transaction as the update and answers `409 conflict` (§8.3); the UI never offers those targets.
+- **Deleting a folder deletes its subfolders, never images.** `parent_id` and `asset_folders.folder_id` cascade, so the folder, every folder inside it at any depth, and all their memberships go in one statement. The images stay in the library, and in any other folder they were in.
+- **Canvas folders are ordinary folders.** A canvas files its images into a top-level folder named after it (§7.1, `canvases.folder_id`). The person may rename, move or nest it like any other; filing follows the id, and if the folder was deleted the next run makes a new one at the top level.
 
 **FTS and backups.** `assets` has a TEXT primary key and therefore an implicit rowid that `VACUUM` may renumber, so `VACUUM INTO` can produce a backup whose `assets_fts` docids no longer match. Restore is therefore defined as: *stop the server, replace `~/.openfield`, start* — and on boot, **before the HTTP listener accepts traffic**, the server runs `INSERT INTO assets_fts(assets_fts) VALUES('rebuild')` whenever the db file's inode/mtime indicates it was replaced. `POST /api/maintenance/reindex {fts:true}` runs the same rebuild on demand.
 
@@ -899,7 +906,8 @@ Prices always carry `pricedAt` and `sourceUrl`, are never presented as authorita
 | Model picker: search, **Recent / by company / Needs a key**, capability badges | M1 | **Not Featured/All** — that is the reference product's editorial grouping (§1.11). M1-04 and §8.8 row 19 are corrected |
 | **Local prompt enhance** | M1 | Per §3.4.3: enhancer-model select over the user's own text models, rewrite styles, preview/automatic modes, diff sheet, 8 s Undo, `prompt_original` persisted, separate usage-log line. Off by default; chip **disabled with "Add an OpenAI or Google key to use this"** when no text-capable key exists. `promptEnhance: "openfield"` on both launch adapters is therefore honest |
 | **`@`-mention typeahead** | M1 | Resolves Openfield presets, characters, reference sets and saved references (§3.2, §5.7). `/` snippets alongside (§5.9). The reference product's server-side "Elements" entity is not reproduced |
-| Detail view: Info · **Edit · History** tabs | M2 | Comments dropped (single user); History replaces it |
+| Detail view: Info · **Edit · History** tabs | M3a (Info), M2 (Edit, History) | Comments dropped (single user); History replaces it. The Info panel, the arrows and the footer actions ship first, in M3a, with the tab control hidden until M2 (§4.0) |
+| **Assets tab** | M3a | §2.8: All images, Favorites, Trash, nested folders (tree, breadcrumb, subfolder cards), multi-folder membership, drag and drop, search over prompts with model, company and date filters, group select and bulk actions |
 | **Layers panel** | M2 | Base + mask + local overlay layers (text, shapes, grade), with visibility, reorder, rename, merge. Generative *layer decomposition* stays a disabled plugin slot |
 | Presets, reference sets, characters, palettes, saved prompts, JSON import/export | M3 | §0.8 |
 | Cost estimate + usage log + CSV | M3 | §0.13 |
@@ -1306,15 +1314,16 @@ This section specifies the main screen of Openfield: the persistent application 
 | `/image` | Create screen: generation feed + floating composer | Default route after launch |
 | `/image?model=<providerId>:<modelId>` | Same, with a model preselected | Colon is the only separator (§0.2). Deep-linkable; changing the model chip rewrites the query without a page transition (`history.replaceState`); an unknown key falls back to the default model with a toast |
 | `/image?folder=<folderId>` | Feed filtered to one folder | Composable with `model` |
-| `/assets` | Library: all assets, date-grouped fixed grid | |
-| `/assets/favourites` | Favourites-only library | |
-| `/assets/folder/:folderId` | Single folder | |
+| `/assets` | Library: All images, date-grouped fixed grid | Search and filters ride in the query: `?q=&model=&provider=&date=today\|7d\|30d\|12m` (§2.8) |
+| `/assets/favourites` | Favorites only | Same query params |
+| `/assets/folder/:folderId` | One folder: its subfolders as cards, then the images filed directly in it | Same query params; an unknown or deleted folder id lands on `/assets` with a toast "That folder no longer exists." |
+| `/assets/trash` | Trash: deleted images, grouped by the day they were deleted | No search in the Trash (§2.8) |
 | `/canvas` | Canvas index (§7) | |
 | `/canvas/:canvasId` | Canvas editor (§7) | |
 | `/settings` | Your keys, models, storage, appearance, usage log (§6.17) | |
 | `/presets` | Preset library (§5) | Reachable from the nav app menu and the style picker |
 
-Routing is client-side (React Router), state in the URL wherever it is user-meaningful: model, folder filter, zoom step (`?z=0..4`), and the open asset (`?asset=<id>`, §4). The feed's scroll offset is preserved per route in memory and restored when returning from the detail view or from `/canvas`.
+Routing is client-side (React Router), state in the URL wherever it is user-meaningful: model, folder filter, library search and filters, zoom step (`?z=0..4`), and the open asset (`?asset=<id>`, §4, on `/image` and every `/assets` route). The feed's scroll offset is preserved per route in memory and restored when returning from the detail view or from `/canvas`.
 
 #### Top navigation bar
 
@@ -1381,7 +1390,7 @@ Inter (self-hosted, variable, subset latin), fallback `system-ui, -apple-system,
 | `--of-t-body` | 14 / 20 / 400 | Prompt text, option-row names, key/value rows |
 | `--of-t-body-strong` | 14 / 20 / 600 | Buttons, active nav, CTA labels |
 | `--of-t-value` | 16 / 20 / 400 | Chip values (aspect, quality, batch) |
-| `--of-t-title` | 20 / 28 / 600 | Page titles ("All assets"), dialog headers |
+| `--of-t-title` | 20 / 28 / 600 | Page titles ("All images"), dialog headers |
 | `--of-t-display` | 28 / 34 / 700 | Empty-state headlines |
 
 Focus visibility: every interactive element gets `outline: 2px solid var(--of-accent); outline-offset: 2px` on `:focus-visible`. Motion respects `prefers-reduced-motion` — the coverage list is §2.11.
@@ -1533,13 +1542,22 @@ Failed tiles persist (`jobs.status = 'failed'`, §0.4) and stay in the feed unti
 | Bulk action | Behaviour |
 |---|---|
 | Download .zip | Server streams a zip of the originals through §8.3's bulk-asset route (`{action:'download'}`), named `openfield-<date>-<count>.zip`; a progress toast shows packaged/total; files inside are named `<created_at>-<shortId>.<ext>` |
-| Add to folder ▸ | Submenu of folders + inline "New folder…"; membership is additive and many-to-many |
+| Add to folder ▸ | Opens the Add to folder picker (§2.8): the folder tree with checkboxes showing which folders the selection is already in (on, mixed, off), a "Find a folder" field and an inline "New folder". Membership is additive and many-to-many (§0.7) |
+| Remove from folder | **Only inside a folder** (`/assets/folder/:id`). Takes the selection out of that folder alone; the images stay in the library and in their other folders (§0.7). No confirmation; an 8 s toast "Removed 3 images from Acme." offers Undo |
 | Favourite | Optimistic toggle, single batched write; flips to *Unfavourite* when all selected are already favourited |
 | Recreate | Replays each selected asset's frozen `NormalizedRequest` through §8.3's recreate route (§0.1). A confirmation shows the **total estimated cost** (§0.13) when more than 4 job sets are involved or the estimate exceeds the warn threshold, and states plainly when any selected model has `seed.supported: false` so its results will differ. Placeholders prepend as usual |
 | Export… | Opens the export sheet: format (PNG/JPEG/WebP), max dimension, whether to write a sidecar `.json` with prompt/model/settings, destination folder. A format that differs from the stored MIME carries §0.7's re-encode warning |
-| Delete | Confirmation dialog: "Delete N images?" with the body "They move to the trash. You can restore them from there. They're also removed from folders and canvases." When the person has set `trashRetentionDays` (§8.6), the body adds "They're deleted for good after N days in the trash."; destructive button `--of-danger`; a single undo toast (8s) restores them straight away, and until the trash is emptied they can be restored from the Trash view |
+| Delete | Confirmation dialog: "Delete N images?" with the body "They move to the trash. You can restore them from there." (one image: "Delete this image?" / "It moves to the trash. You can restore it from there."). When the person has set `trashRetentionDays` (§8.6), the body adds "They're deleted for good after N days in the trash."; destructive button `--of-danger`; a single undo toast (8s) restores them straight away, and until the trash is emptied they can be restored from the Trash view. **Folders and favourites are kept while an image is in the Trash**, so Restore puts it back where it was (§0.7); this replaces the earlier body line "They're also removed from folders and canvases." A canvas that uses a trashed image shows its placeholder until the image is restored (§8.6) |
+
+**What the bar holds on each surface (M3a, design `tpb2H`, `TXVFO`, `errFg`):**
+- `/assets` and `/assets/favourites`: **N selected** · Download · Add to folder · Favourite · Delete · Clear. The feed's bar (`M1-11`, not built yet) is the same component; *Select all shown*, Recreate and Export… join it when M2-13 ships export.
+- `/assets/folder/:id`: the same plus **Remove from folder** (`folder-minus`) after Add to folder.
+- `/assets/trash`: **N selected** · **Restore** · **Delete for good** (`Button / Danger ghost`) · Clear. Delete for good asks first: "Delete N images for good?" / "They're removed from your computer. You can't undo this." / *Delete for good*.
+
+**Range and group selection.** `Shift+click` selects every loaded card between the last clicked one and this one, in visual order and across date groups. A date group's checkbox selects the whole group, on when every card in it is selected and mixed when some are; if the group isn't fully loaded, the client keeps paging until the next group starts, then selects. Selection is cleared by `Esc`, by Clear, and in the library when the person moves to another view (another folder, All images, Favorites, the Trash); as on the feed it survives zoom, search and filter changes.
 
 > **AC-2.5.1** Selecting 200 assets, applying *Add to folder*, and clearing selection performs one HTTP request and one SQLite transaction, and the folder count in the library sidebar updates without a refetch of the grid.
+> **AC-2.5.2** Inside a folder, *Remove from folder* on 3 images that are also in a second folder leaves them in the second folder, in All images, and in the Trash count unchanged; the open folder's count drops by 3 at once.
 
 ---
 
@@ -1569,6 +1587,8 @@ Failed tiles persist (`jobs.status = 'failed'`, §0.4) and stay in the feed unti
 | `⌘/Ctrl + K` | Search everything |
 | `⌘/Ctrl + M` | Choose model |
 | `⌘/Ctrl + F` | Search images |
+| `⌘/Ctrl + Shift + N` | New folder (Assets: inside the open folder, else at the top level) |
+| `F2` | Rename the focused folder (Assets sidebar) |
 | `⌘/Ctrl + Enter` | Generate |
 | `G` then `I / A / C / S` | Go to Create / Assets / Canvas / Settings |
 | `?` | Keyboard shortcuts |
@@ -1585,8 +1605,12 @@ Typing a printable character while the feed has focus and no modifier moves focu
 |---|---|
 | **Fresh install, no provider key** | Centred column, max-width 520: `--of-t-display` headline "Nothing generated yet", `--of-t-body` / `--of-text-secondary` line "Openfield uses your own API keys. Add one to start making images.", primary button **Add a key** → `/settings`, secondary link *How keys are stored* (says, in plain words, that the key stays on your computer, only your user account can read it, and it is only ever sent to the company it belongs to; the file path and permissions live in the README, not in the UI). No sample images, no stock art. This is step 2 of §2.10. |
 | **Key configured, no generations** | Same frame, headline "Your first image", three example prompt cards (our own copy) that populate the composer on click, and a link to the **Preset library** (§5). The composer is focused on mount. |
-| **Folder filter with no members** | "Nothing in *Client work* yet" + "Add images from an image's ⋯ menu, or select several and choose Add to folder." + *Clear filter*. |
-| **Search with no results** | "No matches for “`<query>`”" + *Clear search*; suggests searching in All assets if a folder filter is active. |
+| **Feed folder filter with no members** (`/image?folder=`) | "Nothing in *Client work* yet" + "Add images from an image's ⋯ menu, or select several and choose Add to folder." + *Clear filter*. |
+| **Library folder with no images** (`/assets/folder/:id`, design `uBOvG`) | Subfolder cards still show on top when there are any. Below them: "No images in *Clients* yet" + "Drag images onto this folder, or select a few and choose Add to folder." No button. |
+| **Search with no results** (design `G47AI5`, `Z7qfu`) | All images or Favorites: "No images match “`<query>`”" + "Try other words, or clear the filters." + *Clear search*. Inside a folder: "Nothing in *Acme* matches “`<query>`”" + "Try other words, or search all images." (with a filter set: "Try other words, remove a filter, or search all images.") + *Search all images*, which drops the folder scope and keeps the words. |
+| **No favorites** (design `yReeG`) | "No favorites yet" + "Select the heart on an image to keep it here." |
+| **Empty Trash** (design `Qjd4b`) | "The trash is empty" + "Deleted images stay here until you delete them for good." Empty trash is disabled. |
+| **No folders yet** (sidebar, design `OxeRm`) | Under the Folders heading: "Group images into folders. An image can be in more than one." + *New folder*. |
 | **All items hidden by *Hide failed*** | Inline row: "N failed runs hidden. Show". |
 | **Offline / provider unreachable** | A dismissible banner under the toolbar, `--of-danger-soft`: "Couldn't connect to `<company>`. Runs will fail until it's back." Existing assets remain fully browsable — the library is local files. |
 
@@ -1594,36 +1618,73 @@ Typing a printable character while the feed has focus and no modifier moves focu
 
 ### 2.8 Assets library (`/assets`)
 
-The library is the same data as the feed viewed differently: the feed is the *history of generations* laid out by aspect ratio; the library is *everything in `~/.openfield`* — generations, uploaded references, edited derivatives and imports — laid out in a tidy fixed grid for finding and filing. It has no composer.
+The library is the same data as the feed viewed differently: the feed is the *history of generations* laid out by aspect ratio; the library is *everything in `~/.openfield`* (generations, edited derivatives, imports and uploaded references, never masks) laid out in a tidy fixed grid for finding and filing. It has no composer. Its four views are **All images** (`/assets`), **Favorites** (`/assets/favourites`), **Trash** (`/assets/trash`) and **a folder** (`/assets/folder/:id`). Folders nest with no depth limit and an image can be in several at once (§0.7).
 
-#### Sidebar — 256px, fixed, `--of-surface`, 1px right `--of-border`
+Design: screens `Q1RlD` (All images), `s5XLm` (a folder), `bawgI` (Add to folder), `Jicd4` (drag images), `fWo1s` and `l6Ph7A` (move a folder, refused move), `dyFft` (folder menu), `v0RQD` (new subfolder), `axD2H` (Trash), `UB27b` (delete folder), `nvzy5` and `BwkXq` (search, no results), `x7y6U` (detail view); components in "Section · Assets (v4)" on the Detail, editor, library board. Where a number below differs from an older draft, the design's number is the decision.
 
-1. **Search field** at the top (32px, radius `--of-r-sm`, `--of-elevated`, magnifier glyph, placeholder "Search assets"). Queries prompt text, model name, folder name and filename; debounced 200ms; full-text search over the SQLite FTS index (§8.2).
-2. **All assets** (active by default) and **Favourites (N)** — counts in `--of-text-tertiary`, right-aligned, mono numerals.
-3. Group **Type**: *Images (N)* · *References (N)* · *Edits (N)*, with no *Video* or *Audio* rows in v1: they appear only once those types exist, and the asset model is already modality-agnostic (§1, §8.2), so adding them needs no migration.
-4. Group **Library** — collapsible, with a `+` button that creates a folder inline. Folder rows: 16px folder glyph, name (14px/400, truncated with a tooltip), item count. Drag a selection onto a folder row to file it; drag a folder onto another to nest it one level. Right-click: *Rename · Set colour · Export folder… · Delete folder*.
-5. Bottom: disk-usage line ("4.2 GB used") linking to Settings → Storage (§6.17).
+#### Sidebar: 255px plus a 1px `--of-border` hairline, `--of-surface`, padding 16, gap 12 (design `R0kf8n`)
+
+1. **Search field** at the top (32px, radius 8, `--of-elevated`, magnifier, placeholder "Search"). Typing searches the current view (All images, Favorites or the open folder), debounced 200ms, over the SQLite FTS index: prompt text, plus the model id and tags the index holds (§8.2.2). A filled field shows × to clear it. Search results keep the date groups and use the same cursor as the grid. From the Trash, typing searches All images.
+2. **All images**, **Favorites**, **Trash**, each with its count right-aligned in mono `--of-text-tertiary`: live images, live favourites, images in the Trash.
+3. **Folders**: a heading row with a `folder-plus` button (New folder at the top level), then the **folder tree**:
+   - One row per folder, 34px, radius 10. Depth is shown by padding only: `padding-left = 4 + 20 × depth` (4, 24, 44, 64 …). A 16px disclosure slot (chevron right or down; hidden on folders with no subfolders, the slot kept so names line up), a 16px icon (`folder`, `folder-open` when expanded), the name (14px, truncated with a tooltip), and the **count of images filed directly in that folder** (§0.7).
+   - States (design `ifcYq` family): Selected for the open folder (`--of-accent-soft`, label and icon `--of-accent`), Hover (`--of-elevated`, ⋯ replaces the count and opens the folder menu), Drop target, Can't drop, Editing (inline name field), Disabled (while the folder itself is being dragged, and in Move to).
+   - Sorted by name in the client with `Intl.Collator` (`numeric: true`, `sensitivity: "base"`), so "Shoot 2" comes before "Shoot 10" and case doesn't matter. Expanded folders are remembered per viewer in `localStorage` (a convenience, never state that matters); opening a folder from anywhere expands its ancestors and scrolls its row into view.
+   - Keyboard: the tree is an ARIA `tree`. `↑ ↓` move, `→` expands or moves to the first subfolder, `←` collapses or moves to the parent, `Enter` opens, `F2` renames, `Delete` asks to delete.
+4. The Type group (Images · References · Edits) and the disk-usage line are **not in this scope**: the design has neither. `kind=` stays in the API, and Settings → Storage shows disk use (§6.17).
+
+#### Folder operations
+
+- **New folder.** From the sidebar heading's `+` (top level), the header's **New folder** button (inside the open folder; top level in All images and Favorites), the folder menu's **New subfolder**, `⌘/Ctrl + Shift + N` (same as the header button), and the Add to folder picker's **New folder** (top level; the selection is filed into it at once). A new row appears in place, in the Editing state, with the hint "Enter to save, Esc to cancel". Nothing is created until Enter; Esc or an empty name cancels. Names are 1 to 200 characters, trimmed; two folders may share a name.
+- **Rename.** Folder menu **Rename**, `F2`, or a double-click on the name. Same inline field; Esc keeps the old name.
+- **Move.** Drag the folder (its row or its card) onto another folder, or onto the Folders heading to move it to the top level. Or folder menu **Move to ▸**: a submenu headed "Move “Acme” to" with **Top level** and the whole tree, where the current parent carries a check (choosing it does nothing) and the folder itself and everything inside it are disabled. The UI never sends a move into the folder itself or its descendants; the server refuses one anyway (`409 conflict`, §8.3).
+- **Delete.** Folder menu **Delete folder** asks first. Without subfolders: "Delete “Client A”?" / "The images stay in your library." With subfolders: "Delete “Clients”?" / "The N folders inside it are deleted too. The images stay in your library.", where N counts every folder inside it at any depth. Buttons: *Cancel* · *Delete folder* (danger). The folder, its subfolders and their memberships go in one transaction (§0.7); if the open folder was among them, the view moves to the nearest surviving ancestor, or to All images. There is no undo, which is why it asks.
+- **Folder menu** (right-click a row or card, or its ⋯): *New subfolder* · *Rename* · *Move to ▸* · divider · *Delete folder* (danger). *Set colour* and *Export folder…* are not in this scope; the `color` column stays for later.
 
 #### Main area
 
-- Header row, 56px: page title (`--of-t-title`, e.g. "All assets" / the folder name) with the item count beside it, and at the right the same **zoom slider** as the feed plus a **Hide sidebar** toggle.
-- Assets are **grouped by date** with sticky group headers ("Today", "Yesterday", then the formatted date — all three produced by `Intl`, §2.12). Each header carries a **checkbox that selects the whole group** and a right-aligned count.
-- The grid is **fixed, square-cropped tiles** — not justified rows. At a 1440px viewport: content column 1184px, 24px page padding → **6 columns, 18px gaps, 172×172 cards, radius `--of-r-md`**. Cards use `object-fit: cover` with a centre crop, and a 1px `--of-border` inset so pale images stay bounded. The zoom slider changes the column count: 8 / 7 / **6** / 5 / 4 at steps 0–4, recomputing card size from the available width and requesting the smallest thumb rung ≥ the rendered box (§0.10).
-- Card hover shows the same top-right action stack and checkbox as the feed; the bottom-right pill group is replaced by a single **Open** affordance plus a 12px/500 filename/model caption revealed on hover.
+- **Header, 64px** (design `PEPQO`, `y3xNHk`, `TYC2O`, `X2HLS`):
+  - All images and Favorites: title and count; at the right the Filter button (`list-filter`) and the zoom slider.
+  - A folder: a **breadcrumb** (ancestors in `--of-text-tertiary`, each one opens that folder; `chevron-right` separators; the current folder in `--of-text-primary`), then the count. At the right: **New folder**, ⋯ (the folder menu for the open folder), a divider, Filter, zoom. Deeper than three levels the breadcrumb shows the first level, a ⋯ button that lists the hidden levels, the parent and the current folder; each crumb truncates at 200px with a tooltip.
+  - Trash: "Trash" and its count; at the right the note "Images stay here until you delete them for good." (with a retention setting: "Images are deleted for good after N days."), **Empty trash** (danger ghost button), zoom.
+  - Search: "Results for “neon”" and the number of results; the Filter button shows as on while the filter row is open.
+- **Filter row**, 40px under the header (design `HjXAH`). The Filter button opens it in any view except the Trash; it opens by itself while searching. Left to right: a scope pill when searching inside a folder or Favorites ("In Acme"; its × searches all images and keeps the words), a divider, then **Model**, **Company** and **Date** pills (idle, open, or set to a value with × to clear it), then *Clear all* once anything is set. Model lists only models that made an image in the library, grouped by company, under "Any model"; Company lists "Any company" and the companies present; Date offers *Any time · Today · Last 7 days · Last 30 days · Last 12 months*, one pick, in the viewer's time zone, sent as `from`. Filters work with or without words. Words, filters and scope live in the URL (§2.1).
+- **Folder view, subfolders first** (Finder-like, design `s5XLm`). A "Folders" section title with the subfolder count, a row of **folder cards** (174×64, radius 12, `--of-elevated`, same columns and 18px gaps as image cards: folder icon, name, "8 images · 2 folders" counting what is directly inside, the folders part hidden when there are none), then the date groups of the images filed directly in this folder. A card opens the folder on click, shows ⋯ on hover (folder menu), and is a drop target for images and folders. The Folders section hides while searching.
+- **Date groups** with sticky headers ("Today", "Yesterday", then the formatted date, all from `Intl`, §2.12). Each header's checkbox selects the whole group (§2.5). The Trash groups by the day images were deleted.
+- **The grid** is fixed, square-cropped cards, not justified rows. At a 1440px viewport: content column 1184px, 25px side padding, **6 columns, 18px gaps, 174×174 cards, radius 12** (design `rnsTH`). Cards use `object-fit: cover` with a centre crop and a 1px `--of-border` inset so pale images stay bounded. The zoom slider sets 8 / 7 / **6** / 5 / 4 columns at steps 0 to 4, recomputing card size from the width and requesting the smallest thumb rung at least as big as the card (§0.10).
+- **Cards** (design `rnsTH`, `dVwPY`, `ULgBc`): the checkbox is always at the top left. Hover darkens the image and shows **Favorite** (outline heart; filled `--of-accent` when on), **Download** and ⋯ (the tile menu, with *Remove from folder* added inside a folder) at the top right, and the model and cost at the bottom left. A plain click opens the detail view (§4.0); the checkbox, `⌘/Ctrl+click` and `Shift+click` select (§2.5). Un-favouriting a card in Favorites leaves it in place until the view is opened again, so nothing jumps under the pointer. Trash cards show **Restore** and a delete-for-good button on hover instead (design `N2Bods`).
 - The grid is virtualized by group: only groups intersecting the viewport (plus one either side) render their cards; group heights are computed from the known count, so the scrollbar is stable from the first paint.
-- Same multi-select model, same floating selection toolbar (at `bottom: 16px` here), same keyboard map, plus `⌘/Ctrl + Shift + N` to create a folder.
+- Same multi-select model and floating selection bar as the feed, at `bottom: 16px` here, with the per-view contents in §2.5.
+
+#### Adding, removing, and drag and drop
+
+- **Add to folder picker** (design `RI4UA`, `C85UO`), 288px wide, list up to 360px then scrolling: a "Find a folder" field (matches keep their ancestors visible), the folder tree with a checkbox per row, and **New folder** in the footer (an inline name field with *Add*). Each checkbox shows the selection's membership: on (every selected image is in it), mixed (some are), off (none). A click applies at once: off or mixed becomes on and adds every selected image; on becomes off and removes them from that folder only. The picker stays open for more picks and closes on Esc or a click outside. It opens from the selection bar, the tile and card menus, and the detail view's Add to folder.
+- **Remove from folder** appears only inside a folder: in the selection bar and in the card menu. It removes the images from the folder being viewed and nothing else (§0.7), with an Undo toast.
+- **Dragging images.** Dragging a selected card drags the whole selection; dragging an unselected card drags just that image. The ghost is the image (two stacked, with a count badge, when there are more). Sidebar folder rows and folder cards are the targets (Drop target state, icon `folder-input`, hint "Add 3 images to Moodboard" 12px right of the pointer). Hovering a collapsed row for 600ms expands it. A drop is one bulk request; images already in the folder are skipped; a toast "Added 3 images to Moodboard." offers Undo, which removes only what this drop added. Nothing else accepts images in this scope.
+- **Dragging folders.** A folder row or card can be dropped on another folder ("Move into Product shots") or on the Folders heading ("Move to top level"). While dragging, the folder and its subtree dim; hovering one of them shows the Can't drop state and the hint "A folder can't go inside itself", and releasing there does nothing. Dropping on the current parent does nothing.
+
+#### Trash (`/assets/trash`)
+
+- Delete anywhere moves images to the Trash (a soft delete, §0.7): they leave every other view, keep their folders and favourite, and wait here, newest deletion first. **The trash never empties itself** unless the person sets `trashRetentionDays` in Settings → Storage (default: never; §6.17, §8.6).
+- **Restore** (card, selection bar, detail view) puts images back in All images, in every folder they were in, and in Favorites if they were there; toast "Restored 3 images.". **Delete for good** (card, bar, detail view) asks "Delete 3 images for good?" / "They're removed from your computer. You can't undo this." and then hard-deletes (§8.6). **Empty trash** (header, and Settings → Storage) asks "Empty the trash?" / "The 12 images in the trash are deleted for good. You can't undo this.".
+- No search, filters, favourite toggle or Add to folder in the Trash.
 
 #### How folders relate to the feed
 
-- A **folder is a named collection**, not a location on disk: `folders(id, name, color, parent_id, created_at)` plus `asset_folders(asset_id, folder_id, added_at)` — declared in the Drizzle schema (§8.2). The column is `color`; the British spelling survives only in the menu item **Set colour**. An asset can belong to several folders; files never move, so nothing breaks in Canvas or in a lineage chain when filing changes.
-- **Adding** happens from either surface: the tile *More → Add to folder*, the bulk selection toolbar, or drag-and-drop onto a sidebar row.
-- **Filtering the feed**: choosing a folder in the feed toolbar's folder dropdown sets `/image?folder=<id>`, and the justified feed then shows only that folder's generations, still newest-first and still across all models. The dropdown also offers *Favourites*.
-- **Deleting a folder** removes memberships only; the confirm dialog states "The images stay in your library." Deleting *assets* is the only destructive path, and it is the same dialog in both surfaces; a soft delete keeps the row and its FTS entry (§0.7).
-- Counts are derived (`COUNT` over the join, cached in the store) and update optimistically on add/remove.
-- Where the reference product makes a canvas itself a folder record, Openfield keeps **canvases as their own entity** (§7). A canvas can *reference* assets and can be linked to a folder, but the two are not the same row, so filing an image never mutates a canvas.
+- A **folder is a named collection**, not a location on disk: `folders(id, parent_id, name, color, sort_order, created_at, updated_at)` plus `asset_folders(asset_id, folder_id, added_at)`, declared in the Drizzle schema (§8.2). The column is `color`. Folders nest through `parent_id`, and an asset can belong to several folders; files never move, so nothing breaks in Canvas or in a lineage chain when filing changes (§0.7).
+- **Adding** happens from either surface: the tile *More → Add to folder*, the bulk selection bar, the detail view, or drag and drop onto a folder.
+- **Filtering the feed**: choosing a folder in the feed toolbar's folder dropdown (the tree, indented) sets `/image?folder=<id>`, and the justified feed then shows the generations filed directly in that folder, still newest-first and still across all models. The dropdown also offers *Favourites*.
+- **Deleting a folder** deletes its subfolders and all their memberships, never images (§0.7). Deleting *assets* is the only destructive path, and it is the same dialog in both surfaces; a soft delete keeps the row, its FTS entry, its folders and its favourite (§0.7).
+- Counts are derived (`COUNT` over the join, direct members only), held in the client store, updated optimistically on add, remove and delete, and refreshed on `folder.updated` and `asset.updated`/`asset.deleted` events.
+- Where the reference product makes a canvas itself a folder record, Openfield keeps **canvases as their own entity** (§7). A canvas files its images into a top-level folder named after it and can be linked to that folder, but the two are not the same row, so filing an image never mutates a canvas. The person can rename, move or nest the canvas's folder; filing keeps working because it follows the folder id (§0.7).
 
-> **AC-2.8.1** At a 1440px viewport, `/assets` renders a 6-column grid of 172px square cards with 18px gaps, date group headers stick to the top of the scroll container, and a group header's checkbox selects exactly the assets in that group.
+> **AC-2.8.1** At a 1440px viewport, `/assets` renders a 6-column grid of 174px square cards with 18px gaps and 25px side padding, date group headers stick to the top of the scroll container, and a group header's checkbox selects exactly the assets in that group.
 > **AC-2.8.2** Adding 12 selected assets to a folder from `/assets`, then navigating to `/image?folder=<id>`, shows exactly those of the 12 that are generations, in newest-first order, in justified rows.
+> **AC-2.8.3** Creating Clients › Acme › Spring 2026 shows three tree levels indented 20px apart; opening Acme shows the breadcrumb "Clients › Acme", a Spring 2026 card, and exactly the images filed directly in Acme, and Acme's sidebar count equals that number.
+> **AC-2.8.4** Neither drag and drop nor Move to can put Clients inside Spring 2026, and `PATCH /api/folders/<Clients> {parentId: <Spring 2026>}` answers `409 conflict` with the tree unchanged.
+> **AC-2.8.5** Deleting Clients removes Clients, Acme and Spring 2026 and their memberships in one transaction; the All images count is unchanged, and an image that was also in Moodboard is still in Moodboard.
+> **AC-2.8.6** Searching "neon" inside Acme with the Model filter set returns only images filed directly in Acme whose prompt matches, newest first, paged with the grid's cursor, and the header count equals the number of matches.
+> **AC-2.8.7** Deleting an image that is in two folders and favourited, then restoring it from the Trash, puts it back in both folders and in Favorites with the counts restored.
 
 ---
 
@@ -1713,6 +1774,8 @@ v1 ships English only. The requirement is narrower than translation: nothing in 
 - Whether the reference product's justified solver clamps extreme aspect ratios (21:9, 1:8) was not observed; our `[0.75·H, 1.35·H]` clamp is a derivation that should be tuned against real mixed-ratio histories. Closes with M1-08.
 - The relationship between that product's feed and its assets library was not fully traced: it is unclear whether a generation appears in "all assets" automatically or only once filed. Openfield assumes automatic membership in "All assets".
 - Selection behaviour across pagination boundaries was not observed — whether a selection survives loading more, and whether "select all" means all-loaded or all-matching. Openfield specifies all-loaded with an explicit count.
+- **Search inside a folder covers only the images filed directly in it** (M3a), the same set the folder shows and counts. Including subfolders is a later option (`folder=<id>&deep=1`) if people ask for it; nothing in the schema blocks it.
+- Folder colour and *Export folder…* are designed out of M3a. The `color` column stays so they can return without a migration.
 
 ---
 
@@ -1935,6 +1998,28 @@ Clicking any tile in the feed opens the **detail view**: a full-viewport overlay
 
 This section owns the overlay's geometry, its tabs, the editing surface, the nine edit tools and the requirements the editor places on the data model. Shared contracts it used to restate — the action vocabulary (§0.1), the capability manifest (§0.3), the `Op` union and job states (§0.4), the request body and endpoints (§0.6), lineage columns (§0.7), mask polarity and the regional fallback (§0.9), the thumbnail ladder (§0.10), seeds (§0.11), cancellation (§0.12), cost (§0.13) and the v1 scope list (§0.14) — are cross-referenced, not repeated.
 
+### 4.0 What ships first: the Info view (M3a)
+
+The Assets tab needs the detail view before the editor exists, so its Info form ships in **M3a** (task `M3a-13`, which pulls `M2-01`, `M2-02` and `M2-03` forward in the form below). Everything else in this section lands with M2 as written; where this subsection and §4.1 to §4.5 differ, this subsection is what M3a builds and the rest is what M2 turns it into. Design: screen `x7y6U`, panels `sb8P2` (library) and `JSKpv` (Trash), parts `f4Nwvf`, `AtTwE`, `jQQ6s`.
+
+- **Where it opens.** A plain click on a card in any library view, or on a finished tile in the Image feed. It steps through **the list it was opened from**, in that list's order and filters: All images, Favorites, a folder (its images only, not its subfolders), search results, the Trash, or the feed with its filter. Placeholders and failed tiles keep their own actions (§2.4) and don't open it.
+- **Shell.** Full viewport, above everything, as §4.1: the media area left of a 352px panel inset 8px. The backdrop is the image's `@h360` rung scaled past the edges (1320×1060 at −120,−80 on a 1440×900 viewport), blur 40, opacity 0.22, over `--of-surface`; this is the measured design and replaces §4.1's blur 48 and brightness recipe. The image is fit inside the media area with radius 4 and never upscaled past 100%.
+- **Stepping.** **Previous** and **Next** are `Icon button / Overlay / 38` (`chevron-left`, `chevron-right`) at the left and right edges of the media area, vertically centred (x 16 and x 1026 at 1440); each hides at its end of the list. `←` / `→` do the same (§4.5). Stepping past the loaded page loads the next page with the list's own cursor, and the grid or feed scrolls the current card into view behind the overlay. `?asset=<id>` follows along through `history.replaceState`, so a reload reopens the same image in the same list.
+- **Closing.** `Esc` or the panel's close button (a click on the backdrop does not close, so panning a zoomed image never loses it). The list is exactly where it was, with the current card focused; the feed marks it Last viewed (§2.4).
+- **Media chrome.** Zoom and Expand image at the bottom right of the media area (design `Rsrfa`), with the §4.5 keys.
+- **Panel header.** The prompt as a one-line title, truncated (the model name when there is no prompt), with the relative created time under it ("2 hours ago"; the full date is in Details), and the round close button. **No tab control** until M2 ships Edit and History.
+- **PROMPT block** (design `O0zG8`): the caps label with a **Copy** chip (copies the prompt as written and reads "Copied" for 1.2s), the reference thumbnails (54px, radius 8, the first one ringed in `--of-accent`; a click opens that reference in the detail view when it's in the library), and the prompt text clamped to 6 lines with *See all* / *Hide*.
+- **DETAILS block** (design `f4Nwvf`): **Model** (glyph and name), **Speed** (as §4.3), **Size** (mono), **Created** (full local date and time through `Intl`, §2.12) and **Folders**: a small chip per folder the image is in, which opens that folder; more than two show the first two and "+N", which lists the rest; none reads "None". §4.3's other rows join with M2.
+- **Footer** (design `AtTwE`), pinned to the bottom of the panel, 8px gaps:
+  1. **Recreate**, primary, full width, with the estimate (`~$0.04`, the `~` when the figure is an estimate or the model can't repeat exactly, §0.1). It replays the frozen request as §4.4 says; the new image lands in the feed and in All images like any run, and a toast "Recreating 1 image." offers *Show*, which opens `/image`.
+  2. **Reuse** (loads prompt, references, model and settings into the composer and opens `/image`, as §4.4's *More → Reuse*) and **Copy image** (the image to the clipboard as PNG; toast "Copied.").
+  3. **Download** (the original, filename as §4.4), **Favorite** (outline heart, filled `--of-accent` when on, optimistic), **Add to folder** (`folder-input`; opens the Add to folder picker of §2.8 anchored to the button, with on or off per folder for this one image) and **Delete** (`trash-2` in `--of-danger`). Delete asks "Delete this image?" / "It moves to the trash. You can restore it from there.", then shows the next image in the list, or the previous one, and closes when none is left.
+- **An image in the Trash** (design `JSKpv`): the header caption reads "In the trash since today" (the day it was deleted), the Info blocks are the same, and the footer is **Restore** (primary) and **Delete for good** (danger ghost, with the §2.5 dialog). Either one moves on to the next image in the Trash, as Delete does.
+- **Keys in M3a:** `←` `→`, `Esc`, `F` favourite, `D` download, `R` recreate, `Delete` (asks first), `⇧F` expand, `+` `-` `0` zoom. `U`, `E` and `1`–`3` arrive with M2.
+
+> **AC-4.0.1** Opening an image from a folder and pressing `→` repeatedly visits exactly that folder's images in grid order, loads the next page when needed, hides Next on the last one, and `Esc` returns to the grid at the same scroll with that card focused.
+> **AC-4.0.2** Deleting from the detail view moves the image to the Trash and shows the next image; restoring it from the Trash's detail view puts it back in its folders and in Favorites if it was there.
+
 ### 4.1 Overlay shell and geometry
 
 Radix `Dialog` rendered into a portal, `position: fixed; inset: 0`, above the composer and the feed. Reference geometry below is measured at 1440×900 and holds from 1280px up; below 1100px the panel collapses (§4.10).
@@ -1983,12 +2068,13 @@ Tab state is remembered per session, not per asset: opening the next image with 
 | Duration | e.g. `18.4s` | submit → file on disk |
 | Created | long local date-time | rendered through `Intl.DateTimeFormat` with the system locale (§2.12) — never a hardcoded US format |
 | File | filename + size, click to copy path | |
+| Folders | a chip per folder the image is in; more than two show "+N"; none reads "None" | click opens the folder in Assets (§2.8). Ships in M3a (§4.0) |
 
 Every row supports click-to-copy. A footer link **Copy settings as JSON** yields the frozen `NormalizedRequest` stored on the job set (§0.11), which is what makes a run reproducible outside the app.
 
 ### 4.4 Action row
 
-Pinned to the bottom of the panel, 8px gap between rows, 318px content width. The three iteration actions and their exact spellings are defined in §0.1.
+Pinned to the bottom of the panel, 8px gap between rows, 318px content width. The three iteration actions and their exact spellings are defined in §0.1. **Until M2 ships, the footer is §4.0's** (Recreate · Reuse · Copy image · Download · Favorite · Add to folder · Delete); the row below replaces it when the Edit tab lands.
 
 1. **Send to… — 318×40**, primary/accent, `border-radius: 10`. Opens a menu: **Canvas** (creates an Image node on a new or chosen canvas, pre-wired with this asset as its image input, §7), **Editor** (switches to the Edit tab). **Video is absent, not disabled** (§0.14): the job and asset model is modality-agnostic, so the entry appears when video lands, without a migration. Any item we do disable states its reason inline; we never show a dead control with no explanation.
 2. **Recreate | Use as reference — 2 × 155×40**, `background: var(--of-elevated-2)`, `border: 1px solid var(--of-border-strong)`. This matches the observed `[Recreate | Reference]` slot.
@@ -4836,6 +4922,42 @@ LIMIT :limit;
 
 Search is chronological, not relevance-ranked, because the feed's mental model is chronological; a `sort=relevance` flag switches the ORDER BY to `bm25(assets_fts)` and falls back to offset pagination for that mode only.
 
+**Search takes every library filter (M3a).** The FTS query is built from the same filter list as the feed page (`feedFilters`): the `asset_folders` join for `folder` (direct members only, §0.7), the `favourites` join for `favourite=1`, and `model_id`, `provider_id`, `kind` and `created_at >= :from` / `< :to`. So words, scope and filters combine freely and all page on the one `(created_at, id)` cursor. The library never lists `kind = 'mask'`. The first page (no cursor) of any library listing also runs one `COUNT(*)` over the same `WHERE` for the header's `total`; later pages skip it.
+
+**Folder tree and counts** (M3a). One query returns every folder with its direct live-image count; the client builds the tree from `parent_id` and derives each folder's subfolder count from the same list:
+
+```sql
+SELECT f.*, COUNT(a.id) AS count
+FROM folders f
+LEFT JOIN asset_folders af ON af.folder_id = f.id
+LEFT JOIN assets a ON a.id = af.asset_id AND a.deleted_at IS NULL
+GROUP BY f.id
+ORDER BY f.sort_order, f.name COLLATE NOCASE;
+```
+
+**Move a folder, refusing cycles** (M3a). Inside the `PATCH /api/folders/:id` transaction, before the update, the server walks up from the new parent; if it meets the folder being moved (or the new parent *is* that folder), the move is refused with `409 conflict` and nothing is written:
+
+```sql
+WITH RECURSIVE up(id, parent_id) AS (
+  SELECT id, parent_id FROM folders WHERE id = :new_parent_id
+  UNION ALL
+  SELECT f.id, f.parent_id FROM folders f JOIN up ON f.id = up.parent_id
+)
+SELECT 1 FROM up WHERE id = :folder_id LIMIT 1;   -- a row means "inside itself": refuse
+```
+
+**Delete a folder and what's inside it** (M3a). The descendant ids are read first (the same recursion walking down), so the route can emit one `folder.updated {deleted: true}` per folder; then a single `DELETE FROM folders WHERE id = :id` lets `ON DELETE CASCADE` on `folders.parent_id` and `asset_folders.folder_id` remove the subtree and its memberships. Foreign keys are on at runtime (§8.2), which this relies on.
+
+**Trash page** (M3a). Newest deletion first, keyset-paged on `(deleted_at, id)` against `idx_assets_trash`:
+
+```sql
+SELECT a.* FROM assets a
+WHERE a.deleted_at IS NOT NULL
+  AND (:cursor_ts IS NULL OR (a.deleted_at, a.id) < (:cursor_ts, :cursor_id))
+ORDER BY a.deleted_at DESC, a.id DESC
+LIMIT :limit;
+```
+
 **Version strip and History tab** — one index scan, no recursion (§0.7):
 
 ```sql
@@ -5031,21 +5153,23 @@ All provider traffic originates in this process, and outbound connections are re
 | `POST` | `/api/job-sets/:id/retry` | Re-submit after failure, reusing the same frozen request | `{onlyFailed?:bool}` → new job set |
 | `POST` | `/api/jobs/:id/cancel` | Cancel one output. On a Batch run it cancels the whole run, like the set route, because one provider batch can't lose one request (§0.12) | → `{ok}` |
 | `GET` | `/api/events` | **SSE** stream of job/asset/registry events (§8.4.6) | `?since=<eventId>` → `text/event-stream` |
-| `GET` | `/api/assets` | Feed / library listing | `?cursor=&limit=50&folder=&favourite=1&q=&model=&provider=&kind=&from=&to=&modality=image` → `{items:[{id,width,height,mime,sha256,modelId,createdAt,isFavourite,thumbUrl,fileUrl}], nextCursor}` |
-| `GET` | `/api/assets/:id` | Detail payload for the dialog's Info tab | → `{asset, jobSet, params, references:[asset], lineage:{ancestors,children}, folders:[], isFavourite}` |
+| `GET` | `/api/assets` | Feed / library listing | `?cursor=&limit=50&folder=&favourite=1&trash=1&q=&model=&provider=&kind=&from=&to=&modality=image` → `{items:[{id,width,height,mime,sha256,modelId,createdAt,isFavourite,thumbUrl,fileUrl}], nextCursor, total?}`. `folder` lists images filed **directly** in that folder (§0.7). `q` is the FTS search and combines with every other filter on the same cursor (§8.2.2). `trash=1` lists soft-deleted images instead, newest deletion first, on a `(deleted_at, id)` cursor, and ignores `q`, `folder` and `favourite`. `total` (the number of matches) comes only on the first page, when there is no `cursor`. Masks (`kind='mask'`) are never listed |
+| `GET` | `/api/assets/:id` | Detail payload for the dialog's Info tab | → `{asset, jobSet, params, references:[asset], lineage:{ancestors,children}, folders:[], isFavourite}`. Also answers for an image in the Trash (`asset.deletedAt` set), so the Trash's detail view works; `folders` then lists the folders it will return to |
 | `PATCH` | `/api/assets/:id` | Rename/tag/annotate | `{tags?, note?}` → asset |
 | `DELETE` | `/api/assets/:id` | Soft delete to Trash | `?hard=1` for immediate purge → `{ok}` |
-| `POST` | `/api/assets/:id/restore` | Undo a soft delete | → asset |
+| `POST` | `/api/assets/:id/restore` | Undo a soft delete; the image returns to its folders and favourite (§0.7) | → asset |
 | `PUT`/`DELETE` | `/api/assets/:id/favourite` | Set/clear favourite | → `{isFavourite}` |
-| `PUT`/`DELETE` | `/api/assets/:id/folders/:folderId` | Add to / remove from folder | → `{folders:[]}` |
-| `POST` | `/api/assets/bulk` | Multi-select actions from the feed checkboxes | `{ids:[], action:'delete'\|'favourite'\|'unfavourite'\|'addFolder'\|'removeFolder'\|'download', folderId?}` → `{affected}` |
+| `PUT`/`DELETE` | `/api/assets/:id/folders/:folderId` | Add to / remove from one folder. `PUT` is idempotent and keeps every other folder; `DELETE` removes only this membership (§0.7). `404 not_found` for an unknown folder or asset | → `{folders:[]}` |
+| `POST` | `/api/assets/bulk` | Multi-select actions from the feed, library and Trash checkboxes, and drag and drop | `{ids:[], action:'delete'\|'favourite'\|'unfavourite'\|'addFolder'\|'removeFolder'\|'download'\|'restore'\|'purge', folderId?}` → `{affected}`. One transaction per call. `addFolder` skips images already in the folder; `removeFolder` touches only that folder; `restore` and `purge` apply to images in the Trash only (`purge` is Delete for good, §8.6) |
 | `GET` | `/api/assets/:id/lineage` | Full graph for the lineage view | → `{nodes:[], edges:[]}` |
 | `POST` | `/api/uploads` | Upload a reference image (`multipart/form-data`, accepts `.jpg .jpeg .png .webp .heic` up to 20 MB, the smallest reference limit of the launch models; HEIC is transcoded to PNG on ingest and made smaller if the PNG passes 20 MB). The same bytes uploaded again return that upload (`200`, `duplicate: true`); bytes matching another kind of asset get an uploaded row against the same file | → `{asset, duplicate}` with `kind='uploaded'` |
 | `GET` | `/api/assets/:id/export` | Download with embedded metadata (§8.5.4) | `?format=png\|webp\|jpeg&metadata=1&sidecar=0` → binary, `Content-Disposition: attachment` |
 | `GET` | `/files/asset/:id` | Stream the original (range-capable, immutable cache) | → image bytes |
 | `GET` | `/files/thumb/:id` | WebP thumb, generated on miss; server resolves to the nearest-or-larger rung (§0.10) | `?h=<200\|280\|360\|456\|640>&dpr=1\|2`, or `?p=1440` → image/webp |
-| `GET`/`POST` | `/api/folders` | List / create | `{name, parentId?, color?}` → folder |
-| `PATCH`/`DELETE` | `/api/folders/:id` | Rename, re-parent, delete (assets are not deleted) | → folder / `{ok}` |
+| `GET` | `/api/folders` | Every folder, flat, sorted by `sort_order` then name; the client builds the tree from `parentId` (§8.2.2) | → `[{id, name, color, parentId, sortOrder, count, createdAt, updatedAt}]`, where `count` is the live images filed **directly** in the folder (§0.7) |
+| `POST` | `/api/folders` | Create, at the top level or inside another folder (no depth limit) | `{name, parentId?, color?}` → folder. `name` is trimmed, 1 to 200 characters, not unique. `404 not_found` when `parentId` names no folder. Emits `folder.updated` |
+| `PATCH` | `/api/folders/:id` | Rename and move | `{name?, parentId?, color?, sortOrder?}` → folder. `parentId: null` moves to the top level. A `parentId` that is the folder itself or any of its descendants is refused with **`409 conflict`** ("A folder can't go inside itself.") and nothing changes; the check runs in the same transaction as the update (§8.2.2). `404 not_found` for an unknown folder or parent. Emits `folder.updated` |
+| `DELETE` | `/api/folders/:id` | Delete the folder, **every folder inside it at any depth**, and all their memberships; never an image (§0.7) | → `{ok, deletedIds:[]}` (the folder and its descendants). Emits one `folder.updated {deleted: true}` per deleted folder |
 | `GET`/`POST` | `/api/presets` | Style-preset library list / create. **No `?kind=`** — the four entities have four endpoints (§0.8) | `{name, description?, payload}` → preset |
 | `PATCH`/`DELETE` | `/api/presets/:id` | Edit / delete (builtin presets are copy-on-edit) | → preset |
 | `POST` | `/api/presets/import` | Import one object or a bundle (JSON body or multipart file); **routes by envelope `kind`** (`style`\|`reference-set`\|`character`\|`palette`); reference images arrive inlined base64 and are re-materialised as assets | `{items:[…]}` → `{imported, skipped, conflicts}` |
@@ -5084,6 +5208,7 @@ All provider traffic originates in this process, and outbound connections are re
 | `GET` | `/api/usage` | Usage/cost rollup. Totals skip `simulated` rows (§0.13) | `?from=&to=&groupBy=day\|model\|provider` → `{rows:[], totalUsd, currency:'USD'}` |
 | `GET` | `/api/usage/export.csv` | CSV of `usage_log` | → `text/csv` |
 | `GET` | `/api/stats` | Counts + disk usage for Settings → Storage | → `{assets, bytes, thumbsBytes, dbBytes, trash:{count,bytes}}` |
+| `POST` | `/api/maintenance/empty-trash` | Empty trash: hard-delete every image in the Trash (§8.6), from the Trash header and Settings → Storage | `{}` → `{affected, reclaimedBytes}`. Emits `asset.deleted` per image |
 | `POST` | `/api/maintenance/gc` | Orphan sweep (§8.6) | `{dryRun?:bool}` → `{orphanFiles, missingRows, staleThumbs, reclaimedBytes}` |
 | `POST` | `/api/maintenance/backup` | `VACUUM INTO` snapshot (+ optional asset tar) | `{includeAssets?:bool}` → `{path, bytes}` |
 | `POST` | `/api/maintenance/reindex` | Rebuild FTS (`INSERT INTO assets_fts(assets_fts) VALUES('rebuild')`) and/or regenerate thumbs | `{fts?:bool, thumbs?:bool}` → `{jobId}` |
@@ -5361,7 +5486,7 @@ C2PA signing is explicitly out of scope for v1 — noted as a v1.1 candidate, no
 
 ### 8.6 Filesystem hygiene
 
-**Deletes.** `DELETE /api/assets/:id` is a soft delete: `deleted_at` is set, the asset leaves every feed, files stay. **The FTS row is retained** — no trigger fires on `deleted_at` and none is added; every query filters `deleted_at IS NULL`, and hard delete removes the FTS row via the `assets_ad` trigger. A Trash view lists soft-deleted assets. The trash never empties itself by default: purge happens on the user's command (Empty trash, or delete from the Trash view). Only when the person sets `trashRetentionDays` (default `null` = never) does a purge pass run, at boot and once a day, hard-deleting assets whose `deleted_at` is older than that many days. Hard delete removes the original file, every `thumbs/<sha>@*` entry **whose hash no longer has a live asset**, and the row (cascading `asset_folders`, `favourites`, and `asset_edges` on `child_asset_id` only). Deleting a parent never deletes its children: `assets.parent_asset_id` and `asset_edges.parent_asset_id` carry **no foreign key**, so the pointer survives as a tombstone and the lineage view renders "deleted image" instead of losing the chain.
+**Deletes.** `DELETE /api/assets/:id` is a soft delete: `deleted_at` is set, the asset leaves every feed, files stay. **The FTS row is retained** — no trigger fires on `deleted_at` and none is added; every query filters `deleted_at IS NULL`, and hard delete removes the FTS row via the `assets_ad` trigger. A soft-deleted asset **keeps its `asset_folders` and `favourites` rows**, hidden by the same filter, so `POST /api/assets/:id/restore` (or bulk `restore`) puts it back in every folder and in Favorites (§0.7). A Trash view (`/assets/trash`, §2.8) lists soft-deleted assets, newest deletion first. The trash never empties itself by default: purge happens on the user's command (Empty trash, `POST /api/maintenance/empty-trash`; Delete for good from the Trash view, `DELETE /api/assets/:id?hard=1` or bulk `purge`), each behind a confirmation that says it can't be undone. Only when the person sets `trashRetentionDays` (default `null` = never) does a purge pass run, at boot and once a day, hard-deleting assets whose `deleted_at` is older than that many days. Hard delete removes the original file, every `thumbs/<sha>@*` entry **whose hash no longer has a live asset**, and the row (cascading `asset_folders`, `favourites`, and `asset_edges` on `child_asset_id` only). Deleting a parent never deletes its children: `assets.parent_asset_id` and `asset_edges.parent_asset_id` carry **no foreign key**, so the pointer survives as a tombstone and the lineage view renders "deleted image" instead of losing the chain.
 
 **Orphan GC** (`POST /api/maintenance/gc`, dry-run by default, also offered on startup if >7 days since the last sweep):
 
@@ -5383,7 +5508,7 @@ C2PA signing is explicitly out of scope for v1 — noted as a v1.1 candidate, no
 
 ### 8.7 Delivery plan
 
-Seven milestones: M0.5 was inserted after M0 shipped, for provider settings and speed, and M0.6 after it, for restarts. Each is independently demoable and ends with a working app; nothing is "integrated later". Tasks are ordered and sized to become GitHub issues verbatim.
+Eight milestones: M0.5 was inserted after M0 shipped, for provider settings and speed, and M0.6 after it, for restarts. **M3a (Assets) was split out of M3 after the Canvas merged**: it takes M3-08, M3-09, M3-10 and M2-14 whole, and the Info-only form of M2-01, M2-02 and M2-03, so the library and the detail view ship before the editor and presets. Each is independently demoable and ends with a working app; nothing is "integrated later". Tasks are ordered and sized to become GitHub issues verbatim.
 
 #### M0 — Skeleton, settings, one adapter end-to-end
 
@@ -5470,9 +5595,9 @@ Seven milestones: M0.5 was inserted after M0 shipped, for provider settings and 
 
 **Definition of done** (§0.14, written to be falsifiable): Edit performs whole-image instruction edit on both launch providers; masked inpaint and mask-synthesised outpaint on OpenAI GPT Image **once `M2-15` confirms polarity**; the §0.9 regional fallback on Gemini with the Approximate badge; Upscale ships as **local Lanczos ×2/×4 only**, labelled *"Resizes, adds no detail"*; Remove background renders disabled with its reason. No launch adapter declares `ops.upscale` or `ops.removeBackground`, so **a disabled row with correct copy is the pass condition for M2-08 and M2-09** — not a capability we cannot buy. Clicking a tile opens the detail dialog with blurred backdrop, arrow-key navigation and Info · Edit · History tabs, with a working version strip and lineage.
 
-1. `M2-01` Detail dialog shell: 352 px right panel, blurred/scaled backdrop, ←/→ navigation through the current feed query, Esc to close, "last viewed" marker on return.
-2. `M2-02` Info tab: PROMPT block with copy, reference thumbnail row (72 px, primary highlighted), clamped prompt with See all/Hide, collapsible DETAILS rows (model, quality, size, created).
-3. `M2-03` Footer actions: primary pair **`Recreate | Use as reference`** (2 × 155×40); Download, Favourite, Share→Copy file path/Copy image; More→**Reuse** / Add to folder / Copy / Delete. Exactly the three §0.1 actions, exactly those labels.
+1. `M2-01` *(the shell, arrows, Esc and last-viewed marker ship in M3a as `M3a-13`; M2 adds the tabs)* Detail dialog shell: 352 px right panel, blurred/scaled backdrop, ←/→ navigation through the current feed query, Esc to close, "last viewed" marker on return.
+2. `M2-02` *(ships in M3a as `M3a-13`, with the §4.0 rows: Model, Speed, Size, Created, Folders; M2 adds the rest of §4.3)* Info tab: PROMPT block with copy, reference thumbnail row (72 px, primary highlighted), clamped prompt with See all/Hide, collapsible DETAILS rows (model, quality, size, created).
+3. `M2-03` *(M3a ships §4.0's footer as `M3a-13`: Recreate, Reuse, Copy image, Download, Favorite, Add to folder, Delete; M2 replaces it with this row)* Footer actions: primary pair **`Recreate | Use as reference`** (2 × 155×40); Download, Favourite, Share→Copy file path/Copy image; More→**Reuse** / Add to folder / Copy / Delete. Exactly the three §0.1 actions, exactly those labels.
 4. `M2-04` `POST /api/edit` + `POST /api/masks` + job-set plumbing for every non-`generate` `Op`.
 5. `M2-05` Mask canvas: brush/eraser with adjustable size, lasso, rectangular region; committed mask uploaded once via `POST /api/masks` as a `kind='mask'` asset. Depends on `M2-15`.
 6. `M2-06` Edit area flow: selection box with inline prompt field → job set → new asset row with `parent_asset_id`, `op`, `op_params`, `mask_asset_id`. Depends on `M2-15`.
@@ -5484,7 +5609,7 @@ Seven milestones: M0.5 was inserted after M0 shipped, for provider settings and 
 12. `M2-12` Lineage view + `GET /api/assets/:id/lineage` (the recursive reference graph).
 13. `M2-13` Export with embedded metadata (PNG/WebP/JPEG) + sidecar option + bulk ZIP + the re-encode watermark warning.
 14. `M2-13a` **Metadata writer spike — blocking `M2-13`.** Confirm PNG `tEXt`/`iTXt` plus the legacy `parameters` chunk round-trip, and WebP XMP/EXIF round-trip, under Bun; pick the library and record a fixture.
-15. `M2-14` Trash, restore, Empty trash, the optional daily purge when `trashRetentionDays` is set (default `null`: never purge automatically), and the `file_state='missing'` tile state.
+15. `M2-14` *(moved to M3a: `M3a-04`, `M3a-12`)* Trash, restore, Empty trash, the optional daily purge when `trashRetentionDays` is set (default `null`: never purge automatically), and the `file_state='missing'` tile state.
 16. `M2-15` **Live probe of OpenAI `/v1/images/edits`: mask polarity, dimension and format requirements**, and whether a batch line can carry an edit as a JSON body (§6.14 Speeds); if it can, the `gpt-image-2` batch offer widens to `ops: ["generate", "edit", "inpaint"]`. Fixture recorded, §6.14's manifest note updated. **Blocking prerequisite for `M2-05` and `M2-06`** — we do not ship a mask tool against an unverified polarity.
 17. `M2-16` Colour grading: local WebGL stack (exposure, contrast, temp/tint, saturation/vibrance, lift/gamma/gain, grain, bloom, halation, vignette), `.cube` import/export, Match reference by local 3D histogram matching. **Preset names are Openfield's own.** Writes `generative = 0`, `provider_id = 'local'`, cost $0.00.
 18. `M2-17` LAYERS panel: base + mask + local overlays (text, shapes, grade) with visibility, reorder, rename, merge. Generative layer decomposition is a visible disabled plugin slot.
@@ -5493,7 +5618,7 @@ Seven milestones: M0.5 was inserted after M0 shipped, for provider settings and 
 
 #### M3 — Presets, library and costs
 
-**Definition of done:** the user can save a prompt+style+params combination as a preset, apply it from a picker, export the library to JSON and import it on another machine; the Assets library with folders, favourites and date grouping works; a usage panel shows per-run and cumulative USD.
+**Definition of done:** the user can save a prompt+style+params combination as a preset, apply it from a picker, export the library to JSON and import it on another machine; (the Assets library with folders, favourites and date grouping moved to M3a); a usage panel shows per-run and cumulative USD.
 
 1. `M3-01` Preset data layer + CRUD API (`payload_json` round-trips the §5.3 object whole); copy-on-edit for builtin presets.
 2. `M3-02` Preset picker sheet above the composer (hero band, tabs, search, 6-column card grid) with our own copy and artwork.
@@ -5502,15 +5627,35 @@ Seven milestones: M0.5 was inserted after M0 shipped, for provider settings and 
 5. `M3-05` Starter pack: 12 bundled presets and 8 bundled palettes, authored by us, original names and thumbnails, re-seeded from `apps/server/seed/presets/` and `apps/server/seed/palettes/` when the rows are deleted.
 6. `M3-06` Palettes: `/api/palettes` CRUD, extraction from an asset, `mode` = prompt / reference / both — our open substitute for the reference product's colour-transfer sheet.
 7. `M3-07` Reference sets and characters: `/api/reference-sets` and `/api/characters` CRUD, composer picker tiles, injection per `injection`/`token`, with a clear "*Model* doesn't take reference images" state where `references.supported` is false (§5.6).
-8. `M3-08` Assets library route: 256 px sidebar (search, All assets, Favourites with count, folder tree with counts), fixed 6-column grid with date group headers and group-select checkboxes.
-9. `M3-09` Folders API + drag-to-folder, add-to-folder from tile and detail menus.
-10. `M3-10` FTS search over prompts with the shared cursor, plus model/provider/date filters.
+8. `M3-08` *(moved to M3a: `M3a-06`, `M3a-08`, with nested folders)* Assets library route: 256 px sidebar (search, All assets, Favourites with count, folder tree with counts), fixed 6-column grid with date group headers and group-select checkboxes.
+9. `M3-09` *(moved to M3a: `M3a-03`, `M3a-07`, `M3a-09`, `M3a-10`)* Folders API + drag-to-folder, add-to-folder from tile and detail menus.
+10. `M3-10` *(moved to M3a: `M3a-04`, `M3a-11`)* FTS search over prompts with the shared cursor, plus model/provider/date filters.
 11. `M3-11` Cost engine: per-model price snapshots with `pricedAt` and `sourceUrl`, the pure `estimate()` before submit, reconciliation after, `usage_log` writes including `discarded` rows, `~/.openfield/prices.json` overlay, "Prices as of `<date>`. They may have changed since." disclosure in the UI (§6.9). `refreshPricing()` proposes a diff the user accepts or rejects — prices never change silently.
 12. `M3-12` Usage panel: today / 7 days / 30 days totals, per-model breakdown, a **"Canceled but charged"** line summing `discarded = 1`, `~` markers on `cost_source = 'estimated'` rows, CSV export, optional monthly soft budget warning.
 13. `M3-13` Maintenance UI: storage stats, GC, backup, clear thumb cache, FTS reindex, and the thumbnail status (on, or off when `sharp` can't load) shown in Settings → Storage.
 14. `M3-14` Restore-settings-from-image (read embedded metadata on upload).
 15. `M3-15` Settings screens filled in behind the `M0-17` IA: Defaults, Appearance, Spending, Privacy (including `networkHosts ∪ assetHosts`), Help (the Error log), Experimental.
 16. `M3-16` **Higgsfield adapter (§6.15)**, built against the real public API with the owner's key: Soul v2 standard endpoint, two-field key schema, `assetHosts` download path, `price.kind: 'unknown'`. Every §6.15 fact is verified live with that key and the fixtures are recorded from those runs. Ships only if a user key reaches the documented public API; otherwise `meta.stable: false` behind Settings → Experimental.
+
+#### M3a Assets
+
+**Definition of done:** in fake mode, `/assets` shows All images, Favorites, Trash and a folder tree with counts of what's directly inside; the person creates Clients › Acme › Spring 2026 (top level and inside), renames and moves folders by drag and by Move to, and can't move a folder into itself or its descendants (the server answers `409 conflict` too); opening Acme shows its breadcrumb, its subfolders as cards, then the images filed directly in it. An image added to two folders shows in both; *Remove from folder* inside Acme leaves it in the other. Images dragged from the grid onto a sidebar folder land there in one request. Search "neon" with a model, company and date filter pages on the shared cursor. Group checkboxes, `Shift+click` ranges and the bulk bar work in every view. Delete moves images to the Trash; Restore puts them back in their folders and Favorites; Delete for good and Empty trash ask first and remove files; nothing empties the trash by itself. Clicking an image in Assets or in the Image feed opens the detail view (§4.0) with arrows through that list, Esc to close, the Info panel and the footer actions. Canvas runs still file their images into the canvas's folder, including after that folder is renamed or moved. Screens match design `s5XLm` … `BwkXq` (§2.8) in one measured pass.
+
+1. `M3a-01` **Contracts** (`packages/core`): `BULK_ACTIONS` gains `restore` and `purge`; `assetsListQuerySchema` gains `trash`; the list response gains `total` (first page only); the `DELETE /api/folders/:id` response `{ok, deletedIds}`; the empty-trash response `{affected, reclaimedBytes}`; `LIBRARY_DATE_PRESETS` (`today`, `7d`, `30d`, `12m`) and the helper that turns one into `from` in the viewer's time zone; every Assets string in `en.json` (§2.7, §2.8, §4.0 copy, including the new Delete body without "removed from folders"). Schema tests.
+2. `M3a-02` **Database** (`packages/db/src/queries/`): the folder list with direct counts; `moveFolder` with the recursive cycle check in the same transaction (§8.2.2); `deleteFolder` returning the subtree ids before the cascading delete; soft delete that keeps `asset_folders` and `favourites`; `restoreAssets`; `trashPage` on `(deleted_at, id)`; `emptyTrash`; the FTS search taking every `feedFilters` condition; `total` on the first page; masks never listed. Unit tests: cycles refused at depth 1 and 5, cascade depth, counts after soft delete and restore, multi-folder membership, remove from one folder only.
+3. `M3a-03` **Folder routes** (`apps/server/src/routes/folders.ts`): `GET`, `POST`, `PATCH` (rename, move, `parentId: null`, `409 conflict` on a cycle, `404` on an unknown parent) and `DELETE` (subtree, `deletedIds`), each emitting `folder.updated`. Route tests, including a request that races two moves which would make a loop together: the second one gets `409`.
+4. `M3a-04` **Asset and trash routes**: `/api/assets` with `trash`, `q` plus filters and `total`; `GET /api/assets/:id` for trashed images; bulk `restore` and `purge`; `POST /api/maintenance/empty-trash` with file and thumb cleanup (§8.6); the retention purge at boot and daily only when `trashRetentionDays` is set; `?trash=1` on the file routes for the Trash's detail view. Route tests.
+5. `M3a-05` **Web data layer** (`apps/web/src/api/hooks/`): folders (tree builder, optimistic create, rename, move and delete with rollback), library listing per view with the shared cursor, membership mutations (single, bulk, drag with Undo), trash mutations, and cache updates on `folder.updated`, `asset.updated` and `asset.deleted`.
+6. `M3a-06` **Routes and sidebar**: `/assets`, `/assets/favourites`, `/assets/folder/:folderId`, `/assets/trash` with their query params (§2.1); the sidebar of design `R0kf8n`: search field, All images, Favorites and Trash with counts, the folder tree (indent 4 + 20 × depth, expand and collapse remembered per viewer, ARIA tree keys), and the "No folders yet" state.
+7. `M3a-07` **Folder operations**: New folder from the sidebar, the header, New subfolder and `⌘/Ctrl+Shift+N` with the inline Editing row; Rename (menu, `F2`, double-click); the folder menu on right-click and ⋯; Move to with Top level, the current parent checked and the subtree disabled; the delete dialogs with and without subfolders (design `IxNRM`, `sHp75`) and where the view goes afterwards.
+8. `M3a-08` **Library views**: headers for All images, Favorites, a folder (breadcrumb, deep truncation), Trash and search (design `PEPQO`, `y3xNHk`, `TYC2O`, `X2HLS`); the subfolder card section; date groups with sticky headers and group checkboxes; the 174px grid with zoom and group virtualisation; card hover with the favourite toggle, Download and the tile menu (plus Remove from folder inside a folder); every §2.7 empty state.
+9. `M3a-09` **Selection and bulk actions**: checkbox, `⌘/Ctrl+click`, `Shift+click` ranges across groups, group select that finishes loading the group first; the bar per view (§2.5: library, in a folder with Remove from folder, Trash); the Add to folder picker with on, mixed and off checkboxes, search and inline New folder (design `RI4UA`, `C85UO`); one request per bulk action.
+10. `M3a-10` **Drag and drop**: images from the grid onto tree rows and folder cards (one bulk `addFolder`, toast with Undo); folders onto folders and onto the Folders heading; hover-to-expand after 600 ms; the ghosts, drop states and hints of design `qimon`, `D1CFEp`, `aIda4`, `ERDRV`, `l6YLyO`, `BHy26`; refused drops never sent; keyboard alternatives are the menus.
+11. `M3a-11` **Search and filters**: the sidebar field (200 ms debounce) searching the current view, the scope pill, the Model, Company and Date popovers (design `lOHwD`, `c0TOf`, `uhG8m`), Clear all, URL state, results in date groups on the shared cursor, the no-results states.
+12. `M3a-12` **Trash**: the view, its header note and Empty trash dialog (design `rfGxK`), card Restore and Delete for good (`N2Bods`, `pm10A`), the Trash bar (`errFg`), the retention note when set, and restore returning images to their folders and Favorites.
+13. `M3a-13` **Detail view, Info form** (§4.0; `M2-01` to `M2-03` pulled forward): the overlay with the blurred backdrop, Previous and Next arrows and `←`/`→` through the list it was opened from (every library view and the Image feed), `?asset=`, Esc, last viewed; the panel (header, PROMPT with Copy and references, DETAILS with Folders, no tabs); the footer (Recreate, Reuse, Copy image, Download, Favorite, Add to folder, Delete); the Trash form (Restore, Delete for good). In the feed, a plain click on a finished tile now opens it; the tile's checkbox, `⌘/Ctrl+click` and `Shift+click` keep selecting (§2.5).
+14. `M3a-14` **Canvas filing** (§0.7, §7.1): canvas runs keep filing into the canvas's folder by id after the person renames, moves or nests it, and make a new top-level folder only when it was deleted. Tests.
+15. `M3a-15` **Tests and E2E** in fake mode: the definition of done end to end (nested create, move, refused move, delete with subfolders, multi-folder membership, remove from folder, drag to folder, search with filters, group select and ranges, trash restore, delete for good and empty, detail arrows from a folder and from the feed), plus one measured `getComputedStyle`/`getBoundingClientRect` pass per screen against the design values in the component inventory.
 
 #### M4 — Canvas
 
@@ -5573,9 +5718,9 @@ Seven milestones: M0.5 was inserted after M0 shipped, for provider settings and 
 | 23 | Colour Transfer / HEX sheet with palette presets | ⚠️ M3 substitute | **Open substitute:** the `palettes` entity (§0.8) — extracted colours plus an injection `mode` of prompt / reference / both |
 | 24 | Soul Cinema camera/lens wheel pickers | ⚠️ M3 substitute | **Open substitute:** a `params`/prompt preset family with camera and lens vocabulary; no bespoke wheel UI in v1 |
 | 25 | Hero-sheet picker pattern (1120×540 panel above the composer) | ✅ M3 | Reused for presets and characters, our own copy |
-| 26 | Detail dialog with blurred backdrop, Info/Edit/Comments tabs | ⚠️ M2 | Info · Edit · **History**; Comments dropped (single user), History replaces it |
+| 26 | Detail dialog with blurred backdrop, Info/Edit/Comments tabs | ⚠️ M3a/M2 | The shell and Info panel ship in M3a with the tabs hidden (§4.0); Info · Edit · **History** in M2; Comments dropped (single user), History replaces it |
 | 27 | ←/→ navigation through the feed, Esc to close, "last viewed" badge | ✅ M2 | |
-| 28 | Info tab: prompt + copy, reference thumbs, details rows, footer actions | ✅ M2 | |
+| 28 | Info tab: prompt + copy, reference thumbs, details rows, footer actions | ✅ M3a | §4.0's rows and footer; M2 completes §4.3 and §4.4 |
 | 29 | "Turn to video" primary action | ❌ v1 | Image-only in v1; the job/asset model is already modality-agnostic |
 | 30 | Edit tab: version strip, zoom control, tool bar (select/hand/regional/lasso/pen/eraser/shapes) | ✅ M2 | |
 | 31 | Regional edit with inline prompt on the selection | ✅ M2 | |
@@ -5587,8 +5732,8 @@ Seven milestones: M0.5 was inserted after M0 shipped, for provider settings and 
 | 37 | Colour Grading preset grid | ✅ M2 | Local WebGL grade stack with **our own preset names**, `.cube` import/export, Match reference (§4.8 row 6). Non-generative, $0.00, offline, every model |
 | 38 | Enhancer / Relight / Angles tools | ✅ M2 | Widget-compiled instruction edits, labelled best-effort, original preset names (§4.8 rows 7–9) |
 | 39 | Layers panel with add/visibility/reorder | ✅ M2 | LAYERS panel: base + mask + local overlays, with visibility, reorder, rename, merge (§4.8). Generative layer decomposition is the disabled slot in row 35 |
-| 40 | Assets library: sidebar, favourites count, folders with counts, date groups, group-select | ✅ M3 | Workspaces/teams dropped |
-| 41 | Fixed 6-column grid in the library (distinct from the feed's justified rows) | ✅ M3 | |
+| 40 | Assets library: sidebar, favourites count, folders with counts, date groups, group-select | ✅ M3a | Folders nest with no depth limit, an image can be in several, Trash is its own view (§2.8). Workspaces/teams dropped |
+| 41 | Fixed 6-column grid in the library (distinct from the feed's justified rows) | ✅ M3a | |
 | 42 | Elements + `@`-mention typeahead in the prompt | ✅ M1 | `@` resolves Openfield presets, characters, reference sets and saved references (§3.2/§5.7); the reference product's server-side Elements entity is not reproduced |
 | 43 | Canvas index with templates tab and auto-generated previews | ✅ M4 | Starter templates authored by us (§7.3): three ship with M4 (Start from a reference, Storyboard, Compare two styles); *Image edit* lands with M4-19 |
 | 44 | Canvas editor: React Flow graph, dotted grid, zoom cluster, minimap, toolbar, autosave | ✅ M4 | |

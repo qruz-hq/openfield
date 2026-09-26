@@ -36,6 +36,16 @@ export function olderThan(
   return sql`(${createdAt}, ${id}) < (${at.createdAt}, ${at.id})`;
 }
 
+/**
+ * Splits a long id list so one statement never binds more values than SQLite allows. Bulk actions
+ * name up to 5000 images, and emptying the trash can touch any number.
+ */
+export function chunked<T>(items: readonly T[], size = 500): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 /** Callers fetch limit + 1 rows; the extra row only says whether another page exists. */
 export function toPage<T>(
   rows: T[],

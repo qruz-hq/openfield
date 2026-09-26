@@ -104,6 +104,19 @@ Every stop and what it left behind is also written to `logs/openfield.log` in yo
 
 An image that was interrupted, or cut off again while it ran again, offers **Try again**.
 
+## Assets
+
+**Assets** in the top bar is your whole library in a tidy grid: **All images**, **Favorites**, your folders and the **Trash**, grouped by day.
+
+- Folders nest as deep as you like. Make one with **+** beside **Folders**, or **New folder** inside the open folder. Drag a folder onto another to move it, or onto the **Folders** heading to bring it back to the top level. Opening a folder shows its subfolders first, then the images filed in it.
+- An image can be in several folders, like tags. Drag images onto a folder, or select some and pick **Add to folder**. **Remove from folder** takes them out of the open folder only. Folders are labels, so files never move on disk.
+- Deleting a folder deletes the folders inside it too. The images stay in your library.
+- Search matches prompts, and **Filter** narrows by model, company and date. Click a checkbox to select, Shift-click for a range, or tick a day's heading to select that whole day.
+- Click any image, here or on the Image page, to see it large with its prompt, references and details. Use the arrow keys to step through the list you opened it from, and Esc to close. From there you can **Recreate**, **Reuse** its prompt and settings, download, favorite, file or delete it.
+- Delete moves images to the Trash, where they keep their folders and favorite, so **Restore** puts them back where they were. The Trash never empties itself on its own: **Delete for good** or **Empty trash** removes the files from your disk.
+
+Each canvas files the images it makes into a folder named after it. Rename or move that folder and new images still land in it.
+
 ## Canvas
 
 Canvas is where you build image flows you can run again. Open **Canvas** in the top bar and start from a blank canvas or a template.

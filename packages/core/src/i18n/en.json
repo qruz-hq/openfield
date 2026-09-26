@@ -217,9 +217,9 @@
       "ready": "{count, plural, one {# image ready} other {# images ready}}"
     },
     "delete": {
-      "title": "{count, plural, one {Delete # image?} other {Delete # images?}}",
-      "body": "They move to the trash until you empty it. They're also removed from folders and canvases.",
-      "bodyDays": "They move to the trash for {days, plural, one {# day} other {# days}}. They're also removed from folders and canvases.",
+      "title": "{count, plural, one {Delete this image?} other {Delete # images?}}",
+      "body": "{count, plural, one {It moves to the trash. You can restore it from there.} other {They move to the trash. You can restore them from there.}}",
+      "bodyDays": "{count, plural, one {It moves to the trash. You can restore it from there. It's deleted for good after {days, plural, one {# day} other {# days}} in the trash.} other {They move to the trash. You can restore them from there. They're deleted for good after {days, plural, one {# day} other {# days}} in the trash.}}",
       "confirm": "Delete",
       "done": "{count, plural, one {Deleted # image.} other {Deleted # images.}}"
     },
@@ -1235,7 +1235,14 @@
         "more": "More images",
         "run": "Run",
         "advanced": "Advanced",
-        "changed": "{count, plural, one {# setting changed} other {# settings changed}}"
+        "changed": "{count, plural, one {# setting changed} other {# settings changed}}",
+        "speedNote": {
+          "batch": "Batch speed. Half price, ready within a day.",
+          "flex": "Flex speed. Half price, can take a few minutes.",
+          "priority": "Priority speed. Costs more, stays fast when it's busy.",
+          "other": "{speed} speed."
+        },
+        "changeSpeed": "Change"
       },
       "addMenu": {
         "label": "Add node",
@@ -1248,6 +1255,21 @@
           "utilities": "Utilities"
         },
         "noMatches": "No nodes match \"{query}\"."
+      },
+      "card": {
+        "noPrompt": "Add a prompt to run this",
+        "stop": "Stop",
+        "stopNamed": "Stop {name}",
+        "cancelNamed": "Cancel {name}",
+        "failed": "Failed",
+        "needsKey": "Needs a key",
+        "cantRun": "Can't run yet",
+        "canceled": "Canceled",
+        "charged": "You may still be charged for work that already started.",
+        "noKey": "No {company} key yet.",
+        "pager": "{index} of {count}",
+        "previous": "Previous image",
+        "next": "Next image"
       }
     },
     "run": {
@@ -1280,6 +1302,213 @@
       "title": "Your images",
       "body": "Everything you make is on the Image page.",
       "goToImage": "Go to Image"
+    },
+    "label": "Assets",
+    "views": {
+      "all": "All images",
+      "favorites": "Favorites",
+      "trash": "Trash"
+    },
+    "images": "{count, plural, one {# image} other {# images}}",
+    "sidebar": {
+      "label": "Library",
+      "search": "Search",
+      "clearSearch": "Clear search",
+      "folders": "Folders",
+      "newFolder": "New folder",
+      "noFolders": "Group images into folders. An image can be in more than one.",
+      "expand": "Expand {folder}",
+      "collapse": "Collapse {folder}",
+      "more": "More for {folder}"
+    },
+    "folder": {
+      "newFolder": "New folder",
+      "newSubfolder": "New subfolder",
+      "rename": "Rename",
+      "moveTo": "Move to",
+      "moveHeading": "Move “{folder}” to",
+      "topLevel": "Top level",
+      "delete": "Delete folder",
+      "menu": "Folder menu",
+      "name": "Folder name",
+      "editHint": "Enter to save, Esc to cancel",
+      "breadcrumb": "Folder path",
+      "hiddenLevels": "Show the folders in between",
+      "sectionTitle": "Folders",
+      "meta": "{images, plural, one {# image} other {# images}}",
+      "metaWithFolders": "{images, plural, one {# image} other {# images}} · {folders, plural, one {# folder} other {# folders}}",
+      "gone": "That folder no longer exists.",
+      "insideItself": "A folder can't go inside itself.",
+      "deleteDialog": {
+        "title": "Delete “{folder}”?",
+        "body": "The images stay in your library.",
+        "bodyNested": "{count, plural, one {The folder inside it is deleted too.} other {The # folders inside it are deleted too.}} The images stay in your library.",
+        "confirm": "Delete folder"
+      }
+    },
+    "drag": {
+      "add": "{count, plural, one {Add to {folder}} other {Add # images to {folder}}}",
+      "moveInto": "Move into {folder}",
+      "moveTop": "Move to top level",
+      "insideItself": "A folder can't go inside itself"
+    },
+    "picker": {
+      "label": "Add to folder",
+      "find": "Find a folder",
+      "newFolder": "New folder",
+      "add": "Add",
+      "noMatches": "No folders match “{query}”",
+      "none": "No folders yet"
+    },
+    "header": {
+      "resultsFor": "Results for “{query}”",
+      "filter": "Filter",
+      "trashNote": "Images stay here until you delete them for good.",
+      "trashNoteDays": "{days, plural, one {Images are deleted for good after # day.} other {Images are deleted for good after # days.}}",
+      "emptyTrash": "Empty trash"
+    },
+    "filters": {
+      "label": "Filters",
+      "scope": "In {folder}",
+      "searchAll": "Search all images",
+      "model": "Model",
+      "anyModel": "Any model",
+      "company": "Company",
+      "anyCompany": "Any company",
+      "date": "Date",
+      "dates": {
+        "any": "Any time",
+        "today": "Today",
+        "7d": "Last 7 days",
+        "30d": "Last 30 days",
+        "12m": "Last 12 months"
+      },
+      "clear": "Clear {filter}",
+      "clearAll": "Clear all"
+    },
+    "groups": {
+      "today": "Today",
+      "yesterday": "Yesterday",
+      "select": "Select {group}"
+    },
+    "card": {
+      "select": "Select",
+      "favorite": "Favorite",
+      "unfavorite": "Remove from favorites",
+      "download": "Download",
+      "more": "More",
+      "removeFromFolder": "Remove from folder",
+      "restore": "Restore",
+      "deleteForGood": "Delete for good"
+    },
+    "selection": {
+      "label": "Selected images",
+      "count": "{count} selected",
+      "download": "Download",
+      "addToFolder": "Add to folder",
+      "removeFromFolder": "Remove from folder",
+      "favorite": "Favorite",
+      "unfavorite": "Unfavorite",
+      "delete": "Delete",
+      "restore": "Restore",
+      "deleteForGood": "Delete for good",
+      "clear": "Clear"
+    },
+    "dialogs": {
+      "deleteForGood": {
+        "title": "{count, plural, one {Delete this image for good?} other {Delete # images for good?}}",
+        "body": "{count, plural, one {It's removed from your computer. You can't undo this.} other {They're removed from your computer. You can't undo this.}}",
+        "confirm": "Delete for good"
+      },
+      "emptyTrash": {
+        "title": "Empty the trash?",
+        "body": "{count, plural, one {The image in the trash is deleted for good. You can't undo this.} other {The # images in the trash are deleted for good. You can't undo this.}}",
+        "confirm": "Empty trash"
+      }
+    },
+    "toast": {
+      "added": "{count, plural, one {Added # image to {folder}.} other {Added # images to {folder}.}}",
+      "alreadyIn": "{count, plural, one {It's already in {folder}.} other {They're already in {folder}.}}",
+      "removed": "{count, plural, one {Removed # image from {folder}.} other {Removed # images from {folder}.}}",
+      "restored": "{count, plural, one {Restored # image.} other {Restored # images.}}",
+      "deletedForGood": "{count, plural, one {Deleted # image for good.} other {Deleted # images for good.}}",
+      "trashEmptied": "Emptied the trash.",
+      "recreating": "{count, plural, one {Recreating # image.} other {Recreating # images.}}",
+      "preparingDownload": "{count, plural, one {Getting # image ready.} other {Getting # images ready.}}"
+    },
+    "emptyStates": {
+      "favorites": {
+        "title": "No favorites yet",
+        "body": "Select the heart on an image to keep it here."
+      },
+      "trash": {
+        "title": "The trash is empty",
+        "body": "Deleted images stay here until you delete them for good."
+      },
+      "search": {
+        "title": "No images match “{query}”",
+        "body": "Try other words, or clear the filters.",
+        "bodyWords": "Try other words.",
+        "action": "Clear search"
+      },
+      "searchFolder": {
+        "title": "Nothing in {folder} matches “{query}”",
+        "body": "Try other words, or search all images.",
+        "bodyFiltered": "Try other words, remove a filter, or search all images.",
+        "action": "Search all images"
+      },
+      "folder": {
+        "title": "No images in {folder} yet",
+        "body": "Drag images onto this folder, or select a few and choose Add to folder."
+      },
+      "filtered": {
+        "title": "No images match these filters",
+        "body": "Remove a filter, or clear them all.",
+        "action": "Clear all"
+      }
+    },
+    "detail": {
+      "label": "Image details",
+      "previous": "Previous image",
+      "next": "Next image",
+      "close": "Close",
+      "inTrash": "{when, select, today {In the trash since today} yesterday {In the trash since yesterday} other {In the trash since {date}}}",
+      "prompt": "Prompt",
+      "copy": "Copy",
+      "copied": "Copied",
+      "seeAll": "See all",
+      "hide": "Hide",
+      "noPrompt": "No prompt",
+      "reference": "Reference {index}",
+      "details": "Details",
+      "model": "Model",
+      "speed": "Speed",
+      "size": "Size",
+      "sizeValue": "{width} × {height}",
+      "created": "Created",
+      "folders": "Folders",
+      "noFolders": "None",
+      "moreFolders": "+{count}",
+      "recreate": "Recreate",
+      "reuse": "Reuse",
+      "copyImage": "Copy image",
+      "download": "Download",
+      "favorite": "Favorite",
+      "unfavorite": "Remove from favorites",
+      "addToFolder": "Add to folder",
+      "delete": "Delete",
+      "restore": "Restore",
+      "deleteForGood": "Delete for good",
+      "expand": "Expand image",
+      "zoomIn": "Zoom in",
+      "zoomReset": "Fit to screen",
+      "showDetails": "Show details",
+      "momentAgo": "A moment ago",
+      "otherFolders": "Other folders",
+      "notMadeHere": "This image wasn't made here, so there are no settings to use.",
+      "reused": "Loaded the prompt and settings.",
+      "copyFailed": "Couldn't copy the image.",
+      "loadFailed": "Couldn't load this image."
     }
   },
   "uploads": {

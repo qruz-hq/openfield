@@ -16,7 +16,10 @@ export interface NodeAnalysis {
   blocker: NodeBlocker | null;
   /** ×k: how many times an incoming list runs this node. */
   fanOut: number;
-  /** A run of this node alone, after fan-out. Null for nodes whose model isn't known. */
+  /**
+   * A run of this node alone, after fan-out, to the cent like Run all and the run preview, so the
+   * node's Run and the top bar agree ("~$0.07 · Batch", design u0Hpn). Null when its model isn't known.
+   */
   estimate: CostEstimate | null;
   jobs: number;
   /** Nothing changed since its images were made. */
@@ -110,7 +113,7 @@ export function analyzeGraph(
     const next: NodeAnalysis = {
       blocker: node.blocker,
       fanOut: node.compiled?.fanOut ?? 1,
-      estimate: node.estimate,
+      estimate: node.estimate && roundToCents(node.estimate),
       jobs: node.compiled?.expectedJobs ?? 0,
       upToDate: node.upToDate,
       inputsChanged: node.inputsChanged,

@@ -31,6 +31,7 @@ import { Runner, type StopOptions, type StopReport } from "./runner/runner";
 import type { QueueOptions } from "./runner/timing";
 import { CredentialService } from "./services/credentials";
 import { batchSnapshot, jobSetViews, markAnnounced } from "./services/job-sets";
+import { LibraryService } from "./services/library";
 import { ModelService } from "./services/models";
 import { defaultCap, ProviderSettingsService } from "./services/provider-settings";
 import { SettingsService } from "./services/settings";
@@ -221,7 +222,8 @@ async function boot(
     idempotentSubmit: (key) => models.get(key)?.idempotentSubmit === true,
   });
   jobLog({ event: "startup.recovery", ...recovery });
-  const canvases = new CanvasService({ db, paths, models, settings, logger });
+  const library = new LibraryService({ db, paths, events, logger, settings });
+  const canvases = new CanvasService({ db, paths, models, settings, logger, events });
   // After the runner's pass, so each node's jobs already sit where §0.4's restart rules put them:
   // picked up by id, waiting to run again once, or interrupted. Settled nodes' results go into the
   // saved canvas, so one closed during the run opens with them. Launches recorded but never created
@@ -265,6 +267,7 @@ async function boot(
     events,
     ingest,
     thumbs,
+    library,
     runner,
     canvases,
     canvasRuns,
@@ -276,9 +279,11 @@ async function boot(
   };
   const app = createApp(services);
   let refreshTimer: ReturnType<typeof setInterval> | undefined;
+  let stopRetention: (() => void) | undefined;
   let stopped: Promise<StopReport> | undefined;
   const stop = async ({ closing, ...drain }: StopOptions & { closing?: Promise<unknown> }) => {
     if (refreshTimer) clearInterval(refreshTimer);
+    stopRetention?.();
     // Canvas runs stop moving on first, so the drain sends nothing new. Calls it lets finish are
     // saved as usual, and the next start's recovery brings their nodes up to date.
     canvasRuns.stop();
@@ -308,6 +313,8 @@ async function boot(
       void models.refreshIfStale();
       refreshTimer = setInterval(() => void models.refreshIfStale(), HOUR);
       refreshTimer.unref?.();
+      // Only does anything when the person set trashRetentionDays; the default never purges (§8.6).
+      stopRetention ??= library.scheduleRetention();
     },
     stop(opts = {}) {
       stopped ??= stop(opts);

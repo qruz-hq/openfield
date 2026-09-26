@@ -1,6 +1,14 @@
 import { t } from "@openfield/core";
 import { cn } from "@openfield/ui";
-import { type MouseEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  type MouseEvent,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { AnnotationHandles } from "../../editor/annotation-handles";
 import { CanvasNodeResizer } from "../../editor/node-resizer";
 import { useCanvasActions, useReadOnly } from "../../store/context";
@@ -15,7 +23,22 @@ import "../nodes.css";
 
 // NodeShell (§7.2 node chrome): what every data node shares. The label above the frame, the frame
 // with its selection outline, typed port rails, resize handles, the arrow handles, the right-click
-// menu, the collapsed card and the far-zoom levels of detail. Nodes draw only their body.
+// menu, the collapsed card and the far-zoom levels of detail. Nodes draw only their body. An image
+// card (Generate, design Y5jjx) draws its own frame too: the shell adds the outline outside it.
+
+/** The node menu for a card's own menu button (design ZufQH). */
+export interface CardMenu {
+  /** Opens the menu under the button, right-aligned with it. */
+  open(anchor: Element): void;
+  /** It's open: the card keeps its bars, so the button stays under its menu. */
+  isOpen: boolean;
+}
+
+const NodeMenuContext = createContext<CardMenu | null>(null);
+export const useCardMenu = () => useContext(NodeMenuContext);
+
+/** The node menu hangs this far below the button that opened it. */
+const MENU_GAP = 4;
 
 /** The parts of a node type the shell draws from. */
 export type ShellSpec = Pick<NodeSpec<object>, "label" | "ports" | "resizable" | "minSize" | "runnable">;
@@ -41,6 +64,11 @@ export interface NodeShellProps extends NodeComponentProps {
   frameClassName?: string;
   /** A node sized by its content gets the design's 320 when collapsed; others keep their width. */
   contentSized?: boolean;
+  /**
+   * "card": the body is the node's whole frame (an image card with its own fill and hairline), and
+   * selection draws a 2 px outline outside it rather than inside.
+   */
+  variant?: "panel" | "card";
   children: ReactNode;
 }
 
@@ -64,11 +92,18 @@ export function NodeShell({
   thumbs,
   frameClassName,
   contentSized = false,
+  variant = "panel",
   children,
 }: NodeShellProps) {
   const actions = useCanvasActions();
   const readOnly = useReadOnly();
-  const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null);
+  const [menuAt, setMenuAt] = useState<{ x: number; y: number; align?: "end" } | null>(null);
+  const openMenu = (anchor: Element) => {
+    if (readOnly) return;
+    const box = anchor.getBoundingClientRect();
+    setMenuAt({ x: box.right, y: box.bottom + MENU_GAP, align: "end" });
+  };
+  const card = variant === "card" && !collapsed && lod === "full";
   const name = title?.trim() || t(spec.label);
 
   const onContextMenu = (event: MouseEvent) => {
@@ -114,36 +149,58 @@ export function NodeShell({
       {lod === "rect" ? null : (
         <NodeLabel id={id} title={title} fallback={t(spec.label)} changed={changed} fanOut={fanOut} />
       )}
-      <div
-        className={cn(
-          "relative flex size-full flex-col overflow-hidden rounded-14",
-          lod === "rect" ? "bg-elevated-2" : "bg-elevated",
-          !collapsed && frameClassName,
-          collapsed && contentSized && "w-320",
-        )}
-      >
-        {collapsed ? (
-          <CollapsedCard id={id} name={name} meta={collapsedMeta} status={collapsedStatus} thumbs={thumbs} />
-        ) : lod === "card" ? (
-          thumbs[0] ? (
-            <AssetImage assetId={thumbs[0]} height={320} className="absolute inset-0" />
-          ) : null
-        ) : lod === "rect" ? (
-          <span className="m-auto max-w-[calc(100%-24px)] truncate text-caption font-medium text-text-secondary">
-            {name}
-          </span>
-        ) : (
-          children
-        )}
-      </div>
-      {/* Drawn over the body, so a full-bleed image never covers it. */}
-      <div
-        aria-hidden
-        className={cn(
-          "pointer-events-none absolute inset-0 rounded-14",
-          selected ? "inset-ring-2 inset-ring-accent" : "inset-ring inset-ring-border",
-        )}
-      />
+      {card ? (
+        <NodeMenuContext.Provider value={{ open: openMenu, isOpen: menuAt !== null }}>
+          {children}
+        </NodeMenuContext.Provider>
+      ) : (
+        <div
+          className={cn(
+            "relative flex size-full flex-col overflow-hidden rounded-14",
+            lod === "rect" ? "bg-elevated-2" : "bg-elevated",
+            !collapsed && frameClassName,
+            collapsed && contentSized && "w-320",
+          )}
+        >
+          {collapsed ? (
+            <CollapsedCard
+              id={id}
+              name={name}
+              meta={collapsedMeta}
+              status={collapsedStatus}
+              thumbs={thumbs}
+            />
+          ) : lod === "card" ? (
+            thumbs[0] ? (
+              <AssetImage assetId={thumbs[0]} height={320} className="absolute inset-0" />
+            ) : null
+          ) : lod === "rect" ? (
+            <span className="m-auto max-w-[calc(100%-24px)] truncate text-caption font-medium text-text-secondary">
+              {name}
+            </span>
+          ) : (
+            children
+          )}
+        </div>
+      )}
+      {card ? (
+        // The card's hairline is its own; selection is a 2 px outline outside it (design upuBC).
+        selected ? (
+          <div
+            aria-hidden
+            className="pointer-events-none absolute -inset-2 rounded-16 border-2 border-accent"
+          />
+        ) : null
+      ) : (
+        // Drawn over the body, so a full-bleed image never covers it.
+        <div
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute inset-0 rounded-14",
+            selected ? "inset-ring-2 inset-ring-accent" : "inset-ring inset-ring-border",
+          )}
+        />
+      )}
       {/* Arrow handles first: the data ports sit on top where the two share an edge. */}
       <AnnotationHandles />
       <PortRails nodeId={id} ports={spec.ports} connectable={!readOnly} off={portOff} collapsed={collapsed} />
@@ -156,6 +213,7 @@ export function NodeShell({
         runnable={spec.runnable}
         collapsed={collapsed}
         inspectable={inspectable}
+        align={menuAt?.align}
       />
     </div>
   );

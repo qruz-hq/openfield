@@ -38,6 +38,7 @@ import {
 import {
   ArrowUpRight,
   CircleAlert,
+  Eye,
   HardDrive,
   KeyRound,
   type LucideIcon,
@@ -61,6 +62,7 @@ import {
 import { useProviders } from "../api/hooks/keys";
 import { useSpeedName } from "../api/hooks/provider-settings";
 import { ApiError, errorMessage } from "../api/raw";
+import { detailTarget, useIsLastViewed, useOpenDetail } from "../detail";
 import { useDismissed, useLive } from "../lib/live";
 import { notify, notifyError } from "../lib/notify";
 import { companyName, logoFor, providerOfKey } from "../lib/provider";
@@ -100,15 +102,18 @@ export function AssetTile({
   style,
 }: TileBox & { asset: AssetListItem; rung: number; model?: string; rerun?: boolean }) {
   const image = useAuthedImage(thumbPath(asset, rung));
+  const openDetail = useOpenDetail();
+  const lastViewed = useIsLastViewed(asset.id);
   const label = t("feed.tile.label", {
     prompt: asset.prompt.trim() ? truncate(asset.prompt, 80) : t("feed.tile.noPrompt"),
     model: model ?? asset.modelId ?? "",
     date: formatDate(asset.createdAt),
   });
+  // The pill is too short to warn about billing, so the name carries it for a screen reader.
+  const name = rerun ? `${label}. ${t("feed.tile.rerunLabel")}` : label;
   return (
     <li
-      // The pill is too short to warn about billing, so the name carries it for a screen reader.
-      aria-label={rerun ? `${label}. ${t("feed.tile.rerunLabel")}` : label}
+      aria-label={name}
       data-job-set={asset.jobSetId ?? undefined}
       className={`${box} bg-elevated`}
       style={style}
@@ -116,24 +121,53 @@ export function AssetTile({
       {image.status === "ready" ? (
         <img src={image.src} alt="" className="size-full object-cover" decoding="async" draggable={false} />
       ) : null}
-      {rerun ? <RerunNote className="absolute top-10 left-10" /> : null}
+      {/* Feed / Tile / Last viewed (design UnAoB): a 1px inner stroke and the eye badge. */}
+      {lastViewed ? (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-0 inset-ring inset-ring-border-strong"
+        />
+      ) : null}
+      {lastViewed || rerun ? (
+        // One row at 10,10: the eye badge, then the note 8 after it (design MKHsL).
+        <span
+          aria-hidden
+          className="pointer-events-none absolute top-10 left-10 flex max-w-[calc(100%-20px)] items-center gap-8"
+        >
+          {lastViewed ? <LastViewedBadge /> : null}
+          {rerun ? <RerunNote /> : null}
+        </span>
+      ) : null}
+      {/* A plain click opens the detail view (§4.0); it takes focus back when that closes. */}
+      <button
+        type="button"
+        aria-label={name}
+        {...detailTarget(asset.id)}
+        onClick={() => openDetail(asset.id)}
+        className="absolute inset-0 cursor-pointer focus-visible:-outline-offset-2"
+      />
     </li>
+  );
+}
+
+/** The Last viewed badge (design HEOEH): 24 round, the eye on the overlay fill. */
+function LastViewedBadge() {
+  return (
+    <span className="flex size-24 shrink-0 items-center justify-center rounded-full bg-overlay inset-ring inset-ring-overlay-line backdrop-blur-chip">
+      <Eye size={14} className="text-overlay-fg" />
+    </span>
   );
 }
 
 /**
  * Pill / Tile note / Ran again (design MKHsL): the Last viewed badge's treatment, dark in both
  * themes because it sits on the image. It belongs to the idle tile: hover and selection put the
- * checkbox in this corner (§2.4). The tile has neither state, nor the Last viewed badge, yet: when
- * they come, hide the note on hover and selection, and put the eye badge and the note in one row at
- * 10,10 with an 8px gap instead of placing each on its own.
+ * checkbox in this corner (§2.4). The tile has neither state yet: when they come, hide the badge
+ * row on hover and selection.
  */
-function RerunNote({ className }: { className?: string }) {
+function RerunNote() {
   return (
-    <span
-      aria-hidden
-      className={`inline-flex h-24 max-w-[calc(100%-20px)] items-center gap-6 rounded-full bg-overlay px-10 inset-ring inset-ring-overlay-line backdrop-blur-chip ${className ?? ""}`}
-    >
+    <span className="inline-flex h-24 min-w-0 items-center gap-6 rounded-full bg-overlay px-10 inset-ring inset-ring-overlay-line backdrop-blur-chip">
       <RotateCcw size={12} className="shrink-0 text-overlay-fg-muted" />
       <span className="min-w-0 truncate text-caption font-medium text-overlay-fg">
         {t("feed.tile.rerunNote")}

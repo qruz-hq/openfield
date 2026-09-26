@@ -58,11 +58,11 @@
       "typeVersion": 1,
       "position": {
         "x": 400,
-        "y": 0
+        "y": 170
       },
       "size": {
         "w": 1540,
-        "h": 480
+        "h": 260
       },
       "parentId": null,
       "collapsed": false,
@@ -81,7 +81,7 @@
       },
       "size": {
         "w": 320,
-        "h": 400
+        "h": 180
       },
       "parentId": "n_frame",
       "collapsed": false,
@@ -112,7 +112,7 @@
       },
       "size": {
         "w": 320,
-        "h": 400
+        "h": 180
       },
       "parentId": "n_frame",
       "collapsed": false,
@@ -143,7 +143,7 @@
       },
       "size": {
         "w": 320,
-        "h": 400
+        "h": 180
       },
       "parentId": "n_frame",
       "collapsed": false,
@@ -174,7 +174,7 @@
       },
       "size": {
         "w": 320,
-        "h": 400
+        "h": 180
       },
       "parentId": "n_frame",
       "collapsed": false,

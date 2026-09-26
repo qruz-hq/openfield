@@ -26,11 +26,11 @@ import {
   getAssets,
   getCanvas,
   getCanvasVersion,
+  getFolder,
   insertCanvas,
   insertCanvasVersion,
   listCanvases,
   listCanvasVersions,
-  listFolders,
   newestCanvasVersion,
   pruneVersions,
   saveCanvas,
@@ -39,6 +39,7 @@ import {
   updateFolder,
 } from "@openfield/db";
 import type { HomePaths } from "../config/home";
+import type { EventHub } from "../events/hub";
 import { probeImage } from "../files/probe";
 import { ApiFailure, envelope } from "../http/errors";
 import type { Logger } from "../log/logger";
@@ -77,6 +78,8 @@ export interface CanvasServiceDeps {
   models: ModelService;
   settings: SettingsService;
   logger: Logger;
+  /** Tells other tabs when the canvas's folder follows a rename. */
+  events?: EventHub;
   /** Where the bundled templates live. Tests point it elsewhere. */
   templatesDir?: string;
 }
@@ -150,13 +153,18 @@ export class CanvasService {
     return toCanvasDetail(row, doc);
   }
 
-  /** Opening a canvas: the document in the current shape, and the images it names that aren't here. */
+  /**
+   * Opening a canvas: the document in the current shape, the images it names that aren't here, and
+   * the size of those that are.
+   */
   get(id: string): CanvasDetail {
     const row = this.#row(id);
     const doc = readDocument(row.graph);
+    const { missing, sizes } = this.#assets(doc);
     return {
       ...toCanvasDetail(row, doc),
-      missingAssetIds: this.#missingAssets(doc),
+      missingAssetIds: missing,
+      assetSizes: sizes,
       previewAt: previewTakenAt(row, this.deps.paths),
     };
   }
@@ -375,23 +383,27 @@ export class CanvasService {
     return new ApiFailure(404, "not_found", "That canvas doesn't exist", { field: "id" });
   }
 
-  /** Images the document names that aren't in the library, or whose file is gone. */
-  #missingAssets(doc: CanvasDocument): string[] {
+  /** Images the document names that aren't in the library (or whose file is gone), and the size of the rest. */
+  #assets(doc: CanvasDocument): { missing: string[]; sizes: Record<string, { w: number; h: number }> } {
     const ids = documentAssetIds(doc);
-    if (!ids.length) return [];
-    const here = new Set(
-      getAssets(this.deps.db, ids)
-        .filter((a) => a.fileState === "ok")
-        .map((a) => a.id),
-    );
-    return ids.filter((assetId) => !here.has(assetId));
+    const sizes: Record<string, { w: number; h: number }> = {};
+    if (!ids.length) return { missing: [], sizes };
+    const here = new Set<string>();
+    for (const a of getAssets(this.deps.db, ids)) {
+      if (a.fileState !== "ok") continue;
+      here.add(a.id);
+      if (a.width > 0 && a.height > 0) sizes[a.id] = { w: a.width, h: a.height };
+    }
+    return { missing: ids.filter((assetId) => !here.has(assetId)), sizes };
   }
 
   /** The canvas's library folder follows a rename, unless the person already renamed the folder. */
   #renameFolder(row: CanvasRow, name: string): void {
     if (!row.folderId) return;
-    const folder = listFolders(this.deps.db).find((f) => f.id === row.folderId);
-    if (folder?.name === row.name) updateFolder(this.deps.db, folder.id, { name });
+    const folder = getFolder(this.deps.db, row.folderId);
+    if (folder?.name !== row.name) return;
+    updateFolder(this.deps.db, folder.id, { name });
+    this.deps.events?.publish("folder.updated", { folderId: folder.id, deleted: false });
   }
 
   #autoSnapshotDue(id: string, at: string): boolean {

@@ -19,7 +19,7 @@ import {
 } from "@openfield/core";
 import { type CanvasDocument, canvasDocumentSchema } from "@openfield/core/canvas";
 import { getCanvas, listCanvasVersions, pruneVersions } from "@openfield/db";
-import { image, MODEL, newCanvas } from "./canvas-helpers";
+import { image, libraryImages, MODEL, newCanvas } from "./canvas-helpers";
 import { saveKey, startTestServer, type TestServer } from "./helpers";
 
 // Canvas documents (M4-01, M4-11, M4-14, M4-15): every response parsed with its core schema.
@@ -86,6 +86,7 @@ describe("canvas documents", () => {
     expect(canvasDetailSchema.parse(opened.body)).toEqual({
       ...created,
       missingAssetIds: [],
+      assetSizes: {},
       previewAt: null,
     });
 
@@ -122,6 +123,25 @@ describe("canvas documents", () => {
     expect(listCanvasVersions(server.services.db, created.id)).toEqual([]);
     expect(canvasesListResponseSchema.parse((await server.json("/api/canvases")).body)).toHaveLength(1);
     expect((await server.json(`/api/canvases/${created.id}`, { method: "DELETE" })).status).toBe(404);
+  });
+
+  test("opening names the images that aren't here and gives the size of those that are", async () => {
+    server = await startTestServer();
+    const canvas = await newCanvas(server);
+    const [here] = await libraryImages(server, 1);
+    const gone = newId();
+    const graph = withNodes(canvas.graph);
+    graph.nodes.push({
+      ...graph.nodes[1]!,
+      id: "n_upload",
+      type: "image.upload",
+      params: { assetIds: [here!, gone] },
+    });
+    await server.json(`/api/canvases/${canvas.id}`, { method: "PATCH", body: { graph, graphVersion: 1 } });
+    const opened = canvasDetailSchema.parse((await server.json(`/api/canvases/${canvas.id}`)).body);
+    expect(opened.missingAssetIds).toEqual([gone]);
+    // Image cards open at the image's exact shape (32×24 here), not a thumbnail's rounded one.
+    expect(opened.assetSizes).toEqual({ [here!]: { w: 32, h: 24 } });
   });
 
   test("autosave rejects a stale graphVersion with the server's copy", async () => {

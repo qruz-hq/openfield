@@ -10,10 +10,12 @@ import { canvasRunsRoutes } from "./routes/canvas-runs";
 import { canvasesRoutes } from "./routes/canvases";
 import { eventsRoutes } from "./routes/events";
 import { filesRoutes } from "./routes/files";
+import { foldersRoutes } from "./routes/folders";
 import { generateRoutes } from "./routes/generate";
 import { healthRoutes } from "./routes/health";
 import { jobSetsRoutes } from "./routes/job-sets";
 import { keysRoutes } from "./routes/keys";
+import { libraryRoutes } from "./routes/library";
 import { modelsRoutes } from "./routes/models";
 import { providersRoutes } from "./routes/providers";
 import { settingsRoutes } from "./routes/settings";
@@ -34,6 +36,8 @@ const api = new Hono<Env>()
   .route("/", generateRoutes)
   .route("/", jobSetsRoutes)
   .route("/", assetsRoutes)
+  .route("/", foldersRoutes)
+  .route("/", libraryRoutes)
   .route("/", usageRoutes)
   .route("/", uploadsRoutes)
   .route("/", canvasesRoutes)

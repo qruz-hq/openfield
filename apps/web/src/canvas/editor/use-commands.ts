@@ -215,11 +215,10 @@ export function createCommands(
       const def = nodeRegistry.get(type);
       if (state.ui.readOnly || !def) return null;
       const { flow } = paneCentre();
-      const size = def.size ?? { w: 0, h: 0 };
-      const node = nodeRegistry.instantiate(type, {
-        position: { x: Math.round(flow.x - size.w / 2), y: Math.round(flow.y - size.h / 2) },
-        ctx: engineContext(),
-      });
+      const node = nodeRegistry.instantiate(type, { position: { x: 0, y: 0 }, ctx: engineContext() });
+      // Centred on its own box: a Generate card's follows its aspect ratio.
+      const size = node.size ?? { w: 0, h: 0 };
+      node.position = { x: Math.round(flow.x - size.w / 2), y: Math.round(flow.y - size.h / 2) };
       const ok = report(
         actions().apply([{ op: "addNode", node }], {
           label: "add",

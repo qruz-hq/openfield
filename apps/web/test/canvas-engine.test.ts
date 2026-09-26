@@ -335,7 +335,7 @@ describe("speeds (§0.3)", () => {
       request: { scope: "all", nodeIds: [] },
     });
     if (out.kind !== "plan") throw new Error(out.kind);
-    return { speedCtx, items: out.items, fingerprints };
+    return { speedCtx, items: out.items, fingerprints, doc };
   }
 
   test("a node is priced at its company's speed, and a model without it at Standard", async () => {
@@ -355,6 +355,15 @@ describe("speeds (§0.3)", () => {
     expect(standard.items[0]!.estimate.max).toBeCloseTo(0.134, 6);
     expect(batch.items[0]!.estimate.max).toBeCloseTo(0.067, 6);
     expect(batch.fingerprints).toEqual(standard.fingerprints);
+  });
+
+  test("a node's Run and Run all round alike, to the cent (design u0Hpn: ~$0.07 · Batch)", async () => {
+    const { speedCtx, fingerprints, doc } = await compileBoth("batch");
+    const analysis = analyzeGraph(doc, registry, speedCtx, fingerprints);
+    // $0.067 at Batch on Pro, $0.134 at Standard on Banana: the pills say $0.07 and $0.13.
+    expect(analysis.nodes.a?.estimate?.max).toBe(0.07);
+    expect(analysis.nodes.b?.estimate?.max).toBe(0.13);
+    expect(analysis.estimate.max).toBeCloseTo(0.2, 6);
   });
 
   test("the note says Standard for a model without the speed, and names the speed otherwise", async () => {
@@ -596,6 +605,34 @@ describe("display", () => {
       state: "stale",
       chip: "inputs_changed",
     });
+  });
+
+  test("a stop before anything was made says Canceled until the next run or a change", () => {
+    const base = { fingerprint: "sha256:a", blocker: null, fanOut: 1 };
+    const stopped = (fingerprint: string) => runtime({ state: "canceled", fingerprint });
+    // A first run stopped (znre4), and a re-run stopped over the last image (jxhcX).
+    expect(deriveDisplay({ ...base, result: null, runtime: stopped("sha256:a") }).state).toBe("canceled");
+    expect(deriveDisplay({ ...base, result, runtime: stopped("sha256:a") }).state).toBe("canceled");
+    // A re-run after a new prompt, stopped: still Canceled, not "Inputs changed".
+    const edited = { ...base, fingerprint: "sha256:b" };
+    expect(deriveDisplay({ ...edited, result, runtime: stopped("sha256:b") }).state).toBe("canceled");
+    // Changing the node afterwards goes back to what its saved result says.
+    const moved = { ...base, fingerprint: "sha256:c" };
+    expect(deriveDisplay({ ...moved, result, runtime: stopped("sha256:b") })).toMatchObject({
+      state: "stale",
+      chip: "inputs_changed",
+    });
+    expect(deriveDisplay({ ...moved, result: null, runtime: stopped("sha256:b") }).state).toBe("idle");
+    // While a digest is still coming, the stop stays on show.
+    expect(
+      deriveDisplay({ ...base, fingerprint: undefined, result: null, runtime: stopped("sha256:a") }).state,
+    ).toBe("canceled");
+    // A key problem still comes first, and the next run takes over.
+    expect(
+      deriveDisplay({ ...base, result: null, runtime: stopped("sha256:a"), blocker: { kind: "no_prompt" } })
+        .state,
+    ).toBe("blocked");
+    expect(deriveDisplay({ ...base, result, runtime: runtime({ state: "running" }) }).state).toBe("running");
   });
 
   test("key problems show at once, input problems only after a run hit them", () => {
@@ -1164,6 +1201,18 @@ describe("following runs, the rest", () => {
     store.getState().actions.apply([{ op: "setResult", id: "v", result: done(fingerprints.v!, 2) }]);
     follower.applyRun(runOf([state("v", "canceled", fingerprints.v!)], "2026-09-24T10:02:00.000Z"));
     expect(store.getState().doc.results.v?.state).toBe("done");
+    // The stop itself is on show over it, until the next run or a change (display.ts).
+    const { runtime, doc } = store.getState();
+    expect(runtime.v).toMatchObject({ state: "canceled", fingerprint: fingerprints.v });
+    expect(
+      deriveDisplay({
+        result: doc.results.v ?? null,
+        runtime: runtime.v,
+        fingerprint: fingerprints.v,
+        blocker: null,
+        fanOut: 1,
+      }).state,
+    ).toBe("canceled");
   });
 
   test("a node canceled with its job set made but nothing finished keeps the result it had", async () => {

@@ -1,4 +1,5 @@
-import { expect, type Locator, type Page, test } from "@playwright/test";
+import { type APIRequestContext, expect, type Locator, type Page, test } from "@playwright/test";
+import type { CanvasDetail, CanvasTemplate } from "../packages/core/src/schemas/canvas.ts";
 import { api, FAKE_KEY, libraryRoot, queryDb, SESSION_HEADER, sessionToken } from "./support";
 
 // M4 on fake models: a template runs end to end, a second Run all with nothing changed makes no
@@ -17,28 +18,38 @@ const countJobs = (home: string, canvasId: string) =>
 
 const canvasIdOf = (page: Page) => new URL(page.url()).pathname.split("/").pop()!;
 
+/** The editor's own pane: the card picture is drawn off screen from the same canvas. */
+const pane = (page: Page) => page.locator(".of-canvas:not(.of-capture)");
+
+/** The canvas's save count, as the server has it. */
+const graphVersion = async (request: APIRequestContext, token: string, canvasId: string) =>
+  (await api<CanvasDetail>(request, token, "GET", `/api/canvases/${canvasId}`)).graphVersion;
+
+/** Long enough for autosave to have sent anything it was going to: its slowest wait is 2 s. */
+const SETTLE_MS = 3_000;
+
 /**
  * A small PNG drawn by the page itself, so the suite ships no image files. One pixel differs every
  * time, so a retry on the same server never meets the last attempt's image.
  */
-async function pngBytes(page: Page): Promise<Buffer> {
+async function pngBytes(page: Page, width = 120, height = 80): Promise<Buffer> {
   const bytes = await page.evaluate(
-    async (seed) => {
+    async ({ seed, width, height }) => {
       const canvas = document.createElement("canvas");
-      canvas.width = 120;
-      canvas.height = 80;
+      canvas.width = width;
+      canvas.height = height;
       const g = canvas.getContext("2d")!;
-      const gradient = g.createLinearGradient(0, 0, 120, 80);
+      const gradient = g.createLinearGradient(0, 0, width, height);
       gradient.addColorStop(0, "#e0703a");
       gradient.addColorStop(1, "#3a70e0");
       g.fillStyle = gradient;
-      g.fillRect(0, 0, 120, 80);
+      g.fillRect(0, 0, width, height);
       g.fillStyle = `#${(seed % 0xffffff).toString(16).padStart(6, "0")}`;
       g.fillRect(0, 0, 1, 1);
       const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
       return Array.from(new Uint8Array(await blob.arrayBuffer()));
     },
-    Date.now() + Math.floor(Math.random() * 1000),
+    { seed: Date.now() + Math.floor(Math.random() * 1000), width, height },
   );
   return Buffer.from(bytes);
 }
@@ -61,8 +72,10 @@ async function runEverything(page: Page, heading: RegExp | null) {
     await expect(preview.getByRole("heading")).toHaveText(heading);
     await preview.getByRole("button", { name: /^Run/ }).click();
   }
-  await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Stop" })).toBeHidden({ timeout: 30_000 });
+  // The canvas's own Stop: each running card has one too, named for its node.
+  const stop = page.getByRole("button", { name: "Stop", exact: true });
+  await expect(stop).toBeVisible();
+  await expect(stop).toBeHidden({ timeout: 30_000 });
 }
 
 async function expectImages(node: Locator, count: number) {
@@ -118,6 +131,78 @@ test("a template runs, runs again for free, and survives a reload", async ({ pag
   await expect(prompt).toHaveValue("A lighthouse keeper's last night on the island.");
 });
 
+test("opening a canvas saves nothing, on a screen of any density", async ({ page, request }) => {
+  const token = await sessionToken(request);
+  await page.goto("/canvas");
+  // Nearly 16:9, so a thumbnail's rounding gives a slightly different card than the image itself,
+  // and a different one again at 2x.
+  const upload = await request.post("/api/uploads", {
+    headers: { [SESSION_HEADER]: token },
+    multipart: { file: { name: "wide.png", mimeType: "image/png", buffer: await pngBytes(page, 1000, 563) } },
+  });
+  const { asset } = (await upload.json()) as { asset: { id: string } };
+  const { id } = await api<CanvasDetail>(request, token, "POST", "/api/canvases", { name: "Reopen" });
+  const { graph, graphVersion: version } = await api<CanvasDetail>(
+    request,
+    token,
+    "GET",
+    `/api/canvases/${id}`,
+  );
+  // A card saved at its image's exact box: 320 wide, 320 × 563 ÷ 1000 tall.
+  graph.nodes.push({
+    id: "n_card",
+    type: "image.generate",
+    typeVersion: 1,
+    position: { x: 0, y: 0 },
+    size: { w: 320, h: 180.16 },
+    parentId: null,
+    collapsed: false,
+    title: null,
+    params: { prompt: "A harbor at dawn", size: { kind: "aspect", ratio: "16:9" } },
+    presetLocks: [],
+    result: {
+      state: "done",
+      assetIds: [asset.id],
+      jobSetId: null,
+      jobSetIds: [],
+      outputs: [{ assetId: asset.id }],
+      fingerprint: null,
+      costUsd: null,
+      ranAt: null,
+      error: null,
+    },
+  });
+  await api(request, token, "PATCH", `/api/canvases/${id}`, { graph, graphVersion: version });
+  const saved = await graphVersion(request, token, id);
+
+  const open = async (target: Page) => {
+    await target.goto(`/canvas/${id}`);
+    const card = pane(target).locator('.react-flow__node[data-id="n_card"]');
+    await expectImages(card, 1);
+    // The card takes the image's own shape, not the thumbnail's.
+    expect(await card.evaluate((el) => Number.parseFloat((el as HTMLElement).style.height))).toBeCloseTo(
+      180.16,
+      2,
+    );
+    await target.waitForTimeout(SETTLE_MS);
+    expect(await graphVersion(request, token, id)).toBe(saved);
+  };
+  await open(page);
+  const dense = await page
+    .context()
+    .browser()!
+    .newContext({
+      baseURL: test.info().project.use.baseURL,
+      viewport: { width: 1440, height: 900 },
+      deviceScaleFactor: 2,
+    });
+  try {
+    await open(await dense.newPage());
+  } finally {
+    await dense.close();
+  }
+});
+
 test("dragging from a port to empty canvas adds a node that fits, already connected", async ({ page }) => {
   await page.goto("/canvas");
   await page.getByRole("button", { name: "New canvas" }).first().click();
@@ -140,10 +225,9 @@ test("dragging from a port to empty canvas adds a node that fits, already connec
 
   await expect(generators(page)).toHaveCount(1);
   await expect(page.locator(".react-flow__edge")).toHaveCount(1);
-  await expect(generators(page).getByRole("textbox", { name: "Prompt for this node" })).toHaveAttribute(
-    "placeholder",
-    "A red fox in fresh snow",
-  );
+  // The card shows the start of the prompt coming in, with Run beside it.
+  await expect(generators(page).getByText("A red fox in fresh snow")).toBeVisible();
+  await expect(generators(page).getByRole("button", { name: /^Run / })).toBeVisible();
 });
 
 test("an uploaded photo lands in the library and reaches the model", async ({ page, request }) => {
@@ -198,7 +282,7 @@ test("a node's price follows Google's speed, and says Standard for a model witho
   await api(request, token, "PATCH", "/api/providers/google/settings", { values: { speed: "flex" } });
   try {
     await useTemplate(page, "Start from a reference");
-    await generators(page).click({ button: "right", position: { x: 160, y: 120 } });
+    await generators(page).click({ button: "right" });
     await page.getByRole("menuitem", { name: "Settings" }).click();
     const drawer = page.getByRole("complementary");
     const model = drawer.getByRole("combobox", { name: "Model" });
@@ -208,7 +292,8 @@ test("a node's price follows Google's speed, and says Standard for a model witho
     await model.click();
     await expect(page.getByRole("listbox").getByText("· Standard")).toHaveCount(2);
     await page.getByRole("option", { name: "Nano Banana 2", exact: true }).click();
-    await expect(run).toContainText("$0.067");
+    // To the cent, like Run all and the run preview.
+    await expect(run).toContainText("$0.07");
     await expect(drawer.getByText("Standard for this model")).toBeVisible();
     await run.hover();
     await expect(page.getByRole("tooltip")).toContainText(
@@ -218,7 +303,7 @@ test("a node's price follows Google's speed, and says Standard for a model witho
     // Nano Banana Pro has it: half its 1K price, the speed named, and no note.
     await model.click();
     await page.getByRole("option", { name: "Nano Banana Pro", exact: true }).click();
-    await expect(run).toContainText("$0.067");
+    await expect(run).toContainText("$0.07");
     await expect(drawer.getByText("Standard for this model")).toHaveCount(0);
     await run.hover();
     await expect(page.getByRole("tooltip")).toContainText("Speed: Flex.");
@@ -237,7 +322,7 @@ test("a node at Batch waits at Google, and its finish toast keeps to the canvas"
     await useTemplate(page, "Storyboard");
     const canvasId = canvasIdOf(page);
     const node = generators(page).first();
-    await node.click({ button: "right", position: { x: 160, y: 120 } });
+    await node.click({ button: "right" });
     await page.getByRole("menuitem", { name: "Settings" }).click();
     await page.getByRole("complementary").getByRole("button", { name: /^Run/ }).click();
 
@@ -254,7 +339,7 @@ test("a node at Batch waits at Google, and its finish toast keeps to the canvas"
 
     // Anywhere else, Show brings you back to the canvas rather than to the Image feed.
     const next = generators(page).nth(1);
-    await next.click({ button: "right", position: { x: 160, y: 120 } });
+    await next.click({ button: "right" });
     await page.getByRole("menuitem", { name: "Settings" }).click();
     await page.getByRole("complementary").getByRole("button", { name: /^Run/ }).click();
     await expect(next.getByText("Waiting at Google")).toBeVisible({ timeout: 15_000 });
@@ -269,6 +354,74 @@ test("a node at Batch waits at Google, and its finish toast keeps to the canvas"
     await expectImages(generators(page).nth(1), 1);
   } finally {
     await api(request, token, "PATCH", "/api/providers/google/settings", { values: { speed: "standard" } });
+  }
+});
+
+test("links into a generating card pulse, and a stop says Canceled on the card", async ({
+  page,
+  request,
+}) => {
+  const token = await sessionToken(request);
+  const templates = await api<CanvasTemplate[]>(request, token, "GET", "/api/canvas-templates");
+  const template = templates.find((t) => t.name === "Start from a reference")!;
+  const { id } = await api<CanvasDetail>(request, token, "POST", "/api/canvases", {
+    templateId: template.id,
+  });
+  const { graph, graphVersion: version } = await api<CanvasDetail>(
+    request,
+    token,
+    "GET",
+    `/api/canvases/${id}`,
+  );
+  // A fake call slow enough to watch, and a node that reads from the card, for a link out of it.
+  const prompt = graph.nodes.find((n) => n.id === "n_prompt")!;
+  prompt.params = { ...prompt.params, text: "#fake:slow A red fox in fresh snow" };
+  graph.nodes.push({
+    id: "n_vary",
+    type: "image.variations",
+    typeVersion: 1,
+    position: { x: 900, y: 0 },
+    parentId: null,
+    collapsed: false,
+    title: null,
+    params: {},
+    presetLocks: [],
+    result: null,
+  });
+  graph.edges.push({
+    id: "e_out",
+    source: "n_generate",
+    sourceHandle: "images",
+    target: "n_vary",
+    targetHandle: "image",
+    kind: "data",
+  });
+  await api(request, token, "PATCH", `/api/canvases/${id}`, { graph, graphVersion: version });
+  await page.goto(`/canvas/${id}`);
+
+  const card = pane(page).locator('.react-flow__node[data-id="n_generate"]');
+  const line = (edge: string) => pane(page).locator(`.react-flow__edge[data-id="${edge}"] path.of-edge`);
+  const pulse = (edge: string) => pane(page).locator(`.react-flow__edge[data-id="${edge}"] .of-pulse-core`);
+  await card.getByRole("button", { name: /^Run / }).click();
+  await expect(card.locator('.of-card[data-phase="generating"]')).toBeVisible({ timeout: 15_000 });
+
+  // Every link into the generating card pulses; the link out of it stays still.
+  for (const edge of ["e_prompt", "e_reference"]) {
+    await expect(line(edge)).toHaveAttribute("data-link", "active");
+    await expect(pulse(edge)).toHaveCount(1);
+  }
+  await expect(line("e_out")).toHaveAttribute("data-link", "idle");
+  await expect(pulse("e_out")).toHaveCount(0);
+
+  // Its own Stop: the links go still, and the card says so, with Run again (design znre4).
+  await card.hover();
+  await card.getByRole("button", { name: /^Stop / }).click();
+  await expect(card.locator('.of-card[data-phase="canceled"]')).toBeVisible({ timeout: 15_000 });
+  await expect(card.getByText("You may still be charged for work that already started.")).toBeVisible();
+  await expect(card.getByRole("button", { name: "Run again" })).toBeVisible();
+  for (const edge of ["e_prompt", "e_reference"]) {
+    await expect(line(edge)).toHaveAttribute("data-link", "idle");
+    await expect(pulse(edge)).toHaveCount(0);
   }
 });
 

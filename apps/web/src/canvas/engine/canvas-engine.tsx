@@ -11,9 +11,11 @@ import { useSettings } from "../../api/hooks/settings";
 import { fetchSpentThisMonth } from "../../api/hooks/usage";
 import { useLive } from "../../lib/live";
 import { notify } from "../../lib/notify";
+import { cardMedia, rememberImageSize } from "../nodes/generate/card-media";
 import { nodeRegistry } from "../nodes/registry";
 import { useCanvas, useCanvasStoreApi } from "../store/context";
 import { analyzeGraph } from "./analysis";
+import { followBoxes } from "./boxes";
 import { useEngineContextState } from "./context";
 import { nodeTitle } from "./describe";
 import { activeRuns, useEngineStore } from "./engine-store";
@@ -115,6 +117,17 @@ export function CanvasEngine() {
     };
   }, [store, ctx, ready]);
 
+  // Saved sizes of image cards follow their image where it changes here, never on opening.
+  useEffect(() => {
+    if (store.getState().ui.readOnly) return;
+    return followBoxes(
+      store,
+      nodeRegistry,
+      () => ctxRef.current,
+      (onChange) => cardMedia.subscribe(onChange),
+    );
+  }, [store]);
+
   // The run controller, and following runs on the event stream.
   useEffect(() => {
     if (!ready) return;
@@ -159,6 +172,11 @@ export function CanvasEngine() {
     }
 
     const unsubscribe = subscribeEvents((event) => {
+      // A new image's size, so its card takes the image's shape as soon as it lands.
+      if (event.event === "job.output") {
+        const { asset } = event.data;
+        rememberImageSize(asset.id, asset.width, asset.height);
+      }
       if (event.event === "asset.deleted") {
         // Images deleted while the canvas is open turn into placeholders and stay out of runs.
         const { doc, missingAssets, actions } = store.getState();

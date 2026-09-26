@@ -83,7 +83,7 @@
       },
       "size": {
         "w": 320,
-        "h": 400
+        "h": 320
       },
       "parentId": null,
       "collapsed": false,
@@ -110,11 +110,11 @@
       "typeVersion": 1,
       "position": {
         "x": 440,
-        "y": 440
+        "y": 490
       },
       "size": {
         "w": 320,
-        "h": 400
+        "h": 320
       },
       "parentId": null,
       "collapsed": false,

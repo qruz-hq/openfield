@@ -43,6 +43,9 @@
    takes their place there. */
 .of-canvas {
   --of-note: light-dark(#ece3cf, #e9e3d827);
+  /* The pulse's transparent tail: $accent at 0% (not transparent black), so the fade stays warm
+     instead of going grey. One per theme, like --of-accent. */
+  --of-accent-clear: light-dark(#1b1d2100, #e9e3d800);
 }
 
 /* The off-screen card picture is taken once per theme (preview-capture.tsx). */
@@ -131,15 +134,64 @@
   background: var(--of-elevated-2);
 }
 
-/* Edges (design Z73S2). */
+/* Links (design YQPWR: Idle USl4U, Hover Iq51i, Selected vaCAK, Active HkWNh, Waiting at provider
+   IEo83, Reduced motion RHGMm). Sizes are canvas units, so they scale with the zoom like the curve. */
 .of-canvas .react-flow__edge-path.of-edge {
   stroke: var(--of-border-strong);
   stroke-width: 1.5;
+  /* Idle and lit crossfade both ways. */
+  transition:
+    stroke 200ms ease-out,
+    stroke-width 200ms ease-out;
 }
 
-.of-canvas .react-flow__edge-path.of-edge.of-edge-active {
+.of-canvas .react-flow__edge-path.of-edge[data-hover] {
+  stroke: var(--of-text-tertiary);
+  stroke-width: 2;
+}
+
+/* The node it feeds is generating (a pulse runs over it) or waits at the company. */
+.of-canvas .react-flow__edge-path.of-edge:is([data-link="active"], [data-link="waiting"]) {
+  stroke: var(--of-accent-line);
+}
+
+.of-canvas .react-flow__edge-path.of-edge:is([data-link="active"], [data-link="waiting"])[data-hover] {
+  stroke-width: 2;
+}
+
+/* Reduced motion: the gradient comes inline (source to target in pane coordinates). */
+.of-canvas .react-flow__edge-path.of-edge[data-link="reduced"] {
+  stroke-width: 2;
+}
+
+/* Selected wins over every other state. */
+.of-canvas .react-flow__edge-path.of-edge.of-edge-selected {
   stroke: var(--of-accent);
   stroke-width: 2.5;
+}
+
+/* The pulse (motion spec IMRkA): a 2 px core with round caps over the line, and its glow, the same
+   piece at 6 px blurred 4 px at 60%, under it. pulse-clock.ts moves both. */
+.of-canvas .of-pulse {
+  fill: none;
+  stroke-linecap: round;
+  pointer-events: none;
+  transition: opacity 200ms ease-out;
+}
+
+.of-canvas .of-pulse-core {
+  stroke-width: 2;
+}
+
+.of-canvas .of-pulse-glow {
+  stroke-width: 6;
+  opacity: 0.6;
+  filter: blur(4px);
+}
+
+/* The run ended: the pulse fades where it is. */
+.of-canvas .of-pulse.of-pulse-out {
+  opacity: 0;
 }
 
 .of-canvas .react-flow__edge-path.of-arrow,

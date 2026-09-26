@@ -28,9 +28,12 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { useStore as useZustand } from "zustand";
 import { type ConnectionEnds, canConnect } from "../../engine/connect";
+import { useCanvasEngineContext } from "../../engine/engine-store";
 import { isAnnotationHandle } from "../../engine/types";
 import { takeFitOnOpen } from "../../fit-on-open";
+import { cardMedia } from "../../nodes/generate/card-media";
 import { nodeRegistry } from "../../nodes/registry";
 import {
   type CanvasOp,
@@ -47,7 +50,14 @@ import { PresenceLayer } from "../presence-layer";
 import { useEditorUi, useSession } from "../session";
 import { isMac } from "../shortcuts";
 import { useEditorCommands } from "../use-commands";
-import { createEdgeCache, createNodeCache, type FlowEdge, type FlowNode, type Measured } from "./adapter";
+import {
+  boxesFor,
+  createEdgeCache,
+  createNodeCache,
+  type FlowEdge,
+  type FlowNode,
+  type Measured,
+} from "./adapter";
 import { ConnectionLine, EdgeModeContext, edgeTypes } from "./edges";
 import { buildNodeTypes } from "./node-types";
 import { PendingEdge } from "./pending-edge";
@@ -115,10 +125,14 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
     };
   }, [session]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: measureTick stands for the measured map.
+  // Image cards take the shape of the image they show: its size and the pager feed their box.
+  const ctx = useCanvasEngineContext();
+  const media = useZustand(cardMedia);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: measureTick stands for the measured map; media feeds boxesFor through the store.
   const nodes = useMemo(() => {
     // Forget sizes of nodes that are gone, so a re-added id gets measured afresh.
     for (const id of measured.current.keys()) if (!doc.nodes[id]) measured.current.delete(id);
+    const definition = (type: string) => nodeRegistry.get(type);
     return buildNodes({
       doc,
       selection,
@@ -126,9 +140,22 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
       tool,
       measured: measured.current,
       findHit,
-      definition: (type) => nodeRegistry.get(type),
+      definition,
+      boxOf: boxesFor(doc, definition, ctx),
     });
-  }, [doc.nodes, doc.order, selection, readOnly, tool, findHit, measureTick]);
+  }, [
+    doc.nodes,
+    doc.order,
+    doc.params,
+    doc.results,
+    selection,
+    readOnly,
+    tool,
+    findHit,
+    measureTick,
+    ctx,
+    media,
+  ]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: the edge list depends on these slices only.
   const edges = useMemo(
     () => buildEdges({ doc, selection, readOnly, portType, definition: (type) => nodeRegistry.get(type) }),

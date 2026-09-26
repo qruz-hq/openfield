@@ -72,3 +72,42 @@ export function removeAssets(ids: readonly string[]) {
       : data,
   );
 }
+
+/** Change some images wherever they're cached, in the feed and every library view. */
+export function updateCachedAssets(ids: readonly string[], update: (item: AssetListItem) => AssetListItem) {
+  const wanted = new Set(ids);
+  queryClient.setQueriesData<AssetPages>({ queryKey: queryKeys.allAssets }, (data) =>
+    data
+      ? {
+          ...data,
+          pages: data.pages.map((page) => ({
+            ...page,
+            items: page.items.map((item) => (wanted.has(item.id) ? update(item) : item)),
+          })),
+        }
+      : data,
+  );
+}
+
+/** The cached copies of these images, first one found per id: what an optimistic change replaced. */
+export function cachedAssets(ids: readonly string[]): Map<string, AssetListItem> {
+  const wanted = new Set(ids);
+  const found = new Map<string, AssetListItem>();
+  for (const [, data] of queryClient.getQueriesData<AssetPages>({ queryKey: queryKeys.allAssets })) {
+    for (const page of data?.pages ?? []) {
+      for (const item of page.items) if (wanted.has(item.id) && !found.has(item.id)) found.set(item.id, item);
+    }
+  }
+  return found;
+}
+
+export type AssetCacheSnapshot = [readonly unknown[], AssetPages | undefined][];
+
+/** Every cached image list as it is now, to put back if an optimistic change fails. */
+export function snapshotAssetCaches(): AssetCacheSnapshot {
+  return queryClient.getQueriesData<AssetPages>({ queryKey: queryKeys.allAssets });
+}
+
+export function restoreAssetCaches(snapshot: AssetCacheSnapshot) {
+  for (const [key, data] of snapshot) queryClient.setQueryData(key, data);
+}

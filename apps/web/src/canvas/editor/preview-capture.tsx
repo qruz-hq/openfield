@@ -19,6 +19,7 @@ import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { queryClient } from "../../api/client";
 import { putCanvasPreview } from "../../api/hooks/canvas-doc";
+import { useEngineStore } from "../engine/engine-store";
 import { nodeRegistry } from "../nodes/registry";
 import { type CanvasStore, CanvasStoreProvider, createCanvasStore } from "../store";
 import {
@@ -29,7 +30,7 @@ import {
   openingCapture,
   outlineChanged,
 } from "./capture-schedule";
-import { createEdgeCache, createNodeCache } from "./flow/adapter";
+import { boxesFor, createEdgeCache, createNodeCache } from "./flow/adapter";
 import { edgeTypes } from "./flow/edges";
 import { buildNodeTypes, ForcedLodContext } from "./flow/node-types";
 
@@ -210,6 +211,7 @@ function CaptureRender({ store, onDone }: { store: CanvasStore; onDone: (shots: 
   const ready = useNodesInitialized();
   const initial = useMemo(() => {
     const { doc, selection } = store.getState();
+    const definition = (type: string) => nodeRegistry.get(type);
     return {
       nodes: createNodeCache()({
         doc,
@@ -218,7 +220,8 @@ function CaptureRender({ store, onDone }: { store: CanvasStore; onDone: (shots: 
         tool: "select",
         measured: new Map(),
         findHit: null,
-        definition: (type) => nodeRegistry.get(type),
+        definition,
+        boxOf: boxesFor(doc, definition, useEngineStore.getState().ctx),
       }),
       edges: createEdgeCache()({
         doc,

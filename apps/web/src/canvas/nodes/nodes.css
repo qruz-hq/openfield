@@ -66,3 +66,280 @@
     color-mix(in srgb, var(--of-border-strong) 60%, transparent) 6px 7px
   );
 }
+
+/*
+ * Generate card (design Y5jjx, section A0Fi5O). The card is the image: Media clips everything and
+ * carries the hairline; Top (52) and Bottom (96, or 176 stacked under 300 wide) float over it;
+ * Center fills the card above the bars so the glyph and messages stay level with the middle port.
+ * Scrims are the design's scrim tokens, dark $surface (#0E1012) at 60% (top) and 0 / 28 / 70 / 86%
+ * (bottom), and only go over images.
+ *
+ * Whatever sits on an image stays dark in both themes, like every control on an image: the $overlay
+ * chips (pill, pager, menu, Stop, the message after a result), the scrims, and the prompt and Run
+ * on them. Over an image both bars are painted dark (data-paint), so the prompt's $text-primary and
+ * Run's $accent are the dark theme's, as in the design. Over a placeholder the bars have no scrim
+ * and follow the theme.
+ */
+.of-card {
+  --of-card-stroke: var(--of-border);
+  --of-scrim-top: #0e101299;
+  --of-scrim-clear: #0e101200;
+  --of-scrim-bottom-soft: #0e101247;
+  --of-scrim-bottom-mid: #0e1012b3;
+  --of-scrim-bottom-end: #0e1012db;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--of-elevated);
+}
+
+.of-card[data-media="image"] {
+  background: var(--of-surface);
+}
+
+/* Failed: $danger-soft over $surface with a $danger-line hairline (DY22w); after a result the last
+   image shows over $surface instead, and the hairline stays (KAgcC). */
+.of-card[data-tone="danger"] {
+  --of-card-stroke: var(--of-danger-line);
+}
+
+.of-card[data-tone="danger"][data-media="placeholder"] {
+  background: linear-gradient(var(--of-danger-soft), var(--of-danger-soft)), var(--of-surface);
+}
+
+/* Media's 1 px stroke, inside and over the image. */
+.of-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1px var(--of-card-stroke);
+  pointer-events: none;
+}
+
+.of-card-image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.of-card-image[data-fit="contain"] {
+  object-fit: contain;
+}
+
+.of-card-stripes {
+  position: absolute;
+  inset: 0;
+}
+
+.of-card-top {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  height: 52px;
+  padding: 10px;
+  isolation: isolate;
+}
+
+.of-card-top::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(to bottom, var(--of-scrim-top), var(--of-scrim-clear));
+  opacity: 0;
+  transition: opacity 120ms ease-out;
+  pointer-events: none;
+}
+
+.of-card-bottom {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  width: 100%;
+  height: 96px;
+  padding: 0 12px 12px;
+}
+
+.of-card[data-scrim] .of-card-bottom {
+  background: linear-gradient(
+    to bottom,
+    var(--of-scrim-clear) 0%,
+    var(--of-scrim-bottom-soft) 25%,
+    var(--of-scrim-bottom-mid) 50%,
+    var(--of-scrim-bottom-end) 100%
+  );
+}
+
+/* Under 300 wide the prompt gets the full width and Run sits under it (tG2C4). */
+.of-card[data-narrow] .of-card-bottom {
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: flex-end;
+  height: 176px;
+}
+
+.of-card-prompt {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--of-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.of-card-prompt[data-placeholder] {
+  color: var(--of-text-tertiary);
+}
+
+.of-card[data-narrow] .of-card-prompt {
+  flex: none;
+  width: 100%;
+}
+
+/* Message states on short cards keep the prompt to one line, clear of the message (VgxbW). */
+.of-card[data-short][data-message] .of-card-prompt {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.of-card-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 16px 10px;
+  pointer-events: none;
+}
+
+.of-card-center > * {
+  pointer-events: auto;
+}
+
+.of-card-center[data-over-image] {
+  padding: 16px 20px;
+}
+
+/* After a result the message sits on its own $overlay scrim over the last image (KAgcC, jxhcX,
+   L7x37). The element is painted dark (data-paint), so $border and $danger-soft are the dark ones. */
+.of-card-message[data-over-image] {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--of-overlay);
+  box-shadow: inset 0 0 0 1px var(--of-border);
+  backdrop-filter: blur(8px);
+}
+
+.of-card[data-tone="danger"] .of-card-message[data-over-image] {
+  background: linear-gradient(var(--of-danger-soft), var(--of-danger-soft)), var(--of-overlay);
+}
+
+.of-card-message-text {
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.of-card[data-short] .of-card-message-text {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.of-card-pager {
+  padding: 0 10px;
+}
+
+.of-card-pager-arrow {
+  display: none;
+}
+
+/* Hover-only parts: faded out and out of the pointer's way at rest. Keyboard focus still reaches
+   them, and reaching them shows them. */
+.of-card .of-reveal {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease-out;
+}
+
+/* Shown on hover, on keyboard focus, and while the card is the only node selected. */
+.react-flow__node:is(:hover, :focus-visible) .of-card .of-reveal,
+.react-flow__node .of-card:is([data-bars], :has(:focus-visible)) .of-reveal {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.react-flow__node:is(:hover, :focus-visible) .of-card[data-scrim] .of-card-top::before,
+.react-flow__node .of-card[data-scrim]:is([data-bars], :has(:focus-visible)) .of-card-top::before {
+  opacity: 1;
+}
+
+.react-flow__node:is(:hover, :focus-visible) .of-card .of-card-pager,
+.react-flow__node .of-card:is([data-bars], :has(:focus-visible)) .of-card-pager {
+  padding: 0;
+}
+
+.react-flow__node:is(:hover, :focus-visible) .of-card .of-card-pager-arrow,
+.react-flow__node .of-card:is([data-bars], :has(:focus-visible)) .of-card-pager-arrow {
+  display: flex;
+}
+
+/* The menu is off at rest in the design, so it takes no room then: its 32 and the two 6 gaps
+   around the empty spacer before it. A long pill keeps its whole label until the menu shows. The
+   menu stays in the tab order, and focusing it shows it. */
+.of-card .of-card-menu {
+  margin-left: -44px;
+}
+
+.react-flow__node:is(:hover, :focus-visible) .of-card .of-card-menu,
+.react-flow__node .of-card:is([data-bars], :has(:focus-visible)) .of-card-menu {
+  margin-left: 0;
+}
+
+/* A pill that only shows on hover takes no room at rest, so the pager starts the bar (gl8p1). */
+.of-card .of-reveal-pill {
+  display: none;
+}
+
+.react-flow__node:is(:hover, :focus-visible) .of-card .of-reveal-pill,
+.react-flow__node .of-card:is([data-bars], :has(:focus-visible)) .of-reveal-pill {
+  display: inline-flex;
+
+  @starting-style {
+    opacity: 0;
+  }
+}
+
+/* The pill stays dark in both themes, so its danger icon keeps the dark theme's $danger, which
+   reads on it; the light theme's red doesn't. */
+.of-pill-danger {
+  color: light-dark(#f35a61, var(--of-danger));
+}
+
+/* A narrow card with several images: a long pill drops to its icon while the arrows show. */
+.react-flow__node:is(:hover, :focus-visible) .of-card[data-narrow][data-several] .of-pill-long .of-pill-text,
+.react-flow__node
+  .of-card[data-narrow][data-several]:is([data-bars], :has(:focus-visible))
+  .of-pill-long
+  .of-pill-text {
+  display: none;
+}

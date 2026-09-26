@@ -3,6 +3,7 @@ export * from "./assets";
 export * from "./batches";
 export * from "./canvas";
 export * from "./jobs";
+export * from "./library";
 export * from "./lineage";
 export * from "./models";
 export * from "./organisation";

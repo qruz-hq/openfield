@@ -339,6 +339,7 @@ export const IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"] as con
 export const UPLOAD_MIME_TYPES = [...IMAGE_MIME_TYPES, "image/heic"] as const;
 export const UPLOAD_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".heic"] as const;
 
+/** `restore` and `purge` (Delete for good) apply to images in the Trash only (§8.3). */
 export const BULK_ACTIONS = [
   "delete",
   "favourite",
@@ -346,8 +347,20 @@ export const BULK_ACTIONS = [
   "addFolder",
   "removeFolder",
   "download",
+  "restore",
+  "purge",
 ] as const;
 export type BulkAction = (typeof BULK_ACTIONS)[number];
+/** The most images one bulk request, drop or membership lookup may name. */
+export const BULK_MAX_IDS = 5000;
+
+// Assets library (§2.8)
+export const LIBRARY_VIEWS = ["all", "favourites", "folder", "trash"] as const;
+export type LibraryView = (typeof LIBRARY_VIEWS)[number];
+/** The Date filter. Each one starts at midnight in the viewer's time zone (libraryDateFrom). */
+export const LIBRARY_DATE_PRESETS = ["today", "7d", "30d", "12m"] as const;
+export type LibraryDatePreset = (typeof LIBRARY_DATE_PRESETS)[number];
+export const FOLDER_NAME_MAX = 200;
 
 export const ASSET_PAGE_SIZE = 50;
 export const MAX_PAGE_SIZE = 200;

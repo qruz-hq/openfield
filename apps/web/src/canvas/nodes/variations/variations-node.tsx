@@ -118,7 +118,7 @@ export const VariationsNode = memo(function VariationsNode(props: NodeComponentP
 
   const band = (
     <div className="absolute inset-x-0 bottom-0 flex flex-col justify-end">
-      <StateBand id={id} display={display} model={key} />
+      <StateBand id={id} display={display} model={key} name={name} />
     </div>
   );
   const empty = (

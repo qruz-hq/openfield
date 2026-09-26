@@ -1,11 +1,11 @@
 import type { CanvasNodeType, MessageKey } from "@openfield/core";
-import type { CanvasNode } from "@openfield/core/canvas";
+import type { CanvasNode, CanvasNodeResult } from "@openfield/core/canvas";
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType } from "react";
 import { ANNOTATION_NODES } from "../editor/annotations/catalogue";
 import { type EngineContext, type NodeEngine, PORT_SPACING, type PortSpec, portFlow } from "../engine/types";
 import { newNodeId } from "../store/graph";
-import type { Point, Size } from "../store/ops";
+import type { NodeFrame, Point, Size } from "../store/ops";
 import type { LodBucket, PendingConnection } from "../store/types";
 import { DATA_NODES } from "./catalogue";
 
@@ -20,6 +20,14 @@ export type NodeCategory = "reference" | "generate" | "edit" | "utility" | "anno
 /** Add-node menu groups, in menu order (§7.4, design CnYWZ). */
 export const MENU_GROUPS = ["references", "image", "utilities"] as const;
 export type MenuGroup = (typeof MENU_GROUPS)[number];
+
+/** What a node's box can follow: its saved frame, its params and what it made. */
+export interface NodeBoxInput {
+  frame: NodeFrame;
+  params: Readonly<Record<string, unknown>>;
+  result: CanvasNodeResult | null;
+  ctx: EngineContext;
+}
 
 /** What React Flow's node renderer hands every node component. Everything else comes from the store. */
 export interface NodeComponentProps {
@@ -52,6 +60,18 @@ export interface NodeDefinition<P extends object = Record<string, unknown>> {
   size: Size | null;
   minSize?: Size;
   resizable: boolean;
+  /**
+   * A box that follows what the node shows instead of a hand-set size (Generate's image card).
+   * It wins over the saved size, which follows `rest` so a saved canvas opens at the same box.
+   */
+  box?(input: NodeBoxInput): Size;
+  /** With `box`: what the saved size follows, written by the editor when it changes (engine/boxes.ts). */
+  rest?: {
+    /** Changes when what the box rests on changes: a new image, a new aspect ratio or model. */
+    key(input: Pick<NodeBoxInput, "params" | "result">): string;
+    /** The box to save for it, or null while that box isn't exactly known yet. */
+    box(input: NodeBoxInput): Size | null;
+  };
   /** Annotation nodes (Note, Frame, Text, Shape) stay out of the run graph and have no data ports. */
   annotation: boolean;
   /** Every port the type can have, in rail order (inputs top to bottom, then outputs). */
@@ -150,7 +170,7 @@ export function createNodeRegistry(definitions: readonly NodeDefinition[]): Node
     instantiate(type, { position, ctx, parentId = null }) {
       const def = byType.get(type);
       if (!def) throw new Error(`No node type ${type}`);
-      return {
+      const node: CanvasNode = {
         id: newNodeId(),
         type: def.type,
         typeVersion: def.typeVersion,
@@ -163,6 +183,10 @@ export function createNodeRegistry(definitions: readonly NodeDefinition[]): Node
         presetLocks: [],
         result: null,
       };
+      // A box that follows what the node shows starts at the shape its defaults ask for, so the
+      // node is placed (and saved) at the size it draws.
+      if (def.box) node.size = { ...def.box({ frame: node, params: node.params, result: null, ctx }) };
+      return node;
     },
   };
 }

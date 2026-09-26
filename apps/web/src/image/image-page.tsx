@@ -1,4 +1,4 @@
-import { DEFAULT_FEED_ZOOM } from "@openfield/core";
+import { type AssetListItem, DEFAULT_FEED_ZOOM, type LibraryQuery } from "@openfield/core";
 import { Banner } from "@openfield/ui";
 import { type ReactNode, useCallback, useMemo, useRef } from "react";
 import { useAssets } from "../api/hooks/assets";
@@ -7,6 +7,7 @@ import { useProviders } from "../api/hooks/keys";
 import { useModels } from "../api/hooks/models";
 import { useSettings, useUpdateSettings } from "../api/hooks/settings";
 import { errorMessage } from "../api/raw";
+import { DetailView } from "../detail";
 import { useDismissed, useLive } from "../lib/live";
 import { Composer } from "./composer/composer";
 import { Feed } from "./feed";
@@ -16,6 +17,9 @@ import { FirstImage, FirstRun } from "./first-run";
 
 // Image workspace: filter bar and feed scroll under the nav; the composer floats above.
 // Favorites join the filter bar with the tile's favorite action (M1-11), not before (§0.15).
+
+/** The feed is every image, newest first: All images, as the server lists it. */
+const FEED_QUERY: LibraryQuery = { view: "all" };
 
 export function ImagePage() {
   const scroll = useRef<HTMLDivElement>(null);
@@ -39,6 +43,12 @@ export function ImagePage() {
         hasMoreAssets: assets.hasNextPage,
       }),
     [assets.data, jobSets.data, dismissed, assets.hasNextPage],
+  );
+
+  // The detail view steps through the feed's images in the order the feed shows them (§4.0).
+  const images = useMemo(
+    () => items.flatMap((item): AssetListItem[] => (item.kind === "asset" ? [item.asset] : [])),
+    [items],
   );
 
   const { fetchNextPage } = assets;
@@ -87,6 +97,14 @@ export function ImagePage() {
       </div>
       {/* Until the page knows, Generate waits like it does on first run. */}
       <Composer firstRun={!loaded || (empty && !anyReady)} />
+      <DetailView
+        items={images}
+        query={FEED_QUERY}
+        hasMore={assets.hasNextPage}
+        loadingMore={assets.isFetchingNextPage}
+        onLoadMore={loadMore}
+        loading={!assets.isSuccess}
+      />
     </>
   );
 }

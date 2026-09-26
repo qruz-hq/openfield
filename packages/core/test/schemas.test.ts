@@ -9,10 +9,18 @@ import {
 } from "../src/canvas";
 import {
   assetBulkBodySchema,
+  assetBulkResponseSchema,
+  assetMembershipsBodySchema,
+  assetNeighboursQuerySchema,
   assetsListQuerySchema,
+  assetsListResponseSchema,
   capabilitiesSchema,
   editBodySchema,
+  emptyTrashBodySchema,
   errorEnvelopeSchema,
+  folderCreateBodySchema,
+  folderDeleteResponseSchema,
+  folderPatchBodySchema,
   type GenerateRequest,
   generateBodySchema,
   generateRequestSchema,
@@ -477,6 +485,52 @@ describe("assets", () => {
       true,
     );
     expect(assetBulkBodySchema.safeParse({ ids: [ID_A], action: "delete" }).success).toBe(true);
+  });
+
+  test("the Trash lists with trash=1, and bulk can restore and delete for good", () => {
+    expect(assetsListQuerySchema.parse({ trash: "1", q: "neon" })).toEqual({ trash: true, q: "neon" });
+    for (const action of ["restore", "purge"]) {
+      expect(assetBulkBodySchema.safeParse({ ids: [ID_A], action }).success).toBe(true);
+    }
+    expect(assetBulkBodySchema.safeParse({ ids: [], action: "restore" }).success).toBe(false);
+    const ids = Array.from({ length: 5001 }, () => ID_A);
+    expect(assetBulkBodySchema.safeParse({ ids, action: "delete" }).success).toBe(false);
+    expect(assetMembershipsBodySchema.safeParse({ ids: ids.slice(0, 5000) }).success).toBe(true);
+    expect(assetBulkResponseSchema.parse({ affected: 1, changed: [ID_A] })).toEqual({
+      affected: 1,
+      changed: [ID_A],
+    });
+  });
+
+  test("the total comes on the first page only, so it's optional", () => {
+    expect(assetsListResponseSchema.parse({ items: [], nextCursor: null })).toEqual({
+      items: [],
+      nextCursor: null,
+    });
+    expect(assetsListResponseSchema.parse({ items: [], nextCursor: null, total: 0 }).total).toBe(0);
+  });
+
+  test("neighbours take the listing's filters without a cursor", () => {
+    expect(assetNeighboursQuerySchema.parse({ folder: ID_A, q: "neon", cursor: "abc" })).toEqual({
+      folder: ID_A,
+      q: "neon",
+    });
+  });
+
+  test("folder names are trimmed, 1 to 200 characters, and a move to the top level is null", () => {
+    expect(folderCreateBodySchema.parse({ name: "  Acme  ", parentId: ID_A })).toEqual({
+      name: "Acme",
+      parentId: ID_A,
+    });
+    expect(folderCreateBodySchema.safeParse({ name: "   " }).success).toBe(false);
+    expect(folderCreateBodySchema.safeParse({ name: "x".repeat(201) }).success).toBe(false);
+    expect(folderPatchBodySchema.parse({ parentId: null })).toEqual({ parentId: null });
+    expect(folderPatchBodySchema.safeParse({ parentId: null, extra: 1 }).success).toBe(false);
+    expect(folderDeleteResponseSchema.parse({ ok: true, deletedIds: [ID_A, ID_B] }).deletedIds).toHaveLength(
+      2,
+    );
+    expect(emptyTrashBodySchema.safeParse({}).success).toBe(true);
+    expect(emptyTrashBodySchema.safeParse({ all: true }).success).toBe(false);
   });
 });
 

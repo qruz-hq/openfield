@@ -56,9 +56,15 @@ export interface PortSpec {
   binding?: PortBinding;
   /**
    * Hidden until the feature behind it ships (the style input waits for the Style node, M4-20).
-   * A hidden port isn't drawn, takes no connections and doesn't count for the rail layout.
+   * A hidden port isn't drawn, takes no connections and doesn't count for the rail layout, unless
+   * it keeps its slot.
    */
   hidden?: boolean;
+  /**
+   * With `hidden`: its place on the rail stays empty, so the ports around it sit where the design
+   * puts them and don't move when it ships (Generate's style input, design Y5jjx).
+   */
+  keepSlot?: boolean;
 }
 
 /** Compatibility (§7.6). "coerce" is image into mask: luminance becomes alpha, white is the edit area. */
@@ -279,6 +285,8 @@ export interface NodeRuntime {
   skipped: boolean;
   /** The result arrived after the node changed: "Made with older settings". */
   late: boolean;
+  /** The fingerprint its run was sent with. A stopped run shows until the node changes. */
+  fingerprint: string | null;
 }
 
 export const idleRuntime = (): NodeRuntime => ({
@@ -295,6 +303,7 @@ export const idleRuntime = (): NodeRuntime => ({
   blocker: null,
   skipped: false,
   late: false,
+  fingerprint: null,
 });
 
 /** What a node draws: one state band plus an optional chip (§7.5 node states). */

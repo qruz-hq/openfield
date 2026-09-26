@@ -37,6 +37,8 @@ export interface NodeMenuProps {
   collapsed: boolean;
   /** It has a settings drawer: the menu opens it, which is also the keyboard's way there. */
   inspectable?: boolean;
+  /** "end": the menu's right edge sits at `at` (opened from the card's own menu button). */
+  align?: "start" | "end";
 }
 
 /** Images the node has to save: what it made, else the ones it holds (Upload, Assets). */
@@ -59,7 +61,16 @@ function useDownloadable(id: string): string[] {
   });
 }
 
-export function NodeMenu({ id, name, at, onClose, runnable, collapsed, inspectable = false }: NodeMenuProps) {
+export function NodeMenu({
+  id,
+  name,
+  at,
+  onClose,
+  runnable,
+  collapsed,
+  inspectable = false,
+  align = "start",
+}: NodeMenuProps) {
   const store = useCanvasStoreApi();
   const actions = useCanvasActions();
   const images = useDownloadable(id);
@@ -95,7 +106,7 @@ export function NodeMenu({ id, name, at, onClose, runnable, collapsed, inspectab
         <span aria-hidden className="pointer-events-none fixed size-0" style={{ left: at.x, top: at.y }} />
       </MenuTrigger>
       <MenuContent
-        align="start"
+        align={align}
         side="bottom"
         sideOffset={0}
         className="w-240"

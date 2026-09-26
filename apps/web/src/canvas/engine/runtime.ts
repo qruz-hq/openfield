@@ -51,6 +51,7 @@ export function runtimeFor(
     error: node.error,
     blocker: node.blocked ? blockerFromReason(node.blocked, modelOf) : null,
     skipped: node.state === "cached",
+    fingerprint: node.fingerprint,
     // The server's clock, so a reloaded tab carries on from where the run is.
     startedAt: node.startedAt ?? null,
     // A place in line only comes from the company's queue (job.queued). A node still waiting for

@@ -42,6 +42,10 @@ export const RUN_ONLY_BLOCKERS: ReadonlySet<NodeBlocker["kind"]> = new Set([
   "missing_asset",
 ]);
 
+/** The node's settings moved on from those a run was sent with. Unknown either way counts as not. */
+const changedSince = (sent: string | null, current: string | undefined): boolean =>
+  !!sent && current !== undefined && !isPendingFingerprint(current) && current !== sent;
+
 export function deriveDisplay({
   result,
   runtime,
@@ -55,6 +59,13 @@ export function deriveDisplay({
     return { ...base, state: runtime.state };
   }
   if (blocker) return { ...base, state: "blocked", blocker };
+
+  // A run stopped before it made anything leaves the saved result alone (resultOfRunNode), so the
+  // stop itself says Canceled (znre4, or jxhcX over the last image) until the next run or a change
+  // to the node. A stop that kept some images says the same from its saved result, below.
+  if (runtime?.state === "canceled" && !changedSince(runtime.fingerprint, fingerprint)) {
+    return { ...base, state: "canceled" };
+  }
 
   // Before the first pass (or while a digest is still coming), trust the saved result.
   const matches =

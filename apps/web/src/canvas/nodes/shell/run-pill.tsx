@@ -4,7 +4,7 @@ import { Play } from "lucide-react";
 import { useProviders } from "../../../api/hooks/keys";
 import { tightCost } from "../../../lib/cost";
 import { altKeyName } from "../../editor/shortcuts";
-import { useEngineStore } from "../../engine/engine-store";
+import { useCanvasEngineContext, useEngineStore } from "../../engine/engine-store";
 import type { NodeBlocker } from "../../engine/types";
 import { useCanvas } from "../../store/context";
 import { blockerCopy } from "./blocker-copy";
@@ -12,8 +12,9 @@ import { useNodeSpeed } from "./speed";
 import { useRunNode } from "./use-node";
 
 // Canvas / Node / Run pill (design T1Q3Pl): 32 tall, accent, play icon and the local estimate
-// ("~$0.13") at the company's speed. Pressing it runs the node; ⌥-click runs it even when nothing
-// changed (M4-16). The pill has no room for the speed, so its tooltip names it (§0.3).
+// ("~$0.13") at the company's speed, then the speed itself when it isn't Standard ("· Batch",
+// B3lLY). "Cost unknown" is words, so it's in Inter. Pressing it runs the node; ⌥-click runs it
+// even when nothing changed (M4-16). The tooltip says more about the speed (§0.3).
 
 export interface RunPillProps {
   id: string;
@@ -27,9 +28,25 @@ export interface RunPillProps {
   seedless: boolean;
   /** The models it runs, for the speed line in its tooltip. */
   models?: readonly (ModelListItem | undefined)[];
+  /** Faded but still pressable: nothing to run yet (design V7GVg, "Add a prompt to run this"). */
+  muted?: boolean;
+  /** The node's own action: Enter on the node goes straight to it (use-shortcuts.ts). */
+  primary?: boolean;
+  className?: string;
 }
 
-export function RunPill({ id, name, estimate, blocker, upToDate, seedless, models = [] }: RunPillProps) {
+export function RunPill({
+  id,
+  name,
+  estimate,
+  blocker,
+  upToDate,
+  seedless,
+  models = [],
+  muted = false,
+  primary = false,
+  className,
+}: RunPillProps) {
   const run = useRunNode(id);
   const ready = useCanvas((s) => s.runController.ready && !s.ui.readOnly);
   const busy = useCanvas((s) => s.runtime[id]?.state === "queued" || s.runtime[id]?.state === "running");
@@ -40,6 +57,13 @@ export function RunPill({ id, name, estimate, blocker, upToDate, seedless, model
   const price = estimate ? tightCost(estimate) : undefined;
   const disabled = !ready || busy || starting;
   const speed = useNodeSpeed(models);
+  const ctx = useCanvasEngineContext();
+  // The speed it runs at, when every model runs at the same one and it isn't Standard.
+  const runs = models.flatMap((model) => (model && ctx.runSpeed ? [ctx.runSpeed(model)] : []));
+  const suffix =
+    runs.length && runs.every((r) => r.speed === runs[0]!.speed) && runs[0]!.speed !== "standard"
+      ? t("speed.suffix", { speed: runs[0]!.name })
+      : null;
   const why = blocker
     ? blockerCopy(blocker, providers).message
     : upToDate
@@ -62,6 +86,7 @@ export function RunPill({ id, name, estimate, blocker, upToDate, seedless, model
     <button
       type="button"
       data-run-pill={id}
+      data-node-primary={primary || undefined}
       aria-label={t("canvas.nodes.pill.run", { name })}
       aria-disabled={blocked || undefined}
       disabled={disabled}
@@ -71,15 +96,19 @@ export function RunPill({ id, name, estimate, blocker, upToDate, seedless, model
       }}
       className={cn(
         "nodrag flex h-32 shrink-0 cursor-pointer items-center gap-6 rounded-full bg-accent pr-12 pl-10 text-accent-fg transition-colors not-disabled:hover:bg-accent-hover disabled:cursor-default",
-        (blocked || disabled) && "opacity-40",
+        (blocked || disabled || muted) && "opacity-40",
+        className,
       )}
     >
       <Play size={12} aria-hidden className="shrink-0" />
       {price ? (
         <span className="text-mono-12 font-medium">{price}</span>
       ) : (
-        <span className="text-caption font-medium">{t("canvas.nodes.state.run")}</span>
+        <span className="text-caption font-medium">
+          {estimate?.confidence === "unknown" ? t("cost.unknown") : t("canvas.nodes.state.run")}
+        </span>
       )}
+      {suffix ? <span className="text-caption">{suffix}</span> : null}
     </button>
   );
   return tip ? <Tooltip content={tip}>{pill}</Tooltip> : pill;

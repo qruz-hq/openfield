@@ -1,0 +1,7 @@
+/*
+ * The detail view is a modal dialog, which turns pointer events off everywhere outside it. Toasts
+ * sit outside and carry Undo (after Delete), so they stay clickable while it's open.
+ */
+[data-sonner-toast]:not([data-visible="false"]) {
+  pointer-events: auto;
+}

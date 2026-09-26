@@ -10,7 +10,7 @@ import type { AddMenuState } from "../store/types";
 import { markOpenPicker, OPENS_AT_ONCE } from "./picker-intent";
 import { type MenuGroup, type NodeDefinition, nodeRegistry } from "./registry";
 import { nodeWrapper } from "./shell/focus";
-import { railOffset } from "./shell/ports";
+import { railLayout } from "./shell/ports";
 import { VARIATIONS_BOX } from "./variations/spec";
 
 // Canvas / Add node menu (design CnYWZ, 320 wide): search, then References, Image and Utilities.
@@ -139,9 +139,8 @@ function AddNodePanel({ menu }: { menu: AddMenuState }) {
     const pending = menu.pending;
     const port = pending ? nodeRegistry.fittingPort(def.type, pending) : undefined;
     if (pending && port) {
-      const box = boxOf(def);
-      const rail = nodeRegistry.ports(def.type, port.direction);
-      const y = box.h / 2 + railOffset(rail.indexOf(port), rail.length);
+      const box = node.size ?? boxOf(def);
+      const y = box.h / 2 + (railLayout(def.ports, port.direction).find((p) => p.port === port)?.offset ?? 0);
       node.position =
         port.direction === "in"
           ? { x: menu.flowPosition.x, y: menu.flowPosition.y - y }

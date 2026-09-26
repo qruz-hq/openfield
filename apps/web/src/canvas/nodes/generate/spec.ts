@@ -34,10 +34,14 @@ import {
   readString,
   type SeedParam,
 } from "../params";
+import { cardMedia } from "./card-media";
+import { CARD_WIDTH, cardLayout, restBox, restKey } from "./card-size";
 import { newNodeSize, resolveFor, type SizeParams, wireSettings } from "./settings";
 
 // Generate (design Y5jjx): the canvas's composer. A prompt from upstream plus its own text,
-// reference images in connection order, and the model's own chips. Style waits for M4-20.
+// reference images in connection order, and the model's settings (in the inspector). The node is
+// an image card whose box follows its image, or the chosen aspect ratio before there is one.
+// Style waits for M4-20.
 
 export interface GenerateParams extends SizeParams {
   model?: ModelKey;
@@ -70,7 +74,8 @@ export const GENERATE_PORTS: readonly PortSpec[] = [
     required: false,
     binding: { to: "references", role: "subject" },
   },
-  // The Style node (M4-20) turns this on.
+  // The Style node (M4-20) turns this on. Until then its slot stays empty, so Prompt sits 36 above
+  // the middle and Reference images level with the output (design Y5jjx).
   {
     id: "preset",
     label: "canvas.nodes.ports.style",
@@ -80,6 +85,7 @@ export const GENERATE_PORTS: readonly PortSpec[] = [
     items: "one",
     required: false,
     hidden: true,
+    keepSlot: true,
   },
   {
     id: "images",
@@ -228,9 +234,17 @@ export const generateSpec: NodeSpec<GenerateParams> = {
   icon: Sparkles,
   category: "generate",
   menu: { group: "image", order: 0 },
-  size: { w: 320, h: 400 },
-  minSize: { w: 240, h: 240 },
-  resizable: true,
+  // Auto's square, until the node has an aspect ratio or an image (card-size.ts).
+  size: { w: CARD_WIDTH, h: CARD_WIDTH },
+  resizable: false,
+  box: ({ frame, params, result, ctx }) => {
+    const { w, h } = cardLayout({ frame, params, result, ctx, media: cardMedia.getState() });
+    return { w, h };
+  },
+  rest: {
+    key: ({ params, result }) => restKey(params, result),
+    box: (input) => restBox(input, cardMedia.getState()),
+  },
   annotation: false,
   ports: GENERATE_PORTS,
   defaults: (ctx) => ({

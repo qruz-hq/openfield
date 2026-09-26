@@ -35,8 +35,9 @@ const inOverlay = (el: Element | null) =>
   !!el?.closest("[role=dialog],[role=alertdialog],[role=menu],[role=listbox]");
 
 /**
- * Where Enter takes the keyboard in a node: its first text field, else its first button. Not its
- * ports, and not the label's rename (double-click and the node menu do that).
+ * Where Enter takes the keyboard in a node: the action it marks as its own (an image card's Run,
+ * Stop or Try again), else its first text field, else its first button. Not its ports, and not the
+ * label's rename (double-click and the node menu do that).
  */
 function firstControl(node: HTMLElement): HTMLElement | null {
   const usable = (el: HTMLElement) =>
@@ -45,6 +46,7 @@ function firstControl(node: HTMLElement): HTMLElement | null {
     el.tabIndex >= 0 &&
     el.getClientRects().length > 0;
   for (const selector of [
+    "[data-node-primary]",
     "textarea, input:not([type=hidden]):not([hidden]), [contenteditable=true]",
     "button, select",
   ]) {

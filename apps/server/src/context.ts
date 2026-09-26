@@ -11,6 +11,7 @@ import type { Logger } from "./log/logger";
 import type { CallContexts } from "./runner/provider-fetch";
 import type { Runner } from "./runner/runner";
 import type { CredentialService } from "./services/credentials";
+import type { LibraryService } from "./services/library";
 import type { ModelService } from "./services/models";
 import type { ProviderSettingsService } from "./services/provider-settings";
 import type { SettingsService } from "./services/settings";
@@ -37,6 +38,8 @@ export interface Services {
   events: EventHub;
   ingest: Ingest;
   thumbs: Thumbs;
+  /** The Assets library's changes, with their events and file cleanup (§2.8, §8.6). */
+  library: LibraryService;
   runner: Runner;
   canvases: CanvasService;
   canvasRuns: CanvasRunService;

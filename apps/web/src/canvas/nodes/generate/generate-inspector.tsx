@@ -1,7 +1,8 @@
-import { t } from "@openfield/core";
-import { Badge, cn, Divider, IconButton, MiniChip, Stepper } from "@openfield/ui";
-import { ChevronDown, Link, Plus, SlidersHorizontal } from "lucide-react";
+import { type ModelListItem, t } from "@openfield/core";
+import { Badge, Button, cn, Divider, IconButton, MiniChip, Stepper } from "@openfield/ui";
+import { ChevronDown, Link, Plus, SlidersHorizontal, Timer } from "lucide-react";
 import { type ReactNode, useId, useMemo, useRef, useState } from "react";
+import { useNavigate } from "react-router";
 import { UPLOAD_ACCEPT, uploadImages } from "../../../api/hooks/uploads";
 import { errorMessage } from "../../../api/raw";
 import { clampBatch } from "../../../lib/controls";
@@ -19,9 +20,10 @@ import { ReferenceOrder } from "./reference-order";
 import { SeedField } from "./seed-field";
 import { type GenerateParams, generateSpec } from "./spec";
 
-// Generate's settings (design AWQzm): the prompt card (add a reference, the node's own words, the
-// words coming in from a Prompt node), the model, the size fields, how many images, the Advanced
-// row (the seed, and later each model's extras), then Run.
+// Generate's settings (design AWQzm): the prompt card (add a reference, the whole prompt coming in
+// from a Prompt node, the node's own words), the model and its speed note, the size fields
+// (resolution or quality, and aspect ratio), how many images, the Advanced row (the seed, and
+// later each model's extras), then Run. Everything the card doesn't show is set here.
 
 /** Where a reference added from here goes: to the left of the node, like the design's graphs. */
 const REFERENCE_GAP = 80;
@@ -115,6 +117,12 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
           disabled={readOnly || !model?.capabilities.references.supported}
           onClick={() => files.current?.click()}
         />
+        {/* The whole prompt coming in, then this node's own words after it. */}
+        {upstream ? (
+          <p className="w-full text-small leading-[1.5] break-words whitespace-pre-wrap text-text-primary">
+            {upstream}
+          </p>
+        ) : null}
         <textarea
           value={params.prompt}
           readOnly={readOnly}
@@ -128,9 +136,7 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
         {upstream ? (
           <MiniChip
             icon={Link}
-            label={<span className="block max-w-280 truncate">{upstream}</span>}
-            aria-label={t("canvas.nodes.generate.fromPrompt")}
-            title={t("canvas.nodes.generate.fromPrompt")}
+            label={t("canvas.nodes.generate.fromPrompt")}
             onClick={focusPromptNode}
             className="self-start"
           />
@@ -145,8 +151,10 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
           if (next.key !== model?.key) switchModel(model, next, params);
         }}
       />
+      <SpeedNote model={model} />
       {controls.length ? (
-        <div className="grid w-full grid-cols-2 gap-8">
+        // Size row (HuDXy): resolution or quality, then aspect ratio, sharing the width.
+        <div className="flex w-full gap-8">
           {controls.map((control) => (
             <SizeField
               key={control.id}
@@ -186,6 +194,40 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
         onRun={(anchor, bypassCache) => void run("node", { anchor, bypassCache })}
       />
     </>
+  );
+}
+
+const SPEED_NOTES = {
+  batch: "canvas.nodes.inspector.speedNote.batch",
+  flex: "canvas.nodes.inspector.speedNote.flex",
+  priority: "canvas.nodes.inspector.speedNote.priority",
+} as const;
+
+/**
+ * Speed note (design WNHOX): under the model when its company runs it at a speed other than
+ * Standard, with a way to that company's settings.
+ */
+function SpeedNote({ model }: { model: ModelListItem | undefined }) {
+  const ctx = useCanvasEngineContext();
+  const navigate = useNavigate();
+  const run = model && ctx.runSpeed?.(model);
+  if (!model || !run || run.speed === "standard") return null;
+  const note =
+    run.speed in SPEED_NOTES
+      ? t(SPEED_NOTES[run.speed as keyof typeof SPEED_NOTES])
+      : t("canvas.nodes.inspector.speedNote.other", { speed: run.name });
+  return (
+    <div className="flex w-full items-center gap-6 px-2">
+      <Timer size={12} aria-hidden className="shrink-0 text-text-tertiary" />
+      <span className="min-w-0 flex-1 text-caption text-text-tertiary">{note}</span>
+      <Button
+        variant="link"
+        size="s"
+        onClick={() => navigate("/settings/api-keys", { state: { providerSettings: model.providerId } })}
+      >
+        {t("canvas.nodes.inspector.changeSpeed")}
+      </Button>
+    </div>
   );
 }
 

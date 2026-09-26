@@ -45,12 +45,12 @@ import {
   getAssets,
   getCanvas,
   getCanvasRun,
+  getFolder,
   getJobSetBundle,
   getJobSetByIdempotencyKey,
   getModel,
   getProvider,
   insertCanvasRun,
-  listFolders,
   setCanvasFolder,
   updateCanvasRun,
 } from "@openfield/db";
@@ -798,19 +798,23 @@ export class CanvasRunService {
     const fresh = assetIds.filter((id) => !run.filed.has(id));
     if (fresh.length === 0) return;
     try {
-      let folderId: string | null | undefined = run.folderId;
+      const { db } = this.deps;
+      // Filing follows the folder's id, wherever the person renamed or moved it to (§0.7). One
+      // deleted since the run's last filing is looked up again, which makes a new one.
+      let folderId: string | null | undefined =
+        run.folderId && getFolder(db, run.folderId) ? run.folderId : undefined;
       if (!folderId) {
-        const canvas = getCanvas(this.deps.db, run.canvasId);
+        const canvas = getCanvas(db, run.canvasId);
         if (!canvas) return;
         folderId = canvas.folderId;
         // The person may have deleted the folder; a new one is made rather than filing nowhere.
-        if (!folderId || !listFolders(this.deps.db).some((f) => f.id === folderId)) {
-          folderId = createFolder(this.deps.db, { id: newId(), name: canvas.name }).id;
-          setCanvasFolder(this.deps.db, canvas.id, folderId);
+        if (!folderId || !getFolder(db, folderId)) {
+          folderId = createFolder(db, { id: newId(), name: canvas.name }).id;
+          setCanvasFolder(db, canvas.id, folderId);
         }
         run.folderId = folderId;
       }
-      addToFolder(this.deps.db, folderId, fresh);
+      addToFolder(db, folderId, fresh);
       for (const id of fresh) run.filed.add(id);
       this.deps.events.publish("folder.updated", { folderId, deleted: false });
     } catch (error) {

@@ -66,6 +66,11 @@ export const canvasDetailSchema = z.object({
    * images deleted since. Nodes show a placeholder for them and runs leave them out (§7.8).
    */
   missingAssetIds: z.array(ulidSchema).optional(),
+  /**
+   * Pixel sizes of the images it names that are here, so an image card opens at its image's exact
+   * shape instead of waiting for a thumbnail's rounded one.
+   */
+  assetSizes: z.record(z.string(), z.object({ w: z.int().positive(), h: z.int().positive() })).optional(),
   /** When the index card's picture was taken, so the editor knows whether it's out of date (M4-15). */
   previewAt: timestampSchema.nullable().optional(),
 });

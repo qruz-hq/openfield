@@ -1,7 +1,7 @@
 import { t } from "@openfield/core";
 import type { CanvasEdge } from "@openfield/core/canvas";
 import type { Edge, Node } from "@xyflow/react";
-import type { PortType } from "../../engine/types";
+import type { EngineContext, PortType } from "../../engine/types";
 import type { NodeDefinition } from "../../nodes/registry";
 import { type DocSlice, type NodeFrame, parentsFirst, type Size } from "../../store";
 import type { CanvasTool, SelectionState } from "../../store/types";
@@ -43,6 +43,8 @@ export interface FlowNodeInputs {
   /** The Find match in focus, ringed. */
   findHit: string | null;
   definition(type: string): NodeDefinition | undefined;
+  /** The box of a node that follows what it shows (NodeDefinition.box), over its saved size. */
+  boxOf?(frame: NodeFrame): Size | undefined;
 }
 
 /** What screen readers call a node: its title, else its type's name. */
@@ -61,25 +63,45 @@ export function insideCollapsed(doc: DocSlice, id: string): boolean {
   return false;
 }
 
-/** The box React Flow gets for a node: saved size, then the type's default, then nothing (measured). */
+/**
+ * The box React Flow gets for a node: the box it follows (an image card's), its saved size, the
+ * type's default, then nothing (measured).
+ */
 export function flowSize(
   frame: NodeFrame,
   def: NodeDefinition | undefined,
+  box?: Size,
 ): { width?: number; height?: number } {
-  const size = frame.size ?? (def ? (def.size ?? undefined) : UNKNOWN_NODE_SIZE);
+  const size = box ?? frame.size ?? (def ? (def.size ?? undefined) : UNKNOWN_NODE_SIZE);
   if (!size) return {};
   if (frame.collapsed) {
-    // Frames fold to a strip; data nodes draw their own 56-tall card at their width.
-    return frame.type === FRAME_NODE_TYPE
-      ? { width: size.w, height: FRAME_COLLAPSED_HEIGHT }
-      : { width: size.w };
+    // Frames fold to a strip; data nodes draw their own 56-tall card at their width, and a node
+    // that follows its image folds to the type's own width.
+    if (frame.type === FRAME_NODE_TYPE) return { width: size.w, height: FRAME_COLLAPSED_HEIGHT };
+    return { width: box && def?.size ? def.size.w : size.w };
   }
   return { width: size.w, height: size.h };
+}
+
+/** Builds FlowNodeInputs.boxOf for a document: each node type's own box rule, where it has one. */
+export function boxesFor(
+  doc: DocSlice,
+  definition: (type: string) => NodeDefinition | undefined,
+  ctx: EngineContext,
+): (frame: NodeFrame) => Size | undefined {
+  return (frame) =>
+    definition(frame.type)?.box?.({
+      frame,
+      params: doc.params[frame.id] ?? {},
+      result: doc.results[frame.id] ?? null,
+      ctx,
+    });
 }
 
 interface NodeEntry {
   frame: NodeFrame;
   def: NodeDefinition | undefined;
+  box: Size | undefined;
   selected: boolean;
   hidden: boolean;
   interactive: boolean;
@@ -102,6 +124,7 @@ export function createNodeCache() {
       const entry = {
         frame,
         def,
+        box: inputs.boxOf?.(frame),
         selected: selected.has(id),
         hidden: insideCollapsed(doc, id),
         interactive,
@@ -113,6 +136,8 @@ export function createNodeCache() {
         old &&
         old.frame === entry.frame &&
         old.def === entry.def &&
+        old.box?.w === entry.box?.w &&
+        old.box?.h === entry.box?.h &&
         old.selected === entry.selected &&
         old.hidden === entry.hidden &&
         old.interactive === entry.interactive &&
@@ -131,14 +156,21 @@ export function createNodeCache() {
 function toFlowNode(e: Omit<NodeEntry, "node">): FlowNode {
   const { frame, def } = e;
   const isFrame = frame.type === FRAME_NODE_TYPE;
+  const size = flowSize(frame, def, e.box);
+  // A box the node follows is exact: edges and fit-to-content use it at once, not after React Flow
+  // measures the resized element a frame later.
+  const measured =
+    e.box && size.width !== undefined && size.height !== undefined
+      ? { width: size.width, height: size.height }
+      : e.measured;
   return {
     id: frame.id,
     type: def ? def.type : UNKNOWN_NODE_TYPE,
     position: frame.position,
     ...(frame.parentId !== null && { parentId: frame.parentId }),
     data: EMPTY_DATA,
-    ...flowSize(frame, def),
-    ...(e.measured && { measured: { width: e.measured.width, height: e.measured.height } }),
+    ...size,
+    ...(measured && { measured: { width: measured.width, height: measured.height } }),
     selected: e.selected,
     hidden: e.hidden,
     draggable: e.interactive,

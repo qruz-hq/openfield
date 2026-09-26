@@ -1,11 +1,13 @@
 import { existsSync, statSync } from "node:fs";
 import { zValidator } from "@hono/zod-validator";
-import { canvasPreviewQuerySchema, idParamSchema, thumbQuerySchema } from "@openfield/core";
+import { canvasPreviewQuerySchema, idParamSchema, queryFlagSchema, thumbQuerySchema } from "@openfield/core";
 import { getAsset } from "@openfield/db";
 import { type Context, Hono } from "hono";
+import { z } from "zod";
 import { previewFile } from "../canvas/files";
 import { absolutePath } from "../config/home";
 import type { Env } from "../context";
+import { attachment, downloadName } from "../files/names";
 import { Thumbs } from "../files/thumbs";
 import { notFound, onInvalid } from "../http/errors";
 
@@ -13,23 +15,46 @@ import { notFound, onInvalid } from "../http/errors";
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
 
+/**
+ * An image in the Trash is served only when asked with ?trash=1 (M3a-04), which the Trash's own
+ * URLs carry, so nothing else keeps showing a deleted image by accident. ?download=1 sends the
+ * original as an attachment with a readable name (§4.4).
+ */
+const assetQuerySchema = z.object({
+  trash: queryFlagSchema.optional(),
+  download: queryFlagSchema.optional(),
+});
+const thumbFileQuerySchema = thumbQuerySchema.extend({ trash: queryFlagSchema.optional() });
+
 export const filesRoutes = new Hono<Env>()
-  .get("/asset/:id", zValidator("param", idParamSchema, onInvalid), async (c) => {
-    const { db, paths } = c.var.svc;
-    const asset = getAsset(db, c.req.valid("param").id);
-    const file = asset && absolutePath(paths, asset.path);
-    if (!asset || !file || !existsSync(file)) return notFound(c, "That image");
-    return sendFile(c, file, { type: asset.mime, etag: `"${asset.sha256}"`, cache: IMMUTABLE });
-  })
+  .get(
+    "/asset/:id",
+    zValidator("param", idParamSchema, onInvalid),
+    zValidator("query", assetQuerySchema, onInvalid),
+    async (c) => {
+      const { db, paths } = c.var.svc;
+      const { trash, download } = c.req.valid("query");
+      const asset = getAsset(db, c.req.valid("param").id, { includeDeleted: trash });
+      const file = asset && absolutePath(paths, asset.path);
+      if (!asset || !file || !existsSync(file)) return notFound(c, "That image");
+      return sendFile(c, file, {
+        type: asset.mime,
+        etag: `"${asset.sha256}"`,
+        cache: IMMUTABLE,
+        ...(download && { disposition: attachment(downloadName(asset)) }),
+      });
+    },
+  )
   .get(
     "/thumb/:id",
     zValidator("param", idParamSchema, onInvalid),
-    zValidator("query", thumbQuerySchema, onInvalid),
+    zValidator("query", thumbFileQuerySchema, onInvalid),
     async (c) => {
       const { db, thumbs } = c.var.svc;
-      const asset = getAsset(db, c.req.valid("param").id);
+      const query = c.req.valid("query");
+      const asset = getAsset(db, c.req.valid("param").id, { includeDeleted: query.trash });
       if (!asset) return notFound(c, "That image");
-      const thumb = await thumbs.get(asset, Thumbs.sizeFor(c.req.valid("query")));
+      const thumb = await thumbs.get(asset, Thumbs.sizeFor(query));
       if (!existsSync(thumb.file)) return notFound(c, "That image");
       if (thumb.kind === "original") {
         // Not immutable, so real thumbnails take over once sharp loads (§8.5.2).
@@ -73,13 +98,14 @@ const FRESH_MS = 30_000;
 async function sendFile(
   c: Context,
   file: string,
-  opts: { type: string; etag?: string; cache: string },
+  opts: { type: string; etag?: string; cache: string; disposition?: string },
 ): Promise<Response> {
   const headers = new Headers({
     "content-type": opts.type,
     "cache-control": opts.cache,
     "accept-ranges": "bytes",
   });
+  if (opts.disposition) headers.set("content-disposition", opts.disposition);
   if (opts.etag) {
     headers.set("etag", opts.etag);
     if (c.req.header("if-none-match") === opts.etag) return new Response(null, { status: 304, headers });

@@ -14,6 +14,7 @@ import {
 import { ApiError, errorMessage } from "../../api/raw";
 import { notify, notifyError } from "../../lib/notify";
 import { CanvasEngine } from "../engine";
+import { rememberImageSizes } from "../nodes/generate/card-media";
 import { CanvasStoreProvider, createCanvasStore } from "../store";
 import { type Autosave, createAutosave } from "./autosave";
 import { minimapPref } from "./chrome/prefs";
@@ -64,6 +65,8 @@ const OPEN_CAPTURE_DELAY_MS = 2_000;
 
 function createSession(detail: CanvasDetail): { session: EditorSession; attach: () => () => void } {
   const canvasId = detail.id;
+  // Image cards open at their images' exact shape, before any thumbnail loads.
+  rememberImageSizes(detail.assetSizes);
   const main = createCanvasStore(detail);
   main.getState().actions.setUi({ minimapOpen: minimapPref() });
   const ui = createEditorUi();
@@ -109,6 +112,7 @@ function createSession(detail: CanvasDetail): { session: EditorSession; attach: 
     capture,
 
     reloadFrom(next) {
+      rememberImageSizes(next.assetSizes);
       main.getState().actions.loadDetail(next);
       ui.setState((s) => ({ flowKey: s.flowKey + 1, preview: null, findHit: null, frameDelete: null }));
     },

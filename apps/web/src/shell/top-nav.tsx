@@ -8,6 +8,7 @@ import { useSpentToday } from "../api/hooks/usage";
 
 const ITEMS = [
   { to: "/image", label: "app.nav.image", match: (path: string) => path.startsWith("/image") },
+  { to: "/assets", label: "app.nav.assets", match: (path: string) => path.startsWith("/assets") },
   { to: "/canvas", label: "app.nav.canvas", match: (path: string) => path.startsWith("/canvas") },
 ] as const;
 

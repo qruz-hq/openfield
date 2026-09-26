@@ -1,0 +1,7 @@
+/*
+ * While the library's selection bar is up, toasts sit 12 above it (16 below the bar, 56 of bar,
+ * 12 of air) instead of on top of it. The toaster belongs to the app shell, so this only moves it.
+ */
+:root[data-library-bar] [data-sonner-toaster][data-y-position="bottom"] {
+  bottom: 84px;
+}

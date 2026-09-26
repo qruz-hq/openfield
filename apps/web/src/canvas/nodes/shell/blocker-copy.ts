@@ -14,7 +14,8 @@ export interface BlockerCopy {
   action: string | null;
 }
 
-const companyOf = (providers: readonly ProviderSummary[] | undefined, model: string | null) => {
+/** The company behind a model key, by its display name. */
+export const companyOf = (providers: readonly ProviderSummary[] | undefined, model: string | null) => {
   const providerId = model ? safeParseModelKey(model)?.providerId : undefined;
   return providerId ? companyName(providers, providerId) : "";
 };
