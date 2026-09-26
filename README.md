@@ -7,7 +7,7 @@ Openfield is in early development, so expect rough edges.
 ## Quick start
 
 ```sh
-git clone https://github.com/<owner>/openfield.git
+git clone https://github.com/qruz-hq/openfield.git
 cd openfield
 bun install
 bun dev
