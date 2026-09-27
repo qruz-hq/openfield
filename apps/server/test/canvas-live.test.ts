@@ -267,6 +267,10 @@ describe("presence", () => {
     expect(server.services.presence.navigate({ kind: "path", path: "/assets" })).toBeNull();
 
     expect((await report(server, "tab-one-1111", { focused: true })).status).toBe(200);
+    // Asks travel on the tab's event stream, so only tabs with one open can be asked.
+    expect(server.services.presence.navigate({ kind: "path", path: "/assets" })).toBeNull();
+    server.services.presence.connected("tab-one-1111");
+    server.services.presence.connected("tab-two-2222");
     await Bun.sleep(5);
     await report(server, "tab-two-2222", {
       path: `/canvas/${canvas.id}`,

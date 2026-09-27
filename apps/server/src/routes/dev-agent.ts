@@ -6,6 +6,7 @@ import {
   canvasRunScopeBodySchema,
   idParamSchema,
   navigateTargetSchema,
+  tabIdSchema,
 } from "@openfield/core";
 import { Hono } from "hono";
 import { z } from "zod";
@@ -50,6 +51,12 @@ export const devAgentRoutes = new Hono<Env>()
     },
   )
   .get("/agent/active", (c) => c.json({ tab: c.var.svc.presence.active() }, 200))
-  .post("/agent/navigate", zValidator("json", z.object({ to: navigateTargetSchema }), onInvalid), (c) =>
-    c.json({ tabId: c.var.svc.presence.navigate(c.req.valid("json").to) }, 200),
+  // A tab id picks the tab, so tests running side by side on one server don't meet.
+  .post(
+    "/agent/navigate",
+    zValidator("json", z.object({ to: navigateTargetSchema, tabId: tabIdSchema.optional() }), onInvalid),
+    (c) => {
+      const { to, tabId } = c.req.valid("json");
+      return c.json({ tabId: c.var.svc.presence.navigate(to, tabId) }, 200);
+    },
   );

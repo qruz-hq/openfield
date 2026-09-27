@@ -16,7 +16,10 @@ export const eventsRoutes = new Hono<Env>().get(
   (c) => {
     const { tab } = c.req.valid("query");
     const signal = c.req.raw.signal;
-    if (tab) signal.addEventListener("abort", () => c.var.svc.presence.drop(tab), { once: true });
+    if (tab) {
+      c.var.svc.presence.connected(tab);
+      signal.addEventListener("abort", () => c.var.svc.presence.drop(tab), { once: true });
+    }
     return c.var.svc.events.connect(signal);
   },
 );
