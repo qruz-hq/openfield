@@ -147,6 +147,7 @@ const COLUMNS: Record<string, string[]> = {
     "started_at text",
     "finished_at text",
     "speed text not null default 'standard'",
+    "agent text",
   ],
   jobs: [
     "id text not null pk",
@@ -673,14 +674,14 @@ describe("boot (§8.2.4)", () => {
   });
 
   test("every migration is in the journal and applied, newest tag reported", () => {
-    expect(opened.schemaTag).toBe("0006_canvas");
-    expect(raw.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 7 });
+    expect(opened.schemaTag).toBe("0007_agents");
+    expect(raw.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 8 });
   });
 
   test("reopening applies nothing twice", () => {
     const again = openDb(file);
-    expect(again.schemaTag).toBe("0006_canvas");
-    expect(again.db.$client.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 7 });
+    expect(again.schemaTag).toBe("0007_agents");
+    expect(again.db.$client.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 8 });
     again.close();
   });
 
@@ -735,11 +736,13 @@ describe("boot (§8.2.4)", () => {
 
     const upgraded = openDb(path);
     const db = upgraded.db.$client;
-    expect(upgraded.schemaTag).toBe("0006_canvas");
-    expect(db.query("SELECT speed, cost_actual_usd, request_json FROM job_sets").get()).toEqual({
+    expect(upgraded.schemaTag).toBe("0007_agents");
+    // 0007: runs made before agents existed were made by a person.
+    expect(db.query("SELECT speed, cost_actual_usd, request_json, agent FROM job_sets").get()).toEqual({
       speed: "standard",
       cost_actual_usd: 0.134,
       request_json: '{"batch":1}',
+      agent: null,
     });
     expect(db.query("SELECT status, speed_used FROM jobs").get()).toEqual({
       status: "succeeded",
@@ -831,8 +834,8 @@ describe("boot (§8.2.4)", () => {
 
     const upgraded = openDb(path);
     const db = upgraded.db.$client;
-    expect(upgraded.schemaTag).toBe("0006_canvas");
-    expect(db.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 7 });
+    expect(upgraded.schemaTag).toBe("0007_agents");
+    expect(db.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 8 });
     expect(db.query("SELECT name FROM sqlite_master WHERE name = 'provider_batches'").get()).toEqual({
       name: "provider_batches",
     });
@@ -845,7 +848,7 @@ describe("boot (§8.2.4)", () => {
     upgraded.close();
     // And the next boot has nothing left to do.
     const again = openDb(path);
-    expect(again.schemaTag).toBe("0006_canvas");
+    expect(again.schemaTag).toBe("0007_agents");
     again.close();
   });
 

@@ -2,6 +2,7 @@ import { t } from "@openfield/core";
 import { GroupHeader, NavRow } from "@openfield/ui";
 import type { ComponentType } from "react";
 import { Link, Navigate, useParams } from "react-router";
+import { AgentsPane } from "./agents-pane";
 import { ApiKeysPane } from "./api-keys-pane";
 import { AppearancePane } from "./appearance-pane";
 import { DefaultsPane } from "./defaults-pane";
@@ -23,6 +24,7 @@ const CONTENT: Partial<Record<string, ComponentType>> = {
   appearance: AppearancePane,
   storage: StoragePane,
   spending: SpendingPane,
+  agents: AgentsPane,
   privacy: PrivacyPane,
   help: HelpPane,
   experimental: ExperimentalPane,

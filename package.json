@@ -12,6 +12,7 @@
     "dev": "bun run scripts/dev.ts",
     "build": "bun run typecheck && bun --filter @openfield/web build",
     "start": "NODE_ENV=production bun apps/server/src/index.ts",
+    "mcp": "bun apps/server/src/mcp/stdio.ts",
     "typecheck": "bun --filter '*' typecheck && tsc -p e2e/tsconfig.json && tsc -p scripts/tsconfig.json",
     "db:generate": "bun --filter @openfield/db generate",
     "test": "bun test",
@@ -23,6 +24,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.14",
+    "@modelcontextprotocol/sdk": "1.30.1",
     "@playwright/test": "1.63.0",
     "@types/bun": "1.4.2",
     "typescript": "7.0.2"

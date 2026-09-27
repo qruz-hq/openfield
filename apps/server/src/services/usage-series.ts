@@ -57,6 +57,8 @@ function groupOf(row: UsageMinuteRow, groupBy: UsageGrouping): GroupId {
         quality: row.quality,
       };
     case "place": {
+      // What an agent app asked for is grouped by app, whether it landed in the feed or a canvas.
+      if (row.agent) return { key: `agent:${row.agent}`, place: "agent", agent: row.agent };
       const place = placeOf(row.source);
       return { key: place, place };
     }

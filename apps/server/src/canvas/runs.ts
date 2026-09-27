@@ -212,8 +212,12 @@ export class CanvasRunService {
 
   // Starting a run
 
-  /** POST /api/canvases/:id/run */
-  async run(canvasId: string, body: CanvasRunBody): Promise<CanvasRunResponse> {
+  /** POST /api/canvases/:id/run. `agent`: the agent app that asked for it, for its job sets. */
+  async run(
+    canvasId: string,
+    body: CanvasRunBody,
+    opts: { agent?: string | null } = {},
+  ): Promise<CanvasRunResponse> {
     if (!getCanvas(this.deps.db, canvasId)) {
       throw new ApiFailure(404, "not_found", "That canvas doesn't exist", { field: "id" });
     }
@@ -252,7 +256,7 @@ export class CanvasRunService {
       });
     }
 
-    const run = this.#create(canvasId, body, deps, analysis);
+    const run = this.#create(canvasId, body, deps, analysis, opts.agent ?? null);
     await this.#advance(run);
     this.#process(run);
     const jobSets = run.record.launches
@@ -338,13 +342,17 @@ export class CanvasRunService {
       !body.dryRun && actor?.kind === "agent"
         ? (this.deps.saveAgentVersion?.(canvasId, actor) ?? null)
         : null;
-    const response = await this.run(canvasId, {
-      scope: body.scope,
-      nodeIds: body.nodeIds,
-      plan: outcome.items.map((c) => c.item),
-      ...(body.dryRun !== undefined && { dryRun: body.dryRun }),
-      ...(body.confirmed !== undefined && { confirmed: body.confirmed }),
-    });
+    const response = await this.run(
+      canvasId,
+      {
+        scope: body.scope,
+        nodeIds: body.nodeIds,
+        plan: outcome.items.map((c) => c.item),
+        ...(body.dryRun !== undefined && { dryRun: body.dryRun }),
+        ...(body.confirmed !== undefined && { confirmed: body.confirmed }),
+      },
+      { agent: actor?.kind === "agent" ? actor.name : null },
+    );
     if (!body.dryRun && actor?.kind === "agent") {
       this.deps.events.publish("agent.activity", {
         canvasId,
@@ -519,6 +527,7 @@ export class CanvasRunService {
     body: CanvasRunBody,
     deps: Map<string, string[]>,
     analysis: Map<string, Analysis>,
+    agent: string | null,
   ): ActiveRun {
     const id = newId();
     const createdAt = new Date().toISOString();
@@ -552,6 +561,7 @@ export class CanvasRunService {
       launches: [],
       canceled: false,
       canceledNodes: [],
+      agent,
     };
     // A single node goes in beside the composer's runs; one that brings earlier nodes along
     // (Run them too) is a batch like any other and waits its turn (§0.12).
@@ -723,6 +733,7 @@ export class CanvasRunService {
       const accepted = await this.deps.runner.createJobSet(launch.request, {
         priority: run.priority,
         canvasRunId: run.id,
+        agent: run.record.agent,
       });
       launch.jobSetId = accepted.jobSet.id;
       this.#jobSetRun.set(accepted.jobSet.id, run.id);
@@ -1036,6 +1047,14 @@ export class CanvasRunService {
         this.#jobSetRun.delete(launch.jobSetId);
       }
     }
+  }
+
+  /** One run's state, live while it runs. Undefined when there's no such run on this canvas. */
+  state(canvasId: string, runId: string): CanvasRunState | undefined {
+    const live = this.#runs.get(runId);
+    if (live) return live.canvasId === canvasId ? stateOf(live) : undefined;
+    const row = getCanvasRun(this.deps.db, runId);
+    return row && row.canvasId === canvasId ? storedState(row) : undefined;
   }
 
   /** GET /api/canvases/:id/runs: live state for active runs, the stored state for finished ones. */

@@ -104,7 +104,7 @@ describe("versions", () => {
 describe("runs", () => {
   test("active runs, and those finished after a time, oldest first", () => {
     const row = canvas();
-    const plan = { nodeIds: [], items: [], launches: [], canceled: false, canceledNodes: [] };
+    const plan = { nodeIds: [], items: [], launches: [], canceled: false, canceledNodes: [], agent: null };
     const run = (minutes: number) =>
       insertCanvasRun(db(), { id: newId(), canvasId: row.id, scope: "all", plan, createdAt: at(minutes) });
     const done = run(1);

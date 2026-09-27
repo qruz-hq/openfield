@@ -19,6 +19,7 @@ const row = (minute: string, over: Partial<UsageMinuteRow> = {}): UsageMinuteRow
   resolution: null,
   quality: null,
   source: "composer",
+  agent: null,
   runs: 1,
   images: 1,
   usd: 0.134,
@@ -109,6 +110,22 @@ describe("building the series", () => {
       ["image", 0.06],
     ]);
     expect(places.models).toBe(2);
+  });
+
+  test("what an agent app asked for is grouped by the app, wherever it landed", () => {
+    const rows = [
+      row("2026-09-20T10:00", { agent: "Claude Code", usd: 0.1 }),
+      row("2026-09-20T10:05", { agent: "Claude Code", source: "canvas", usd: 0.2 }),
+      row("2026-09-20T10:10", { agent: "Cursor", usd: 0.05 }),
+      row("2026-09-20T10:15", { usd: 0.4 }),
+    ];
+    const places = buildUsageSeries(rows, { ...opts, from: "2026-09-20T00:00:00.000Z", groupBy: "place" });
+    expect(places.groups.map((g) => [g.key, g.place, g.agent, g.usd])).toEqual([
+      ["image", "image", undefined, 0.4],
+      ["agent:Claude Code", "agent", "Claude Code", 0.3],
+      ["agent:Cursor", "agent", "Cursor", 0.05],
+    ]);
+    usageSeriesResponseSchema.parse(places);
   });
 
   test("Recreate counts as the Image page, and a run with no job set as somewhere else", () => {

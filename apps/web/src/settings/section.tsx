@@ -1,9 +1,30 @@
 import { Divider, SectionLabel, SettingText, Surface } from "@openfield/ui";
 import { Children, Fragment, isValidElement, type ReactNode, useId } from "react";
 
-/** Settings / Section: a caps label over a card of rows, hairlines between them. */
-export function SettingsSection({ label, children }: { label: string; children: ReactNode }) {
+/**
+ * Settings / Section: a caps label over a card of rows, hairlines between them. `stack` is a card
+ * of free content instead, 16px in with 12px between, as in Settings > Agents' Add to an app.
+ */
+export function SettingsSection({
+  label,
+  stack = false,
+  children,
+}: {
+  label: string;
+  stack?: boolean;
+  children: ReactNode;
+}) {
   const id = useId();
+  if (stack) {
+    return (
+      <section aria-labelledby={id} className="flex w-full flex-col gap-10">
+        <SectionLabel id={id}>{label}</SectionLabel>
+        <Surface variant="card" className="gap-12 p-16">
+          {children}
+        </Surface>
+      </section>
+    );
+  }
   const rows = Children.toArray(children);
   return (
     <section aria-labelledby={id} className="flex w-full flex-col gap-10">

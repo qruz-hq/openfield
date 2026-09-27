@@ -1,3 +1,4 @@
+export * from "./agents";
 export * from "./asset";
 export * from "./canvas";
 export * from "./common";

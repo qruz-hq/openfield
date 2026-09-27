@@ -57,6 +57,8 @@ export const queryKeys = {
   usageMonth: ["usage", "month"] as const,
   usageSeries: (query: Record<string, string>) => ["usage", "series", query] as const,
   stats: ["stats"] as const,
+  /** Settings > Agents: on or off, the key, and the apps that connected. */
+  agents: ["agents"] as const,
   canvases: ["canvases"] as const,
   canvas: (id: string) => ["canvases", id] as const,
   canvasVersions: (id: string) => ["canvases", id, "versions"] as const,

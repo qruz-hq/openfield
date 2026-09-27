@@ -23,7 +23,6 @@ import {
   type AssetRow,
   assetNeighbours,
   childrenOf,
-  type Db,
   type FeedItem,
   folderMemberships,
   foldersOfAssetWithCounts,
@@ -42,13 +41,12 @@ import { attachment } from "../files/names";
 import { envelope, notFound, onInvalid } from "../http/errors";
 import { toAsset, toFolder } from "../mappers/asset";
 import { toJobSet } from "../mappers/job";
-import { toListItems } from "../services/library";
+import { ancestorsOf, toListItems } from "../services/library";
 
 // The library's images (§8.3, M3a-04): every view, search and filter on one cursor, the detail
 // view's payload and neighbours, the Trash, favourites, filing and the bulk actions. Changes go
 // out on the event stream from the library service, so other open tabs follow along.
 
-const MAX_ANCESTORS = 100;
 /** The zip's exact size in bytes, and how many images are in it. */
 export const ZIP_BYTES_HEADER = "x-openfield-zip-bytes";
 export const ZIP_COUNT_HEADER = "x-openfield-zip-count";
@@ -215,7 +213,7 @@ export const assetsRoutes = new Hono<Env>()
   });
 
 /** A listing's filters, shared by the page and the detail view's neighbours. */
-function filterOf(q: Omit<AssetsListQuery, "cursor" | "limit">): LibraryFilter {
+export function filterOf(q: Omit<AssetsListQuery, "cursor" | "limit">): LibraryFilter {
   return {
     folderId: q.folder,
     favouritesOnly: q.favourite,
@@ -238,16 +236,3 @@ export const folderGone = (c: Context) =>
     }),
     404,
   );
-
-/** Parent, grandparent, … up to the root. A hard-deleted parent ends the walk (§0.7 tombstone). */
-function ancestorsOf(db: Db, asset: AssetRow): AssetRow[] {
-  const out: AssetRow[] = [];
-  let parentId = asset.parentAssetId;
-  while (parentId && out.length < MAX_ANCESTORS) {
-    const parent = getAsset(db, parentId);
-    if (!parent) break;
-    out.push(parent);
-    parentId = parent.parentAssetId;
-  }
-  return out;
-}

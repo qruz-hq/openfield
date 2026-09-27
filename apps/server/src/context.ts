@@ -8,8 +8,10 @@ import type { EventHub } from "./events/hub";
 import type { Ingest } from "./files/ingest";
 import type { Thumbs } from "./files/thumbs";
 import type { Logger } from "./log/logger";
+import type { McpSessions } from "./mcp/sessions";
 import type { CallContexts } from "./runner/provider-fetch";
 import type { Runner } from "./runner/runner";
+import type { AgentService } from "./services/agents";
 import type { CredentialService } from "./services/credentials";
 import type { LibraryService } from "./services/library";
 import type { ModelService } from "./services/models";
@@ -48,6 +50,10 @@ export interface Services {
   presence: PresenceService;
   /** OPENFIELD_FAKE_PROVIDERS=1: fake models, and the test-only routes that act as an agent. */
   fake: boolean;
+  /** Settings > Agents: whether agent apps may connect, their key, and what they did today. */
+  agents: AgentService;
+  /** The agent apps connected at /mcp. */
+  mcp: McpSessions;
   webDist: string | null;
   viteOrigin: string;
 }

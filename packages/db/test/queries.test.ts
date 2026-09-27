@@ -6,6 +6,7 @@ import {
   activeJobs,
   activeProviderBatches,
   addToFolder,
+  agentUsageSince,
   assetVersions,
   canceledWithHandle,
   clearCanceledHandles,
@@ -41,6 +42,7 @@ import {
   markJobResumed,
   type OpenDb,
   openDb,
+  pendingAgentEstimateUsd,
   providerBatchesForJobSets,
   readSettings,
   recordBatchPoll,
@@ -746,6 +748,7 @@ describe("usage", () => {
         resolution: "2K",
         quality: "high",
         source: "canvas",
+        agent: null,
         runs: 2,
         images: 1,
         usd: 0.134,
@@ -760,6 +763,7 @@ describe("usage", () => {
         resolution: null,
         quality: "low",
         source: "composer",
+        agent: null,
         runs: 1,
         images: 1,
         usd: 0.067,
@@ -770,6 +774,50 @@ describe("usage", () => {
     ]);
     // Without a range: everything, and a row whose job set is gone still counts, as "somewhere".
     expect(usageMinutes(db(), {}).at(-1)).toMatchObject({ minute: "2026-09-21T08:00", source: null, usd: 1 });
+  });
+
+  test("agent spend sums per app, with runs still going spoken for", () => {
+    const agentRun = (agent: string | null, estimate: number) =>
+      createJobSet(db(), {
+        jobSet: {
+          id: newId(),
+          op: "generate",
+          providerId: "google",
+          modelId: "m",
+          requestJson: request,
+          agent,
+          costEstimateUsd: estimate,
+        },
+        jobs: [{ id: newId(), idx: 0 }],
+      }).jobSet;
+    const claude = agentRun("Claude Code", 0.1);
+    const cursor = agentRun("Cursor", 0.2);
+    const person = agentRun(null, 0.4);
+    const base = { providerId: "google", modelId: "m", operation: "generate" as const };
+    const at = "2026-09-27T09:00:00.000Z";
+    insertUsage(db(), { ...base, jobSetId: claude.id, ts: at, outcome: "succeeded", costUsd: 0.1 });
+    insertUsage(db(), {
+      ...base,
+      jobSetId: claude.id,
+      ts: at,
+      outcome: "canceled",
+      discarded: true,
+      costUsd: 0.1,
+    });
+    insertUsage(db(), { ...base, jobSetId: claude.id, ts: at, outcome: "failed", costUsd: 0 });
+    insertUsage(db(), {
+      ...base,
+      jobSetId: cursor.id,
+      ts: "2026-09-26T09:00:00.000Z",
+      outcome: "succeeded",
+      costUsd: 0.2,
+    });
+    insertUsage(db(), { ...base, jobSetId: person.id, ts: at, outcome: "succeeded", costUsd: 0.4 });
+    expect(agentUsageSince(db(), "2026-09-27T00:00:00.000Z")).toEqual([
+      { agent: "Claude Code", images: 1, usd: 0.2 },
+    ]);
+    // All three sets are still pending here; only the agents' ones count.
+    expect(pendingAgentEstimateUsd(db())).toBeCloseTo(0.3);
   });
 
   test("knows when tracking started, ignoring plain failures", () => {

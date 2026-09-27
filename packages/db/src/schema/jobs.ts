@@ -52,6 +52,9 @@ export const jobSets = sqliteTable(
     // The speed resolved for this model at submit (§0.3), a copy of request_json.speed so tiles and
     // queries needn't parse JSON. Added in 0003.
     speed: text("speed", { enum: SPEED_IDS }).notNull().default("standard"),
+    // The agent app that asked for it, e.g. "Claude Code". Null when a person did. Spending groups
+    // by it and the agents' daily limit sums it. Added in 0007.
+    agent: text("agent"),
   },
   (t) => [
     check("job_sets_op_check", oneOf("op", OPS)),

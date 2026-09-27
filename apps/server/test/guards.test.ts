@@ -30,7 +30,7 @@ describe("guards", () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; schema: string };
     expect(body.ok).toBe(true);
-    expect(body.schema).toBe("0006_canvas");
+    expect(body.schema).toBe("0007_agents");
   });
 
   test("a wrong Host is rejected, even with the token", async () => {

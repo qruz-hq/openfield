@@ -1,5 +1,6 @@
 import {
   type CancelResponse,
+  type CostEstimate,
   type ErrorAction,
   type GenerateRequest,
   isTerminalState,
@@ -245,11 +246,34 @@ export class Runner {
    */
   async createJobSet(
     body: GenerateRequest,
-    opts: { priority?: number; canvasRunId?: string } = {},
+    opts: { priority?: number; canvasRunId?: string; agent?: string | null } = {},
   ): Promise<JobSetAccepted> {
     const existing = getJobSetByIdempotencyKey(this.deps.db, body.idempotencyKey);
     if (existing) return this.#accepted(existing.id);
 
+    const { manifest, result } = await this.#prepare(body);
+    for (const d of result.diagnostics) this.deps.logger.debug("Adjusted a setting for this model", d);
+    for (const note of result.settings.notes)
+      this.deps.logger.debug("A company setting doesn't apply here", note);
+    return this.#insert(manifest, result.request, result.jobIds, result.calls, {
+      op: body.op,
+      priority: opts.priority ?? 10,
+      canvasRunId: opts.canvasRunId ?? null,
+      agent: opts.agent ?? null,
+    });
+  }
+
+  /**
+   * What createJobSet would charge, from the same checks and the same frozen request, without
+   * making anything. Agents price a run with it before they're allowed to start one.
+   */
+  async quote(body: GenerateRequest): Promise<{ estimate: CostEstimate; request: NormalizedRequest }> {
+    const { manifest, result } = await this.#prepare(body);
+    return { estimate: estimate(manifest, result.request), request: result.request };
+  }
+
+  /** The model, company and settings checks, then normalize (§0.3). Throws what the caller shows. */
+  async #prepare(body: GenerateRequest) {
     const manifest = this.deps.models.get(body.model);
     if (!manifest)
       throw new ApiFailure(400, "bad_request", `Unknown model ${body.model}`, { field: "model" });
@@ -265,20 +289,13 @@ export class Runner {
         userMessage: result.error.userMessage,
       });
     }
-    for (const d of result.diagnostics) this.deps.logger.debug("Adjusted a setting for this model", d);
-    for (const note of result.settings.notes)
-      this.deps.logger.debug("A company setting doesn't apply here", note);
-    return this.#insert(manifest, result.request, result.jobIds, result.calls, {
-      op: body.op,
-      priority: opts.priority ?? 10,
-      canvasRunId: opts.canvasRunId ?? null,
-    });
+    return { manifest, result };
   }
 
   /** Recreate (§0.1): replays the frozen request as a new job set, never the current UI state. */
-  recreate(jobSetId: string): JobSetAccepted {
+  recreate(jobSetId: string, opts: { agent?: string | null } = {}): JobSetAccepted {
     const set = this.#jobSet(jobSetId);
-    return this.#replay(set, { batch: set.requestJson.batch, source: "recreate" });
+    return this.#replay(set, { batch: set.requestJson.batch, source: "recreate", agent: opts.agent ?? null });
   }
 
   /**
@@ -300,7 +317,10 @@ export class Runner {
     return accepted;
   }
 
-  #replay(set: JobSetRow, change: { batch: number; source: NormalizedRequest["source"] }): JobSetAccepted {
+  #replay(
+    set: JobSetRow,
+    change: { batch: number; source: NormalizedRequest["source"]; agent?: string | null },
+  ): JobSetAccepted {
     const manifest = this.deps.models.get(`${set.providerId}:${set.modelId}`);
     if (!manifest)
       throw new ApiFailure(400, "capability_unsupported", "This model isn't available anymore", {
@@ -324,6 +344,7 @@ export class Runner {
       op: set.op,
       priority: set.priority,
       promptOriginal: set.promptOriginal,
+      agent: change.agent ?? null,
     });
   }
 
@@ -332,7 +353,13 @@ export class Runner {
     request: NormalizedRequest,
     jobIds: string[],
     calls: NormalizedRequest[],
-    meta: { op: Op; priority: number; promptOriginal?: string | null; canvasRunId?: string | null },
+    meta: {
+      op: Op;
+      priority: number;
+      promptOriginal?: string | null;
+      canvasRunId?: string | null;
+      agent?: string | null;
+    },
   ): JobSetAccepted {
     const { providerId, modelId } = parseModelKey(request.model);
     // Priced at the speed this run resolved to (§0.13).
@@ -357,6 +384,7 @@ export class Runner {
         canvasRunId: meta.canvasRunId ?? null,
         costEstimateUsd: cost.confidence === "unknown" ? null : cost.max,
         speed: request.speed,
+        agent: meta.agent ?? null,
       },
       jobs: jobIds.map((id, idx) => ({ id, idx, seed: seedFor(request, calls, idx) })),
     });

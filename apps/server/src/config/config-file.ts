@@ -18,10 +18,17 @@ import { isPosix, keepPrivate } from "./home";
 
 const providerEntrySchema = z.record(z.string(), z.string().nullable());
 
+/** Whether agent apps may connect, and the key they connect with (Settings > Agents). */
+const agentsEntrySchema = z.object({
+  enabled: z.boolean().default(false),
+  key: z.string().nullable().default(null),
+});
+
 export const configSchema = z.looseObject({
   version: z.literal(1).default(1),
   port: z.int().min(1).max(65535).optional(),
   providers: z.record(z.string(), providerEntrySchema).default({}),
+  agents: agentsEntrySchema.default({ enabled: false, key: null }),
 });
 
 export type ConfigData = z.infer<typeof configSchema>;
@@ -106,14 +113,15 @@ export class ConfigStore {
   }
 }
 
-/** `previous` with only the provider values that `next` still holds. */
+/** `previous` with only the provider values, and the agent key, that `next` still holds. */
 function keptSecrets(previous: ConfigData, next: ConfigData): ConfigData {
   const providers: ConfigData["providers"] = {};
   for (const [id, fields] of Object.entries(previous.providers)) {
     const kept = Object.entries(fields).filter(([name, value]) => next.providers[id]?.[name] === value);
     if (kept.length) providers[id] = Object.fromEntries(kept);
   }
-  return { ...previous, providers };
+  const agentKey = previous.agents.key === next.agents.key ? previous.agents.key : null;
+  return { ...previous, providers, agents: { ...previous.agents, key: agentKey } };
 }
 
 /**
