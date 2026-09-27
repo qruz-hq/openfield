@@ -5,6 +5,7 @@ import type { Env, Services } from "./context";
 import { envelope, toErrorResponse } from "./http/errors";
 import { crossSiteGuard, hostGuard, responseHeaders, sessionGuard } from "./http/guards";
 import { spaHandler } from "./http/spa";
+import { agentsRoutes } from "./routes/agents";
 import { assetsRoutes } from "./routes/assets";
 import { canvasRunsRoutes } from "./routes/canvas-runs";
 import { canvasesRoutes } from "./routes/canvases";
@@ -45,6 +46,7 @@ const api = new Hono<Env>()
   .route("/", canvasesRoutes)
   .route("/", canvasRunsRoutes)
   .route("/", presenceRoutes)
+  .route("/", agentsRoutes)
   .route("/", eventsRoutes);
 
 const isBackendPath = (path: string) => /^\/(api|files)(\/|$)/.test(path);
@@ -106,6 +108,10 @@ const bodyLimits: MiddlewareHandler = (c, next) => {
 export function createApp(svc: Services) {
   const app = new Hono<Env>()
     .use("*", responseHeaders(), hostGuard(svc.port), crossSiteGuard())
+    // Agent apps (docs/agents.md): the guards above, then the agent key instead of the session token.
+    .all("/mcp", (c) => svc.mcp.handle(c.req.raw))
+    // Apps look here for a sign-in to use; there is none, the agent key is all they need.
+    .get("/.well-known/*", (c) => c.json(envelope("not_found", "No such route"), 404))
     .use("/api/*", sessionGuard(svc.token))
     .use("/api/*", bodyLimits)
     .use("/files/*", sessionGuard(svc.token))

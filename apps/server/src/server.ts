@@ -1,6 +1,6 @@
 import { statSync } from "node:fs";
 import { join } from "node:path";
-import { type AuthKind, DEFAULT_PORT } from "@openfield/core";
+import { type AgentLaunch, type AuthKind, DEFAULT_PORT } from "@openfield/core";
 import {
   activeJobSets,
   getProvider,
@@ -26,10 +26,12 @@ import { mintSessionToken } from "./http/guards";
 import { VITE_ORIGIN } from "./http/spa";
 import { consoleSink, createJobLog, fileSink, Logger, RollingFile } from "./log/logger";
 import { images } from "./log/plural";
+import { McpSessions } from "./mcp/sessions";
 import { CallContexts } from "./runner/provider-fetch";
 import { type RecoveryReport, recover } from "./runner/recovery";
 import { Runner, type StopOptions, type StopReport } from "./runner/runner";
 import type { QueueOptions } from "./runner/timing";
+import { AgentService } from "./services/agents";
 import { CredentialService } from "./services/credentials";
 import { batchSnapshot, jobSetViews, markAnnounced } from "./services/job-sets";
 import { LibraryService } from "./services/library";
@@ -125,7 +127,10 @@ async function boot(
 
   // The logger needs every loaded key to hide it, and keys load after the database opens.
   let credentials: CredentialService | undefined;
-  const logger = new Logger({ secrets: () => credentials?.secrets() ?? [] });
+  let agents: AgentService | undefined;
+  const logger = new Logger({
+    secrets: () => [...(credentials?.secrets() ?? []), ...(agents?.secrets() ?? [])],
+  });
   if (opts.console !== false) logger.addSink(consoleSink());
   logger.addSink(fileSink(new RollingFile(join(paths.logs, "openfield.log"))));
   const jobLog = createJobLog(logger, new RollingFile(join(paths.logs, "jobs.ndjson")));
@@ -262,6 +267,15 @@ async function boot(
   const resumedRuns = await canvasRuns.recover();
   if (resumedRuns) jobLog({ event: "startup.canvas_runs", resumed: resumedRuns });
 
+  const port = opts.port ?? portFrom(env) ?? config.data.port ?? DEFAULT_PORT;
+  agents = new AgentService({
+    config,
+    db,
+    endpoint: `http://127.0.0.1:${port}/mcp`,
+    launch: agentLaunch(paths, port, config.data.port ?? DEFAULT_PORT),
+  });
+  const mcp = new McpSessions(() => services);
+
   settings.onChange((next, changed) => {
     if (changed.includes("logLevel")) logger.setLevel(next.logLevel);
     if (changed.includes("globalConcurrency")) runner.tick();
@@ -269,7 +283,7 @@ async function boot(
 
   const services: Services = {
     version: pkg.version,
-    port: opts.port ?? portFrom(env) ?? config.data.port ?? DEFAULT_PORT,
+    port,
     dev,
     token: mintSessionToken(),
     paths,
@@ -292,6 +306,8 @@ async function boot(
     canvasRuns,
     presence,
     fake,
+    agents,
+    mcp,
     viteOrigin: opts.viteOrigin ?? viteOriginFrom(env),
     webDist:
       opts.webDist === undefined
@@ -308,6 +324,7 @@ async function boot(
     // Canvas runs stop moving on first, so the drain sends nothing new. Calls it lets finish are
     // saved as usual, and the next start's recovery brings their nodes up to date.
     canvasRuns.stop();
+    mcp.stop();
     events.close();
     const report = await runner.stop(drain);
     await thumbs.idle();
@@ -386,6 +403,20 @@ function viteOriginFrom(env: Record<string, string | undefined>): string {
   const port = Number(env.OPENFIELD_VITE_PORT);
   return Number.isInteger(port) && port > 0 && port < 65536 ? `http://127.0.0.1:${port}` : VITE_ORIGIN;
 }
+
+/**
+ * How an app that can only start programs reaches this server: the stdio bridge (`bun run mcp`),
+ * run by this same bun from this checkout. Only what the bridge couldn't find on its own goes in env.
+ */
+function agentLaunch(paths: HomePaths, port: number, configuredPort: number): AgentLaunch {
+  const env: Record<string, string> = {};
+  if (paths.root !== resolveHome({})) env.OPENFIELD_HOME = paths.root;
+  if (port !== configuredPort) env.OPENFIELD_PORT = String(port);
+  return { command: process.execPath, args: ["run", "--cwd", REPO_ROOT, "mcp"], env };
+}
+
+/** The Openfield checkout this server runs from. */
+const REPO_ROOT = join(import.meta.dir, "../../..");
 
 function portFrom(env: Record<string, string | undefined>): number | undefined {
   const port = Number(env.OPENFIELD_PORT);
