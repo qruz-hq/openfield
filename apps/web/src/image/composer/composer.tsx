@@ -43,6 +43,7 @@ import { aspectChoices, qualityChoices, resolutionChoices } from "../../lib/cont
 import { speedFallbackHint } from "../../lib/cost";
 import { notify, notifyError } from "../../lib/notify";
 import { companyName } from "../../lib/provider";
+import { askedPrice } from "../../lib/remote-price";
 import { askToNotifyOnce } from "../../lib/system-notify";
 import { focusPrompt, registerPrompt } from "./focus";
 import { GenerateButton, type GenerateSpeed } from "./generate-button";
@@ -115,7 +116,14 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
   // Speed comes only from the company's settings (§0.3); prices here follow it.
   const run = picked ? runSpeedFor(picked) : undefined;
   const speed = run?.speed ?? "standard";
-  const state = generateState({ model: picked, anyReady, prompt: composer.prompt, resolved, speed });
+  const state = generateState({
+    model: picked,
+    anyReady,
+    prompt: composer.prompt,
+    resolved,
+    speed,
+    askPrice: askedPrice,
+  });
   const generateSpeed: GenerateSpeed | undefined =
     !picked || !run
       ? undefined

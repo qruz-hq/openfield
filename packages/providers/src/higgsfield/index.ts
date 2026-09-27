@@ -1,11 +1,4 @@
-import {
-  type CostEstimate,
-  DEFAULT_CURRENCY,
-  formatMoney,
-  type JobHandle,
-  type ModelManifest,
-  t,
-} from "@openfield/core";
+import { type CostEstimate, type JobHandle, type ModelManifest, t } from "@openfield/core";
 import {
   type CallContext,
   errorFromFetchFailure,
@@ -23,12 +16,13 @@ import { higgsfieldFetch } from "./http";
 import { toHiggsfieldBody } from "./map-request";
 import { type Resume, type StatusBody, toJobUpdate } from "./map-response";
 import { HIGGSFIELD_MODELS, specFor } from "./models";
+import { toCostEstimate } from "./pricing";
 
 export { mapError } from "./errors";
 
 // Higgsfield's public API (§6.15): a queue. A create call answers at once with a request id, and a
-// status read by that id answers queued, in_progress, then the finished images as URLs. Experimental
-// until someone runs it live: see README.md for what's unconfirmed.
+// status read by that id answers queued, in_progress, then the finished images as URLs. Checked
+// live on 2026-09-27 (a SOUL V2 run and the estimate endpoint); README.md lists what still isn't.
 
 export function createHiggsfieldProvider(): Provider {
   return {
@@ -39,7 +33,7 @@ export function createHiggsfieldProvider(): Provider {
       consoleUrl: "https://open.higgsfield.ai/api-keys",
       networkHosts: [API_HOST],
       assetHosts: [...ASSET_HOSTS],
-      stable: false,
+      stable: true,
     },
     credentials: {
       fields: [
@@ -166,26 +160,15 @@ function bindModel(manifest: ModelManifest, spec: WireSpec): ImageModel {
       throw redactError(await mapError(res, body), ctx.log);
     },
 
-    // The documented estimate: the same body, answered with credits and dollars for one request.
+    // The documented estimate: the same body as the run, answered for one request. It makes no
+    // image and costs nothing. The prompt and seed never change it (checked live, 2026-09-27).
     async estimateRemote(req, ctx): Promise<CostEstimate> {
       const { res, body } = await higgsfieldFetch(ctx, `${API_BASE}/estimate/${spec.path}`, {
         method: "POST",
-        body: toHiggsfieldBody(spec, req),
+        body: toHiggsfieldBody(spec, { ...req, batch: 1 }),
       });
       if (!res.ok) throw redactError(await mapError(res, body), ctx.log);
-      const each = Number((body as { usd?: unknown } | undefined)?.usd);
-      if (!Number.isFinite(each) || each < 0) {
-        throw new ProviderError("provider_error", { message: "The estimate had no dollar amount" });
-      }
-      const count = Math.max(1, req.batch);
-      return {
-        currency: DEFAULT_CURRENCY,
-        min: each * count,
-        max: each * count,
-        confidence: "estimated",
-        basis: t("cost.basis", { count, each: formatMoney(each, DEFAULT_CURRENCY, true) }),
-        pricedAt: new Date(ctx.now()).toISOString().slice(0, 10),
-      };
+      return toCostEstimate(body, Math.max(1, req.batch), ctx.now());
     },
   };
 }

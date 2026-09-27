@@ -17,6 +17,7 @@ import type { LibraryService } from "./services/library";
 import type { ModelService } from "./services/models";
 import type { PresenceService } from "./services/presence";
 import type { ProviderSettingsService } from "./services/provider-settings";
+import type { RemotePrices } from "./services/remote-prices";
 import type { SettingsService } from "./services/settings";
 
 /** Everything a route can reach, set on the Hono context as `svc`. */
@@ -38,6 +39,8 @@ export interface Services {
   credentials: CredentialService;
   contexts: CallContexts;
   models: ModelService;
+  /** Prices a company answers per request (Higgsfield's estimate), asked once a day (§6.9). */
+  prices: RemotePrices;
   events: EventHub;
   ingest: Ingest;
   thumbs: Thumbs;

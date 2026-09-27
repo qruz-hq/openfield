@@ -6,7 +6,7 @@ import {
   type Settings,
   type SpeedId,
 } from "@openfield/core";
-import { runSpeed } from "@openfield/providers/manifest";
+import { type AskPrice, runSpeed } from "@openfield/providers/manifest";
 import type { EngineContext } from "./types";
 
 // The engine's view of the app: enabled models with their manifests, the defaults from Settings,
@@ -18,6 +18,7 @@ export function buildEngineContext(
   settings: Pick<Settings, "defaultModel" | "defaultBatch" | "defaultAspect"> | undefined,
   providers: readonly Pick<ProviderSummary, "id" | "enabled" | "meta">[] | undefined,
   providerSettings?: ReadonlyMap<string, ProviderSettingsResponse>,
+  askPrice?: AskPrice,
 ): EngineContext {
   const byKey = new Map(models.map((m) => [m.key as string, m]));
   const wanted = settings?.defaultModel;
@@ -37,6 +38,7 @@ export function buildEngineContext(
     defaultAspect: settings?.defaultAspect ?? null,
     companyOff: (providerId) => off.has(providerId),
     runSpeed: (model) => runSpeed(providerSettings?.get(model.providerId), model),
+    ...(askPrice && { askPrice }),
   };
 }
 

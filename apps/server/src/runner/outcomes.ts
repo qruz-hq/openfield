@@ -2,14 +2,17 @@ import {
   type CostEstimate,
   type CostSource,
   canvasSource,
+  DEFAULT_CURRENCY,
   type ErrorAction,
   errorCopy,
+  formatMoney,
   isTerminalState,
   type JobState,
   type ModelManifest,
   type NormalizedRequest,
   type SpeedId,
   THUMB_RUNGS,
+  t,
   type UsageUnits,
 } from "@openfield/core";
 import {
@@ -66,6 +69,23 @@ export interface ImageCost {
   costSource: CostSource;
 }
 
+/** What a job set carries of the price it was sent at. */
+export type SetPrice = Pick<JobSetRow, "costEstimateUsd" | "batchSize" | "createdAt">;
+
+/** One image's share of the price a run was sent at, or undefined when it carries none. */
+export function eachFromSet(set: SetPrice): CostEstimate | undefined {
+  if (set.costEstimateUsd === null || set.batchSize < 1) return undefined;
+  const each = Math.round((set.costEstimateUsd / set.batchSize) * 1e6) / 1e6;
+  return {
+    currency: DEFAULT_CURRENCY,
+    min: each,
+    max: each,
+    confidence: "estimated",
+    basis: t("cost.basis", { count: 1, each: formatMoney(each, DEFAULT_CURRENCY, true) }),
+    pricedAt: set.createdAt.slice(0, 10),
+  };
+}
+
 export class Outcomes {
   constructor(private readonly deps: OutcomeDeps) {}
 
@@ -73,9 +93,20 @@ export class Outcomes {
     return this.deps.fake;
   }
 
-  /** One image's cost at the speed the company served, never the one asked for (§0.13). */
-  cost(manifest: ModelManifest, call: NormalizedRequest, speed: SpeedId, result?: JobResult): ImageCost {
-    const each = estimate(manifest, { ...call, batch: 1, speed });
+  /**
+   * One image's cost at the speed the company served, never the one asked for (§0.13). A model
+   * priced per request has no price of its own, so its share of what the company answered when the
+   * run was sent stands in (§6.9).
+   */
+  cost(
+    manifest: ModelManifest,
+    call: NormalizedRequest,
+    speed: SpeedId,
+    result?: JobResult,
+    set?: SetPrice,
+  ): ImageCost {
+    const local = estimate(manifest, { ...call, batch: 1, speed });
+    const each = local.confidence === "unknown" && set ? (eachFromSet(set) ?? local) : local;
     const images = Math.max(1, result?.images.filter((i) => !i.partial).length ?? 1);
     const known = each.confidence === "unknown" ? null : each.max;
     const costUsd = result?.cost ? result.cost.amount / images : known;

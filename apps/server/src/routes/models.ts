@@ -13,6 +13,7 @@ import { estimate, pricedOp, resolveProviderSettings } from "@openfield/provider
 import { Hono } from "hono";
 import type { Env } from "../context";
 import { notFound, onInvalid } from "../http/errors";
+import { asksForPrice } from "../services/remote-prices";
 
 export const modelsRoutes = new Hono<Env>()
   .get("/models", zValidator("query", modelsListQuerySchema, onInvalid), async (c) => {
@@ -32,17 +33,21 @@ export const modelsRoutes = new Hono<Env>()
     return c.json(item satisfies ModelListItem, 200);
   })
   // For server-side callers and the canvas preview, priced at the speed the company's settings
-  // resolve to for this model (§0.13). The composer prices locally with the same code.
+  // resolve to for this model (§0.13). The composer prices locally with the same code, except for a
+  // model its company prices per request (Higgsfield), which it asks here (§6.9).
   .post(
     "/models/:providerId/:modelId/estimate",
     zValidator("param", modelParamSchema, onInvalid),
     zValidator("json", estimateBodySchema, onInvalid),
-    (c) => {
+    async (c) => {
       const { providerId, modelId } = c.req.valid("param");
       const svc = c.var.svc;
       const manifest = svc.models.get(`${providerId}:${modelId}`);
       if (!manifest) return notFound(c, "That model");
       const body = c.req.valid("json");
+      // No answer (no key, a failure, a price with no amount) falls through to "Cost unknown".
+      const asked = asksForPrice(manifest) ? await svc.prices.estimateFor(manifest, body) : null;
+      if (asked) return c.json(asked satisfies CostEstimate, 200);
       const { schema, stored } = svc.providerSettings.forRun(providerId);
       const { speed } = resolveProviderSettings(schema, stored, manifest, pricedOp(body.op));
       const size =

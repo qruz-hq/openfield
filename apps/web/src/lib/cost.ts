@@ -1,5 +1,6 @@
 import { type CostEstimate, formatCost, type ModelListItem, type SpeedId, t } from "@openfield/core";
 import { estimateRun, type RunSpeed, resolveValues } from "@openfield/providers/manifest";
+import { askedPrice, isPricePending } from "./remote-price";
 
 /** "~$0.067" for chips, tags and option rows, or nothing when the price isn't known. */
 export function tightCost(estimate: CostEstimate): string | undefined {
@@ -8,10 +9,12 @@ export function tightCost(estimate: CostEstimate): string | undefined {
 
 /** One image at the model's own defaults and its company's speed, for the picker and the key card's tags. */
 export const defaultPrice = (model: ModelListItem, speed: SpeedId = "standard"): string | undefined =>
-  tightCost(estimateRun(model, resolveValues(model.capabilities, {}, 1), "", speed));
+  tightCost(estimateRun(model, resolveValues(model.capabilities, {}, 1), "", speed, {}, askedPrice));
 
 export interface SpeedPrice {
   price?: string | undefined;
+  /** Its company's price is still being asked: show no price rather than "Cost unknown". */
+  pending?: boolean;
   /** "· Standard" when the model lacks its company's speed and runs at Standard instead. */
   note?: string | undefined;
   /** Why, in one line: "Nano Banana 2 has no Flex, so it runs at Standard." */
@@ -20,7 +23,16 @@ export interface SpeedPrice {
 
 /** A model's price at the speed it would run at now, saying so plainly when that's a fallback. */
 export function speedPrice(model: ModelListItem, run: RunSpeed): SpeedPrice {
-  const price = defaultPrice(model, run.speed);
+  const estimate = estimateRun(
+    model,
+    resolveValues(model.capabilities, {}, 1),
+    "",
+    run.speed,
+    {},
+    askedPrice,
+  );
+  const price = tightCost(estimate);
+  if (isPricePending(estimate)) return { pending: true };
   if (!run.fellBack) return { price };
   return {
     price,

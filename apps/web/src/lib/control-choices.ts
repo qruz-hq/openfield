@@ -6,6 +6,7 @@ import {
   type Resolved,
 } from "@openfield/providers/manifest";
 import { tightCost } from "./cost";
+import { askedPrice } from "./remote-price";
 
 // The rows a resolution, quality or aspect chip opens, built once for the composer and the canvas
 // nodes so the two never disagree: the model's own options in its order, what can't be picked
@@ -32,7 +33,9 @@ export function resolutionChoices(
     value: tier,
     title: tier,
     subtitle: off(control, tier) ? control.reason : t(`composer.chips.resolution.tiers.${tier}`),
-    price: tightCost(estimateRun(model, { ...resolved, resolution: tier, batch: 1 }, "", speed)),
+    price: tightCost(
+      estimateRun(model, { ...resolved, resolution: tier, batch: 1 }, "", speed, {}, askedPrice),
+    ),
     disabled: off(control, tier),
   }));
 }
@@ -47,7 +50,9 @@ export function qualityChoices(
     value: level.id,
     title: level.label,
     subtitle: off(control, level.id) ? control.reason : level.hint,
-    price: tightCost(estimateRun(model, { ...resolved, quality: level.id, batch: 1 }, "", speed)),
+    price: tightCost(
+      estimateRun(model, { ...resolved, quality: level.id, batch: 1 }, "", speed, {}, askedPrice),
+    ),
     disabled: off(control, level.id),
   }));
 }

@@ -17,11 +17,11 @@ export const COMPANY = "Higgsfield";
 export const API_HOST = "api.higgsfield.ai";
 export const API_BASE = `https://${API_HOST}`;
 /**
- * Where finished images are downloaded from. UNCONFIRMED: the docs only show cdn.example.com, so
- * this is the PRD's research until a live run shows the real host. A download from anywhere else
- * is refused, and the error names the host, so the log says what to add here.
+ * Where finished images are downloaded from: the host a live SOUL V2 run answered with on
+ * 2026-09-27 (the docs only show cdn.example.com). Other models may use another host. A download
+ * from anywhere else is refused, and the error names the host, so the log says what to add here.
  */
-export const ASSET_HOSTS = ["cdn.higgsfield.ai"];
+export const ASSET_HOSTS = ["d3u0tzju9qaucj.cloudfront.net"];
 
 /**
  * One model's wire rules: its endpoint, and how each Openfield control reaches it. The manifest is

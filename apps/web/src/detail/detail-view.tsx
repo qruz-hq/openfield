@@ -45,6 +45,7 @@ import { useSettings } from "../api/hooks/settings";
 import { ApiError, errorMessage } from "../api/raw";
 import { tightCost } from "../lib/cost";
 import { notify, notifyError } from "../lib/notify";
+import { asksForPrice } from "../lib/remote-price";
 import { copyImage, downloadOriginal, focusPromptSoon, reuseSettings } from "./actions";
 import { type DetailActions, DetailPanel, type RunSpeedInfo } from "./detail-panel";
 import {
@@ -325,7 +326,18 @@ function DetailContent({
     if (frozen.quality) request.quality = frozen.quality;
     if (frozen.size) request.size = frozen.size;
     if (frozen.prompt !== undefined) request.prompt = frozen.prompt;
-    recreatePrice = tightCost(estimate(model, request));
+    // A model its company prices per request replays at the price its run was sent at, as the
+    // server prices the replay.
+    recreatePrice = asksForPrice(model)
+      ? jobSet.costEstimateUsd === null
+        ? undefined
+        : tightCost({
+            ...estimate(model, request),
+            confidence: "estimated",
+            min: jobSet.costEstimateUsd,
+            max: jobSet.costEstimateUsd,
+          })
+      : tightCost(estimate(model, request));
   }
   const recreateInexact = !model?.capabilities.seed.supported || data?.asset.seed === null;
 

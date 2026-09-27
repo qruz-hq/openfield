@@ -4,6 +4,7 @@ import { cn, Tooltip } from "@openfield/ui";
 import { Play } from "lucide-react";
 import { useProviders } from "../../../api/hooks/keys";
 import { tightCost } from "../../../lib/cost";
+import { isPricePending } from "../../../lib/remote-price";
 import { altKeyName } from "../../editor/shortcuts";
 import { useCanvasEngineContext, useEngineStore } from "../../engine/engine-store";
 import { useCanvas } from "../../store/context";
@@ -55,6 +56,8 @@ export function RunPill({
   const providers = useProviders().data;
   const blocked = !!blocker;
   const price = estimate ? tightCost(estimate) : undefined;
+  // A price still being asked of its company reads as a plain Run, not "Cost unknown".
+  const unknown = estimate?.confidence === "unknown" && !isPricePending(estimate);
   const disabled = !ready || busy || starting;
   const speed = useNodeSpeed(models);
   const ctx = useCanvasEngineContext();
@@ -68,7 +71,7 @@ export function RunPill({
     ? blockerCopy(blocker, providers).message
     : upToDate
       ? t("canvas.nodes.pill.upToDate", { alt: altKeyName() })
-      : estimate?.confidence === "unknown"
+      : unknown
         ? t("cost.unknown")
         : seedless
           ? t("canvas.nodes.pill.newEachRun")
@@ -105,7 +108,7 @@ export function RunPill({
         <span className="text-mono-12 font-medium">{price}</span>
       ) : (
         <span className="text-caption font-medium">
-          {estimate?.confidence === "unknown" ? t("cost.unknown") : t("canvas.nodes.state.run")}
+          {unknown ? t("cost.unknown") : t("canvas.nodes.state.run")}
         </span>
       )}
       {suffix ? <span className="text-caption">{suffix}</span> : null}

@@ -92,7 +92,10 @@ function harvest(handle: JobHandle, status: StatusBody, ctx: CallContext): Promi
 async function toJobResult(handle: JobHandle, status: StatusBody, ctx: CallContext): Promise<JobResult> {
   const urls = (status.images ?? []).map((i) => i.url).filter((u): u is string => typeof u === "string");
   if (!urls.length) {
-    throw new ProviderError("provider_error", { message: "The finished request listed no image" });
+    throw new ProviderError("provider_error", {
+      message: "The finished request listed no image",
+      final: true,
+    });
   }
   // Every URL is checked before any is fetched, so a stray host writes nothing at all.
   const checked = urls.map(assetUrl);
@@ -136,6 +139,7 @@ function assetUrl(raw: string): URL {
     throw new ProviderError("provider_error", {
       message: `The image came from ${url.protocol}//${url.host}, which isn't a declared ${COMPANY} image host`,
       userMessage: t("errors.imageBlocked"),
+      final: true,
     });
   }
   return url;

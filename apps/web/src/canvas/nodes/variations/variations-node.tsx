@@ -135,7 +135,9 @@ export const VariationsNode = memo(function VariationsNode(props: NodeComponentP
         const logo = logoFor(m?.providerId);
         // At its company's speed, with "· Standard" when it lacks that speed (§0.3).
         const run = m ? ctx.runSpeed?.(m) : undefined;
-        const cost = m ? tightCost(estimateRun(m, carriedFor(m, params), "", run?.speed)) : undefined;
+        const cost = m
+          ? tightCost(estimateRun(m, carriedFor(m, params), "", run?.speed, {}, ctx.askPrice))
+          : undefined;
         const price = cost && run?.fellBack ? `${cost} ${t("speed.suffix", { speed: run.name })}` : cost;
         return (
           <div key={modelKey} className="flex min-w-0 flex-1 flex-col">

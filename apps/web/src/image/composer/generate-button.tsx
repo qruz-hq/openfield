@@ -145,7 +145,8 @@ export function GenerateButton({
     );
   }
 
-  const range = costParts(state.estimate);
+  // No estimate yet: its company's price is on its way, so the button shows no price line.
+  const range = state.estimate ? costParts(state.estimate) : undefined;
   const tip = tooltipFor(state.estimate, speed);
   const button = (
     <button type="button" aria-busy={working || undefined} className={cn(shell, accent)} onClick={onGenerate}>
@@ -154,8 +155,10 @@ export function GenerateButton({
         <Spinner size={16} />
       ) : (
         <>
-          <Estimate estimate={state.estimate} tone="text-accent-fg" speed={speed?.name} />
-          {range.kind === "amount" && range.range ? (
+          {state.estimate ? (
+            <Estimate estimate={state.estimate} tone="text-accent-fg" speed={speed?.name} />
+          ) : null}
+          {range?.kind === "amount" && range.range ? (
             <span className="text-micro">{t("feed.tile.images", { count: batch })}</span>
           ) : null}
           <FallbackNote speed={speed} />

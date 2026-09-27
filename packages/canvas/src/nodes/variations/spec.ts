@@ -261,7 +261,14 @@ export const variationsEngine: NodeEngine<VariationsParams> = {
     const k = fanOutOf(inputs);
     const images = imagesOf(inputs, "image");
     const estimates: CostEstimate[] = calls.map(({ model, resolved, call }) =>
-      estimateRun(model, { ...resolved, batch: call.batch }, call.prompt, speedOf(ctx, model)),
+      estimateRun(
+        model,
+        { ...resolved, batch: call.batch },
+        call.prompt,
+        speedOf(ctx, model),
+        {},
+        ctx.askPrice,
+      ),
     );
     const jobs = calls.reduce((sum, c) => sum + c.call.batch, 0) * k;
     return {

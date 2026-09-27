@@ -350,6 +350,7 @@
     "basisWith": "{count} × {each} ({detail})",
     "unknown": "Cost unknown",
     "free": "Free",
+    "credits": "{credits, plural, one {# credit} other {# credits}}",
     "withCount": "{cost} · {count, plural, one {# image} other {# images}}",
     "pricesAsOf": "Prices as of {date}. They may have changed since."
   },

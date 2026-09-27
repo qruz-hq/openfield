@@ -4,6 +4,7 @@ import { createHiggsfieldProvider } from "../src/higgsfield";
 import { CONCURRENCY_WAIT_MS, mapError } from "../src/higgsfield/errors";
 import { toHiggsfieldBody } from "../src/higgsfield/map-request";
 import { HIGGSFIELD_MODELS, specFor } from "../src/higgsfield/models";
+import { toCostEstimate } from "../src/higgsfield/pricing";
 import { normalize } from "../src/normalize";
 import { createTestContext } from "../src/testing/context";
 import { createFakeFetch } from "../src/testing/fake-fetch";
@@ -84,7 +85,8 @@ describe("the Higgsfield adapter", () => {
     const model = provider.model(manifest("soul-v2").key);
     const handle = await model.submit(await call("soul-v2", { prompt: "A kite #fake:foreign_asset" }), ctx);
     const err = await finish(model, handle, ctx, clock).catch((e: unknown) => e);
-    expect(err).toMatchObject({ code: "provider_error" });
+    // Final: reading the same id again can't change where the image is.
+    expect(err).toMatchObject({ code: "provider_error", final: true });
     expect((err as Error).message).toContain("files.unknown-host.example");
     expect(ctx.assets.written).toHaveLength(0);
   });
@@ -125,11 +127,33 @@ describe("the Higgsfield adapter", () => {
     expect(JSON.stringify(done.result?.providerRaw)).not.toContain("?");
   });
 
-  test("estimateRemote asks Higgsfield and scales by the image count", async () => {
+  test("estimateRemote asks Higgsfield for one image and scales by the image count", async () => {
     const { ctx } = processAt({ now: T0 });
     const model = provider.model(manifest("soul-v2").key);
+    // SOUL V2 at 1K (720p): $0.004, 0.05 credits, a live answer.
     const cost = await model.estimateRemote!({ ...(await call("soul-v2")), batch: 2 }, ctx);
-    expect(cost).toMatchObject({ currency: "USD", min: 0.188, max: 0.188, confidence: "estimated" });
+    expect(cost).toMatchObject({ currency: "USD", min: 0.008, max: 0.008, confidence: "estimated" });
+    expect(cost.basis).toBe("2 × $0.004 (0.05 credits)");
+    // 2K is 1080p there, which Higgsfield prices higher.
+    const sharper = await model.estimateRemote!({ ...(await call("soul-v2")), resolution: "2K" }, ctx);
+    expect(sharper).toMatchObject({ min: 0.006, max: 0.006 });
+  });
+
+  test("a token-priced workflow's estimate has no amount, so its cost stays unknown", async () => {
+    const { ctx } = processAt({ now: T0 });
+    const model = provider.model(manifest("marketing-studio-image-2.5-flare").key);
+    const cost = await model.estimateRemote!(await call("marketing-studio-image-2.5-flare"), ctx);
+    expect(cost).toMatchObject({ confidence: "unknown", min: 0, max: 0 });
+  });
+
+  test("an estimate answer without a dollar amount is an error, not a free image", () => {
+    expect(toCostEstimate({ type: "estimate", credits: "1.500", usd: "0.094" }, 1, T0)).toMatchObject({
+      min: 0.094,
+      basis: "1 × $0.094 (1.5 credits)",
+    });
+    expect(() => toCostEstimate({ type: "estimate", credits: "1.500" }, 1, T0)).toThrow(
+      "The estimate had no dollar amount",
+    );
   });
 });
 

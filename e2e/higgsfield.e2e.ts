@@ -1,8 +1,8 @@
 import { expect, type Page, test } from "@playwright/test";
 
-// Higgsfield (§6.15) is an early company (meta.stable false): its card and models show only with
-// Settings > Experimental > Show early models on. With it on, a key readies SOUL V2 and a run lands
-// from the fake's image host. The tests share one server.
+// Higgsfield (§6.15): a regular company, checked live on 2026-09-27. Its prices come from its
+// estimate endpoint through the server (§6.9); the fake answers SOUL V2 at $0.004 an image, as the
+// real one did. The tests share one server.
 
 test.describe.configure({ mode: "serial" });
 
@@ -13,16 +13,13 @@ const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&
 const images = (page: Page, prompt: string) =>
   page.getByRole("listitem", { name: new RegExp(`^${escapeRegExp(prompt)} · `) }).locator("img");
 
-test("Higgsfield stays hidden until Show early models is on", async ({ page }) => {
-  await page.goto("/settings/api-keys");
-  await expect(page.getByRole("group", { name: "OpenAI" })).toBeVisible();
-  await expect(page.getByRole("group", { name: "Higgsfield" })).toHaveCount(0);
-
+test("Higgsfield's card shows without Experimental, and a key readies its models with their prices", async ({
+  page,
+}) => {
+  // No company is early, so Experimental has no early models switch to show.
   await page.goto("/settings/experimental");
-  const early = page.getByRole("switch", { name: "Show early models" });
-  await expect(early).not.toBeChecked();
-  await early.click();
-  await expect(early).toBeChecked();
+  await expect(page.getByText("Also save canvases as files")).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Show early models" })).toHaveCount(0);
 
   await page.goto("/settings/api-keys");
   const card = page.getByRole("group", { name: "Higgsfield" });
@@ -30,12 +27,18 @@ test("Higgsfield stays hidden until Show early models is on", async ({ page }) =
   await card.getByPlaceholder("Paste your key").fill(KEY);
   await card.getByRole("button", { name: "Check key" }).click();
   await expect(card.getByRole("status")).toHaveText("Connected");
+  // Each model's usual price, asked of Higgsfield: SOUL V2 at its defaults.
+  await expect(card.getByText("SOUL V2", { exact: true }).locator("..")).toContainText("~$0.004");
 });
 
-test("with a key, SOUL V2 makes an image", async ({ page }) => {
+test("the composer prices SOUL V2 from Higgsfield before generating, then makes an image", async ({
+  page,
+}) => {
   const prompt = `A red kite over wheat fields ${Date.now().toString(36)}`;
   await page.goto(`/image?model=${encodeURIComponent(SOUL_V2)}`);
   await page.getByRole("textbox", { name: "Describe the image you want" }).fill(prompt);
-  await page.getByRole("button", { name: /^Generate/ }).click();
+  const generate = page.getByRole("button", { name: /^Generate/ });
+  await expect(generate).toContainText(/About\s*\$0\.004/);
+  await generate.click();
   await expect(images(page, prompt).first()).toBeVisible({ timeout: 20_000 });
 });

@@ -26,8 +26,9 @@ describe("model registry", () => {
     server = await startTestServer();
     const res = await server.json<ModelsListResponse>("/api/models");
     const list = modelsListResponseSchema.parse(res.body);
-    // Higgsfield is an early company, off the list until Settings > Experimental (higgsfield.test.ts).
-    expect(list.models.map((m) => m.key)).toEqual([
+    // Higgsfield's catalog has its own file (higgsfield.test.ts).
+    const listed = list.models.filter((m) => m.providerId !== "higgsfield");
+    expect(listed.map((m) => m.key)).toEqual([
       "google:gemini-3-pro-image",
       "google:gemini-3.1-flash-image",
       "google:gemini-3.1-flash-lite-image",
@@ -37,11 +38,10 @@ describe("model registry", () => {
     ]);
     expect(list.models.every((m) => !m.ready && m.enabled)).toBe(true);
     expect(list.staleAt).toBeNull();
-    // The models table keeps every company's rows; only the list hides early ones.
     const rows = listModels(server.services.db).filter((r) => r.providerId !== "higgsfield");
     expect(rows).toHaveLength(6);
     // Speeds travel with the manifest (and into the models table); the batch path never does.
-    expect(list.models.map((m) => m.speeds?.map((o) => o.id))).toEqual([
+    expect(listed.map((m) => m.speeds?.map((o) => o.id))).toEqual([
       ["batch", "flex", "priority"],
       ["batch"],
       ["batch"],

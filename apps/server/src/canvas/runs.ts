@@ -72,9 +72,11 @@ import type { EventHub } from "../events/hub";
 import { ApiFailure } from "../http/errors";
 import type { Logger } from "../log/logger";
 import type { Runner } from "../runner/runner";
+import { sleep } from "../runner/timing";
 import type { CredentialService } from "../services/credentials";
 import type { ModelService } from "../services/models";
 import type { ProviderSettingsService } from "../services/provider-settings";
+import { asksForPrice, type RemotePrices } from "../services/remote-prices";
 import { blockerMessage } from "./blockers";
 import { readDocument } from "./documents";
 
@@ -90,6 +92,8 @@ import { readDocument } from "./documents";
 
 /** canvas_run.updated at most this often per run (§7.10: batched, 10 a second). */
 const EMIT_INTERVAL_MS = 100;
+/** How long a run waits for companies to answer prices, before those nodes are priced as unknown. */
+const PRICE_WAIT_MS = 4_000;
 const NODE_OK: readonly CanvasRunNodeState["state"][] = ["done", "cached"];
 const NODE_TERMINAL: readonly CanvasRunNodeState["state"][] = [
   "done",
@@ -105,6 +109,8 @@ export interface CanvasRunDeps {
   db: Db;
   runner: Runner;
   models: ModelService;
+  /** Prices a company answers per request (§6.9). Without it those nodes are priced as unknown. */
+  prices?: RemotePrices;
   credentials: CredentialService;
   /** The company's speed, which prices each call as the runner will freeze it (§0.3). */
   providerSettings: ProviderSettingsService;
@@ -223,7 +229,7 @@ export class CanvasRunService {
     }
     const deps = this.#checkOrder(body.plan);
     this.#checkNotRunning(canvasId, body.plan);
-    const analysis = this.#analyse(body.plan, deps);
+    const analysis = this.#analyse(body.plan, deps, await this.#askPrices(body.plan));
 
     const rows: CanvasRunNodeResult[] = body.plan.map((item) => {
       const a = analysis.get(item.nodeId)!;
@@ -417,7 +423,34 @@ export class CanvasRunService {
   }
 
   /** What each item will do: skip, wait on a fix, or make this many images for about this much. */
-  #analyse(plan: CanvasRunPlanItem[], deps: Map<string, string[]>): Map<string, Analysis> {
+  /**
+   * The prices companies answer per request, for the calls that need one (§6.9), asked together.
+   * A slow answer isn't waited for past a few seconds: that node is then priced as unknown.
+   */
+  async #askPrices(plan: CanvasRunPlanItem[]): Promise<Map<CanvasRunCall, CostEstimate | null>> {
+    const prices = this.deps.prices;
+    const asked = new Map<CanvasRunCall, CostEstimate | null>();
+    if (!prices) return asked;
+    const late = sleep(PRICE_WAIT_MS).then(() => null);
+    await Promise.all(
+      plan.flatMap((item) =>
+        item.calls.flatMap((call) => {
+          const manifest = this.deps.models.get(call.model);
+          if (!manifest || !asksForPrice(manifest)) return [];
+          const { model: _model, label: _label, ...body } = call;
+          const ask = prices.estimateFor(manifest, { ...body, seed: body.seed ?? null });
+          return [Promise.race([ask, late]).then((cost) => void asked.set(call, cost))];
+        }),
+      ),
+    );
+    return asked;
+  }
+
+  #analyse(
+    plan: CanvasRunPlanItem[],
+    deps: Map<string, string[]>,
+    asked: ReadonlyMap<CanvasRunCall, CostEstimate | null> = new Map(),
+  ): Map<string, Analysis> {
     const out = new Map<string, Analysis>();
     const assetIds = plan.flatMap((item) =>
       item.inputs.flatMap((input) => input.values.flatMap((v) => (v.kind === "asset" ? [v.assetId] : []))),
@@ -462,7 +495,10 @@ export class CanvasRunService {
           return product * Math.max(1, count);
         }, 1);
       const perRun = item.calls.reduce((sum, call) => sum + call.batch, 0);
-      const cost = scaleCostEstimate(sumCostEstimates(item.calls.map((c) => this.#estimate(c))), fanOut);
+      const cost = scaleCostEstimate(
+        sumCostEstimates(item.calls.map((c) => asked.get(c) ?? this.#estimate(c))),
+        fanOut,
+      );
       out.set(item.nodeId, {
         skipped: false,
         blocked: null,

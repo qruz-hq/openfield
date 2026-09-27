@@ -1,0 +1,17 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/estimate/marketing-studio/image/flare"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "x-correlation-id": "3c9d1e27-8a4b-4f6e-9b2d-5e7a1c0f8d34"
+    },
+    "body": {
+      "type": "description",
+      "pricing_description": "Per 1M tokens: text input $5, cached text input $1.25, text output $10; image input $8, cached image input $2, image output $30. Quality defaults to high. Final cost uses actual token usage and standard credit rounding. The initial charge is an estimate reconciled on completion."
+    }
+  }
+}

@@ -39,6 +39,7 @@ import { ModelService } from "./services/models";
 import { PresenceService } from "./services/presence";
 import { defaultCap, ProviderSettingsService } from "./services/provider-settings";
 import { providerSummaries } from "./services/provider-summaries";
+import { RemotePrices } from "./services/remote-prices";
 import { SettingsService } from "./services/settings";
 
 // Boot (§0.16): home folder, lock, config, logs, database, services, crash recovery. Nothing here
@@ -206,9 +207,11 @@ async function boot(
     modelsJson: paths.modelsJson,
   });
   models.init();
+  const prices = new RemotePrices({ models, contexts, ingest, providerSettings, logger });
   const runner = new Runner({
     db,
     models,
+    prices,
     credentials,
     settings,
     providerSettings,
@@ -252,6 +255,7 @@ async function boot(
     db,
     runner,
     models,
+    prices,
     credentials,
     providerSettings,
     events,
@@ -298,6 +302,7 @@ async function boot(
     credentials,
     contexts,
     models,
+    prices,
     events,
     ingest,
     thumbs,

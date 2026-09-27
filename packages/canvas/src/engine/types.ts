@@ -17,7 +17,7 @@ import type {
   SizeSpec,
 } from "@openfield/core";
 import type { CanvasNodeResult } from "@openfield/core/canvas";
-import type { RunSpeed } from "@openfield/providers/manifest";
+import type { AskPrice, RunSpeed } from "@openfield/providers/manifest";
 
 // Shared engine vocabulary (§7.6, §7.7, §0.11). Pure types plus a few constant tables: no React,
 // no store, no fetch, so the compiler, fingerprints and their tests stay plain functions.
@@ -109,6 +109,11 @@ export interface EngineContext {
   missing?: ReadonlySet<string>;
   /** The speed a run of this model gets from its company's settings (§0.3). Standard when absent. */
   runSpeed?(model: ModelListItem): RunSpeed;
+  /**
+   * Prices a model its company prices per request (Higgsfield, §6.9). The web app asks through the
+   * server; without it those models are priced from their manifest.
+   */
+  askPrice?: AskPrice;
 }
 
 /** A node as the engine sees it: document fields only, params already parsed by its type. */

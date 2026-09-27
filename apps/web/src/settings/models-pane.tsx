@@ -26,7 +26,7 @@ export function ModelsPane() {
       <SettingsSection label={t("settings.models.yours")}>
         {(models.data ?? []).map((model) => {
           const logo = logoFor(model.providerId);
-          const { price, note, hint } = speedPrice(model, runSpeed(model));
+          const { price, note, hint, pending } = speedPrice(model, runSpeed(model));
           return (
             <SettingRow
               key={model.key}
@@ -43,7 +43,9 @@ export function ModelsPane() {
               }
             >
               <span className="flex shrink-0 items-center gap-4" title={hint}>
-                <span className="text-mono-12 text-text-secondary">{price ?? t("cost.unknown")}</span>
+                {pending ? null : (
+                  <span className="text-mono-12 text-text-secondary">{price ?? t("cost.unknown")}</span>
+                )}
                 {note ? <span className="text-caption text-text-tertiary">{note}</span> : null}
               </span>
             </SettingRow>

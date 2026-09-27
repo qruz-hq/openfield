@@ -2,6 +2,7 @@ import {
   type CancelResponse,
   type CostEstimate,
   type ErrorAction,
+  formatMoney,
   type GenerateRequest,
   isTerminalState,
   type JobHandle,
@@ -56,9 +57,10 @@ import { toJobSetWithJobs } from "../mappers/job";
 import type { CredentialService } from "../services/credentials";
 import type { BoundModel, ModelService } from "../services/models";
 import type { ProviderSettingsService } from "../services/provider-settings";
+import { asksForPrice, type RemotePrices } from "../services/remote-prices";
 import type { SettingsService } from "../services/settings";
 import { asProviderError, BatchWatcher, refused, untilAborted } from "./batches";
-import { batchAction, callsFor, finalReason, Outcomes } from "./outcomes";
+import { batchAction, callsFor, eachFromSet, finalReason, Outcomes } from "./outcomes";
 import { type CallContexts, noWrites } from "./provider-fetch";
 import {
   batchPollDelay,
@@ -87,6 +89,20 @@ import {
 // instead of resend) through the batch watcher and its provider_batches row.
 
 const IN_FLIGHT: readonly JobState[] = ["submitting", "queued", "running"];
+
+/** How long a new run waits for its company to answer a price, before it's priced as unknown. */
+const PRICE_WAIT_MS = 4_000;
+
+/** One image's price as `count` of them. */
+function scaleCost(each: CostEstimate, count: number): CostEstimate {
+  const total = Math.round(each.max * count * 1e6) / 1e6;
+  return {
+    ...each,
+    min: total,
+    max: total,
+    basis: t("cost.basis", { count, each: formatMoney(each.max, each.currency, true) }),
+  };
+}
 
 interface Unit {
   id: string;
@@ -168,6 +184,8 @@ export interface RunnerDeps {
   contexts: CallContexts;
   logger: Logger;
   jobLog: (entry: Record<string, unknown>) => void;
+  /** Prices a company answers per request (§6.9). Without it those runs are priced as unknown. */
+  prices?: RemotePrices;
   /** OPENFIELD_FAKE_PROVIDERS=1: costs are recorded as 0 and never count toward spend (§0.13). */
   fake?: boolean;
   options?: Partial<QueueOptions>;
@@ -255,11 +273,13 @@ export class Runner {
     for (const d of result.diagnostics) this.deps.logger.debug("Adjusted a setting for this model", d);
     for (const note of result.settings.notes)
       this.deps.logger.debug("A company setting doesn't apply here", note);
+    const cost = await this.#askPrice(manifest, result.request);
     return this.#insert(manifest, result.request, result.jobIds, result.calls, {
       op: body.op,
       priority: opts.priority ?? 10,
       canvasRunId: opts.canvasRunId ?? null,
       agent: opts.agent ?? null,
+      ...(cost && { cost }),
     });
   }
 
@@ -269,7 +289,8 @@ export class Runner {
    */
   async quote(body: GenerateRequest): Promise<{ estimate: CostEstimate; request: NormalizedRequest }> {
     const { manifest, result } = await this.#prepare(body);
-    return { estimate: estimate(manifest, result.request), request: result.request };
+    const asked = await this.#askPrice(manifest, result.request);
+    return { estimate: asked ?? estimate(manifest, result.request), request: result.request };
   }
 
   /** The model, company and settings checks, then normalize (§0.3). Throws what the caller shows. */
@@ -290,6 +311,18 @@ export class Runner {
       });
     }
     return { manifest, result };
+  }
+
+  /**
+   * A model priced per request is priced now, as it's sent, so the run and Spending carry what the
+   * company said (§6.9). The answer is usually kept from the composer's ask; a slow one isn't
+   * waited for past a few seconds, and the run is then priced as unknown.
+   */
+  async #askPrice(manifest: ModelManifest, request: NormalizedRequest): Promise<CostEstimate | undefined> {
+    const prices = this.deps.prices;
+    if (!prices || !asksForPrice(manifest)) return undefined;
+    const late = sleep(PRICE_WAIT_MS).then(() => null);
+    return (await Promise.race([prices.estimate(manifest, request), late])) ?? undefined;
   }
 
   /** Recreate (§0.1): replays the frozen request as a new job set, never the current UI state. */
@@ -340,11 +373,14 @@ export class Runner {
       source: change.source,
       speed,
     };
+    // The same request costs what it did: a model priced per request keeps the run's own price.
+    const each = asksForPrice(manifest) ? eachFromSet(set) : undefined;
     return this.#insert(manifest, request, jobIds, planCalls(manifest, request, jobIds), {
       op: set.op,
       priority: set.priority,
       promptOriginal: set.promptOriginal,
       agent: change.agent ?? null,
+      ...(each && { cost: scaleCost(each, change.batch) }),
     });
   }
 
@@ -359,11 +395,13 @@ export class Runner {
       promptOriginal?: string | null;
       canvasRunId?: string | null;
       agent?: string | null;
+      /** A price the company answered for this request, for a model priced per request. */
+      cost?: CostEstimate;
     },
   ): JobSetAccepted {
     const { providerId, modelId } = parseModelKey(request.model);
     // Priced at the speed this run resolved to (§0.13).
-    const cost = estimate(manifest, request);
+    const cost = meta.cost ?? estimate(manifest, request);
     const jobCount = jobIds.length;
     const created = createJobSet(this.deps.db, {
       jobSet: {
@@ -879,7 +917,10 @@ export class Runner {
             action: "try-again",
           });
         }
-        if (failed.code === "content_refused") return this.#end(unit, set, failed, sink, latencyMs);
+        // Or an answer that reading again won't change, such as an image from an undeclared host.
+        if (failed.code === "content_refused" || failed.final) {
+          return this.#end(unit, set, failed, sink, latencyMs);
+        }
         // A key put right while the company still holds the image lands it (§0.4).
         if (failed.code === "auth_invalid") {
           recordKeyCheck(this.deps.db, set.providerId, { ok: false, code: failed.code });
@@ -1137,7 +1178,7 @@ export class Runner {
     const images = result.images.filter((i) => !i.partial);
     // Cost follows the speed the company served: a Priority call served at Standard bills Standard.
     const speedUsed = result.speedUsed ?? call.speed;
-    const cost = this.outcomes.cost(manifest, call, speedUsed, result);
+    const cost = this.outcomes.cost(manifest, call, speedUsed, result, set);
     const jobs = unit.jobIds.map((id) => getJob(db, id)).filter((j): j is JobRow => j !== undefined);
 
     jobs.forEach((job, i) => {
@@ -1356,7 +1397,7 @@ export class Runner {
     // discarded, and drop any late result.
     const manifest = unit?.bound?.manifest ?? this.deps.models.get(`${set.providerId}:${set.modelId}`);
     const call = unit?.call ?? set.requestJson;
-    const each = manifest ? estimate(manifest, { ...call, batch: 1 }) : undefined;
+    const each = manifest ? this.outcomes.cost(manifest, call, call.speed, undefined, set).each : undefined;
     const moved = this.outcomes.cancel(set, job.id, { discarded: true, each, speed: call.speed });
     if (!moved) return false;
     if (!unit) {

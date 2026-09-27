@@ -12,11 +12,11 @@
     "body": {
       "status": "completed",
       "request_id": "c2a8f0f4-3b5e-4d7a-9c1e-6f2b8d4a0e31",
-      "status_url": "https://api.higgsfield.ai/requests/c2a8f0f4-3b5e-4d7a-9c1e-6f2b8d4a0e31/status",
-      "cancel_url": "https://api.higgsfield.ai/requests/c2a8f0f4-3b5e-4d7a-9c1e-6f2b8d4a0e31/cancel",
+      "status_url": "https://platform.higgsfield.ai/requests/c2a8f0f4-3b5e-4d7a-9c1e-6f2b8d4a0e31/status",
+      "cancel_url": "https://platform.higgsfield.ai/requests/c2a8f0f4-3b5e-4d7a-9c1e-6f2b8d4a0e31/cancel",
       "images": [
         {
-          "url": "https://cdn.higgsfield.ai/outputs/c2a8f0f4-3b5e-4d7a-9c1e-6f2b8d4a0e31/0.png"
+          "url": "https://d3u0tzju9qaucj.cloudfront.net/3d6bd4e9-8550-450f-a730-5b7b72c57510/c2a8f0f4-3b5e-4d7a-9c1e-6f2b8d4a0e31.png"
         }
       ]
     }

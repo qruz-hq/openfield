@@ -12,6 +12,7 @@ import {
   type SpeedId,
   t,
 } from "@openfield/core";
+import { type AskPrice, asksForPrice, isPricePending, type PriceAsk } from "./asked-price";
 import { estimate } from "./estimate";
 import { nearestRatio, placeholderSize } from "./size";
 
@@ -164,15 +165,40 @@ export function expectedSize(caps: Capabilities, resolved: Resolved): PixelSize 
   return placeholderSize(caps, { aspect }, resolved.resolution);
 }
 
-/** `speed` is what the company's settings resolve to; a speed the model lacks prices as Standard. */
+/** What else a run sends that its company's price can depend on (Z-Image's prompt rewriting, say). */
+export type PriceExtras = Pick<PriceAsk, "enhancePrompt" | "providerOptions" | "negativePrompt">;
+
+/**
+ * `speed` is what the company's settings resolve to; a speed the model lacks prices as Standard.
+ * `askPrice` prices a model its company prices per request; without one, such a model is priced
+ * from its manifest like any other.
+ */
 export function estimateRun(
   model: ModelListItem,
   resolved: Resolved,
   prompt: string,
   speed: SpeedId = "standard",
+  extras: PriceExtras = {},
+  askPrice?: AskPrice,
 ): CostEstimate {
   // A model that takes a ratio is priced by that ratio, as the server prices the finished run.
   const spec = sizeSpec(model.capabilities, resolved);
+  // Its company prices each request (Higgsfield): asked of it, once there's a key to ask with.
+  if (askPrice && asksForPrice(model) && model.ready) {
+    return askPrice(model, {
+      op: "generate",
+      batch: resolved.batch,
+      size: spec,
+      ...(model.capabilities.resolution && resolved.resolution && { resolution: resolved.resolution }),
+      ...(model.capabilities.quality && resolved.quality && { quality: resolved.quality }),
+      ...(extras.enhancePrompt !== undefined && { enhancePrompt: extras.enhancePrompt }),
+      ...(extras.providerOptions &&
+        Object.keys(extras.providerOptions).length && {
+          providerOptions: extras.providerOptions,
+        }),
+      ...(extras.negativePrompt?.trim() && { negativePrompt: extras.negativePrompt }),
+    });
+  }
   const size =
     model.capabilities.size.mode === "aspect" && spec.kind !== "pixels"
       ? { aspect: spec.kind === "aspect" ? spec.ratio : ("auto" as const) }
@@ -216,7 +242,8 @@ export type GenerateState =
   | { kind: "needs-key"; model: ModelListItem }
   /** Can't send yet; the reason is the tooltip. */
   | { kind: "blocked"; reason: string; estimate?: CostEstimate }
-  | { kind: "ready"; estimate: CostEstimate };
+  /** No estimate while its company's price is on its way: the button shows no price yet. */
+  | { kind: "ready"; estimate?: CostEstimate | undefined };
 
 export function generateState(input: {
   model: ModelListItem | undefined;
@@ -224,12 +251,15 @@ export function generateState(input: {
   prompt: string;
   resolved: Resolved | undefined;
   speed?: SpeedId;
+  askPrice?: AskPrice;
 }): GenerateState {
-  const { model, anyReady, prompt, resolved, speed } = input;
+  const { model, anyReady, prompt, resolved, speed, askPrice } = input;
   if (!model)
     return anyReady ? { kind: "blocked", reason: t("composer.generate.noModel") } : { kind: "no-key" };
   if (!model.ready) return { kind: "needs-key", model };
-  const cost = resolved ? estimateRun(model, resolved, prompt, speed) : undefined;
+  const asked = resolved ? estimateRun(model, resolved, prompt, speed, {}, askPrice) : undefined;
+  // A price still being asked shows as none yet, never as "Cost unknown".
+  const cost = isPricePending(asked) ? undefined : asked;
   if (!prompt.trim()) return { kind: "blocked", reason: t("composer.generate.emptyPrompt"), estimate: cost };
-  return { kind: "ready", estimate: cost! };
+  return { kind: "ready", estimate: cost };
 }

@@ -1,5 +1,7 @@
 import type { ModelListItem } from "@openfield/core";
 import { queryOptions, useMutation, useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { asksForPrice, usePriceVersion } from "../../lib/remote-price";
 import { api, call, queryClient, queryKeys } from "../client";
 
 /** Every model, enabled or not, as GET /api/models sends it. Shared by hooks and event handlers. */
@@ -11,7 +13,18 @@ export const modelsQuery = queryOptions({
 
 /** The registry with every manifest. It drives every chip in the composer (§3.5). */
 export function useModels() {
-  return useQuery({ ...modelsQuery, select: (data) => data.models.filter((m) => m.enabled) });
+  const prices = usePriceVersion();
+  const query = useQuery({ ...modelsQuery, select: (data) => data.models.filter((m) => m.enabled) });
+  const data = useMemo(() => repriced(query.data, prices), [query.data, prices]);
+  return { ...query, data };
+}
+
+/**
+ * A price its company answered changes what a model costs, so a model priced per request comes
+ * out as a new object each time one lands, and everything that prices it looks again.
+ */
+function repriced(models: ModelListItem[] | undefined, _version: number): ModelListItem[] | undefined {
+  return models?.map((m) => (asksForPrice(m) ? { ...m } : m));
 }
 
 export const findModel = (models: readonly ModelListItem[] | undefined, key: string | null | undefined) =>

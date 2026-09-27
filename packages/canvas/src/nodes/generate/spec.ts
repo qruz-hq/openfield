@@ -216,7 +216,7 @@ export const generateEngine: NodeEngine<GenerateParams> = {
           cached: null,
         },
         expectedJobs: resolved.batch,
-        estimate: estimateRun(model, resolved, prompt, speedOf(ctx, model)),
+        estimate: estimateRun(model, resolved, prompt, speedOf(ctx, model), call, ctx.askPrice),
         fanOut: 1,
       },
     };

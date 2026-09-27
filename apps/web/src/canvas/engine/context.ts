@@ -5,6 +5,7 @@ import { useProviders } from "../../api/hooks/keys";
 import { useModels } from "../../api/hooks/models";
 import { useAllProviderSettings } from "../../api/hooks/provider-settings";
 import { useSettings } from "../../api/hooks/settings";
+import { askedPrice } from "../../lib/remote-price";
 
 export { buildEngineContext, EMPTY_ENGINE_CONTEXT, speedOf } from "@openfield/canvas/engine/context-base";
 
@@ -19,7 +20,7 @@ export function useEngineContextState(): { ctx: EngineContext; ready: boolean } 
   const providers = useProviders().data;
   const speeds = useAllProviderSettings();
   const ctx = useMemo(
-    () => buildEngineContext(models.data ?? [], settings.data, providers, speeds),
+    () => buildEngineContext(models.data ?? [], settings.data, providers, speeds, askedPrice),
     [models.data, settings.data, providers, speeds],
   );
   // The default model comes from Settings, so both have to be in before anything is hashed.

@@ -26,6 +26,12 @@ export interface ProviderErrorOptions {
    * provider_error: the runner fails the job and never sends the call again. See notFoundError().
    */
   notFound?: boolean;
+  /**
+   * The company's answer can't be used, and reading the same id again won't change it: a finished
+   * image from a host the adapter doesn't declare, say. The runner ends the run at once instead of
+   * reading again until the deadline.
+   */
+  final?: boolean;
   cause?: unknown;
 }
 
@@ -40,6 +46,7 @@ export class ProviderError extends Error {
   readonly hint?: { action: ErrorHintAction; label: string };
   readonly busy?: boolean;
   readonly notFound?: boolean;
+  readonly final?: boolean;
 
   constructor(code: ErrorCode, opts: ProviderErrorOptions = {}) {
     super(opts.message ?? code, opts.cause === undefined ? undefined : { cause: opts.cause });
@@ -54,6 +61,7 @@ export class ProviderError extends Error {
     if (opts.hint !== undefined) this.hint = opts.hint;
     if (opts.busy) this.busy = true;
     if (opts.notFound) this.notFound = true;
+    if (opts.final) this.final = true;
   }
 
   toJSON(): ProviderErrorData {

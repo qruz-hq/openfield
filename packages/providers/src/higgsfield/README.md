@@ -1,6 +1,6 @@
 # Higgsfield adapter
 
-Higgsfield's documented public API (§6.15), with the person's own key and billing. **Experimental**: nobody has run it against the real API yet, so `meta.stable` is `false`: its key card and models show only with Settings > Experimental > Show early models on, its models are never picked as a default, and the daily model check leaves it alone while it's hidden. Everything below comes from Higgsfield's docs as of 2026-09-27 (model catalog dated 2026-09-22), and every place that still needs a live run says so.
+Higgsfield's documented public API (§6.15), with the person's own key and billing. **Checked live on 2026-09-27** with a real key: a SOUL V2 run end to end (create, status reads, the image host) and the estimate endpoint for every workflow. So `meta.stable` is `true`: it's a regular company, not behind Settings > Experimental. The rest comes from Higgsfield's docs as of 2026-09-27 (model catalog dated 2026-09-22), and every place that still needs a live run says so.
 
 Openfield ships no Higgsfield name, logo or colour as its own (§1.11). The name appears only as this company's id and display name, the model names are Higgsfield's own, and Higgsfield's logo (from the design file) marks only its key card and its models, as Google's and OpenAI's do.
 
@@ -16,7 +16,7 @@ Openfield ships no Higgsfield name, logo or colour as its own (§1.11). The name
 
 **Auth.** `Authorization: Key <key>`, where the key is pasted exactly as the console gives it (Higgsfield's Python client sends it the same way; the JS client splits it into `id:secret`). One credential field, `apiKey`, from `OPENFIELD_HIGGSFIELD_API_KEY`. Not `HF_KEY`, which Higgsfield's clients read: `HF_` is Hugging Face's prefix, and a Hugging Face token must never be sent to Higgsfield. Keys come from [open.higgsfield.ai/api-keys](https://open.higgsfield.ai/api-keys).
 
-**Hosts.** `networkHosts: ["api.higgsfield.ai"]`, `assetHosts: ["cdn.higgsfield.ai"]`. **The image host is unconfirmed.** The docs only ever show `cdn.example.com`; `cdn.higgsfield.ai` is the PRD's research. A download from any other host is refused before it's fetched, and the error in the log names the host (`The image came from https://… which isn't a declared Higgsfield image host`). The first live run will show the real host: add it to `ASSET_HOSTS` in `capabilities.ts`. Images are downloaded without the key, and only the scheme, host and path are kept (a signed query string never reaches the library or the log).
+**Hosts.** `networkHosts: ["api.higgsfield.ai"]`, `assetHosts: ["d3u0tzju9qaucj.cloudfront.net"]`. The image host is the one a live SOUL V2 run answered with on 2026-09-27 (the docs only show `cdn.example.com`, and the PRD's guess, `cdn.higgsfield.ai`, was wrong). The same answer's `status_url` and `cancel_url` point at `platform.higgsfield.ai`; the adapter builds both from the request id on `api.higgsfield.ai`, which answers the same. Other models may deliver from another host. A download from any undeclared host is refused before it's fetched, the run fails at once rather than reading the id again, and the error in the log names the host (`The image came from https://… which isn't a declared Higgsfield image host`): add it to `ASSET_HOSTS` in `capabilities.ts`. Images are downloaded without the key, and only the scheme, host and path are kept (a signed query string never reaches the library or the log).
 
 ## Restarts
 
@@ -67,7 +67,9 @@ Left out: **Soul ID** trains a character rather than making an image, and **Qwen
 
 ## Cost
 
-`price.kind: "provider_estimate"`, so the composer says **Cost unknown**. `estimateRemote()` calls the documented estimate endpoint and scales it by the image count, but nothing calls `estimateRemote()` yet: the server's estimate route and the composer both use the pure `estimate()`. It's also left out of runs on purpose: the conformance suite holds a resumable call to exactly one create call, so a run's usage row records no cost. Pricing page: [open.higgsfield.ai/pricing](https://open.higgsfield.ai/pricing?tab=images) (per-model "from" prices only). Failed, `nsfw` and canceled-while-queued requests are refunded.
+`price.kind: "provider_estimate"`, checked live on 2026-09-27. `estimateRemote()` posts the run's body to `POST /estimate/<model path>`, which makes no image and costs nothing, and answers `{"type": "estimate", "credits": "0.050", "usd": "0.004", "discount": null}` for one request. Each call makes one image, so a batch is that many times the answer. Prices show in dollars; the credits go in the note ("2 × $0.004 (0.05 credits)"). The token-priced Marketing Studio 2.5 workflows answer `{"type": "description", "pricing_description": "Per 1M tokens: …"}` with no amount, so they stay **Cost unknown**.
+
+The server asks it (`apps/server/src/services/remote-prices.ts`) for the composer, the canvas, Settings' usual prices and each run, keeping each answer for a day. It swaps the prompt and seed for fixed ones first: neither changes the price (checked live), and what does is per workflow: SOUL's resolution (720p $0.004, 1080p $0.006 on SOUL V2), Qwen's resolution, Ideogram's, Grok's and Studio 2.0's quality, and Z-Image's prompt rewriting ($0.015, or $0.030 with it). A run asks when it's sent and records its share per image as an estimated cost in Spending; Recreate reuses the run's own price. Pricing page: [open.higgsfield.ai/pricing](https://open.higgsfield.ai/pricing?tab=images) (per-model "from" prices only). Failed, `nsfw` and canceled-while-queued requests are refunded.
 
 ## Errors
 
@@ -75,7 +77,7 @@ FastAPI bodies: `{"detail": "…"}`, or a list of `{loc, msg, type}` for a 422. 
 
 ## Unconfirmed until a live run
 
-- The image host (above), and the output format per model.
+- The image host for models other than SOUL V2 (above), and the output format per model.
 - References and edits: they need `POST /files/generate-upload-url`, whose `upload_url` is on an undocumented storage host, so `references.supported` and `imageEdit` are false for now. Once the host is known, add it to `networkHosts` and map `image_urls` / `image_reference_url` / `image_url`.
 - The exact create status code (docs show the body only; any 2xx is taken), and the exact 403 and cancel-400 wording.
 - `typicalLatencyMs` is a placeholder, not 10 measured runs.

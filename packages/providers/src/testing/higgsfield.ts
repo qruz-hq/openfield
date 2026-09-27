@@ -2,6 +2,7 @@ import badKey from "../higgsfield/__fixtures__/bad-key.json";
 import cancelStarted from "../higgsfield/__fixtures__/cancel-started.json";
 import concurrency from "../higgsfield/__fixtures__/concurrency.json";
 import estimate from "../higgsfield/__fixtures__/estimate.json";
+import estimateDescription from "../higgsfield/__fixtures__/estimate-description.json";
 import invalid from "../higgsfield/__fixtures__/invalid.json";
 import modelNotFound from "../higgsfield/__fixtures__/model-not-found.json";
 import noCredits from "../higgsfield/__fixtures__/no-credits.json";
@@ -29,7 +30,7 @@ import {
 // answers after a server restart with no stored state, like the other fakes.
 
 const API = "api.higgsfield.ai";
-const CDN = "cdn.higgsfield.ai";
+const CDN = "d3u0tzju9qaucj.cloudfront.net";
 
 type Rule =
   | { type: "string"; enum?: string[]; minLength?: number; maxLength?: number; uuid?: boolean }
@@ -305,7 +306,7 @@ export const higgsfieldFake: FakeRoute = {
     const body = (await request.json().catch(() => undefined)) as Record<string, unknown> | undefined;
     const invalidBody = validate(workflow, body);
     if (invalidBody) return invalidBody;
-    if (estimating) return replay(estimate);
+    if (estimating) return estimateOf(path, body!);
 
     const prompt = String(body!.prompt);
     const scenario = forced ?? taggedScenario(prompt);
@@ -314,6 +315,28 @@ export const higgsfieldFake: FakeRoute = {
     return create(workflow, body!, prompt, scenario, env);
   },
 };
+
+/**
+ * Live answers from 2026-09-27, so fake mode prices like a real key: SOUL V2 at 720p ($0.004) and
+ * 1080p ($0.006), and a token-priced workflow's description with no amount. The rest answer like
+ * SOUL V2 at 720p.
+ */
+function estimateOf(path: string, body: Record<string, unknown>): Response {
+  if (
+    path === "estimate/marketing-studio/image/flare" ||
+    path === "estimate/marketing-studio/image/sunburst"
+  ) {
+    return replay(estimateDescription);
+  }
+  if (body.resolution === "1080p") {
+    const { response } = estimate;
+    return replay({
+      ...estimate,
+      response: { ...response, body: { type: "estimate", credits: "0.090", usd: "0.006", discount: null } },
+    });
+  }
+  return replay(estimate);
+}
 
 function create(
   workflow: Workflow,
