@@ -1390,6 +1390,41 @@
       "allBusy": "Wait for the running nodes to finish.",
       "finished": "{name} finished",
       "jumpToNode": "Jump to node"
+    },
+    "edits": {
+      "noNode": "There's no node {id} on this canvas.",
+      "notFrame": "{id} isn't a frame, so nothing can go inside it.",
+      "cantApply": "That change doesn't fit this canvas. {reason}",
+      "noSetting": "{node} nodes have no setting called {key}. Their settings: {keys}.",
+      "badSetting": "{value} isn't a valid {key} for a {node} node.",
+      "noModel": "There's no model {model} here, or its company is turned off in Settings.",
+      "notSupported": "Openfield can't add {type} nodes yet.",
+      "aliasTaken": "The name {alias} is already used earlier in this batch.",
+      "aliasClash": "{alias} is already the id of a node on this canvas. Pick another name.",
+      "notResizable": "{node} nodes size themselves, so they can't be resized.",
+      "cantCollapse": "Notes, frames, text and shapes can't be collapsed.",
+      "insideItself": "A frame can't go inside itself.",
+      "badArrow": "An arrow runs from an arrow-source side (top, right, bottom or left) to an arrow-target side.",
+      "noOutput": "{node} has no output called {port}. Its outputs: {ports}.",
+      "noOutputs": "{node} has no outputs to connect from.",
+      "noInput": "{node} has no input called {port}. Its inputs: {ports}.",
+      "noInputs": "{node} has no inputs to connect to.",
+      "noFit": "Nothing that comes out of {from} can go into {to}.",
+      "cantConnect": "Those two can't be connected.",
+      "noEdge": "There's no connection like that on this canvas.",
+      "whichEdge": "Say which connection to remove: its id, or the nodes it joins.",
+      "running": "{count, plural, one {A node this changes is running} other {# nodes this changes are running}}. Stop the run or wait for it to finish.",
+      "missingAsset": "There's no image {id} in your library.",
+      "invalid": "That would leave the canvas broken. {reason}"
+    },
+    "agents": {
+      "editing": "{name} is editing",
+      "following": "Following {name}",
+      "follow": "Follow",
+      "stopFollowing": "Stop following",
+      "versionSaved": "Saved a version before {name}'s changes.",
+      "versionLabel": "Before {name}",
+      "view": "View"
     }
   },
   "assets": {

@@ -12,6 +12,7 @@ import {
 } from "./common";
 import { jobErrorSchema } from "./errors";
 import { batchUpdatedSchema, jobSetWithJobsSchema } from "./job";
+import { agentActivitySchema, canvasUpdatedSchema, uiNavigateSchema } from "./live";
 import { maintenanceTaskSchema } from "./usage";
 
 // One stream, GET /api/events (§0.6, §8.3.2). Each frame parses as { event, data }.
@@ -104,6 +105,11 @@ export const sseEventSchema = z.discriminatedUnion("event", [
       finished: z.boolean(),
     }),
   ),
+  /** A change made on the server, as the ops every open tab replays (§7.11). */
+  frame("canvas.updated", canvasUpdatedSchema),
+  frame("agent.activity", agentActivitySchema),
+  /** For the tab with this id only. */
+  frame("ui.navigate", uiNavigateSchema),
 ]);
 
 export type SseEvent = z.infer<typeof sseEventSchema>;
