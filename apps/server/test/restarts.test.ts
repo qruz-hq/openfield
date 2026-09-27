@@ -506,15 +506,18 @@ describe("a resumable call", () => {
 
     await server.json(`/api/job-sets/${run.jobSet.id}/cancel`, { method: "POST" });
     release();
-    await waitFor(() => cancelCalls === 1);
+    // It's owed, and tried again while the company is still down: counted as at least, since a slow
+    // machine can see the retries go by before it looks.
+    await waitFor(() => cancelCalls >= 1);
     await waitFor(() => server!.services.runner.inFlight === 0);
     // Owed: the canceled job keeps the id until the company has been told.
     expect(job(server, id)).toMatchObject({ status: "canceled", resumable: true });
     expect(job(server, id).handle?.providerRef).toBeTruthy();
 
-    cancelDown = false;
     server = await restart(server, holding);
-    await waitFor(() => cancelCalls === 2);
+    const beforeUp = cancelCalls;
+    cancelDown = false;
+    await waitFor(() => cancelCalls > beforeUp);
     await waitFor(() => job(server!, id).handle === null);
     expect(creates(fake)).toBe(1);
   });
