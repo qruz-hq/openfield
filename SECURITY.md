@@ -34,6 +34,7 @@ Out of scope:
 - The server makes every call to the model. Keys never reach the browser, and the API only reports whether a key is set and its last four characters.
 - Logs and the Error log drop auth headers and replace any known key with `[hidden]`, with key-shaped patterns as a second net.
 - The server listens on `127.0.0.1` only. Every request must pass a Host check, a cross-site check and a per-start session token, and the server never sends CORS headers. These stop other websites, not other programs on your computer (see Scope).
+- Agent apps (docs/agents.md) connect at `/mcp`, which is off until you turn it on in Settings > Agents. It passes the same Host and cross-site checks, then needs the agents' access key instead of the session token. The key sits in `config.json` beside your company keys and is removed from logs. Agents can't read company keys, change settings or raise their own spending limits. On purpose, an agent with the key can bring in an image from any file your user account can read or from any web address (`import_image`, and references by path or address): the file or download must be an image, and goes through the same checks as an upload. Treat the access key like a company key.
 - The server only connects to the hosts each adapter declares, over `https:`, and doesn't follow redirects to other hosts.
 - CI builds the web app and fails if server code or a key-shaped string ends up in the browser bundle.
 - There is no telemetry. The only outbound traffic is the model calls you start.

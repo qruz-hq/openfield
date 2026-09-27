@@ -33,7 +33,7 @@ Everything lives in `~/.openfield`. Set `OPENFIELD_HOME` to use a different fold
 
 | Path | What it holds |
 |---|---|
-| `config.json` | Your keys and a few startup settings. Readable only by your user account. |
+| `config.json` | Your keys, the agents' access key and a few startup settings. Readable only by your user account. |
 | `config.json.bak` | The previous `config.json`, minus any key you removed or replaced. |
 | `openfield.db` | SQLite: prompts, settings, lineage, presets, canvases, usage. |
 | `openfield.lock` | Held while Openfield runs, so two copies never share one library. |
@@ -129,6 +129,10 @@ Canvas is where you build image flows you can run again. Open **Canvas** in the 
 
 Press `?` in a canvas to see every shortcut.
 
+## Agents
+
+AI apps like Claude Code, Claude Desktop, Cursor and Codex can use Openfield for you while it runs: make and edit images, search and file your library, and check prices and spending. Turn it on in **Settings > Agents**, which has a ready-made snippet for each app. Agents use your keys without ever seeing them, show you the price before anything above the amount you set, and stop at a daily limit. [docs/agents.md](docs/agents.md) has the details.
+
 ## Running without keys
 
 ```sh
@@ -169,6 +173,7 @@ Tags use underscores, not hyphens: an unknown tag is ignored and the run succeed
 |---|---|
 | `bun dev` | Runs the server and the Vite dev server (port 4318) together. Open <http://127.0.0.1:4317>. Saving a server file restarts the server once running images are saved. |
 | `bun start` | Runs the server in production mode, serving the built web app. |
+| `bun run mcp` | The bridge for agent apps that start a program, like Claude Desktop ([docs/agents.md](docs/agents.md)). |
 | `bun run build` | Type-checks every workspace, then builds `apps/web` to `apps/web/dist`. |
 | `bun run typecheck` | Type-checks every workspace, the end-to-end tests and `scripts/`. |
 | `bun test` | Unit tests, the database schema check and the adapter conformance suite (offline). |
