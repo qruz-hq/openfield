@@ -7,7 +7,7 @@ import { companyName } from "../../lib/provider";
 import { OTHER, type SeriesView } from "./view";
 
 // What a series is called, and which company logo sits beside it: a model's name, a company's,
-// "2K · High", or where the image was made.
+// "2K · High", where the image was made, or the agent app that asked for it.
 
 export interface SeriesLabel {
   name: string;
@@ -32,6 +32,8 @@ export function useSeriesLabels(): (series: SeriesView) => SeriesLabel {
 
   const groupLabel = useCallback(
     (group: UsageSeriesGroup): SeriesLabel => {
+      // An agent app's own name, such as "Claude Code", reads better than "Agents".
+      if (group.place === "agent" && group.agent) return { name: group.agent };
       if (group.place) return { name: t(`settings.spending.places.${group.place}`) };
       if (group.modelId && group.providerId) {
         const model = models.data?.models.find(

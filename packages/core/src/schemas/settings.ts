@@ -45,6 +45,10 @@ const settingValues = {
    * Read once per boot. Never touches a call that resumes by id or a Batch run.
    */
   rerunInterrupted: z.boolean(),
+  /** An agent has to show the price and get an OK for anything estimated above this, in USD. */
+  agentAskAboveUsd: z.number().min(0).max(10_000),
+  /** What agents may spend in a day, local midnight to midnight, in USD. null: no limit. */
+  agentDailyCapUsd: z.number().positive().max(100_000).nullable(),
 };
 
 type SettingValues = typeof settingValues;
@@ -72,6 +76,8 @@ export const SETTINGS_DEFAULTS: Settings = {
   canvasFileWriteThrough: false,
   upscaleCommandPath: null,
   rerunInterrupted: true,
+  agentAskAboveUsd: 0.5,
+  agentDailyCapUsd: 5,
 };
 
 function withDefaults<S extends z.ZodRawShape>(shape: S, defaults: { [K in keyof S]: z.output<S[K]> }) {

@@ -76,6 +76,8 @@ export const usageSeriesGroupSchema = usageFiguresSchema.extend({
   resolution: z.string().nullable().optional(),
   quality: z.string().nullable().optional(),
   place: z.enum(USAGE_PLACES).optional(),
+  /** Place "agent": the app that asked, such as "Claude Code". */
+  agent: z.string().optional(),
 });
 
 export const usageSeriesBucketSchema = z.object({

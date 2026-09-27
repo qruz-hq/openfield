@@ -250,6 +250,8 @@ describe("settings", () => {
         "canvasFileWriteThrough",
         "upscaleCommandPath",
         "rerunInterrupted",
+        "agentAskAboveUsd",
+        "agentDailyCapUsd",
       ].sort(),
     );
   });
