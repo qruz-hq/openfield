@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { AddNodeMenu } from "../nodes/add-node-menu";
 import { NodeInspector } from "../nodes/inspector";
 import { CanvasStoreProvider, useCanvas, useCanvasStoreApi, useReadOnly, useUi } from "../store";
+import { AgentPill, FollowFrame } from "./chrome/agent-pill";
 import { ConflictBanner } from "./chrome/conflict-banner";
 import { ContextToolbar } from "./chrome/context-toolbar";
 import { FindBar } from "./chrome/find-bar";
@@ -64,9 +65,10 @@ function EditorSurface({ previewing }: { previewing: boolean }) {
     >
       <CanvasFlow className="absolute inset-0" />
       {empty && !readOnly && !addMenu ? <StartOptions commands={commands} /> : null}
+      <FollowFrame />
       <TopBarLeft />
       <TopBarRight />
-      {previewing ? <PreviewBar /> : null}
+      {previewing ? <PreviewBar /> : <AgentPill />}
       <div className="pointer-events-none absolute inset-x-0 top-64 z-10 flex flex-col items-center gap-12">
         <ConflictBanner />
         <NothingInView onBack={commands.fit} />

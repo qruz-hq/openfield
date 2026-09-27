@@ -1,0 +1,38 @@
+/* Agents on the canvas (§7.11, design board "Components · Agents"). */
+
+/* The pill's live dot breathes while the agent is at work. */
+@keyframes of-agent-breathe {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.of-agent-dot {
+  animation: of-agent-breathe 1.6s ease-in-out infinite;
+}
+
+/* A touched node's ring and tag hold, then fade out by the end of their 3 s. */
+@keyframes of-agent-touch {
+  0%,
+  85% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+.of-agent-touch {
+  animation: of-agent-touch 3s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .of-agent-dot,
+  .of-agent-touch {
+    animation: none;
+  }
+}

@@ -19,6 +19,8 @@ const toastShell =
 
 export interface ToastProps extends Omit<ComponentProps<"div">, "children" | "title"> {
   tone?: ToastTone;
+  /** Another icon than the tone's own, in the tone's color. */
+  icon?: LucideIcon;
   message: ReactNode;
   /** Optional second line. */
   description?: ReactNode;
@@ -37,6 +39,7 @@ export interface ToastProps extends Omit<ComponentProps<"div">, "children" | "ti
  */
 export function Toast({
   tone = "success",
+  icon,
   message,
   description,
   actionLabel,
@@ -47,7 +50,8 @@ export function Toast({
   className,
   ...props
 }: ToastProps) {
-  const { icon: Icon, className: iconClass } = TONE[tone];
+  const { icon: toneIcon, className: iconClass } = TONE[tone];
+  const Icon = icon ?? toneIcon;
   return (
     <div className={cn(toastShell, className)} {...props}>
       <Icon size={16} aria-hidden className={cn("shrink-0", iconClass)} />
