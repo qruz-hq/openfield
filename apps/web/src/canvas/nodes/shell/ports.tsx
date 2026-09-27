@@ -19,7 +19,7 @@ const ICONS: Partial<Record<PortType, LucideIcon>> = {
   preset: Palette,
 };
 
-type PortLook = "idle" | "ready" | "dimmed";
+type PortLook = "idle" | "ready" | "target" | "dimmed";
 
 /** A selected link lights the ports at both of its ends (design vaCAK). */
 function attachedToSelected(state: CanvasState, nodeId: string, port: PortSpec): boolean {
@@ -36,6 +36,14 @@ function attachedToSelected(state: CanvasState, nodeId: string, port: PortSpec):
 function lookFor(state: CanvasState, nodeId: string, port: PortSpec): PortLook {
   const pending = state.ui.connecting;
   if (!pending) return attachedToSelected(state, nodeId, port) ? "ready" : "idle";
+  // The link is over this card, off its ports: the port a drop would use.
+  const over = state.ui.connectOver;
+  if (
+    over?.nodeId === nodeId &&
+    over.portId === port.id &&
+    port.direction === (pending.handleType === "source" ? "in" : "out")
+  )
+    return "target";
   if (pending.nodeId === nodeId) return pending.handleId === port.id ? "idle" : "dimmed";
   if (pending.handleType === "source") {
     if (port.direction !== "in" || portFlow(pending.portType, port.type) === "no") return "dimmed";
@@ -79,7 +87,8 @@ export const Port = memo(function Port({ nodeId, port, offset, off, stacked, con
         aria-label={off ? `${name}. ${off}` : name}
         className={cn(
           "of-port",
-          look === "ready" && "of-port-ready",
+          (look === "ready" || look === "target") && "of-port-ready",
+          look === "target" && "of-port-target",
           look === "dimmed" && "of-port-dimmed",
           off && look === "idle" && "of-port-off",
           stacked && "of-port-stacked",

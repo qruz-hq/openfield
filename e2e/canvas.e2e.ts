@@ -232,6 +232,196 @@ test("dragging from a port to empty canvas adds a node that fits, already connec
   await expect(generators(page).getByRole("button", { name: /^Run / })).toBeVisible();
 });
 
+/** A canvas with these nodes and links, opened in the editor. */
+async function openWith(
+  page: Page,
+  request: APIRequestContext,
+  nodes: { id: string; type: string; x: number; y: number; params?: Record<string, unknown> }[],
+  edges: CanvasDetail["graph"]["edges"] = [],
+) {
+  const token = await sessionToken(request);
+  const made = await api<CanvasDetail>(request, token, "POST", "/api/canvases", { name: "Links" });
+  const graph = {
+    ...made.graph,
+    nodes: nodes.map((n) => ({
+      id: n.id,
+      type: n.type,
+      typeVersion: 1,
+      position: { x: n.x, y: n.y },
+      ...(n.type === "prompt" && { size: { w: 296, h: 151 } }),
+      parentId: null,
+      collapsed: false,
+      title: null,
+      params: n.params ?? {},
+      presetLocks: [],
+      result: null,
+    })),
+    edges,
+  };
+  await api(request, token, "PATCH", `/api/canvases/${made.id}`, { graph, graphVersion: made.graphVersion });
+  await page.goto(`/canvas/${made.id}`);
+  await expect(pane(page).locator(".react-flow__node")).toHaveCount(nodes.length);
+}
+
+const centreOf = async (locator: Locator) => {
+  const box = (await locator.boundingBox())!;
+  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+};
+
+async function dragBetween(page: Page, from: { x: number; y: number }, to: { x: number; y: number }) {
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move((from.x + to.x) / 2, (from.y + to.y) / 2, { steps: 8 });
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await page.mouse.up();
+}
+
+test("a link's × removes it, on hover and while it's selected", async ({ page, request }) => {
+  const link = {
+    id: "e_1",
+    source: "p",
+    sourceHandle: "text",
+    target: "g",
+    targetHandle: "prompt",
+    kind: "data" as const,
+  };
+  const nodes = [
+    { id: "p", type: "prompt", x: 200, y: 200, params: { text: "A red fox" } },
+    { id: "g", type: "image.generate", x: 760, y: 200 },
+  ];
+  const links = pane(page).locator(".react-flow__edge");
+  const midpoint = () =>
+    page.evaluate(() => {
+      const path = document.querySelector(
+        ".of-canvas:not(.of-capture) .react-flow__edge-interaction",
+      ) as SVGPathElement;
+      const at = path.getPointAtLength(path.getTotalLength() / 2);
+      const m = path.getScreenCTM()!;
+      return { x: at.x * m.a + m.e, y: at.y * m.d + m.f };
+    });
+  const remove = page.getByRole("button", { name: "Delete" });
+
+  await openWith(page, request, nodes, [link]);
+  const mid = await midpoint();
+  await page.mouse.move(mid.x, mid.y, { steps: 4 });
+  await remove.click();
+  await expect(links).toHaveCount(0);
+
+  // Selected, the link stays under the nodes, so it never covers a port's circle; the × sits above
+  // it all, and stays without hover.
+  await openWith(page, request, nodes, [link]);
+  const again = await midpoint();
+  await page.mouse.click(again.x + 40, again.y + 10);
+  await page.mouse.move(40, 800);
+  await expect(pane(page).locator(".react-flow__edge.selected")).toHaveCount(1);
+  for (const [id, handle, side] of [
+    ["p", "text", "source"],
+    ["g", "prompt", "target"],
+  ] as const) {
+    const at = await centreOf(
+      pane(page).locator(`.react-flow__handle.${side}[data-nodeid="${id}"][data-handleid="${handle}"]`),
+    );
+    const top = await page.evaluate(
+      ({ x, y }) => !!document.elementFromPoint(x, y)?.closest(".react-flow__handle"),
+      at,
+    );
+    expect(top, `the ${handle} port on ${id} is on top of its link`).toBe(true);
+  }
+  await expect(remove).toBeVisible();
+  await remove.click();
+  await expect(links).toHaveCount(0);
+});
+
+test("with several nodes selected, a link dragged from one of their ports connects them all", async ({
+  page,
+  request,
+}) => {
+  await openWith(page, request, [
+    { id: "u1", type: "image.upload", x: 300, y: 120 },
+    { id: "u2", type: "image.upload", x: 300, y: 380 },
+    { id: "p1", type: "prompt", x: 300, y: 620, params: { text: "A red fox" } },
+    { id: "p2", type: "prompt", x: 300, y: 800, params: { text: "In fresh snow" } },
+    { id: "g", type: "image.generate", x: 900, y: 240 },
+  ]);
+  const node = (id: string) => pane(page).locator(`.react-flow__node[data-id="${id}"]`);
+  const port = (id: string, handle: string, side: "source" | "target") =>
+    pane(page).locator(`.react-flow__handle.${side}[data-nodeid="${id}"][data-handleid="${handle}"]`);
+
+  // A box selection: React Flow puts a group-drag box over the selection, which must not cover its ports.
+  const first = (await node("u1").boundingBox())!;
+  const last = (await node("p2").boundingBox())!;
+  await dragBetween(
+    page,
+    { x: first.x - 30, y: first.y - 30 },
+    { x: last.x + last.width + 20, y: last.y + last.height + 20 },
+  );
+  await expect(pane(page).locator(".react-flow__node.selected")).toHaveCount(4);
+
+  // While it's dragged, every selected node draws its own pending line to the cursor.
+  const from = await centreOf(port("u2", "images", "source"));
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 120, from.y - 40, { steps: 6 });
+  await expect(pane(page).locator(".react-flow__connectionline path.of-pending")).toHaveCount(4);
+  const to = await centreOf(port("g", "input_images", "target"));
+  await page.mouse.move(to.x, to.y, { steps: 8 });
+  await page.mouse.up();
+  // Both images into Reference images, the first prompt into Prompt; the second has nowhere to go.
+  await expect(pane(page).locator(".react-flow__edge")).toHaveCount(3);
+  await expect(pane(page).locator('.react-flow__edge[aria-label="Upload to Generate"]')).toHaveCount(2);
+  await expect(pane(page).locator('.react-flow__edge[aria-label="Prompt to Generate"]')).toHaveCount(1);
+  await expect(page.getByText("1 node didn't connect: Prompt takes one link.")).toBeVisible();
+
+  // One undo takes them all back.
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+z" : "Control+z");
+  await expect(pane(page).locator(".react-flow__edge")).toHaveCount(0);
+
+  // Dropped on the card's body instead of a port, the group connects the same way.
+  const card = (await node("g").boundingBox())!;
+  await dragBetween(page, await centreOf(port("u2", "images", "source")), {
+    x: card.x + card.width / 2,
+    y: card.y + card.height * 0.3,
+  });
+  await expect(pane(page).locator('.react-flow__edge[aria-label="Upload to Generate"]')).toHaveCount(2);
+  await expect(pane(page).locator('.react-flow__edge[aria-label="Prompt to Generate"]')).toHaveCount(1);
+});
+
+test("a link dropped on a card goes to the port that fits, or says why it can't", async ({
+  page,
+  request,
+}) => {
+  await openWith(page, request, [
+    { id: "p", type: "prompt", x: 200, y: 200, params: { text: "A red fox" } },
+    { id: "u", type: "image.upload", x: 200, y: 480 },
+    { id: "g", type: "image.generate", x: 800, y: 200 },
+  ]);
+  const node = (id: string) => pane(page).locator(`.react-flow__node[data-id="${id}"]`);
+  const port = (id: string, handle: string, side: "source" | "target") =>
+    pane(page).locator(`.react-flow__handle.${side}[data-nodeid="${id}"][data-handleid="${handle}"]`);
+  const card = (await node("g").boundingBox())!;
+  const body = { x: card.x + card.width / 2, y: card.y + card.height * 0.3 };
+
+  // Over the card, off its ports: the port it would use is filled and the card gets a dashed ring.
+  const from = await centreOf(port("p", "text", "source"));
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move((from.x + body.x) / 2, (from.y + body.y) / 2, { steps: 6 });
+  await page.mouse.move(body.x, body.y, { steps: 6 });
+  await expect(pane(page).locator(".of-port-target")).toHaveAttribute("data-handleid", "prompt");
+  await expect(node("g").locator("[data-drop-target]")).toHaveCount(1);
+  await page.mouse.up();
+  await expect(pane(page).locator('.react-flow__edge[aria-label="Prompt to Generate"]')).toHaveCount(1);
+
+  // Images onto the Prompt card, which takes only text: nothing connects, and the toast says why.
+  const prompt = (await node("p").boundingBox())!;
+  await dragBetween(page, await centreOf(port("u", "images", "source")), {
+    x: prompt.x + prompt.width / 2,
+    y: prompt.y + prompt.height / 2,
+  });
+  await expect(page.getByText("An image can't go into a text input on Prompt.")).toBeVisible();
+  await expect(pane(page).locator(".react-flow__edge")).toHaveCount(1);
+});
+
 test("an uploaded photo lands in the library and reaches the model", async ({ page, request }) => {
   const token = await sessionToken(request);
   const home = await libraryRoot(request, token);

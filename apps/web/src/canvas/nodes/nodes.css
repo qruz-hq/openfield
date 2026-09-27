@@ -32,6 +32,12 @@
   color: var(--of-accent);
 }
 
+/* The link is over this port's card, and a drop there lands here: filled, like the ring at the cursor. */
+.of-port.react-flow__handle.of-port-target {
+  background: var(--of-accent);
+  color: var(--of-accent-fg);
+}
+
 /* It doesn't (Uz1no, HNtYP): faded, and hover can't wake it. */
 .of-port.react-flow__handle.of-port-dimmed {
   opacity: 0.35;

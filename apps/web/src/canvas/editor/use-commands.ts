@@ -1,4 +1,9 @@
-import { canConnect } from "@openfield/canvas/engine/connect";
+import {
+  canConnect,
+  nextEdgeOrder,
+  planGroupConnect,
+  skippedMessage,
+} from "@openfield/canvas/engine/connect";
 import type { CanvasRunScope } from "@openfield/core";
 import { t } from "@openfield/core";
 import type { CanvasEdge } from "@openfield/core/canvas";
@@ -9,13 +14,13 @@ import { useEngineStore } from "../engine/engine-store";
 import { nodeRegistry } from "../nodes/registry";
 import {
   type ApplyResult,
+  applyOps,
   type CanvasOp,
   type CanvasStore,
   childrenOf,
   containedIn,
   extractFragment,
   type FrameDeleteMode,
-  incomingEdges,
   newEdgeId,
   type Point,
   type Size,
@@ -24,6 +29,7 @@ import {
 import type { CanvasTool } from "../store/types";
 import { PASTE_STEP, parseFragment, serializeFragment } from "./clipboard";
 import type { FlowEdge, FlowNode } from "./flow/adapter";
+import { markFreshLinks } from "./flow/fresh-links";
 import { FIT_PADDING } from "./flow/view-controller";
 import {
   type Alignment,
@@ -141,10 +147,7 @@ export function createCommands(
       if (check.kind === "data") {
         const node = state.doc.nodes[target];
         const port = node ? nodeRegistry.port(node.type, targetHandle, "in") : undefined;
-        if (port?.arity === "multi") {
-          const existing = incomingEdges(state.doc, target, targetHandle);
-          order = existing.reduce((max, e, i) => Math.max(max, (e.order ?? i) + 1), 0);
-        }
+        if (port?.arity === "multi") order = nextEdgeOrder(state.doc, target, targetHandle);
       }
       const edge: CanvasEdge = {
         id: newEdgeId(),
@@ -156,7 +159,23 @@ export function createCommands(
         ...(order !== undefined && { order }),
       };
       ops.push({ op: "addEdge", edge });
+      // Dragged from a node in a selection: the rest of it links to the same node, in one undo step.
+      const origin = state.ui.connecting;
+      let skipped: ReturnType<typeof planGroupConnect>["skipped"] = [];
+      if (check.kind === "data" && origin) {
+        const plan = planGroupConnect(
+          applyOps(state.doc, ops).doc,
+          connection,
+          origin,
+          state.selection.nodeIds,
+        );
+        for (const extra of plan.edges) ops.push({ op: "addEdge", edge: extra });
+        skipped = plan.skipped;
+      }
+      // A group's links draw in one after another as they appear.
+      markFreshLinks(ops.flatMap((op) => (op.op === "addEdge" ? [op.edge.id] : [])));
       if (!report(actions().apply(ops, { label: "connect" }))) return;
+      if (skipped.length) toast(skippedMessage(skipped), 3500);
       if (check.replaces) {
         notify(t("canvas.editor.toasts.replaced"), {
           action: { label: t("actions.undo"), onClick: () => report(store.getState().actions.undo()) },

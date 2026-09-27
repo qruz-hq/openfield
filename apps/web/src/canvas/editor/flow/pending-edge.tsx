@@ -15,8 +15,9 @@ export function PendingEdge() {
     const handle = bounds?.find((h) => h.id === pending.handleId);
     if (!node || !handle) return null;
     const { x, y } = node.internals.positionAbsolute;
+    // From the port's outer edge: this is drawn above the nodes and must not cover the port's circle.
     return {
-      x: x + handle.x + handle.width / 2,
+      x: x + handle.x + (handle.position === Position.Right ? handle.width : 0),
       y: y + handle.y + handle.height / 2,
       position: handle.position,
     };

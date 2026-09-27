@@ -1408,7 +1408,9 @@
       },
       "connect": {
         "mismatch": "{from, select, text {Text} image {An image} mask {A mask} preset {A style} other {This}} can't go into {to, select, text {a text} image {an image} mask {a mask} preset {a style} other {this}} input on {node}.",
-        "loop": "That would create a loop."
+        "loop": "That would create a loop.",
+        "oneLink": "{count, plural, one {# node didn't connect} other {# nodes didn't connect}}: {port} takes one link.",
+        "oneLinkEach": "{count, plural, one {# node didn't connect} other {# nodes didn't connect}}: the inputs they fit take one link each."
       },
       "label": {
         "rename": "Rename {name}",

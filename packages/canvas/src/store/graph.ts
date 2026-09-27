@@ -172,12 +172,13 @@ export function isCanvasFragment(value: unknown): value is CanvasFragment {
 /**
  * The selected nodes, everything inside selected frames, and the edges between them. Results are
  * stripped. A node copied without its frame gets its pane position and no parent, unless
- * `keepParents` (duplicate in place) keeps it in that frame.
+ * `keepParents` (duplicate in place) keeps it in that frame. Duplicating also keeps each node's
+ * images (`keepResults`) and the data links coming into it from nodes left behind (`keepInputs`).
  */
 export function extractFragment(
   doc: DocSlice,
   nodeIds: readonly string[],
-  opts: { keepParents?: boolean } = {},
+  opts: { keepParents?: boolean; keepResults?: boolean; keepInputs?: boolean } = {},
 ): CanvasFragment {
   const picked = new Set<string>();
   for (const id of nodeIds) {
@@ -195,12 +196,15 @@ export function extractFragment(
       parentId: keepParent ? frame.parentId : null,
       position: keepParent ? { ...frame.position } : absolutePosition(doc, id),
       params: structuredClone({ ...(doc.params[id] ?? {}) }),
-      result: null,
+      result: opts.keepResults ? structuredClone(doc.results[id] ?? null) : null,
     });
   }
   const edges = doc.edgeOrder
     .map((id) => doc.edges[id])
-    .filter((e): e is CanvasEdge => !!e && picked.has(e.source) && picked.has(e.target))
+    .filter(
+      (e): e is CanvasEdge =>
+        !!e && picked.has(e.target) && (picked.has(e.source) || (!!opts.keepInputs && e.kind === "data")),
+    )
     .map((e) => ({ ...e }));
   return { kind: CANVAS_FRAGMENT_KIND, nodes, edges };
 }
@@ -211,11 +215,13 @@ export const newEdgeId = (): string => `e_${newId().toLowerCase()}`;
 /**
  * Fresh ids for every node and edge, internal edges and frame links kept. Nodes whose frame isn't in
  * the fragment move by `offset`; they lose that frame unless `keepForeignParents` (same canvas).
+ * On the same canvas a duplicate also keeps its images and the links coming in from nodes outside
+ * the fragment (`keepOutside`).
  */
 export function remapFragment(
   fragment: CanvasFragment,
   offset: Point = { x: 0, y: 0 },
-  opts: { keepForeignParents?: boolean } = {},
+  opts: { keepForeignParents?: boolean; keepOutside?: boolean } = {},
 ): CanvasFragment {
   const ids = new Map(fragment.nodes.map((n) => [n.id, newNodeId()]));
   const nodes = fragment.nodes.map((n) => {
@@ -226,11 +232,16 @@ export function remapFragment(
       id: ids.get(n.id)!,
       parentId,
       position: inner ? n.position : { x: n.position.x + offset.x, y: n.position.y + offset.y },
-      result: null,
+      result: opts.keepOutside ? n.result : null,
     };
   });
   const edges = fragment.edges
-    .filter((e) => ids.has(e.source) && ids.has(e.target))
-    .map((e) => ({ ...e, id: newEdgeId(), source: ids.get(e.source)!, target: ids.get(e.target)! }));
+    .filter((e) => ids.has(e.target) && (ids.has(e.source) || !!opts.keepOutside))
+    .map((e) => ({
+      ...e,
+      id: newEdgeId(),
+      source: ids.get(e.source) ?? e.source,
+      target: ids.get(e.target)!,
+    }));
   return { kind: CANVAS_FRAGMENT_KIND, nodes, edges };
 }

@@ -49,6 +49,7 @@ const initialUi = (readOnly: boolean): CanvasUiState => ({
   lod: "full",
   addMenu: null,
   connecting: null,
+  connectOver: null,
   drawer: null,
   findOpen: false,
   minimapOpen: false,
@@ -190,6 +191,7 @@ export function createCanvasStore(detail: CanvasDetail, options: CanvasStoreOpti
       fragment: CanvasFragment,
       place: { offset: Point } | { at: Point },
       keepForeignParents = false,
+      keepOutside = false,
     ): string[] => {
       let offset: Point;
       if ("offset" in place) offset = place.offset;
@@ -199,7 +201,7 @@ export function createCanvasStore(detail: CanvasDetail, options: CanvasStoreOpti
         const minY = Math.min(...top.map((n) => n.position.y));
         offset = top.length ? { x: place.at.x - minX, y: place.at.y - minY } : { x: 0, y: 0 };
       }
-      const fresh = remapFragment(fragment, offset, { keepForeignParents });
+      const fresh = remapFragment(fragment, offset, { keepForeignParents, keepOutside });
       const ops: CanvasOp[] = [
         ...fresh.nodes.map((node): CanvasOp => ({ op: "addNode", node })),
         ...fresh.edges.map((edge): CanvasOp => ({ op: "addEdge", edge })),
@@ -261,9 +263,14 @@ export function createCanvasStore(detail: CanvasDetail, options: CanvasStoreOpti
         },
 
         duplicateNodes(ids, offset = DUPLICATE_OFFSET) {
-          // Duplicating a node inside a frame keeps it in that frame.
-          const fragment = extractFragment(get().doc, ids, { keepParents: true });
-          return insertFragment(fragment, { offset }, true);
+          // A duplicate keeps its frame, its images and the links coming into it, so it reads from
+          // the same inputs and shows what the original made. Links out of it stay with the original.
+          const fragment = extractFragment(get().doc, ids, {
+            keepParents: true,
+            keepResults: true,
+            keepInputs: true,
+          });
+          return insertFragment(fragment, { offset }, true, true);
         },
 
         insertFragment: (fragment, place) => insertFragment(fragment, place),
@@ -295,7 +302,7 @@ export function createCanvasStore(detail: CanvasDetail, options: CanvasStoreOpti
         },
 
         closeAddMenu() {
-          set({ ui: { ...get().ui, addMenu: null, connecting: null } });
+          set({ ui: { ...get().ui, addMenu: null, connecting: null, connectOver: null } });
         },
 
         openInspector(nodeId) {
@@ -337,7 +344,7 @@ export function createCanvasStore(detail: CanvasDetail, options: CanvasStoreOpti
             ...loaded,
             runtime: kept,
             missingAssets: next.missingAssetIds ? loaded.missingAssets : missingAssets,
-            ui: { ...get().ui, drawer: null, addMenu: null, connecting: null },
+            ui: { ...get().ui, drawer: null, addMenu: null, connecting: null, connectOver: null },
           });
         },
 

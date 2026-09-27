@@ -1,7 +1,12 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
 import { compileRun } from "@openfield/canvas/engine/compile";
-import { checkConnection } from "@openfield/canvas/engine/connect";
+import {
+  bodyDropPort,
+  checkConnection,
+  planGroupConnect,
+  skippedMessage,
+} from "@openfield/canvas/engine/connect";
 import { buildEngineContext } from "@openfield/canvas/engine/context-base";
 import { deriveDisplay, visibleBlocker } from "@openfield/canvas/engine/display";
 import {
@@ -766,6 +771,143 @@ describe("connections", () => {
         registry,
       ).ok,
     ).toBe(false);
+  });
+});
+
+describe("connecting a selection", () => {
+  const at = (n: CanvasNode, x: number, y: number): CanvasNode => ({ ...n, position: { x, y } });
+  const upload = (id: string, x: number, y: number) =>
+    at(node(id, "image.upload", { assetIds: [ULID(1)] }), x, y);
+  const prompt = (id: string, x: number, y: number) => at(node(id, "prompt", { text: id }), x, y);
+  const gen = node("g", "image.generate", { model: "google:banana" });
+  /** The doc with the dragged link, then the plan for the rest of the selection. */
+  const plan = (doc: DocSlice, dragged: CanvasEdge, origin: string, selection: string[], from = "source") =>
+    planGroupConnect(
+      apply(doc, { op: "addEdge", edge: dragged }),
+      dragged,
+      { nodeId: origin, handleType: from as "source" | "target" },
+      selection,
+      registry,
+    );
+
+  test("every selected image joins Reference images, top to bottom after the dragged one", () => {
+    const doc = docOf([upload("u1", 0, 0), upload("u2", 0, 200), upload("u3", 0, 100), gen]);
+    const dragged = { ...edge("u2", "images", "g", "input_images"), order: 0 };
+    const out = plan(doc, dragged, "u2", ["u1", "u2", "u3"]);
+    expect(out.edges.map((e) => [e.source, e.targetHandle, e.order])).toEqual([
+      ["u1", "input_images", 1],
+      ["u3", "input_images", 2],
+    ]);
+    expect(out.skipped).toEqual([]);
+  });
+
+  test("each node takes the input it fits; a taken one-link input skips the rest and says so", () => {
+    const doc = docOf([prompt("p1", 0, 0), prompt("p2", 0, 300), upload("u1", 0, 150), gen]);
+    const out = plan(doc, edge("p1", "text", "g", "prompt"), "p1", ["p1", "p2", "u1"]);
+    expect(out.edges.map((e) => [e.source, e.targetHandle])).toEqual([["u1", "input_images"]]);
+    expect(out.skipped.map((s) => [s.nodeId, s.port.id])).toEqual([["p2", "prompt"]]);
+    expect(skippedMessage(out.skipped)).toBe("1 node didn't connect: Prompt takes one link.");
+  });
+
+  test("a one-link input the dragged link doesn't use goes to the first node that fits", () => {
+    const doc = docOf([upload("u1", 0, 0), prompt("p1", 0, 100), prompt("p2", 0, 200), gen]);
+    const out = plan(doc, edge("u1", "images", "g", "input_images"), "u1", ["u1", "p1", "p2"]);
+    expect(out.edges.map((e) => [e.source, e.targetHandle])).toEqual([["p1", "prompt"]]);
+    expect(out.skipped.map((s) => s.nodeId)).toEqual(["p2"]);
+  });
+
+  test("a link already there is never replaced, loops and repeats are left out quietly", () => {
+    const base = chain();
+    // g already has its prompt from p; v is downstream of g, so v into g would be a loop.
+    const doc = apply(
+      base,
+      { op: "addNode", node: prompt("p2", 0, 400) },
+      { op: "addNode", node: upload("u1", 0, 500) },
+    );
+    const out = plan(doc, edge("u1", "images", "g", "input_images"), "u1", ["u1", "p", "p2", "v"]);
+    expect(out.edges).toEqual([]);
+    // p is already linked to g; p2 fits only the taken Prompt; v would loop.
+    expect(out.skipped.map((s) => s.nodeId)).toEqual(["p2"]);
+    expect(Object.values(doc.edges).some((e) => e.target === "g" && e.source === "p")).toBe(true);
+  });
+
+  test("dragged from an input, the node it's dropped on feeds the rest of the selection", () => {
+    const g2 = at(node("g2", "image.generate", { model: "google:banana" }), 0, 300);
+    const doc = docOf([prompt("p", 0, 0), gen, g2]);
+    const out = plan(doc, edge("p", "text", "g", "prompt"), "g", ["g", "g2"], "target");
+    expect(out.edges.map((e) => [e.source, e.sourceHandle, e.target, e.targetHandle])).toEqual([
+      ["p", "text", "g2", "prompt"],
+    ]);
+  });
+
+  test("a drag from a node outside the selection, or a selection of one, links just the one", () => {
+    const doc = docOf([upload("u1", 0, 0), upload("u2", 0, 100), gen]);
+    expect(plan(doc, edge("u1", "images", "g", "input_images"), "u1", ["u2"]).edges).toEqual([]);
+    expect(plan(doc, edge("u1", "images", "g", "input_images"), "u1", ["u1"]).edges).toEqual([]);
+  });
+});
+
+describe("dropping a link on a card", () => {
+  const out = (nodeId: string, handleId: string) => ({ nodeId, handleId, handleType: "source" as const });
+  const into = (nodeId: string, handleId: string) => ({ nodeId, handleId, handleType: "target" as const });
+
+  test("it goes to the input that fits, in rail order", () => {
+    const doc = docOf([
+      node("p", "prompt", { text: "a fox" }),
+      node("u", "image.upload", { assetIds: [ULID(1)] }),
+      node("g", "image.generate", { model: "google:banana" }),
+    ]);
+    const text = bodyDropPort(doc, out("p", "text"), "g", registry);
+    expect(text.ok && text.ends).toEqual({
+      source: "p",
+      sourceHandle: "text",
+      target: "g",
+      targetHandle: "prompt",
+    });
+    const images = bodyDropPort(doc, out("u", "images"), "g", registry);
+    expect(images.ok && images.ends.targetHandle).toBe("input_images");
+  });
+
+  test("a taken one-link input is used only when nothing else has room, and then replaces", () => {
+    // g's Prompt already comes from p; text has nowhere else to go on Generate.
+    const doc = apply(chain(), { op: "addNode", node: node("p2", "prompt", { text: "b" }) });
+    const again = bodyDropPort(doc, out("p2", "text"), "g", registry);
+    expect(again.ok && again.ends.targetHandle).toBe("prompt");
+    expect(again.ok && checkConnection(doc, again.ends, registry)).toMatchObject({
+      ok: true,
+      replaces: expect.any(String),
+    });
+  });
+
+  test("from an input, the card's output that fits feeds it", () => {
+    const doc = docOf([
+      node("p", "prompt", { text: "a fox" }),
+      node("g", "image.generate", { model: "google:banana" }),
+    ]);
+    const drop = bodyDropPort(doc, into("g", "prompt"), "p", registry);
+    expect(drop.ok && drop.ends).toEqual({
+      source: "p",
+      sourceHandle: "text",
+      target: "g",
+      targetHandle: "prompt",
+    });
+  });
+
+  test("nothing that fits says why, a loop before a type; its own card says nothing", () => {
+    const doc = apply(chain(), { op: "addNode", node: node("u", "image.upload", { assetIds: [ULID(1)] }) });
+    expect(bodyDropPort(doc, out("u", "images"), "p", registry)).toEqual({
+      ok: false,
+      reason: "An image can't go into a text input on Prompt.",
+    });
+    expect(bodyDropPort(doc, out("v", "images"), "g", registry)).toEqual({
+      ok: false,
+      reason: "That would create a loop.",
+    });
+    expect(bodyDropPort(doc, out("g", "images"), "g", registry)).toEqual({ ok: false, reason: null });
+    expect(bodyDropPort(doc, out("p", "arrow-source-right"), "g", registry)).toEqual({
+      ok: false,
+      reason: null,
+    });
   });
 });
 

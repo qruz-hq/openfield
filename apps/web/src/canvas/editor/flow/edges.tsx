@@ -25,12 +25,14 @@ import {
 import { useCompanyWait } from "../../nodes/shell/company-wait";
 import { useCanvas, useCanvasActions, useReadOnly } from "../../store";
 import { ANNOTATION_EDGE_TYPE, DATA_EDGE_TYPE, type FlowEdge } from "./adapter";
+import { freshLinkDelay } from "./fresh-links";
+import { GroupLines } from "./group-lines";
 import { type LinkActivity, linkActivity } from "./pulse";
 import { type PulseHandle, startPulse } from "./pulse-clock";
 
 // Links (design YQPWR, components USl4U…RHGMm; recipes Z73S2). Data: a 1.5 px $border-strong
 // bezier from port centre to port centre; hovered, 2 px $text-tertiary with a 16 px × at the
-// midpoint; selected, 2.5 px $accent with 6 px dots 13 px in from each end. While the node it
+// midpoint; selected, 2.5 px $accent with 6 px dots 13 px in from each end, and the × stays. While the node it
 // feeds is generating, the line turns $accent-line and a light pulse runs from source to target
 // on the canvas's shared clock (pulse-clock.ts); while that node waits at the company, the line
 // stays lit without moving; with reduced motion, a static 2 px gradient from $accent-line at the
@@ -43,6 +45,8 @@ const HIT_WIDTH = 16;
 const DOT_INSET = 13;
 /** How long a pulse takes to fade where it is when the run ends. */
 const FADE_MS = 200;
+/** A link a group drop just made draws in over this long (editor.css, of-link-draw). */
+const DRAW_MS = 180;
 /**
  * Ports are 24 px circles centred on the node's side. React Flow hands a link the port's outer
  * edge; links run from port centre to port centre (formula x4Vq3), so a pulse comes out from under
@@ -123,6 +127,13 @@ const DataEdge = memo(function DataEdge(props: EdgeProps<FlowEdge>) {
   const actions = useCanvasActions();
   const readOnly = useReadOnly();
   const activity = useLinkActivity(target);
+  // Made by a group drop a moment ago: it draws in from its source, then is an ordinary link.
+  const [drawDelay, setDrawDelay] = useState(() => freshLinkDelay(id));
+  useEffect(() => {
+    if (drawDelay === null) return;
+    const timer = setTimeout(() => setDrawDelay(null), drawDelay + DRAW_MS + 50);
+    return () => clearTimeout(timer);
+  }, [drawDelay]);
   const reduced = useReducedMotion();
   const [hover, setHover] = useState(false);
   const leave = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -138,6 +149,8 @@ const DataEdge = memo(function DataEdge(props: EdgeProps<FlowEdge>) {
 
   // Selected wins over everything: the pulse hides while the link is selected.
   const running = activity === "active" && !reduced;
+  // The × shows on hover and stays while the link is selected, so it can be removed either way.
+  const removable = (hover || selected) && !readOnly;
   const fading = useFadeOut(running);
   const pulsing = running && !selected;
   const drawPulse = (pulsing || fading) && !selected;
@@ -215,8 +228,16 @@ const DataEdge = memo(function DataEdge(props: EdgeProps<FlowEdge>) {
           fill="none"
           data-link={selected ? undefined : look}
           data-hover={(hover && !selected) || undefined}
-          style={still ? { stroke: `url(#${stillId})` } : undefined}
-          className={cn("react-flow__edge-path of-edge", selected && "of-edge-selected")}
+          pathLength={drawDelay === null ? undefined : 1}
+          style={{
+            ...(still && { stroke: `url(#${stillId})` }),
+            ...(drawDelay !== null && { animationDelay: `${drawDelay}ms` }),
+          }}
+          className={cn(
+            "react-flow__edge-path of-edge",
+            selected && "of-edge-selected",
+            drawDelay !== null && "of-link-draw",
+          )}
         />
         {drawPulse ? (
           <path
@@ -242,7 +263,7 @@ const DataEdge = memo(function DataEdge(props: EdgeProps<FlowEdge>) {
           </>
         ) : null}
       </g>
-      {(hover && !readOnly) || data?.coerce ? (
+      {removable || data?.coerce ? (
         <EdgeLabelRenderer>
           <div
             className="nodrag nopan pointer-events-auto absolute flex items-center gap-4"
@@ -250,12 +271,12 @@ const DataEdge = memo(function DataEdge(props: EdgeProps<FlowEdge>) {
             onPointerEnter={enter}
             onPointerLeave={exit}
           >
-            {data?.coerce && !hover ? (
+            {data?.coerce && !removable ? (
               <span className="flex size-16 items-center justify-center rounded-full bg-elevated-2 text-text-secondary inset-ring inset-ring-border-strong">
                 <SquareDashed size={10} aria-hidden />
               </span>
             ) : null}
-            {hover && !readOnly ? (
+            {removable ? (
               <button
                 type="button"
                 aria-label={t("canvas.editor.selection.delete")}
@@ -330,11 +351,13 @@ export function ConnectionLine({
   fromPosition,
   toPosition,
   fromHandle,
+  fromNode,
 }: ConnectionLineComponentProps) {
   const arrow = isAnnotationHandle(fromHandle?.id);
-  // A data link starts at its port's centre, like the links already drawn.
+  // It's drawn above the nodes, so it starts at its port's outer edge (where React Flow hands it
+  // over) rather than its centre: it never covers the port's circle.
   const [path] = getBezierPath({
-    sourceX: arrow ? fromX : portCentre(fromX, fromPosition),
+    sourceX: fromX,
     sourceY: fromY,
     sourcePosition: fromPosition,
     targetX: toX,
@@ -343,6 +366,16 @@ export function ConnectionLine({
   });
   return (
     <g>
+      {arrow || !fromHandle ? null : (
+        <GroupLines
+          fromNodeId={fromNode.id}
+          fromHandleId={fromHandle.id ?? ""}
+          side={fromHandle.type}
+          toX={toX}
+          toY={toY}
+          toPosition={toPosition}
+        />
+      )}
       <path d={path} fill="none" className={arrow ? "of-arrow of-pending-arrow" : "of-pending"} />
       <circle cx={toX} cy={toY} r={4} className="of-pending-ring" />
     </g>

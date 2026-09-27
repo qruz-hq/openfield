@@ -197,6 +197,45 @@ describe("canvas store", () => {
     expect([copied.source, copied.target].sort()).toEqual([...ids].sort());
   });
 
+  test("a duplicate keeps its images and the links coming into it; links out stay with the original", () => {
+    const doc = documentWith(
+      [node("p"), node("g", { type: "image.generate" }), node("v", { type: "image.generate" })],
+      [dataEdge("in", "p", "g"), dataEdge("out", "g", "v")],
+    );
+    const store = createCanvasStore(detailOf(doc));
+    const images = ["01K6BQ80000000000000AS0001", "01K6BQ80000000000000AS0002"];
+    store.getState().actions.apply([
+      {
+        op: "setResult",
+        id: "g",
+        result: {
+          state: "done",
+          assetIds: images,
+          jobSetId: null,
+          jobSetIds: [],
+          outputs: [],
+          fingerprint: "f".repeat(64),
+          costUsd: null,
+          ranAt: null,
+          error: null,
+        },
+      },
+    ]);
+    const [copy] = store.getState().actions.duplicateNodes(["g"]);
+    const state = store.getState();
+    expect(state.doc.results[copy!]?.assetIds).toEqual(images);
+    const edges = Object.values(state.doc.edges);
+    expect(edges.filter((e) => e.target === copy).map((e) => e.source)).toEqual(["p"]);
+    expect(edges.filter((e) => e.source === copy)).toEqual([]);
+    // The original keeps both its links.
+    expect(
+      edges
+        .filter((e) => e.source === "g" || e.target === "g")
+        .map((e) => e.id)
+        .sort(),
+    ).toEqual(["in", "out"]);
+  });
+
   test("the saved document is valid and round-trips", () => {
     const original = chain();
     const store = createCanvasStore(detailOf(original));

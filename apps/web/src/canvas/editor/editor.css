@@ -23,6 +23,13 @@
   background: transparent;
 }
 
+/* That box sits under the nodes, not over them (React Flow puts it above, at z-index 3), so the
+   ports of selected nodes can still start a link. The viewport lets the pointer through between
+   nodes, so the group still drags from the gaps, and dragging any selected node moves them all. */
+.of-canvas .react-flow__nodesselection {
+  z-index: 1;
+}
+
 .of-canvas .react-flow__node {
   cursor: default;
 }
@@ -168,6 +175,40 @@
 .of-canvas .react-flow__edge-path.of-edge.of-edge-selected {
   stroke: var(--of-accent);
   stroke-width: 2.5;
+}
+
+/* The × and the conversion badge at a link's midpoint sit above every link and node: React Flow
+   stacks this layer under the nodes, where a card could cover the ×. Links themselves stay under the
+   nodes even when selected (elevateEdgesOnSelect off), so they never cover a port's circle. The
+   layer lets the pointer through; only its buttons catch it. */
+.of-canvas .react-flow__edgelabel-renderer {
+  z-index: 1001;
+}
+
+/* A group drag's other pending lines grow from their ports one after another (group-lines.tsx):
+   a solid mask copy of each path draws in over 180 ms, ease-out, revealing the dashed line. The
+   links the drop makes draw in the same way (fresh-links.ts). */
+.of-canvas .of-pending-draw,
+.of-canvas .react-flow__edge-path.of-edge.of-link-draw {
+  stroke-dasharray: 1 1;
+  animation: of-draw-in 180ms ease-out both;
+}
+
+@keyframes of-draw-in {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .of-canvas .of-pending-draw,
+  .of-canvas .react-flow__edge-path.of-edge.of-link-draw {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
 }
 
 /* The pulse (motion spec IMRkA): a 2 px core with round caps over the line, and its glow, the same

@@ -1,4 +1,4 @@
-import { checkConnection } from "@openfield/canvas/engine/connect";
+import { checkConnection, planGroupConnect, skippedMessage } from "@openfield/canvas/engine/connect";
 import type { MenuGroup } from "@openfield/canvas/nodes/registry";
 import { VARIATIONS_BOX } from "@openfield/canvas/nodes/variations/spec";
 import { newEdgeId } from "@openfield/canvas/store/graph";
@@ -6,6 +6,8 @@ import { applyOps, type CanvasOp, type Size } from "@openfield/canvas/store/ops"
 import { t } from "@openfield/core";
 import { cn, SearchInput, surfaceVariants } from "@openfield/ui";
 import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { notify } from "../../lib/notify";
+import { markFreshLinks } from "../editor/flow/fresh-links";
 import { useCanvasEngineContext } from "../engine/engine-store";
 import { useCanvasStoreApi, useUi } from "../store/context";
 import type { AddMenuState } from "../store/types";
@@ -137,6 +139,7 @@ function AddNodePanel({ menu }: { menu: AddMenuState }) {
     const state = store.getState();
     const node = nodeRegistry.instantiate(def.type, { position: menu.flowPosition, ctx });
     const ops: CanvasOp[] = [{ op: "addNode", node }];
+    let skipped: ReturnType<typeof planGroupConnect>["skipped"] = [];
     const pending = menu.pending;
     const port = pending ? nodeRegistry.fittingPort(def.type, pending) : undefined;
     if (pending && port) {
@@ -159,6 +162,12 @@ function AddNodePanel({ menu }: { menu: AddMenuState }) {
       if (check.ok) {
         if (check.replaces) ops.push({ op: "deleteEdge", id: check.replaces });
         ops.push({ op: "addEdge", edge: { id: newEdgeId(), ...ends, kind: check.kind } });
+        // Dragged from a node in a selection: the rest of it links to the new node too.
+        if (check.kind === "data") {
+          const plan = planGroupConnect(applyOps(state.doc, ops).doc, ends, pending, state.selection.nodeIds);
+          for (const edge of plan.edges) ops.push({ op: "addEdge", edge });
+          skipped = plan.skipped;
+        }
       }
       // Variations after a Generate starts from that Generate's model.
       const source = state.doc.nodes[pending.nodeId];
@@ -171,7 +180,9 @@ function AddNodePanel({ menu }: { menu: AddMenuState }) {
         node.params = { ...node.params, model: sourceModel };
       }
     }
+    markFreshLinks(ops.flatMap((op) => (op.op === "addEdge" ? [op.edge.id] : [])));
     const result = state.actions.apply(ops, { label: "add", select: { nodeIds: [node.id], edgeIds: [] } });
+    if (result.ok && skipped.length) notify(skippedMessage(skipped), { duration: 3500 });
     if (result.ok && OPENS_AT_ONCE.has(def.type)) markOpenPicker(node.id);
     // A node that opens its own picker right away takes focus itself.
     if (result.ok && !OPENS_AT_ONCE.has(def.type)) closing.current = { kind: "insert", id: node.id };

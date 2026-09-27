@@ -1,4 +1,4 @@
-import { type ConnectionEnds, canConnect } from "@openfield/canvas/engine/connect";
+import { bodyDropPort, type ConnectionEnds, canConnect } from "@openfield/canvas/engine/connect";
 import { isAnnotationHandle } from "@openfield/canvas/engine/types";
 import { t } from "@openfield/core";
 import { cn, Menu, MenuContent, MenuItem, MenuTrigger } from "@openfield/ui";
@@ -16,6 +16,7 @@ import {
   SelectionMode,
   useStore as useFlowStore,
   useReactFlow,
+  useStoreApi,
   type Viewport,
   ViewportPortal,
 } from "@xyflow/react";
@@ -82,6 +83,16 @@ let gestures = 0;
 
 export interface CanvasFlowProps {
   className?: string;
+}
+
+/**
+ * The editor's node under a screen point, off its ports: a port is a drop on that port. The card
+ * pictures (preview-capture.tsx) draw the same nodes off screen, so only the live pane counts.
+ */
+function nodeUnder(x: number, y: number): string | null {
+  const el = document.elementFromPoint(x, y);
+  if (!el || el.closest(".react-flow__handle") || el.closest(".of-capture")) return null;
+  return el.closest<HTMLElement>(".react-flow__node")?.dataset.id ?? null;
 }
 
 export function CanvasFlow({ className }: CanvasFlowProps) {
@@ -357,8 +368,20 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
       session.ui.setState({ annotationConnecting: false });
       const { actions, ui } = store.getState();
       const pending = ui.connecting;
+      const done = () => actions.setUi({ connecting: null, connectOver: null });
       if (state.isValid) {
-        actions.setUi({ connecting: null });
+        done();
+        return;
+      }
+      const point = "changedTouches" in event ? event.changedTouches[0]! : event;
+      // Dropped on a card, off its ports: the port that fits takes it (§7.6), the rest of a
+      // selection with it, in one undo step. Only a drop right on a port goes by that port.
+      const over = nodeUnder(point.clientX, point.clientY);
+      if (pending && over && !ui.readOnly) {
+        const drop = bodyDropPort(store.getState().doc, pending, over);
+        if (drop.ok) commands.connect(drop.ends as Connection);
+        else if (drop.reason) commands.toast(drop.reason, 2500);
+        done();
         return;
       }
       const from = state.fromHandle;
@@ -380,14 +403,14 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
               };
         const check = canConnect(store.getState(), ends);
         if (!check.ok && check.reason) commands.toast(check.reason, 2500);
-        actions.setUi({ connecting: null });
+        done();
         return;
       }
       const target = event.target as Element | null;
       const onPane = !!target?.classList?.contains("react-flow__pane");
       if (pending && onPane && !ui.readOnly) {
         // Dropped on empty pane: the add-node menu, filtered to what fits (§7.6).
-        const point = "changedTouches" in event ? event.changedTouches[0]! : event;
+        actions.setUi({ connectOver: null });
         const screen = { x: point.clientX, y: point.clientY };
         actions.openAddMenu({
           flowPosition: rf.screenToFlowPosition(screen),
@@ -396,7 +419,7 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
         });
         return;
       }
-      actions.setUi({ connecting: null });
+      done();
     },
     [commands, rf, session, store],
   );
@@ -463,11 +486,22 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
     [store],
   );
 
+  const flow = useStoreApi<FlowNode, FlowEdge>();
   const onPointerMove = useCallback(
     (event: ReactPointerEvent) => {
       session.ui.setState({ pointer: { x: event.clientX, y: event.clientY } });
+      // While a link is dragged, the card under it (off its ports) shows where a drop would go. Near
+      // a port React Flow snaps to that port and lights it itself.
+      const { ui, actions } = store.getState();
+      if (!ui.connecting) return;
+      const connection = flow.getState().connection;
+      const snapped = connection.inProgress && connection.isValid && connection.toHandle;
+      const over = snapped ? null : nodeUnder(event.clientX, event.clientY);
+      if (over === (ui.connectOver?.nodeId ?? null)) return;
+      const drop = over ? bodyDropPort(store.getState().doc, ui.connecting, over) : null;
+      actions.setUi({ connectOver: over ? { nodeId: over, portId: drop?.ok ? drop.port.id : null } : null });
     },
-    [session],
+    [flow, session, store],
   );
   const onPointerLeave = useCallback(() => session.ui.setState({ pointer: null }), [session]);
 
@@ -534,7 +568,9 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
         deleteKeyCode={null}
         zoomOnDoubleClick={false}
         elevateNodesOnSelect={false}
-        elevateEdgesOnSelect
+        // Links stay under the nodes when selected too, so they never cover a port's circle; the ×
+        // lives in the label layer above the nodes (editor.css).
+        elevateEdgesOnSelect={false}
         snapToGrid={snap}
         snapGrid={[8, 8]}
         onlyRenderVisibleElements

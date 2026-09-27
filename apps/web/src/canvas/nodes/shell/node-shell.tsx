@@ -12,7 +12,7 @@ import {
 } from "react";
 import { AnnotationHandles } from "../../editor/annotation-handles";
 import { CanvasNodeResizer } from "../../editor/node-resizer";
-import { useCanvasActions, useReadOnly } from "../../store/context";
+import { useCanvas, useCanvasActions, useReadOnly } from "../../store/context";
 import type { NodeComponentProps } from "../registry";
 import { CollapsedCard } from "./collapsed-card";
 import { NodeLabel } from "./node-label";
@@ -104,6 +104,7 @@ export function NodeShell({
     setMenuAt({ x: box.right, y: box.bottom + MENU_GAP, align: "end" });
   };
   const card = variant === "card" && !collapsed && lod === "full";
+  const dropTarget = useCanvas((s) => s.ui.connectOver?.nodeId === id && s.ui.connectOver.portId !== null);
   const name = title?.trim() || t(spec.label);
 
   const onContextMenu = (event: MouseEvent) => {
@@ -183,6 +184,15 @@ export function NodeShell({
           )}
         </div>
       )}
+      {dropTarget ? (
+        // A link dragged over the card that a drop here would connect: a dashed ring, like the
+        // pending link and its ring at the cursor.
+        <div
+          aria-hidden
+          data-drop-target
+          className="pointer-events-none absolute -inset-4 rounded-[18px] border-2 border-dashed border-accent"
+        />
+      ) : null}
       {card ? (
         // The card's hairline is its own; selection is a 2 px outline outside it (design upuBC).
         selected ? (

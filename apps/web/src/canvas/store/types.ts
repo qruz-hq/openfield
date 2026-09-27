@@ -75,6 +75,11 @@ export interface CanvasUiState {
   lod: LodBucket;
   addMenu: AddMenuState | null;
   connecting: PendingConnection | null;
+  /**
+   * The node a dragged link is over, off its ports, and the port a drop there would use
+   * (bodyDropPort), or null when it takes nothing.
+   */
+  connectOver: { nodeId: string; portId: string | null } | null;
   /** The right-side drawer: the node inspector or version history (§7.11 drawer host). */
   drawer: { panel: DrawerPanel; nodeId: string | null } | null;
   findOpen: boolean;
