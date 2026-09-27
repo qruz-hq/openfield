@@ -119,6 +119,29 @@ export class Thumbs {
     }
   }
 
+  /**
+   * A small JPEG for an agent to look at, at most `edge` px on its long side, on white where the
+   * image is transparent. Not cached: agents ask for few. Null when sharp is off or fails.
+   */
+  async jpeg(source: Pick<ThumbSource, "path">, edge: number): Promise<Uint8Array | null> {
+    const sharp = this.sharp;
+    if (!sharp) return null;
+    const original = absolutePath(this.opts.paths, source.path);
+    try {
+      return await this.#slots.run(() =>
+        sharp(original, { failOn: "none" })
+          .rotate()
+          .resize({ width: edge, height: edge, fit: "inside", withoutEnlargement: true })
+          .flatten({ background: "#ffffff" })
+          .jpeg({ quality: 80 })
+          .toBuffer(),
+      );
+    } catch (err) {
+      this.opts.logger.warn("Couldn't make a preview for an agent", { path: source.path, error: err });
+      return null;
+    }
+  }
+
   /** Makes the feed's thumbnail ahead of the first request (§8.5.1 step 5). */
   warm(source: ThumbSource, size: ThumbSize): void {
     if (this.sharp) void this.get(source, size).catch(() => {});

@@ -78,6 +78,21 @@ export function toListItems(db: Db, rows: readonly FeedItem[]): AssetListItem[] 
   return rows.map((r) => toAssetListItem(r, r.isFavourite, reruns.has(r.jobId ?? "")));
 }
 
+const MAX_ANCESTORS = 100;
+
+/** Parent, grandparent, … up to the root. A hard-deleted parent ends the walk (§0.7 tombstone). */
+export function ancestorsOf(db: Db, asset: AssetRow): AssetRow[] {
+  const out: AssetRow[] = [];
+  let parentId = asset.parentAssetId;
+  while (parentId && out.length < MAX_ANCESTORS) {
+    const parent = getAsset(db, parentId);
+    if (!parent) break;
+    out.push(parent);
+    parentId = parent.parentAssetId;
+  }
+  return out;
+}
+
 export class LibraryService {
   constructor(private readonly deps: LibraryServiceDeps) {}
 
