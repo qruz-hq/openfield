@@ -35,6 +35,8 @@ export interface BridgeOptions {
   env?: Record<string, string | undefined>;
   /** For tests: where requests go instead of the network. */
   fetch?: FetchLike;
+  /** How long a replayed handshake may take. */
+  handshakeTimeoutMs?: number;
 }
 
 export const notRunning = () =>
@@ -155,15 +157,24 @@ export class Bridge {
     const http = await this.#connection();
     const handshake = this.#handshake!;
     const id = `openfield-bridge-${++this.#replays}`;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const answer = new Promise<JSONRPCMessage>((resolve, reject) => {
       this.#ours.set(id, resolve);
-      setTimeout(() => {
-        this.#ours.delete(id);
-        reject(new BridgeError(notRunning()));
-      }, HANDSHAKE_TIMEOUT_MS).unref?.();
+      timer = setTimeout(
+        () => reject(new BridgeError(notRunning())),
+        this.opts.handshakeTimeoutMs ?? HANDSHAKE_TIMEOUT_MS,
+      );
+      timer.unref?.();
     });
-    await http.send({ ...handshake, id });
-    const result = await answer;
+    let result: JSONRPCMessage;
+    try {
+      await http.send({ ...handshake, id });
+      result = await answer;
+    } finally {
+      // A send that fails leaves the answer unawaited: its timer must not fire later.
+      clearTimeout(timer);
+      this.#ours.delete(id);
+    }
     if (isJSONRPCErrorResponse(result)) throw new BridgeError(result.error.message);
     const version = isJSONRPCResultResponse(result)
       ? (result.result as InitializeResult).protocolVersion

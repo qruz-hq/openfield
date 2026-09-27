@@ -451,12 +451,18 @@ describe("the stdio bridge", () => {
     await turnOnAgents(server);
     const { answers, reply } = collect();
     const down = () => Promise.reject(new TypeError("Unable to connect"));
-    const bridge = new Bridge(reply, { env: { OPENFIELD_HOME: server.home }, fetch: down });
+    const bridge = new Bridge(reply, {
+      env: { OPENFIELD_HOME: server.home },
+      fetch: down,
+      handshakeTimeoutMs: 20,
+    });
     await bridge.receive(hello(1, "codex-mcp-client"));
     await bridge.receive({ jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "list_folders" } });
     expect(answers[0]?.error?.message).toBe(notRunning());
     expect(answers[1]?.result).toMatchObject({ isError: true, content: [{ text: notRunning() }] });
     expect(notRunning()).toContain("bun start");
+    // The failed reconnect's handshake timer mustn't go off later as an unhandled rejection.
+    await Bun.sleep(60);
     await bridge.close();
   });
 
