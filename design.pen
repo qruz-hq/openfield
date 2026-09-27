@@ -26642,6 +26642,24 @@
                                       }
                                     },
                                     {
+                                      "id": "V0NA3T",
+                                      "type": "ref",
+                                      "ref": "e0i6b",
+                                      "name": "Item · Agents",
+                                      "width": "fill_container",
+                                      "descendants": {
+                                        "VbR25": {
+                                          "icon": "bot"
+                                        },
+                                        "tKvFC": {
+                                          "content": "Agents"
+                                        },
+                                        "YXDug": {
+                                          "enabled": false
+                                        }
+                                      }
+                                    },
+                                    {
                                       "id": "eY2I2",
                                       "type": "ref",
                                       "ref": "e0i6b",
@@ -95447,6 +95465,4238 @@
               ]
             }
           }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "DxFd5",
+      "x": 16560,
+      "y": -3000,
+      "name": "Components · Agents",
+      "clip": true,
+      "width": 2880,
+      "fill": "$surface",
+      "layout": "vertical",
+      "gap": 40,
+      "padding": 48,
+      "children": [
+        {
+          "type": "frame",
+          "id": "Z5XVw4",
+          "name": "Board header",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 6,
+          "children": [
+            {
+              "type": "text",
+              "id": "Hwru2",
+              "name": "Title",
+              "fill": "$text-primary",
+              "content": "Components · Agents",
+              "fontFamily": "Inter",
+              "fontSize": 28,
+              "fontWeight": "600",
+              "letterSpacing": -0.4
+            },
+            {
+              "type": "text",
+              "id": "tUNsg",
+              "name": "Subtitle",
+              "fill": "$text-secondary",
+              "content": "How agents like Claude connect to Openfield, and how their work shows up while you watch. Built from the primitives and the canvas chrome.",
+              "fontFamily": "Inter",
+              "fontSize": 13,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "i0tYb",
+          "name": "Section · Agents (v5)",
+          "width": "fill_container",
+          "fill": "$surface",
+          "layout": "vertical",
+          "gap": 20,
+          "children": [
+            {
+              "type": "frame",
+              "id": "XvnLQ",
+              "name": "Section header",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "SltwZ",
+                  "name": "Title row",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "alignItems": "end",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "c4g2pZ",
+                      "name": "Section title",
+                      "fill": "$text-primary",
+                      "content": "Agents",
+                      "fontFamily": "Inter",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "VbysA",
+                      "name": "Section note",
+                      "fill": "$text-tertiary",
+                      "content": "Settings > Agents, and how an agent shows up on a canvas while it works.",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "NyWUg",
+                  "name": "Hairline",
+                  "fill": "$border",
+                  "width": "fill_container",
+                  "height": 1
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "d9oUKa",
+              "name": "Row · Settings parts",
+              "fill": "$surface",
+              "gap": 48,
+              "padding": 16,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "P7JnqM",
+                  "name": "Cell · Code block",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "rlE3w",
+                      "name": "Settings / Code block",
+                      "reusable": true,
+                      "width": 560,
+                      "fill": "$surface",
+                      "cornerRadius": 10,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "gap": 12,
+                      "padding": [
+                        10,
+                        8,
+                        10,
+                        14
+                      ],
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "GKDMT",
+                          "name": "Code",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "claude mcp add --transport http openfield http://127.0.0.1:4317/mcp \\\n  --header \"Authorization: Bearer of_ag_4f8c2b91e7d05a3c9kF3\"",
+                          "lineHeight": 1.6,
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "id": "E4Jowg",
+                          "type": "ref",
+                          "ref": "TovGQ",
+                          "name": "Copy",
+                          "descendants": {
+                            "B4EbBS": {
+                              "icon": "copy"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "K3UyI5",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Settings / Code block · mono, wraps, Copy swaps to a check for 2 s",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "mWkVQ",
+                  "name": "Cell · Access key",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "VRNrn",
+                      "name": "Agents / Access key",
+                      "reusable": true,
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "MHtS0",
+                          "name": "Key",
+                          "height": 32,
+                          "fill": "$surface",
+                          "cornerRadius": 8,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "gap": 6,
+                          "padding": [
+                            0,
+                            4,
+                            0,
+                            12
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "iCdLk",
+                              "name": "Value",
+                              "fill": "$text-primary",
+                              "content": "of_ag_••••••••9kF3",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            },
+                            {
+                              "id": "jCMWm",
+                              "type": "ref",
+                              "ref": "TovGQ",
+                              "name": "Copy",
+                              "width": 24,
+                              "height": 24,
+                              "descendants": {
+                                "B4EbBS": {
+                                  "icon": "copy",
+                                  "width": 14,
+                                  "height": 14
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "id": "x5UqL",
+                          "type": "ref",
+                          "ref": "ohpFX",
+                          "name": "Make new key",
+                          "descendants": {
+                            "D27v8a": {
+                              "icon": "refresh-cw"
+                            },
+                            "VV3Wp": {
+                              "content": "Make a new key"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "wNAP4",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Agents / Access key · the key stays hidden, Copy copies all of it",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "tDYZP",
+                  "name": "Cell · Client tabs",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "mR9QQ",
+                      "name": "Agents / Client tabs",
+                      "reusable": true,
+                      "gap": 4,
+                      "children": [
+                        {
+                          "id": "tUIAL",
+                          "type": "ref",
+                          "ref": "MF3j8",
+                          "name": "Tab · Claude Code",
+                          "descendants": {
+                            "xl6oO": {
+                              "content": "Claude Code"
+                            }
+                          }
+                        },
+                        {
+                          "id": "u9qFc",
+                          "type": "ref",
+                          "ref": "Dpha7",
+                          "name": "Tab · Claude Desktop",
+                          "descendants": {
+                            "CkVHQ": {
+                              "content": "Claude Desktop"
+                            }
+                          }
+                        },
+                        {
+                          "id": "A3cf3",
+                          "type": "ref",
+                          "ref": "Dpha7",
+                          "name": "Tab · Cursor",
+                          "descendants": {
+                            "CkVHQ": {
+                              "content": "Cursor"
+                            }
+                          }
+                        },
+                        {
+                          "id": "kBbKi",
+                          "type": "ref",
+                          "ref": "Dpha7",
+                          "name": "Tab · Codex",
+                          "descendants": {
+                            "CkVHQ": {
+                              "content": "Codex"
+                            }
+                          }
+                        },
+                        {
+                          "id": "yLfWH",
+                          "type": "ref",
+                          "ref": "Dpha7",
+                          "name": "Tab · Other apps",
+                          "descendants": {
+                            "CkVHQ": {
+                              "content": "Other apps"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "t93VEV",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Agents / Client tabs · Tabs / Pill items, one per app",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "HAo8I",
+                  "name": "Cell · Client row",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "D0ebDN",
+                      "name": "Agents / Client row",
+                      "reusable": true,
+                      "width": 560,
+                      "gap": 12,
+                      "padding": [
+                        12,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "ylAYS",
+                          "name": "Tile",
+                          "width": 32,
+                          "height": 32,
+                          "fill": "$elevated-2",
+                          "cornerRadius": 8,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "bF0zi",
+                              "name": "Icon",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "terminal",
+                              "library": "lucide",
+                              "fill": "$text-secondary"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "dsRYk",
+                          "name": "Text",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "O39S3",
+                              "name": "Name",
+                              "fill": "$text-primary",
+                              "content": "Claude Code",
+                              "fontFamily": "Inter",
+                              "fontSize": 14,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "WQho5",
+                              "name": "Status",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "text",
+                                  "id": "w3rURf",
+                                  "name": "Description",
+                                  "fill": "$text-secondary",
+                                  "content": "Last used 2 minutes ago",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "reviW",
+                          "name": "Today",
+                          "fill": "$text-secondary",
+                          "content": "14 images · $0.56 today",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "uYQbr",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Agents / Client row · an app that connected before, with what it made today",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "iz543",
+                  "name": "Cell · Client row live",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Kuexh",
+                      "name": "Agents / Client row / Live",
+                      "reusable": true,
+                      "width": 560,
+                      "gap": 12,
+                      "padding": [
+                        12,
+                        0
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "He1AU",
+                          "name": "Tile",
+                          "width": 32,
+                          "height": 32,
+                          "fill": "$elevated-2",
+                          "cornerRadius": 8,
+                          "stroke": "$accent-line",
+                          "strokeWidth": 1,
+                          "justifyContent": "center",
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "D5yMoN",
+                              "name": "Icon",
+                              "width": 16,
+                              "height": 16,
+                              "icon": "terminal",
+                              "library": "lucide",
+                              "fill": "$accent"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "FQzC6",
+                          "name": "Text",
+                          "width": "fill_container",
+                          "layout": "vertical",
+                          "gap": 2,
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "MN7Ii",
+                              "name": "Name",
+                              "fill": "$text-primary",
+                              "content": "Claude Code",
+                              "fontFamily": "Inter",
+                              "fontSize": 14,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "frame",
+                              "id": "m3P7Ho",
+                              "name": "Status",
+                              "gap": 6,
+                              "alignItems": "center",
+                              "children": [
+                                {
+                                  "type": "ellipse",
+                                  "id": "A4Txq",
+                                  "name": "Live dot",
+                                  "fill": "$accent",
+                                  "width": 6,
+                                  "height": 6
+                                },
+                                {
+                                  "type": "text",
+                                  "id": "ypiBd",
+                                  "name": "Description",
+                                  "fill": "$text-secondary",
+                                  "content": "Working on Product shoot now",
+                                  "fontFamily": "Inter",
+                                  "fontSize": 13,
+                                  "fontWeight": "normal"
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "type": "text",
+                          "id": "baBfu",
+                          "name": "Today",
+                          "fill": "$text-secondary",
+                          "content": "14 images · $0.56 today",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "JvPZu",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Agents / Client row / Live · working right now, names the canvas",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "SPNa7",
+                  "name": "Cell · Permission switch",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "id": "rEVTi",
+                      "type": "ref",
+                      "ref": "Eaiax",
+                      "name": "Permission switch · Mixed",
+                      "width": 228,
+                      "descendants": {
+                        "E8Pxb": {
+                          "id": "UlfFV",
+                          "type": "ref",
+                          "ref": "Yr4wt",
+                          "name": "Segment 1",
+                          "width": "fill_container",
+                          "descendants": {
+                            "oipL7": {
+                              "content": "Allow"
+                            }
+                          }
+                        },
+                        "B53lEC": {
+                          "id": "lvPAZ",
+                          "type": "ref",
+                          "ref": "Yr4wt",
+                          "name": "Segment 2",
+                          "width": "fill_container",
+                          "descendants": {
+                            "oipL7": {
+                              "content": "Ask"
+                            }
+                          }
+                        },
+                        "gzxhc": {
+                          "id": "eKM9o",
+                          "type": "ref",
+                          "ref": "Yr4wt",
+                          "name": "Segment 3",
+                          "width": "fill_container",
+                          "descendants": {
+                            "oipL7": {
+                              "content": "Default"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "faNYp",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Segmented / 3 at 228 · Allow, Ask, Default. A group's \"All of these\" shows none picked when its actions differ",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "qFZzU",
+              "name": "Row · Canvas parts",
+              "fill": "$canvas",
+              "gap": 48,
+              "padding": 24,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "X41A2Q",
+                  "name": "Cell · Agent pill",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "W4O9c8",
+                      "name": "Canvas / Chrome / Agent",
+                      "reusable": true,
+                      "height": 40,
+                      "fill": "$elevated",
+                      "cornerRadius": 10,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "gap": 8,
+                      "padding": [
+                        0,
+                        4,
+                        0,
+                        12
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "ThnBZ",
+                          "name": "Live dot",
+                          "fill": "$accent",
+                          "width": 8,
+                          "height": 8
+                        },
+                        {
+                          "type": "text",
+                          "id": "kVnUY",
+                          "name": "Label",
+                          "fill": "$text-primary",
+                          "content": "Claude Code is editing",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "id": "yhWkh",
+                          "type": "ref",
+                          "ref": "jsktt",
+                          "name": "Divider"
+                        },
+                        {
+                          "id": "RukVY",
+                          "type": "ref",
+                          "ref": "luXtK",
+                          "name": "Follow",
+                          "descendants": {
+                            "Y4EJwv": {
+                              "icon": "locate-fixed",
+                              "fill": "$text-secondary"
+                            },
+                            "y1e5K": {
+                              "content": "Follow"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "eGQWM",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Canvas / Chrome / Agent · top center while an agent edits this canvas. The dot breathes (reduced motion: still)",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "b12gAI",
+                  "name": "Cell · Agent pill following",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "Xv2Wi",
+                      "name": "Canvas / Chrome / Agent / Following",
+                      "reusable": true,
+                      "height": 40,
+                      "fill": "$accent-soft",
+                      "cornerRadius": 10,
+                      "stroke": "$accent-line",
+                      "strokeWidth": 1,
+                      "gap": 8,
+                      "padding": [
+                        0,
+                        4,
+                        0,
+                        12
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "ellipse",
+                          "id": "Ajc0x",
+                          "name": "Live dot",
+                          "fill": "$accent",
+                          "width": 8,
+                          "height": 8
+                        },
+                        {
+                          "type": "text",
+                          "id": "tVigu",
+                          "name": "Label",
+                          "fill": "$text-primary",
+                          "content": "Following Claude Code",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "id": "eXUBl",
+                          "type": "ref",
+                          "ref": "jsktt",
+                          "name": "Divider"
+                        },
+                        {
+                          "id": "aM6L8",
+                          "type": "ref",
+                          "ref": "luXtK",
+                          "name": "Stop following",
+                          "descendants": {
+                            "Y4EJwv": {
+                              "icon": "x",
+                              "fill": "$text-secondary"
+                            },
+                            "y1e5K": {
+                              "content": "Stop following"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "kNICU",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "… / Following · the view moves to what the agent touches. Any pan or zoom of yours, or Stop following, ends it. A thin bone frame marks the view",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "luiSe",
+                  "name": "Cell · Agent tag",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "sgH49",
+                      "name": "Canvas / Node / Agent tag",
+                      "reusable": true,
+                      "height": 22,
+                      "fill": "$accent",
+                      "cornerRadius": 6,
+                      "gap": 5,
+                      "padding": [
+                        0,
+                        8,
+                        0,
+                        6
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "Zn7wU",
+                          "name": "Icon",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "bot",
+                          "library": "lucide",
+                          "fill": "$accent-fg"
+                        },
+                        {
+                          "type": "text",
+                          "id": "eSBcI",
+                          "name": "Name",
+                          "fill": "$accent-fg",
+                          "content": "Claude Code",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "600"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "Es4QY",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Canvas / Node / Agent tag · above a node the agent just added or changed, with a 2 px bone ring. Fades after 3 s",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "SYJeE",
+      "x": 37440,
+      "y": 16308,
+      "name": "Settings · Agents",
+      "clip": true,
+      "width": 1440,
+      "height": 3000,
+      "fill": "$surface",
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "pGEeH",
+          "type": "ref",
+          "ref": "Q1x7G",
+          "name": "Shell",
+          "width": "fill_container",
+          "height": "fill_container",
+          "descendants": {
+            "gfwwv/FR0yy": {
+              "id": "gZe6W",
+              "type": "ref",
+              "ref": "e0i6b",
+              "name": "Item · Keys",
+              "width": "fill_container",
+              "descendants": {
+                "VbR25": {
+                  "icon": "key"
+                },
+                "tKvFC": {
+                  "content": "API keys"
+                },
+                "YXDug": {
+                  "enabled": false
+                }
+              }
+            },
+            "gfwwv/V0NA3T": {
+              "id": "YfEwD",
+              "type": "ref",
+              "ref": "PDRCJ",
+              "name": "Item · Agents",
+              "width": "fill_container",
+              "descendants": {
+                "vzfjR": {
+                  "icon": "bot"
+                },
+                "jmxp5": {
+                  "content": "Agents"
+                },
+                "gVD6l": {
+                  "enabled": false
+                }
+              }
+            },
+            "JjcRP/ZTffU": {
+              "content": "Agents"
+            },
+            "JjcRP/eur5I": {
+              "content": "Let AI apps like Claude and Cursor use Openfield for you. They can build and run canvases, make images and sort your library."
+            },
+            "cFo0S": {
+              "children": [
+                {
+                  "id": "Fav2R",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · Connection",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "CONNECTION"
+                    },
+                    "mzmIA": {
+                      "children": [
+                        {
+                          "id": "aonr2",
+                          "type": "ref",
+                          "ref": "g4l0ro",
+                          "name": "Let agents use Openfield",
+                          "width": "fill_container",
+                          "descendants": {
+                            "VFmQc/m8pUt3": {
+                              "content": "Let agents use Openfield"
+                            },
+                            "VFmQc/XqZMy": {
+                              "content": "Apps on this computer can connect with the access key below. They use your keys but never see them."
+                            }
+                          }
+                        },
+                        {
+                          "id": "h6ggja",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "CWm15",
+                          "type": "ref",
+                          "ref": "E76BPR",
+                          "name": "Access key",
+                          "width": "fill_container",
+                          "descendants": {
+                            "rRAPe/m8pUt3": {
+                              "content": "Access key"
+                            },
+                            "rRAPe/XqZMy": {
+                              "content": "Apps use it to connect. A new key disconnects the apps that use this one."
+                            },
+                            "P5XrkA": {
+                              "id": "fpPdw",
+                              "type": "ref",
+                              "ref": "VRNrn",
+                              "name": "Access key"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "B7Qn1f",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · Add to an app",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "ADD TO AN APP"
+                    },
+                    "mzmIA": {
+                      "padding": 16,
+                      "gap": 12,
+                      "children": [
+                        {
+                          "id": "WUGrU",
+                          "type": "ref",
+                          "ref": "mR9QQ",
+                          "name": "Client tabs"
+                        },
+                        {
+                          "type": "text",
+                          "id": "aiKzW",
+                          "name": "Instruction",
+                          "fill": "$text-secondary",
+                          "content": "Run this in a terminal, then start a new Claude Code session.",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "id": "lNXwN",
+                          "type": "ref",
+                          "ref": "rlE3w",
+                          "name": "Command",
+                          "width": "fill_container",
+                          "descendants": {
+                            "GKDMT": {
+                              "content": "claude mcp add --transport http openfield http://127.0.0.1:4317/mcp \\\n  --header \"Authorization: Bearer of_ag_••••••••9kF3\""
+                            }
+                          }
+                        },
+                        {
+                          "type": "frame",
+                          "id": "MOvVS",
+                          "name": "Footnote",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "kAzaG",
+                              "name": "Icon",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "info",
+                              "library": "lucide",
+                              "fill": "$text-tertiary"
+                            },
+                            {
+                              "type": "text",
+                              "id": "pQMPS",
+                              "name": "Text",
+                              "fill": "$text-tertiary",
+                              "content": "Copy adds your full key. Openfield has to be running while an app uses it.",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "type": "frame",
+                  "id": "wHtz0",
+                  "name": "Permissions note",
+                  "width": "fill_container",
+                  "gap": 6,
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "F7GzH",
+                      "name": "Icon",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "info",
+                      "library": "lucide",
+                      "fill": "$text-tertiary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "gZS3S",
+                      "name": "Text",
+                      "fill": "$text-tertiary",
+                      "content": "Allow never asks. Ask checks with you in the agent's app every time. Default follows the rule under each action.",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "id": "BCHPx",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · LOOK AROUND",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "LOOK AROUND"
+                    },
+                    "mzmIA": {
+                      "children": [
+                        {
+                          "id": "IL4Q0",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "All of these",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "All of these"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "See your canvases, images, models, prices and spending."
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "b9MYL",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "rAaHf",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "RiOBj",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "sAhFa",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "QteiE",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "See models and prices",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "See models and prices"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: allowed"
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "lkHG0",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "B6eUyu",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "g9oEy",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "nrtdB",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "Db5NW",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Read canvases",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Read canvases"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: allowed"
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "xUJr2",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "Pncor",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "v241Sk",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "PujWv",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "iMLee",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Search and look at images",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Search and look at images"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: allowed"
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "RWCN3",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "E0uDZ",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "oZnMT",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "Nl7CA",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "JchBq",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "See spending and settings",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "See spending and settings"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: allowed"
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "wFZBV",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "q4PAG",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "YnLCP",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "dFPks",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · BUILD CANVASES",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "BUILD CANVASES"
+                    },
+                    "mzmIA": {
+                      "children": [
+                        {
+                          "id": "v8zKt",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "All of these",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "All of these"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Add, change and connect nodes. You see each change as it happens."
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "DutrG",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "zIeCK",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "q7fnp",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "J7RA3M",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "tAUZv",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Make canvases",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Make canvases"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: allowed"
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "bDoO5",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "gtAaV",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "U67voe",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "tZvKD",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "yyFYx",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Change canvases",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Change canvases"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: allowed. A version is saved before the first change."
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "gXLO4",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "N13oL",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "T0Idu",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "JnqBS",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "FSOYw",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Save and restore versions",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Save and restore versions"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: allowed"
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "xHPb9",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "fibfP",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "LRE7y",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "hj8M1",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "ALzJL",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Open things in your tab",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Open things in your tab"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: allowed"
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "X1MWM",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "xXtpk",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "Ag88o",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "zJyd6",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · MAKE IMAGES",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "MAKE IMAGES"
+                    },
+                    "mzmIA": {
+                      "children": [
+                        {
+                          "id": "zwxly",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "All of these",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "All of these"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Anything that spends with your keys. The daily limit always applies."
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "OZcJf",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "mBNHQ",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "h2qnAA",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "q7OpL",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "TWIxH",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Make images",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Make images"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: asks above $0.50"
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "GkHvM",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "KVkhm",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "nhpDm",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "wsL92",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "K33AtK",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Run canvases",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Run canvases"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: asks above $0.50"
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "TRBqr",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "Hhmwf",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "T93SG",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "wwjbN",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "LBTFa",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Stop runs",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Stop runs"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: allowed"
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "yFjYW",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "aQ2yp",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "HEuwO",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "I1U0k",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · ORGANISE LIBRARY",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "ORGANISE LIBRARY"
+                    },
+                    "mzmIA": {
+                      "children": [
+                        {
+                          "id": "cob5K",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "All of these",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "All of these"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Bring images in and file them."
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "kVFR1",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "Zp6T1",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "NGxv5",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "gB5nC",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "ppNTV",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Bring images in",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Bring images in"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: allowed"
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "PhXeD",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "hemOZ",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "Sf41q",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "Vty7M",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "EazdC",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Favourite and file images",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Favourite and file images"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: allowed"
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "MUrB7",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "G3cFF",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "D5homC",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "w4InaY",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "xBdMI",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Make and change folders",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Make and change folders"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: allowed"
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "jC8dO",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "Sw648",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "f3v2vF",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "tFYIp",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · DELETE THINGS",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "DELETE THINGS"
+                    },
+                    "mzmIA": {
+                      "children": [
+                        {
+                          "id": "sP8Qk",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "All of these",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "All of these"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Take things away. Some can't be undone."
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "k4sKS",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "ZHzVa",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "kMoEu",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "oejAX",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "pv2ek",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Remove nodes from canvases",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Remove nodes from canvases"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: allowed. A version is saved before the first change."
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "i6rtqM",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "sAhCA",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "LieyK",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "GBUxw",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "E5vrVO",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Move images to the Trash",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Move images to the Trash"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: allowed. You can restore them."
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "iU0Ks",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "THKJ2",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "zV8MH",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "DcY1i",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "mz8ZK",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Delete folders",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Delete folders"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: asks. The images stay in your library."
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "hHRCx",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "KrWai",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "L11Zg",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "cUJ8X",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "M4Q9N2",
+                          "type": "ref",
+                          "ref": "PWsFA",
+                          "name": "Delete canvases",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bLWuI/m8pUt3": {
+                              "content": "Delete canvases"
+                            },
+                            "bLWuI/XqZMy": {
+                              "content": "Default: asks. This can't be undone."
+                            },
+                            "RXz9X": {
+                              "width": 228
+                            },
+                            "RXz9X/E8Pxb": {
+                              "id": "Z4upwe",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 1",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Allow"
+                                }
+                              }
+                            },
+                            "RXz9X/B53lEC": {
+                              "id": "Rxbpt",
+                              "type": "ref",
+                              "ref": "Yr4wt",
+                              "name": "Segment 2",
+                              "width": "fill_container",
+                              "descendants": {
+                                "oipL7": {
+                                  "content": "Ask"
+                                }
+                              }
+                            },
+                            "RXz9X/gzxhc": {
+                              "id": "b6YZyU",
+                              "type": "ref",
+                              "ref": "oa1JL",
+                              "name": "Segment 3",
+                              "width": "fill_container",
+                              "descendants": {
+                                "o5jf1": {
+                                  "content": "Default"
+                                }
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "bU1tK",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · Spending by agents",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "SPENDING BY AGENTS"
+                    },
+                    "mzmIA": {
+                      "children": [
+                        {
+                          "id": "uhSvu",
+                          "type": "ref",
+                          "ref": "E76BPR",
+                          "name": "Ask before spending",
+                          "width": "fill_container",
+                          "descendants": {
+                            "rRAPe/m8pUt3": {
+                              "content": "Ask before spending more than"
+                            },
+                            "rRAPe/XqZMy": {
+                              "content": "Above this, an agent has to show you the price and wait for your OK."
+                            },
+                            "P5XrkA": {
+                              "id": "x6XXUN",
+                              "type": "ref",
+                              "ref": "mQmo1",
+                              "name": "Amount",
+                              "width": 120,
+                              "descendants": {
+                                "NlUic": {
+                                  "content": "$0.50"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "Ozhfi",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "qxRSZ",
+                          "type": "ref",
+                          "ref": "E76BPR",
+                          "name": "Daily limit",
+                          "width": "fill_container",
+                          "descendants": {
+                            "rRAPe/m8pUt3": {
+                              "content": "Daily limit"
+                            },
+                            "rRAPe/XqZMy": {
+                              "content": "Agents stop making images for the day when they reach it. Starts again at midnight."
+                            },
+                            "P5XrkA": {
+                              "id": "Ok9gV",
+                              "type": "ref",
+                              "ref": "mQmo1",
+                              "name": "Amount",
+                              "width": 120,
+                              "descendants": {
+                                "NlUic": {
+                                  "content": "$5.00"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "z8ccOt",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "winNL",
+                          "type": "ref",
+                          "ref": "DvWwF",
+                          "name": "Spent today",
+                          "width": "fill_container",
+                          "descendants": {
+                            "gonce/m8pUt3": {
+                              "content": "Spent by agents today"
+                            },
+                            "gonce/XqZMy": {
+                              "content": "Across every app. Opens Spending, grouped by where it ran."
+                            },
+                            "h8OKU": {
+                              "content": "$1.24 of $5.00"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "DaSVD",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · Connected apps",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "CONNECTED APPS"
+                    },
+                    "mzmIA": {
+                      "children": [
+                        {
+                          "id": "jWmaG",
+                          "type": "ref",
+                          "ref": "Kuexh",
+                          "name": "Claude Code",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "Tgnzf",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "k7brH",
+                          "type": "ref",
+                          "ref": "D0ebDN",
+                          "name": "Cursor",
+                          "width": "fill_container",
+                          "descendants": {
+                            "bF0zi": {
+                              "icon": "code-xml"
+                            },
+                            "O39S3": {
+                              "content": "Cursor"
+                            },
+                            "w3rURf": {
+                              "content": "Last used yesterday"
+                            },
+                            "reviW": {
+                              "content": "Nothing today"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "sPkzR",
+      "x": 35880,
+      "y": 16308,
+      "name": "Settings · Agents · Off",
+      "clip": true,
+      "width": 1440,
+      "height": 900,
+      "fill": "$surface",
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "pqdvN",
+          "type": "ref",
+          "ref": "Q1x7G",
+          "name": "Shell",
+          "width": "fill_container",
+          "height": "fill_container",
+          "descendants": {
+            "gfwwv/FR0yy": {
+              "id": "AmpWo",
+              "type": "ref",
+              "ref": "e0i6b",
+              "name": "Item · Keys",
+              "width": "fill_container",
+              "descendants": {
+                "VbR25": {
+                  "icon": "key"
+                },
+                "tKvFC": {
+                  "content": "API keys"
+                },
+                "YXDug": {
+                  "enabled": false
+                }
+              }
+            },
+            "gfwwv/V0NA3T": {
+              "id": "D4aofD",
+              "type": "ref",
+              "ref": "PDRCJ",
+              "name": "Item · Agents",
+              "width": "fill_container",
+              "descendants": {
+                "vzfjR": {
+                  "icon": "bot"
+                },
+                "jmxp5": {
+                  "content": "Agents"
+                },
+                "gVD6l": {
+                  "enabled": false
+                }
+              }
+            },
+            "JjcRP/ZTffU": {
+              "content": "Agents"
+            },
+            "JjcRP/eur5I": {
+              "content": "Let AI apps like Claude and Cursor use Openfield for you. They can build and run canvases, make images and sort your library."
+            },
+            "cFo0S": {
+              "children": [
+                {
+                  "id": "JZ3JW",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · Connection",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "CONNECTION"
+                    },
+                    "mzmIA": {
+                      "children": [
+                        {
+                          "id": "N3VTDh",
+                          "type": "ref",
+                          "ref": "g4l0ro",
+                          "name": "Let agents use Openfield",
+                          "width": "fill_container",
+                          "descendants": {
+                            "VFmQc/m8pUt3": {
+                              "content": "Let agents use Openfield"
+                            },
+                            "VFmQc/XqZMy": {
+                              "content": "Off until you turn it on. Then apps on this computer can connect with an access key."
+                            },
+                            "sKGaI": {
+                              "id": "K5BWy9",
+                              "type": "ref",
+                              "ref": "MGrOY",
+                              "name": "Toggle"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "ICYmK",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · What agents can do",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "WHAT AGENTS CAN DO"
+                    },
+                    "mzmIA": {
+                      "children": [
+                        {
+                          "id": "Xju0u",
+                          "type": "ref",
+                          "ref": "CNoP6",
+                          "name": "Build canvases with you",
+                          "width": "fill_container",
+                          "descendants": {
+                            "sTntM/m8pUt3": {
+                              "content": "Build canvases with you"
+                            },
+                            "sTntM/XqZMy": {
+                              "content": "Add, connect and run nodes on your canvases. You see each change as it happens."
+                            },
+                            "urL5c": {
+                              "enabled": false
+                            }
+                          }
+                        },
+                        {
+                          "id": "qjNSA",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "AwAuH",
+                          "type": "ref",
+                          "ref": "CNoP6",
+                          "name": "Make images",
+                          "width": "fill_container",
+                          "descendants": {
+                            "sTntM/m8pUt3": {
+                              "content": "Make images"
+                            },
+                            "sTntM/XqZMy": {
+                              "content": "With your keys and within your limits. Anything above your limit waits for your OK."
+                            },
+                            "urL5c": {
+                              "enabled": false
+                            }
+                          }
+                        },
+                        {
+                          "id": "HHpbR",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "vvWC2",
+                          "type": "ref",
+                          "ref": "CNoP6",
+                          "name": "Keep your library tidy",
+                          "width": "fill_container",
+                          "descendants": {
+                            "sTntM/m8pUt3": {
+                              "content": "Keep your library tidy"
+                            },
+                            "sTntM/XqZMy": {
+                              "content": "Search your images, file them into folders and move them to the trash."
+                            },
+                            "urL5c": {
+                              "enabled": false
+                            }
+                          }
+                        },
+                        {
+                          "id": "twSRv",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "B8BEcV",
+                          "type": "ref",
+                          "ref": "CNoP6",
+                          "name": "Never your keys",
+                          "width": "fill_container",
+                          "descendants": {
+                            "sTntM/m8pUt3": {
+                              "content": "Never your keys"
+                            },
+                            "sTntM/XqZMy": {
+                              "content": "Agents can't see your keys or change these settings."
+                            },
+                            "urL5c": {
+                              "enabled": false
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Tkk1k",
+      "x": 39000,
+      "y": 16308,
+      "name": "Settings · Agents · Claude Desktop",
+      "clip": true,
+      "width": 1440,
+      "height": 1024,
+      "fill": "$surface",
+      "layout": "vertical",
+      "children": [
+        {
+          "id": "GR5pf",
+          "type": "ref",
+          "ref": "Q1x7G",
+          "name": "Shell",
+          "width": "fill_container",
+          "height": "fill_container",
+          "descendants": {
+            "gfwwv/FR0yy": {
+              "id": "hm0O1",
+              "type": "ref",
+              "ref": "e0i6b",
+              "name": "Item · Keys",
+              "width": "fill_container",
+              "descendants": {
+                "VbR25": {
+                  "icon": "key"
+                },
+                "tKvFC": {
+                  "content": "API keys"
+                },
+                "YXDug": {
+                  "enabled": false
+                }
+              }
+            },
+            "gfwwv/V0NA3T": {
+              "id": "a8k8Do",
+              "type": "ref",
+              "ref": "PDRCJ",
+              "name": "Item · Agents",
+              "width": "fill_container",
+              "descendants": {
+                "vzfjR": {
+                  "icon": "bot"
+                },
+                "jmxp5": {
+                  "content": "Agents"
+                },
+                "gVD6l": {
+                  "enabled": false
+                }
+              }
+            },
+            "JjcRP/ZTffU": {
+              "content": "Agents"
+            },
+            "JjcRP/eur5I": {
+              "content": "Let AI apps like Claude and Cursor use Openfield for you. They can build and run canvases, make images and sort your library."
+            },
+            "cFo0S": {
+              "children": [
+                {
+                  "id": "T4avB",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · Connection",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "CONNECTION"
+                    },
+                    "mzmIA": {
+                      "children": [
+                        {
+                          "id": "cMcj8",
+                          "type": "ref",
+                          "ref": "g4l0ro",
+                          "name": "Let agents use Openfield",
+                          "width": "fill_container",
+                          "descendants": {
+                            "VFmQc/m8pUt3": {
+                              "content": "Let agents use Openfield"
+                            },
+                            "VFmQc/XqZMy": {
+                              "content": "Apps on this computer can connect with the access key below. They use your keys but never see them."
+                            }
+                          }
+                        },
+                        {
+                          "id": "ARJ4K",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "mKnaa",
+                          "type": "ref",
+                          "ref": "E76BPR",
+                          "name": "Access key",
+                          "width": "fill_container",
+                          "descendants": {
+                            "rRAPe/m8pUt3": {
+                              "content": "Access key"
+                            },
+                            "rRAPe/XqZMy": {
+                              "content": "Apps use it to connect. A new key disconnects the apps that use this one."
+                            },
+                            "P5XrkA": {
+                              "id": "zGr4d",
+                              "type": "ref",
+                              "ref": "VRNrn",
+                              "name": "Access key"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "XoKNs",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · Add to an app",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "ADD TO AN APP"
+                    },
+                    "mzmIA": {
+                      "padding": 16,
+                      "gap": 12,
+                      "children": [
+                        {
+                          "id": "M64CC",
+                          "type": "ref",
+                          "ref": "mR9QQ",
+                          "name": "Client tabs",
+                          "descendants": {
+                            "tUIAL": {
+                              "id": "w90Ce4",
+                              "type": "ref",
+                              "ref": "Dpha7",
+                              "name": "Tab · Claude Code",
+                              "descendants": {
+                                "CkVHQ": {
+                                  "content": "Claude Code"
+                                }
+                              }
+                            },
+                            "u9qFc": {
+                              "id": "dWWq6",
+                              "type": "ref",
+                              "ref": "MF3j8",
+                              "name": "Tab · Claude Desktop",
+                              "descendants": {
+                                "xl6oO": {
+                                  "content": "Claude Desktop"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "type": "text",
+                          "id": "iHCoq",
+                          "name": "Instruction",
+                          "fill": "$text-secondary",
+                          "content": "In Claude Desktop, open Settings > Developer > Edit Config. Add this, then restart Claude.",
+                          "fontFamily": "Inter",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "id": "cmkBU",
+                          "type": "ref",
+                          "ref": "rlE3w",
+                          "name": "Config",
+                          "width": "fill_container",
+                          "descendants": {
+                            "GKDMT": {
+                              "content": "{\n  \"mcpServers\": {\n    \"openfield\": {\n      \"command\": \"bun\",\n      \"args\": [\"run\", \"--cwd\", \"/Users/mara/Code/openfield\", \"mcp\"]\n    }\n  }\n}"
+                            }
+                          }
+                        },
+                        {
+                          "type": "frame",
+                          "id": "WsHtJ",
+                          "name": "Footnote",
+                          "gap": 6,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "Dn7df",
+                              "name": "Icon",
+                              "width": 14,
+                              "height": 14,
+                              "icon": "info",
+                              "library": "lucide",
+                              "fill": "$text-tertiary"
+                            },
+                            {
+                              "type": "text",
+                              "id": "DczAP",
+                              "name": "Text",
+                              "fill": "$text-tertiary",
+                              "content": "Nothing to paste: Claude Desktop reads the key from your Openfield folder. Openfield has to be running.",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                },
+                {
+                  "id": "wuTk7",
+                  "type": "ref",
+                  "ref": "AhZCK",
+                  "name": "Section · Spending by agents",
+                  "width": "fill_container",
+                  "descendants": {
+                    "YObYT/Fmac4": {
+                      "content": "SPENDING BY AGENTS"
+                    },
+                    "mzmIA": {
+                      "children": [
+                        {
+                          "id": "Wdg4c",
+                          "type": "ref",
+                          "ref": "E76BPR",
+                          "name": "Ask before spending",
+                          "width": "fill_container",
+                          "descendants": {
+                            "rRAPe/m8pUt3": {
+                              "content": "Ask before spending more than"
+                            },
+                            "rRAPe/XqZMy": {
+                              "content": "Above this, an agent has to show you the price and wait for your OK."
+                            },
+                            "P5XrkA": {
+                              "id": "LuPYn",
+                              "type": "ref",
+                              "ref": "mQmo1",
+                              "name": "Amount",
+                              "width": 120,
+                              "descendants": {
+                                "NlUic": {
+                                  "content": "$0.50"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "DK1u8",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "l9X3Sh",
+                          "type": "ref",
+                          "ref": "E76BPR",
+                          "name": "Daily limit",
+                          "width": "fill_container",
+                          "descendants": {
+                            "rRAPe/m8pUt3": {
+                              "content": "Daily limit"
+                            },
+                            "rRAPe/XqZMy": {
+                              "content": "Agents stop making images for the day when they reach it. Starts again at midnight."
+                            },
+                            "P5XrkA": {
+                              "id": "PDmWg",
+                              "type": "ref",
+                              "ref": "mQmo1",
+                              "name": "Amount",
+                              "width": 120,
+                              "descendants": {
+                                "NlUic": {
+                                  "content": "$5.00"
+                                }
+                              }
+                            }
+                          }
+                        },
+                        {
+                          "id": "f3EX1r",
+                          "type": "ref",
+                          "ref": "mA2sK",
+                          "name": "Divider",
+                          "width": "fill_container"
+                        },
+                        {
+                          "id": "TAO0J",
+                          "type": "ref",
+                          "ref": "DvWwF",
+                          "name": "Spent today",
+                          "width": "fill_container",
+                          "descendants": {
+                            "gonce/m8pUt3": {
+                              "content": "Spent by agents today"
+                            },
+                            "gonce/XqZMy": {
+                              "content": "Across every app. Opens Spending, grouped by where it ran."
+                            },
+                            "h8OKU": {
+                              "content": "$1.24 of $5.00"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "rtVNe",
+      "x": 24960,
+      "y": 18708,
+      "name": "Canvas · Agent editing",
+      "clip": true,
+      "width": 1440,
+      "height": 900,
+      "fill": "$canvas",
+      "layout": "none",
+      "children": [
+        {
+          "id": "AfvkF",
+          "type": "ref",
+          "ref": "DSM0X",
+          "name": "Pane",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "oOWcz",
+          "type": "ref",
+          "ref": "HkWNh",
+          "name": "Edge · Prompt to Generate",
+          "x": 428,
+          "y": 275.5,
+          "width": 120,
+          "height": 138.5,
+          "descendants": {
+            "J6JhDn": {
+              "x": 40.83,
+              "y": 32.62,
+              "width": 38.35,
+              "height": 73.27,
+              "viewBox": [
+                40.83,
+                32.62,
+                38.35,
+                73.27
+              ],
+              "geometry": "M44.83 36.62C55.63 56.78 64.37 81.72 75.17 101.88",
+              "stroke": {
+                "type": "gradient",
+                "gradientType": "linear",
+                "enabled": true,
+                "rotation": 221.62,
+                "size": {
+                  "height": 1.19
+                },
+                "colors": [
+                  {
+                    "color": "$accent-clear",
+                    "position": 0
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 0.8
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 1
+                  }
+                ]
+              }
+            },
+            "Bjkf9": {
+              "width": 120,
+              "height": 138.5,
+              "viewBox": [
+                0,
+                0,
+                120,
+                138.5
+              ],
+              "geometry": "M0 0c60 0 60 138.5 120 138.5"
+            },
+            "xySB0": {
+              "x": 40.83,
+              "y": 32.62,
+              "width": 38.35,
+              "height": 73.27,
+              "viewBox": [
+                40.83,
+                32.62,
+                38.35,
+                73.27
+              ],
+              "geometry": "M44.83 36.62C55.63 56.78 64.37 81.72 75.17 101.88",
+              "stroke": {
+                "type": "gradient",
+                "gradientType": "linear",
+                "enabled": true,
+                "rotation": 221.62,
+                "size": {
+                  "height": 1.19
+                },
+                "colors": [
+                  {
+                    "color": "$accent-clear",
+                    "position": 0
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 0.8
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 1
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "DHtuq",
+          "type": "ref",
+          "ref": "HkWNh",
+          "name": "Edge · Reference image to Generate",
+          "x": 412,
+          "y": 450,
+          "width": 136,
+          "height": 103,
+          "descendants": {
+            "J6JhDn": {
+              "x": 42.74,
+              "y": 18.5,
+              "width": 50.53,
+              "height": 66.01,
+              "viewBox": [
+                42.74,
+                18.5,
+                50.53,
+                66.01
+              ],
+              "geometry": "M46.74 80.5C62.32 63.3 73.68 39.7 89.26 22.5",
+              "stroke": {
+                "type": "gradient",
+                "gradientType": "linear",
+                "enabled": true,
+                "rotation": 316.24,
+                "size": {
+                  "height": 1.22
+                },
+                "colors": [
+                  {
+                    "color": "$accent-clear",
+                    "position": 0
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 0.8
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 1
+                  }
+                ]
+              }
+            },
+            "Bjkf9": {
+              "width": 136,
+              "height": 103,
+              "viewBox": [
+                0,
+                0,
+                136,
+                103
+              ],
+              "geometry": "M0 103c68 0 68-103 136-103"
+            },
+            "xySB0": {
+              "x": 42.74,
+              "y": 18.5,
+              "width": 50.53,
+              "height": 66.01,
+              "viewBox": [
+                42.74,
+                18.5,
+                50.53,
+                66.01
+              ],
+              "geometry": "M46.74 80.5C62.32 63.3 73.68 39.7 89.26 22.5",
+              "stroke": {
+                "type": "gradient",
+                "gradientType": "linear",
+                "enabled": true,
+                "rotation": 316.24,
+                "size": {
+                  "height": 1.22
+                },
+                "colors": [
+                  {
+                    "color": "$accent-clear",
+                    "position": 0
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 0.8
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 1
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "T6ITf",
+          "type": "ref",
+          "ref": "USl4U",
+          "name": "Edge · Generate to Variations",
+          "x": 868,
+          "y": 432,
+          "width": 120,
+          "height": 18,
+          "descendants": {
+            "Bjkf9": {
+              "width": 120,
+              "height": 18,
+              "viewBox": [
+                0,
+                0,
+                120,
+                18
+              ],
+              "geometry": "M0 18c60 0 60-18 120-18"
+            }
+          }
+        },
+        {
+          "id": "TSORQ",
+          "type": "ref",
+          "ref": "pFPMj",
+          "name": "Prompt",
+          "x": 132,
+          "y": 200,
+          "descendants": {
+            "h8JmOh": {
+              "content": "Stoneware mug on linen, soft morning light, a curl of steam, warm neutral tones"
+            },
+            "sGfuB": {
+              "content": "79 / 4000"
+            }
+          }
+        },
+        {
+          "id": "J1UhM",
+          "type": "ref",
+          "ref": "GTnB2",
+          "name": "Reference image",
+          "x": 132,
+          "y": 413,
+          "descendants": {
+            "XvkNJ/EZoZX": {
+              "content": "Reference image"
+            },
+            "n1ILOE": {
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "https://images.unsplash.com/photo-1620116365405-ea027a649693?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzg0MjZ8&ixlib=rb-4.1.0&q=80&w=1080",
+                "mode": "fill"
+              }
+            },
+            "TLr1S": {
+              "enabled": false
+            },
+            "aqbJz": {
+              "enabled": false
+            },
+            "bfmao": {
+              "content": "1 image"
+            }
+          }
+        },
+        {
+          "id": "npgeD",
+          "type": "ref",
+          "ref": "OPInN",
+          "name": "Generate (selected, generating)",
+          "x": 548,
+          "y": 250,
+          "height": 400,
+          "stroke": "$accent",
+          "strokeWidth": 2,
+          "strokeAlignment": "outer",
+          "descendants": {
+            "g0PW4": {
+              "fill": [
+                "$surface",
+                {
+                  "type": "image",
+                  "opacity": 0.5,
+                  "enabled": true,
+                  "url": "https://images.unsplash.com/photo-1630573636067-b2f6133b920b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+                  "mode": "fill"
+                }
+              ]
+            },
+            "Mh9DV": {
+              "y": 304
+            },
+            "XmhDU": {
+              "y": 398
+            },
+            "GHCTd": {
+              "y": 152
+            },
+            "FoIcz": {
+              "y": 188
+            },
+            "xJUgJ": {
+              "y": 224
+            },
+            "DxRcw": {
+              "x": 308,
+              "y": 188
+            }
+          }
+        },
+        {
+          "id": "diQyL",
+          "type": "ref",
+          "ref": "zodbS",
+          "stroke": "$accent-line",
+          "strokeWidth": 4,
+          "strokeAlignment": "outer",
+          "name": "Variations",
+          "x": 988,
+          "y": 270,
+          "descendants": {
+            "mcjar": {
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "https://images.unsplash.com/photo-1540221537295-af4d932fe7c3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzg0NDl8&ixlib=rb-4.1.0&q=80&w=1080",
+                "mode": "fill"
+              }
+            },
+            "JwgKz": {
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "https://images.unsplash.com/photo-1518548981607-b068130027d2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzg0NjV8&ixlib=rb-4.1.0&q=80&w=1080",
+                "mode": "fill"
+              }
+            },
+            "IqrY1": {
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "https://images.unsplash.com/photo-1645014802050-77b1ff422932?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzg0NjZ8&ixlib=rb-4.1.0&q=80&w=1080",
+                "mode": "fill"
+              }
+            },
+            "RTKRW": {
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "https://images.unsplash.com/photo-1604699899817-810bec6447b8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzg0NTJ8&ixlib=rb-4.1.0&q=80&w=1080",
+                "mode": "fill"
+              }
+            },
+            "qmVAl": {
+              "children": [
+                {
+                  "id": "Q1Vuou",
+                  "type": "ref",
+                  "ref": "rQEK8",
+                  "name": "State",
+                  "width": "fill_container"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "m7Dmp",
+          "type": "ref",
+          "ref": "JDH76",
+          "name": "Top bar left",
+          "x": 12,
+          "y": 12,
+          "descendants": {
+            "jEWck": {
+              "content": "Mug campaign"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "a41Qix",
+          "x": 972,
+          "y": 12,
+          "name": "Run controls",
+          "width": 456,
+          "height": 40,
+          "gap": 12,
+          "justifyContent": "end",
+          "alignItems": "center",
+          "children": [
+            {
+              "id": "RYrsD",
+              "type": "ref",
+              "ref": "B9bh4",
+              "name": "Save state"
+            },
+            {
+              "id": "sVKcE",
+              "type": "ref",
+              "ref": "ghBKJ",
+              "name": "Stop",
+              "descendants": {
+                "yCq4y": {
+                  "content": "0 of 1 done"
+                }
+              }
+            },
+            {
+              "id": "ZSjC2",
+              "type": "ref",
+              "ref": "byh7K",
+              "name": "Run all",
+              "descendants": {
+                "W9VQg": {
+                  "content": "~$0.65"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "lJ7S9",
+          "type": "ref",
+          "ref": "p1WXGf",
+          "name": "Toolbar",
+          "x": 547,
+          "y": 840
+        },
+        {
+          "id": "LRVRz",
+          "type": "ref",
+          "ref": "ehbF7",
+          "name": "Zoom",
+          "x": 12,
+          "y": 848
+        },
+        {
+          "id": "iJgWy",
+          "type": "ref",
+          "ref": "L8nXKV",
+          "name": "Node menu",
+          "x": 618,
+          "y": 296,
+          "enabled": false
+        },
+        {
+          "id": "e3C05Q",
+          "type": "ref",
+          "ref": "sgH49",
+          "name": "Agent tag",
+          "x": 1202,
+          "y": 240
+        },
+        {
+          "id": "c6qsfd",
+          "type": "ref",
+          "ref": "W4O9c8",
+          "name": "Agent",
+          "x": 579,
+          "y": 12
+        },
+        {
+          "id": "R47bSR",
+          "type": "ref",
+          "ref": "oRVir",
+          "name": "Toast · Version saved",
+          "x": 492,
+          "y": 772,
+          "descendants": {
+            "Ee7DR": {
+              "icon": "history"
+            },
+            "j1ZXyT": {
+              "content": "Saved a version before Claude Code's changes."
+            },
+            "w8F6r/NllYk": {
+              "content": "View"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "Z5icBr",
+      "x": 26520,
+      "y": 18708,
+      "name": "Canvas · Following an agent",
+      "clip": true,
+      "width": 1440,
+      "height": 900,
+      "fill": "$canvas",
+      "layout": "none",
+      "children": [
+        {
+          "id": "ODDyH",
+          "type": "ref",
+          "ref": "DSM0X",
+          "name": "Pane",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "INKom",
+          "type": "ref",
+          "ref": "HkWNh",
+          "name": "Edge · Prompt to Generate",
+          "x": 428,
+          "y": 275.5,
+          "width": 120,
+          "height": 138.5,
+          "descendants": {
+            "J6JhDn": {
+              "x": 40.83,
+              "y": 32.62,
+              "width": 38.35,
+              "height": 73.27,
+              "viewBox": [
+                40.83,
+                32.62,
+                38.35,
+                73.27
+              ],
+              "geometry": "M44.83 36.62C55.63 56.78 64.37 81.72 75.17 101.88",
+              "stroke": {
+                "type": "gradient",
+                "gradientType": "linear",
+                "enabled": true,
+                "rotation": 221.62,
+                "size": {
+                  "height": 1.19
+                },
+                "colors": [
+                  {
+                    "color": "$accent-clear",
+                    "position": 0
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 0.8
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 1
+                  }
+                ]
+              }
+            },
+            "Bjkf9": {
+              "width": 120,
+              "height": 138.5,
+              "viewBox": [
+                0,
+                0,
+                120,
+                138.5
+              ],
+              "geometry": "M0 0c60 0 60 138.5 120 138.5"
+            },
+            "xySB0": {
+              "x": 40.83,
+              "y": 32.62,
+              "width": 38.35,
+              "height": 73.27,
+              "viewBox": [
+                40.83,
+                32.62,
+                38.35,
+                73.27
+              ],
+              "geometry": "M44.83 36.62C55.63 56.78 64.37 81.72 75.17 101.88",
+              "stroke": {
+                "type": "gradient",
+                "gradientType": "linear",
+                "enabled": true,
+                "rotation": 221.62,
+                "size": {
+                  "height": 1.19
+                },
+                "colors": [
+                  {
+                    "color": "$accent-clear",
+                    "position": 0
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 0.8
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 1
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "LzyJO",
+          "type": "ref",
+          "ref": "HkWNh",
+          "name": "Edge · Reference image to Generate",
+          "x": 412,
+          "y": 450,
+          "width": 136,
+          "height": 103,
+          "descendants": {
+            "J6JhDn": {
+              "x": 42.74,
+              "y": 18.5,
+              "width": 50.53,
+              "height": 66.01,
+              "viewBox": [
+                42.74,
+                18.5,
+                50.53,
+                66.01
+              ],
+              "geometry": "M46.74 80.5C62.32 63.3 73.68 39.7 89.26 22.5",
+              "stroke": {
+                "type": "gradient",
+                "gradientType": "linear",
+                "enabled": true,
+                "rotation": 316.24,
+                "size": {
+                  "height": 1.22
+                },
+                "colors": [
+                  {
+                    "color": "$accent-clear",
+                    "position": 0
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 0.8
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 1
+                  }
+                ]
+              }
+            },
+            "Bjkf9": {
+              "width": 136,
+              "height": 103,
+              "viewBox": [
+                0,
+                0,
+                136,
+                103
+              ],
+              "geometry": "M0 103c68 0 68-103 136-103"
+            },
+            "xySB0": {
+              "x": 42.74,
+              "y": 18.5,
+              "width": 50.53,
+              "height": 66.01,
+              "viewBox": [
+                42.74,
+                18.5,
+                50.53,
+                66.01
+              ],
+              "geometry": "M46.74 80.5C62.32 63.3 73.68 39.7 89.26 22.5",
+              "stroke": {
+                "type": "gradient",
+                "gradientType": "linear",
+                "enabled": true,
+                "rotation": 316.24,
+                "size": {
+                  "height": 1.22
+                },
+                "colors": [
+                  {
+                    "color": "$accent-clear",
+                    "position": 0
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 0.8
+                  },
+                  {
+                    "color": "$accent",
+                    "position": 1
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "id": "a0FOYl",
+          "type": "ref",
+          "ref": "USl4U",
+          "name": "Edge · Generate to Variations",
+          "x": 868,
+          "y": 432,
+          "width": 120,
+          "height": 18,
+          "descendants": {
+            "Bjkf9": {
+              "width": 120,
+              "height": 18,
+              "viewBox": [
+                0,
+                0,
+                120,
+                18
+              ],
+              "geometry": "M0 18c60 0 60-18 120-18"
+            }
+          }
+        },
+        {
+          "id": "VCBnp",
+          "type": "ref",
+          "ref": "pFPMj",
+          "stroke": "$accent-line",
+          "strokeWidth": 4,
+          "strokeAlignment": "outer",
+          "name": "Prompt",
+          "x": 132,
+          "y": 200,
+          "descendants": {
+            "h8JmOh": {
+              "content": "Stoneware mug on linen, soft morning light, a curl of steam, warm neutral tones"
+            },
+            "sGfuB": {
+              "content": "79 / 4000"
+            }
+          }
+        },
+        {
+          "id": "e1ahd",
+          "type": "ref",
+          "ref": "GTnB2",
+          "name": "Reference image",
+          "x": 132,
+          "y": 413,
+          "descendants": {
+            "XvkNJ/EZoZX": {
+              "content": "Reference image"
+            },
+            "n1ILOE": {
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "https://images.unsplash.com/photo-1620116365405-ea027a649693?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzg0MjZ8&ixlib=rb-4.1.0&q=80&w=1080",
+                "mode": "fill"
+              }
+            },
+            "TLr1S": {
+              "enabled": false
+            },
+            "aqbJz": {
+              "enabled": false
+            },
+            "bfmao": {
+              "content": "1 image"
+            }
+          }
+        },
+        {
+          "id": "Gukbu",
+          "type": "ref",
+          "ref": "OPInN",
+          "name": "Generate (selected, generating)",
+          "x": 548,
+          "y": 250,
+          "height": 400,
+          "stroke": "$accent",
+          "strokeWidth": 2,
+          "strokeAlignment": "outer",
+          "descendants": {
+            "g0PW4": {
+              "fill": [
+                "$surface",
+                {
+                  "type": "image",
+                  "opacity": 0.5,
+                  "enabled": true,
+                  "url": "https://images.unsplash.com/photo-1630573636067-b2f6133b920b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&q=80&w=1080",
+                  "mode": "fill"
+                }
+              ]
+            },
+            "Mh9DV": {
+              "y": 304
+            },
+            "XmhDU": {
+              "y": 398
+            },
+            "GHCTd": {
+              "y": 152
+            },
+            "FoIcz": {
+              "y": 188
+            },
+            "xJUgJ": {
+              "y": 224
+            },
+            "DxRcw": {
+              "x": 308,
+              "y": 188
+            }
+          }
+        },
+        {
+          "id": "SNIRK",
+          "type": "ref",
+          "ref": "zodbS",
+          "name": "Variations",
+          "x": 988,
+          "y": 270,
+          "descendants": {
+            "mcjar": {
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "https://images.unsplash.com/photo-1540221537295-af4d932fe7c3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzg0NDl8&ixlib=rb-4.1.0&q=80&w=1080",
+                "mode": "fill"
+              }
+            },
+            "JwgKz": {
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "https://images.unsplash.com/photo-1518548981607-b068130027d2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzg0NjV8&ixlib=rb-4.1.0&q=80&w=1080",
+                "mode": "fill"
+              }
+            },
+            "IqrY1": {
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "https://images.unsplash.com/photo-1645014802050-77b1ff422932?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzg0NjZ8&ixlib=rb-4.1.0&q=80&w=1080",
+                "mode": "fill"
+              }
+            },
+            "RTKRW": {
+              "fill": {
+                "type": "image",
+                "enabled": true,
+                "url": "https://images.unsplash.com/photo-1604699899817-810bec6447b8?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzg0NTJ8&ixlib=rb-4.1.0&q=80&w=1080",
+                "mode": "fill"
+              }
+            },
+            "qmVAl": {
+              "children": [
+                {
+                  "id": "krqHg",
+                  "type": "ref",
+                  "ref": "rQEK8",
+                  "name": "State",
+                  "width": "fill_container"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "cIFkZ",
+          "type": "ref",
+          "ref": "JDH76",
+          "name": "Top bar left",
+          "x": 12,
+          "y": 12,
+          "descendants": {
+            "jEWck": {
+              "content": "Mug campaign"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "Lnf8Y",
+          "x": 972,
+          "y": 12,
+          "name": "Run controls",
+          "width": 456,
+          "height": 40,
+          "gap": 12,
+          "justifyContent": "end",
+          "alignItems": "center",
+          "children": [
+            {
+              "id": "g7Z3IJ",
+              "type": "ref",
+              "ref": "B9bh4",
+              "name": "Save state"
+            },
+            {
+              "id": "mOVk9",
+              "type": "ref",
+              "ref": "ghBKJ",
+              "name": "Stop",
+              "descendants": {
+                "yCq4y": {
+                  "content": "0 of 1 done"
+                }
+              }
+            },
+            {
+              "id": "V85Bb",
+              "type": "ref",
+              "ref": "byh7K",
+              "name": "Run all",
+              "descendants": {
+                "W9VQg": {
+                  "content": "~$0.65"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "oxo7B",
+          "type": "ref",
+          "ref": "p1WXGf",
+          "name": "Toolbar",
+          "x": 547,
+          "y": 840
+        },
+        {
+          "id": "aZP7Q",
+          "type": "ref",
+          "ref": "ehbF7",
+          "name": "Zoom",
+          "x": 12,
+          "y": 848
+        },
+        {
+          "id": "J8R6J",
+          "type": "ref",
+          "ref": "L8nXKV",
+          "name": "Node menu",
+          "x": 618,
+          "y": 296,
+          "enabled": false
+        },
+        {
+          "id": "uaD4k",
+          "type": "ref",
+          "ref": "sgH49",
+          "name": "Agent tag",
+          "x": 322,
+          "y": 170
+        },
+        {
+          "id": "znf8G",
+          "type": "ref",
+          "ref": "Xv2Wi",
+          "name": "Agent · Following",
+          "x": 553,
+          "y": 12
+        },
+        {
+          "type": "rectangle",
+          "id": "plZ8X",
+          "x": 0,
+          "y": 0,
+          "name": "Follow frame",
+          "fill": "#00000000",
+          "width": 1440,
+          "height": 900,
+          "stroke": "$accent-line",
+          "strokeWidth": 2,
+          "strokeAlignment": "inner"
         }
       ]
     }
