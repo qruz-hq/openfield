@@ -1,5 +1,5 @@
 import type { JobSource } from "@openfield/core/constants";
-import { and, desc, eq, gte, inArray, lt, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
 import type { Executor } from "../client";
 import type { NewUsageLogRow, UsageLogRow } from "../rows";
 import { jobSets, usageLog } from "../schema";
@@ -76,6 +76,8 @@ export interface UsageMinuteRow extends Omit<UsageRollupRow, "day"> {
   source: JobSource | null;
   /** Runs canceled after they were sent. */
   canceled: number;
+  /** The agent app that asked for the run, or null when a person did. */
+  agent: string | null;
 }
 
 /**
@@ -97,6 +99,7 @@ export function usageMinutes(db: Executor, q: { from?: string; to?: string }): U
       resolution,
       quality,
       source: jobSets.source,
+      agent: jobSets.agent,
       ...figures,
       canceled: sql<number>`sum(${usageLog.outcome} = 'canceled' AND ${usageLog.discarded} = 1)`,
     })
@@ -105,7 +108,7 @@ export function usageMinutes(db: Executor, q: { from?: string; to?: string }): U
     .where(
       and(q.from ? gte(usageLog.ts, q.from) : undefined, q.to ? lt(usageLog.ts, q.to) : undefined, counted),
     )
-    .groupBy(minute, usageLog.providerId, usageLog.modelId, resolution, quality, jobSets.source)
+    .groupBy(minute, usageLog.providerId, usageLog.modelId, resolution, quality, jobSets.source, jobSets.agent)
     .orderBy(minute)
     .all();
 }
@@ -119,4 +122,29 @@ export function firstUsageAt(db: Executor): string | null {
       .where(counted)
       .get()?.at ?? null
   );
+}
+
+export interface AgentUsageRow {
+  agent: string;
+  images: number;
+  /** Spent, canceled-after-submit included: it may be billed, so it counts toward the limit. */
+  usd: number;
+}
+
+/**
+ * What each agent app spent since `from`, for Settings > Agents and the agents' daily limit. Same
+ * rules as the rollup, except that a canceled run's possible charge counts as spent.
+ */
+export function agentUsageSince(db: Executor, from: string): AgentUsageRow[] {
+  return db
+    .select({
+      agent: sql<string>`${jobSets.agent}`,
+      images: figures.images,
+      usd: sql<number>`coalesce(sum(CASE WHEN ${usageLog.outcome} IN ('succeeded', 'canceled') THEN ${cost} ELSE 0 END), 0)`,
+    })
+    .from(usageLog)
+    .innerJoin(jobSets, eq(jobSets.id, usageLog.jobSetId))
+    .where(and(gte(usageLog.ts, from), isNotNull(jobSets.agent), counted))
+    .groupBy(jobSets.agent)
+    .all();
 }

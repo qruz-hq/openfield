@@ -151,6 +151,19 @@ export function activeJobSets(db: Executor): JobSetBundle[] {
 }
 
 /**
+ * The estimates of agent runs still going: not in the usage log yet, but spoken for, so an agent
+ * can't pass its daily limit by starting many runs at once.
+ */
+export function pendingAgentEstimateUsd(db: Executor): number {
+  const row = db
+    .select({ usd: sql<number>`coalesce(sum(${jobSets.costEstimateUsd}), 0)` })
+    .from(jobSets)
+    .where(and(inArray(jobSets.status, [...ACTIVE_JOB_STATES]), isNotNull(jobSets.agent)))
+    .get();
+  return row?.usd ?? 0;
+}
+
+/**
  * Every unfinished job with its set, in scheduler order: priority DESC, created_at, idx (§0.12).
  * The queue scan and crash recovery (§8.4.5) both start here. `skipBatch` leaves Batch runs to
  * the batch watcher, which owns them once their provider batch exists.

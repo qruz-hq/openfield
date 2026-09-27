@@ -50,6 +50,13 @@
       "when": 1790211127313,
       "tag": "0006_canvas",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790504964007,
+      "tag": "0007_agents",
+      "breakpoints": true
     }
   ]
 }
