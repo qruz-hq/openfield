@@ -55992,15 +55992,84 @@
                               "gap": 12,
                               "children": [
                                 {
-                                  "id": "BmkDK",
-                                  "type": "ref",
-                                  "ref": "UjXOH",
-                                  "name": "Add reference",
-                                  "descendants": {
-                                    "NImkK": {
-                                      "icon": "plus"
+                                  "type": "frame",
+                                  "id": "iff7Q",
+                                  "name": "References",
+                                  "gap": 6,
+                                  "alignItems": "center",
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "b8yIS",
+                                      "x": 0,
+                                      "y": 0,
+                                      "name": "Thumb · Product shot",
+                                      "enabled": false,
+                                      "clip": true,
+                                      "width": 32,
+                                      "height": 32,
+                                      "fill": {
+                                        "type": "image",
+                                        "enabled": true,
+                                        "url": "https://images.unsplash.com/photo-1789654497772-9b71ab027673?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzUyMzN8&ixlib=rb-4.1.0&q=80&w=1080",
+                                        "mode": "fill"
+                                      },
+                                      "cornerRadius": 8,
+                                      "stroke": "$border",
+                                      "strokeWidth": 1
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "l45D5",
+                                      "x": 0,
+                                      "y": 0,
+                                      "name": "Thumb · Mood board",
+                                      "enabled": false,
+                                      "clip": true,
+                                      "width": 32,
+                                      "height": 32,
+                                      "fill": {
+                                        "type": "image",
+                                        "enabled": true,
+                                        "url": "https://images.unsplash.com/photo-1604690078253-f73b6fbfcbd1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzUyMzR8&ixlib=rb-4.1.0&q=80&w=1080",
+                                        "mode": "fill"
+                                      },
+                                      "cornerRadius": 8,
+                                      "stroke": "$border",
+                                      "strokeWidth": 1
+                                    },
+                                    {
+                                      "type": "frame",
+                                      "id": "E2nVYJ",
+                                      "x": 0,
+                                      "y": 0,
+                                      "name": "Thumb · Upload",
+                                      "enabled": false,
+                                      "clip": true,
+                                      "width": 32,
+                                      "height": 32,
+                                      "fill": {
+                                        "type": "image",
+                                        "enabled": true,
+                                        "url": "https://images.unsplash.com/photo-1585726302469-28a7f85edb26?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzI2ODZ8&ixlib=rb-4.1.0&q=80&w=1080",
+                                        "mode": "fill"
+                                      },
+                                      "cornerRadius": 8,
+                                      "stroke": "$border",
+                                      "strokeWidth": 1
+                                    },
+                                    {
+                                      "id": "BmkDK",
+                                      "type": "ref",
+                                      "ref": "UjXOH",
+                                      "name": "Add reference",
+                                      "descendants": {
+                                        "NImkK": {
+                                          "icon": "plus"
+                                        }
+                                      }
                                     }
-                                  }
+                                  ]
                                 },
                                 {
                                   "type": "text",
@@ -57954,17 +58023,117 @@
                               "alignItems": "end",
                               "children": [
                                 {
-                                  "type": "text",
-                                  "id": "J98AB",
-                                  "name": "Prompt",
-                                  "fill": "$text-primary",
-                                  "textGrowth": "fixed-width",
+                                  "type": "frame",
+                                  "id": "x26Tq",
+                                  "name": "Text",
                                   "width": "fill_container",
-                                  "content": "Lighthouse at dusk, long exposure, soft sea mist, muted…",
-                                  "lineHeight": 1.4,
-                                  "fontFamily": "Inter",
-                                  "fontSize": 13,
-                                  "fontWeight": "normal"
+                                  "layout": "vertical",
+                                  "gap": 8,
+                                  "children": [
+                                    {
+                                      "type": "frame",
+                                      "id": "FgDFK",
+                                      "x": 0,
+                                      "y": 0,
+                                      "name": "References",
+                                      "enabled": false,
+                                      "gap": 4,
+                                      "alignItems": "center",
+                                      "children": [
+                                        {
+                                          "type": "frame",
+                                          "id": "QC2X1",
+                                          "name": "Thumb 1",
+                                          "clip": true,
+                                          "width": 24,
+                                          "height": 24,
+                                          "fill": {
+                                            "type": "image",
+                                            "enabled": true,
+                                            "url": "https://images.unsplash.com/photo-1789654497772-9b71ab027673?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzUyMzN8&ixlib=rb-4.1.0&q=80&w=1080",
+                                            "mode": "fill"
+                                          },
+                                          "cornerRadius": 6,
+                                          "stroke": "$border-strong",
+                                          "strokeWidth": 1
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "KsSC1",
+                                          "name": "Thumb 2",
+                                          "clip": true,
+                                          "width": 24,
+                                          "height": 24,
+                                          "fill": {
+                                            "type": "image",
+                                            "enabled": true,
+                                            "url": "https://images.unsplash.com/photo-1604690078253-f73b6fbfcbd1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzUyMzR8&ixlib=rb-4.1.0&q=80&w=1080",
+                                            "mode": "fill"
+                                          },
+                                          "cornerRadius": 6,
+                                          "stroke": "$border-strong",
+                                          "strokeWidth": 1
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "O4hEo",
+                                          "name": "Thumb 3",
+                                          "clip": true,
+                                          "width": 24,
+                                          "height": 24,
+                                          "fill": {
+                                            "type": "image",
+                                            "enabled": true,
+                                            "url": "https://images.unsplash.com/photo-1585726302469-28a7f85edb26?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzI2ODZ8&ixlib=rb-4.1.0&q=80&w=1080",
+                                            "mode": "fill"
+                                          },
+                                          "cornerRadius": 6,
+                                          "stroke": "$border-strong",
+                                          "strokeWidth": 1
+                                        },
+                                        {
+                                          "type": "frame",
+                                          "id": "zcCM7",
+                                          "name": "More",
+                                          "height": 24,
+                                          "fill": "$overlay",
+                                          "cornerRadius": 6,
+                                          "stroke": "$border",
+                                          "strokeWidth": 1,
+                                          "padding": [
+                                            0,
+                                            7
+                                          ],
+                                          "alignItems": "center",
+                                          "children": [
+                                            {
+                                              "type": "text",
+                                              "id": "yM427",
+                                              "name": "Count",
+                                              "fill": "$text-secondary",
+                                              "content": "+2",
+                                              "fontFamily": "JetBrains Mono",
+                                              "fontSize": 11,
+                                              "fontWeight": "500"
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "type": "text",
+                                      "id": "J98AB",
+                                      "name": "Prompt",
+                                      "fill": "$text-primary",
+                                      "textGrowth": "fixed-width",
+                                      "width": "fill_container",
+                                      "content": "Lighthouse at dusk, long exposure, soft sea mist, muted…",
+                                      "lineHeight": 1.4,
+                                      "fontFamily": "Inter",
+                                      "fontSize": 13,
+                                      "fontWeight": "normal"
+                                    }
+                                  ]
                                 },
                                 {
                                   "id": "Q1h2r",
@@ -60148,9 +60317,6 @@
                           "justifyContent": "end",
                           "alignItems": "end"
                         },
-                        "J98AB": {
-                          "content": "Lighthouse at dusk, long exposure, soft sea mist, muted teal and amber"
-                        },
                         "XmhDU": {
                           "width": 270,
                           "y": 478
@@ -60762,6 +60928,3494 @@
             },
             {
               "type": "frame",
+              "id": "bKwOZ",
+              "name": "Row · Generating voxels (proposal)",
+              "width": "fill_container",
+              "fill": "$surface",
+              "gap": 30,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "gpIwQ",
+                  "name": "Cell · Generating · first run · voxels ripple",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "XJ6HC",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "Y5jjx",
+                      "name": "Canvas / Node / Generate / Generating / Voxel",
+                      "descendants": {
+                        "g0PW4": {
+                          "fill": "$elevated"
+                        },
+                        "zSopC": {
+                          "id": "cDPFQ",
+                          "type": "ref",
+                          "ref": "bCOmV",
+                          "name": "Voxels",
+                          "layoutPosition": "absolute",
+                          "x": 0,
+                          "y": 0,
+                          "width": 320,
+                          "height": 427
+                        },
+                        "mXpue": {
+                          "enabled": true,
+                          "fill": "#00000000"
+                        },
+                        "M1057/Sa6IB": {
+                          "icon": "loader"
+                        },
+                        "M1057/byR6B": {
+                          "content": "Generating"
+                        },
+                        "M1057/FsuNX": {
+                          "enabled": true,
+                          "content": "0:14"
+                        },
+                        "ZufQH": {
+                          "enabled": false
+                        },
+                        "Opg7S": {
+                          "enabled": false
+                        },
+                        "XmhDU": {
+                          "enabled": true
+                        },
+                        "XmhDU/o63Qy": {
+                          "width": 120
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "YbdW0",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Generating · first run · voxels gather, spread and fade",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "qA6Ho",
+                  "name": "Cell · Generating again · last image at 50%, voxels on top",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "d3mi5j",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "Y5jjx",
+                      "name": "Canvas / Node / Generate / Generating / Voxel / Re-run",
+                      "descendants": {
+                        "g0PW4": {
+                          "fill": [
+                            "$surface",
+                            {
+                              "type": "image",
+                              "opacity": 0.5,
+                              "enabled": true,
+                              "url": "https://images.unsplash.com/photo-1509515571118-8181eca8767d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzczOTN8&ixlib=rb-4.1.0&q=80&w=1080",
+                              "mode": "fill"
+                            }
+                          ]
+                        },
+                        "zSopC": {
+                          "id": "Ey95I",
+                          "type": "ref",
+                          "ref": "bCOmV",
+                          "name": "Voxels",
+                          "layoutPosition": "absolute",
+                          "x": 0,
+                          "y": 0,
+                          "width": 320,
+                          "height": 427,
+                          "fill": {
+                            "type": "shader",
+                            "enabled": true,
+                            "url": "design/shaders/voxel-pulse.glsl",
+                            "uniforms": {
+                              "u_color": "$accent",
+                              "u_cells": 80,
+                              "u_backing": 0.72,
+                              "u_phase": -1,
+                              "u_period": 1.6,
+                              "u_mode": 0
+                            }
+                          }
+                        },
+                        "mXpue": {
+                          "enabled": true
+                        },
+                        "M1057/Sa6IB": {
+                          "icon": "loader"
+                        },
+                        "M1057/byR6B": {
+                          "content": "Generating"
+                        },
+                        "M1057/FsuNX": {
+                          "enabled": true,
+                          "content": "0:09"
+                        },
+                        "ZufQH": {
+                          "enabled": false
+                        },
+                        "Opg7S": {
+                          "enabled": false
+                        },
+                        "XmhDU": {
+                          "enabled": true
+                        },
+                        "XmhDU/o63Qy": {
+                          "width": 80
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "wytVO",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Generating again · last image at 50%, voxels on top",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "oYrD9",
+                  "name": "Cell · Generating again · hover, Stop replaces Run",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "t0dA7",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "Y5jjx",
+                      "name": "Canvas / Node / Generate / Generating / Voxel / Hover",
+                      "descendants": {
+                        "g0PW4": {
+                          "fill": [
+                            "$surface",
+                            {
+                              "type": "image",
+                              "opacity": 0.5,
+                              "enabled": true,
+                              "url": "https://images.unsplash.com/photo-1509515571118-8181eca8767d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzczOTN8&ixlib=rb-4.1.0&q=80&w=1080",
+                              "mode": "fill"
+                            }
+                          ]
+                        },
+                        "zSopC": {
+                          "id": "CIZAg",
+                          "type": "ref",
+                          "ref": "bCOmV",
+                          "name": "Voxels",
+                          "layoutPosition": "absolute",
+                          "x": 0,
+                          "y": 0,
+                          "width": 320,
+                          "height": 427,
+                          "fill": {
+                            "type": "shader",
+                            "enabled": true,
+                            "url": "design/shaders/voxel-pulse.glsl",
+                            "uniforms": {
+                              "u_color": "$accent",
+                              "u_cells": 80,
+                              "u_backing": 0.72,
+                              "u_phase": -1,
+                              "u_period": 1.6,
+                              "u_mode": 0
+                            }
+                          }
+                        },
+                        "mXpue": {
+                          "enabled": true
+                        },
+                        "M1057/Sa6IB": {
+                          "icon": "loader"
+                        },
+                        "M1057/byR6B": {
+                          "content": "Generating"
+                        },
+                        "M1057/FsuNX": {
+                          "enabled": true,
+                          "content": "0:09"
+                        },
+                        "Mh9DV": {
+                          "enabled": true
+                        },
+                        "Q1h2r": {
+                          "enabled": false
+                        },
+                        "GnRxu": {
+                          "enabled": true
+                        },
+                        "Opg7S": {
+                          "enabled": false
+                        },
+                        "XmhDU": {
+                          "enabled": true
+                        },
+                        "XmhDU/o63Qy": {
+                          "width": 80
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "fHf94",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Generating again · hover, Stop replaces Run",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "xwjqw",
+                  "name": "Cell · Waiting · voxels breathe",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "W5YxRi",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "Y5jjx",
+                      "name": "Canvas / Node / Generate / Waiting / Voxel",
+                      "descendants": {
+                        "g0PW4": {
+                          "fill": "$elevated"
+                        },
+                        "zSopC": {
+                          "id": "bdWAH",
+                          "type": "ref",
+                          "ref": "j8N37",
+                          "name": "Voxels",
+                          "layoutPosition": "absolute",
+                          "x": 0,
+                          "y": 0,
+                          "width": 320,
+                          "height": 427
+                        },
+                        "mXpue": {
+                          "enabled": true,
+                          "fill": "#00000000"
+                        },
+                        "M1057/Sa6IB": {
+                          "icon": "clock-3"
+                        },
+                        "M1057/byR6B": {
+                          "content": "Waiting"
+                        },
+                        "M1057/XvAyW": {
+                          "enabled": true,
+                          "content": "2nd in line"
+                        },
+                        "ZufQH": {
+                          "enabled": false
+                        },
+                        "Opg7S": {
+                          "enabled": false
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "UJORy",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Waiting · the circle breathes",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ZOTf9",
+                  "name": "Cell · Waiting at provider · voxels breathe, the note stays",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "UYLFn",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "Y5jjx",
+                      "name": "Canvas / Node / Generate / Waiting at provider / Voxel",
+                      "descendants": {
+                        "g0PW4": {
+                          "fill": "$elevated"
+                        },
+                        "zSopC": {
+                          "id": "jIyIx",
+                          "type": "ref",
+                          "ref": "j8N37",
+                          "name": "Voxels",
+                          "layoutPosition": "absolute",
+                          "x": 0,
+                          "y": 0,
+                          "width": 320,
+                          "height": 427
+                        },
+                        "mXpue": {
+                          "enabled": true,
+                          "fill": "#00000000"
+                        },
+                        "M1057/Sa6IB": {
+                          "icon": "hourglass"
+                        },
+                        "M1057/byR6B": {
+                          "content": "Waiting at Google"
+                        },
+                        "M1057/XvAyW": {
+                          "enabled": true,
+                          "content": "Batch"
+                        },
+                        "ZufQH": {
+                          "enabled": false
+                        },
+                        "Opg7S": {
+                          "enabled": true,
+                          "padding": [
+                            150,
+                            0,
+                            0,
+                            0
+                          ]
+                        },
+                        "V3Rfk": {
+                          "enabled": false
+                        },
+                        "GNJnE": {
+                          "content": "Usually done within a few hours",
+                          "fontFamily": "Inter"
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "naxHq",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Waiting at provider · the circle breathes, the note sits below it",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "fErXj",
+              "name": "Row · Voxel parts and motion spec (proposal)",
+              "width": "fill_container",
+              "fill": "$surface",
+              "gap": 30,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "oa2y6",
+                  "name": "Cell · Voxel parts",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "T5c6a",
+                      "name": "Parts",
+                      "fill": "$elevated",
+                      "cornerRadius": 14,
+                      "gap": 24,
+                      "padding": 24,
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "bCOmV",
+                          "name": "Voxel pulse / Pulse",
+                          "reusable": true,
+                          "width": 320,
+                          "height": 427,
+                          "fill": {
+                            "type": "shader",
+                            "enabled": true,
+                            "url": "design/shaders/voxel-pulse.glsl",
+                            "uniforms": {
+                              "u_color": "$accent",
+                              "u_cells": 80,
+                              "u_backing": 0,
+                              "u_phase": -1,
+                              "u_period": 1.6,
+                              "u_mode": 0
+                            }
+                          }
+                        },
+                        {
+                          "type": "frame",
+                          "id": "j8N37",
+                          "name": "Voxel pulse / Idle",
+                          "reusable": true,
+                          "width": 320,
+                          "height": 427,
+                          "fill": {
+                            "type": "shader",
+                            "enabled": true,
+                            "url": "design/shaders/voxel-pulse.glsl",
+                            "uniforms": {
+                              "u_color": "$accent",
+                              "u_cells": 80,
+                              "u_backing": 0,
+                              "u_phase": -1,
+                              "u_period": 3.2,
+                              "u_mode": 1
+                            }
+                          }
+                        },
+                        {
+                          "id": "TSntM",
+                          "type": "ref",
+                          "reusable": true,
+                          "ref": "bCOmV",
+                          "name": "Voxel pulse / Still (reduced motion)",
+                          "fill": {
+                            "type": "shader",
+                            "enabled": true,
+                            "url": "design/shaders/voxel-pulse.glsl",
+                            "uniforms": {
+                              "u_color": "$accent",
+                              "u_cells": 80,
+                              "u_backing": 0,
+                              "u_phase": 0.26,
+                              "u_period": 1.6,
+                              "u_mode": 0
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "X8Qz4R",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Voxel pulse · Pulse, Idle, Still (reduced motion) · each fills the card",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "f25uL",
+                  "name": "Cell · Motion spec",
+                  "width": 1100,
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "PU7rT",
+                      "name": "Title",
+                      "fill": "$text-primary",
+                      "content": "Voxel pulse · motion spec",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zk2o5",
+                      "name": "Keyframes · Gather",
+                      "width": "fill_container",
+                      "fill": "$elevated",
+                      "cornerRadius": 14,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "gap": 20,
+                      "padding": [
+                        20,
+                        24
+                      ],
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "YsXYo",
+                          "name": "Frame · 0.00 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "aQpAZ",
+                              "type": "ref",
+                              "ref": "bCOmV",
+                              "name": "Voxels",
+                              "width": 120,
+                              "height": 160,
+                              "cornerRadius": 6,
+                              "clip": true,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-pulse.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0,
+                                    "u_period": 1.6,
+                                    "u_mode": 0
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "cJthK",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "0.00 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "TbClJ",
+                          "name": "Frame · 0.08 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "HAt1x",
+                              "type": "ref",
+                              "ref": "bCOmV",
+                              "name": "Voxels",
+                              "width": 120,
+                              "height": 160,
+                              "cornerRadius": 6,
+                              "clip": true,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-pulse.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.049999999999999996,
+                                    "u_period": 1.6,
+                                    "u_mode": 0
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "gbJH8",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "0.08 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "i4Nczf",
+                          "name": "Frame · 0.16 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "Yc71K",
+                              "type": "ref",
+                              "ref": "bCOmV",
+                              "name": "Voxels",
+                              "width": 120,
+                              "height": 160,
+                              "cornerRadius": 6,
+                              "clip": true,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-pulse.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.09999999999999999,
+                                    "u_period": 1.6,
+                                    "u_mode": 0
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "IBuke",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "0.16 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "MzPes",
+                          "name": "Frame · 0.24 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "FDDRl",
+                              "type": "ref",
+                              "ref": "bCOmV",
+                              "name": "Voxels",
+                              "width": 120,
+                              "height": 160,
+                              "cornerRadius": 6,
+                              "clip": true,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-pulse.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.15,
+                                    "u_period": 1.6,
+                                    "u_mode": 0
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "I5MOd9",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "0.24 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "LDzAc",
+                          "name": "Frame · 0.32 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "xGJDV",
+                              "type": "ref",
+                              "ref": "bCOmV",
+                              "name": "Voxels",
+                              "width": 120,
+                              "height": 160,
+                              "cornerRadius": 6,
+                              "clip": true,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-pulse.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.19999999999999998,
+                                    "u_period": 1.6,
+                                    "u_mode": 0
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "kN7qx",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "0.32 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "T7n99",
+                          "name": "Frame · 0.40 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "Y1UGv",
+                              "type": "ref",
+                              "ref": "bCOmV",
+                              "name": "Voxels",
+                              "width": 120,
+                              "height": 160,
+                              "cornerRadius": 6,
+                              "clip": true,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-pulse.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.25,
+                                    "u_period": 1.6,
+                                    "u_mode": 0
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "Fn3yL",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "0.40 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NOqVa",
+                      "name": "Keyframes · Spread and fade",
+                      "width": "fill_container",
+                      "fill": "$elevated",
+                      "cornerRadius": 14,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "gap": 20,
+                      "padding": [
+                        20,
+                        24
+                      ],
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "FqBAR",
+                          "name": "Frame · 0.6 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "L8hypb",
+                              "type": "ref",
+                              "ref": "bCOmV",
+                              "name": "Voxels",
+                              "width": 120,
+                              "height": 160,
+                              "cornerRadius": 6,
+                              "clip": true,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-pulse.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.37499999999999994,
+                                    "u_period": 1.6,
+                                    "u_mode": 0
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "L2Xna0",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "0.6 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "jLShZ",
+                          "name": "Frame · 0.8 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "h7XVrK",
+                              "type": "ref",
+                              "ref": "bCOmV",
+                              "name": "Voxels",
+                              "width": 120,
+                              "height": 160,
+                              "cornerRadius": 6,
+                              "clip": true,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-pulse.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.5,
+                                    "u_period": 1.6,
+                                    "u_mode": 0
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "L7DHsS",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "0.8 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "LeaGM",
+                          "name": "Frame · 1.0 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "gqUkF",
+                              "type": "ref",
+                              "ref": "bCOmV",
+                              "name": "Voxels",
+                              "width": 120,
+                              "height": 160,
+                              "cornerRadius": 6,
+                              "clip": true,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-pulse.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.625,
+                                    "u_period": 1.6,
+                                    "u_mode": 0
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "v4JSp5",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "1.0 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "qjl0B",
+                          "name": "Frame · 1.2 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "oxpfO",
+                              "type": "ref",
+                              "ref": "bCOmV",
+                              "name": "Voxels",
+                              "width": 120,
+                              "height": 160,
+                              "cornerRadius": 6,
+                              "clip": true,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-pulse.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.7499999999999999,
+                                    "u_period": 1.6,
+                                    "u_mode": 0
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "WkPYT",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "1.2 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "jkGHO",
+                          "name": "Frame · 1.4 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "cwLuV",
+                              "type": "ref",
+                              "ref": "bCOmV",
+                              "name": "Voxels",
+                              "width": 120,
+                              "height": 160,
+                              "cornerRadius": 6,
+                              "clip": true,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-pulse.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.8749999999999999,
+                                    "u_period": 1.6,
+                                    "u_mode": 0
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "c04B6",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "1.4 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ZuP2p",
+                      "name": "Keyframes · Idle and reduced motion",
+                      "width": "fill_container",
+                      "fill": "$elevated",
+                      "cornerRadius": 14,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "gap": 20,
+                      "padding": [
+                        20,
+                        24
+                      ],
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "sRSBP",
+                          "name": "Frame · idle · dim",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "uzbaM",
+                              "type": "ref",
+                              "ref": "j8N37",
+                              "name": "Voxels",
+                              "width": 120,
+                              "height": 160,
+                              "cornerRadius": 6,
+                              "clip": true,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-pulse.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0,
+                                    "u_period": 3.2,
+                                    "u_mode": 1
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "FRbfg",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "idle · dim",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "zY8Mk",
+                          "name": "Frame · idle · bright",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "R19TI",
+                              "type": "ref",
+                              "ref": "j8N37",
+                              "name": "Voxels",
+                              "width": 120,
+                              "height": 160,
+                              "cornerRadius": 6,
+                              "clip": true,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-pulse.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.5,
+                                    "u_period": 3.2,
+                                    "u_mode": 1
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "x2kCx",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "idle · bright",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "MRQXP",
+                          "name": "Divider",
+                          "width": 1,
+                          "height": 160,
+                          "fill": "$border"
+                        },
+                        {
+                          "type": "frame",
+                          "id": "v083Hi",
+                          "name": "Frame · reduced motion",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "id": "A5bRA",
+                              "type": "ref",
+                              "ref": "TSntM",
+                              "name": "Voxels",
+                              "width": 120,
+                              "height": 160,
+                              "cornerRadius": 6,
+                              "clip": true,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-pulse.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.26,
+                                    "u_period": 1.6,
+                                    "u_mode": 0
+                                  }
+                                }
+                              ]
+                            },
+                            {
+                              "type": "text",
+                              "id": "ejSKx",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "reduced motion",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "tOsM9",
+                      "name": "Spec · Cells",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Tv0e9",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Cells",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "LLEpT",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Cells fill the whole media area, edge to edge: a 4 px pitch with 3 px squares and 1 px gaps, square corners, centered on the card. A 320 by 427 card is 80 columns by 107 rows.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "xJDkO",
+                      "name": "Spec · Colour",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "bL7Km",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Colour",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "I8OU7",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "$accent in six brightness steps from 5% to 95% opacity, with a 4 by 4 ordered dither between steps, so gradients stay soft and cells still switch like voxels.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "eGO4H",
+                      "name": "Spec · Pulse",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "V4CQt",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Pulse",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "tIoS4",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Every 1.6 s. Gather, the first 0.45 s: voxels switch on at random, the center first, into a small flat circle, bright at its edge and dimmer inside. Spread, from 0.35 s: the circle grows, its bright edge thins and its middle empties; it fills the card by about 1 s and carries on past the edges, dissolving cell by cell as it leaves. The next one gathers as it goes.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ecDe5",
+                      "name": "Spec · Base",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "aJqV8",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Base",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "YbOLy",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "A cell the pulse isn't on sits at 5%, so the whole card reads as a voxel field.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "pd96w",
+                      "name": "Spec · Clock",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "MNYoP",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Clock",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "v48ODf",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "One clock for the whole canvas, so every generating node pulses in step.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "H2djLF",
+                      "name": "Spec · Over an image",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "W1IVa",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Over an image",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "DuLxO",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "On a re-run the last image stays at 50% and the field draws over it. Lit cells get a #0E1012 backing, up to 72%, so the pulse reads over any picture; the rest of the image stays visible.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "vGCPI",
+                      "name": "Spec · Waiting",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "aiJ92",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Waiting",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "CwT2z",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Waiting in line and Waiting at provider don't pulse: the small circle stays in the middle and breathes, a little larger and brighter and back over 3.2 s, cosine eased, at about half the pulse's brightness. Waiting at provider keeps its note, below the circle.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Sl6W2",
+                      "name": "Spec · Replaces",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "dFmwM",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Replaces",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "WA7f4",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "The field sits behind the status pill, timer, progress line, ports and hover controls, which don't change. The image glyph and the ratio go.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Y5bkap",
+                      "name": "Spec · Reduced motion",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "GaOim",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Reduced motion",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "u9Ex9",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "When the system asks for less motion: the gathered circle, still. Waiting shows the circle still at its middle brightness.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "O8XSf",
+                      "name": "Spec · Start and end",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "MT3Iz",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Start and end",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Vunhj",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "The field fades in over 200 ms, ease-out, when the run starts, and the first pulse gathers from nothing. When it ends, the image or the end state replaces it with the same fade.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "ZGYVD",
+                      "name": "Spec · Zoom",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "H02oJZ",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Zoom",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "L4NjgS",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Sizes are canvas units and scale with zoom like the rest of the card.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "o4twi",
+                      "name": "Spec · Reference",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "pD8mo",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Reference",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "e1CGZN",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "design/shaders/voxel-pulse.glsl draws every frame here and is the reference for the build.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "wKzQJ",
+              "name": "Row · Generating swarm (proposal)",
+              "width": "fill_container",
+              "fill": "$surface",
+              "gap": 30,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "c8s5Y",
+                  "name": "Cell · Generating · first run · particle swarm, glowing pockets",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "lqh3Q",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "Y5jjx",
+                      "name": "Canvas / Node / Generate / Generating / Swarm",
+                      "descendants": {
+                        "g0PW4": {
+                          "fill": "$elevated"
+                        },
+                        "zSopC": {
+                          "type": "frame",
+                          "id": "YROoX",
+                          "layoutPosition": "absolute",
+                          "x": 0,
+                          "y": 0,
+                          "name": "Voxels",
+                          "width": 320,
+                          "height": 427,
+                          "fill": {
+                            "type": "shader",
+                            "enabled": true,
+                            "url": "design/shaders/voxel-swarm.glsl",
+                            "uniforms": {
+                              "u_color": "$accent",
+                              "u_cells": 80,
+                              "u_backing": 0,
+                              "u_phase": -1,
+                              "u_period": 3.2,
+                              "u_mode": 0,
+                              "u_seed": 393,
+                              "u_ports": [
+                                0.4168618266978923,
+                                0.5011709601873536,
+                                -1
+                              ],
+                              "u_link": 2.4,
+                              "u_arrive": 1.6,
+                              "u_settle": 2.4
+                            }
+                          }
+                        },
+                        "mXpue": {
+                          "enabled": true,
+                          "fill": "#00000000"
+                        },
+                        "M1057/Sa6IB": {
+                          "icon": "loader"
+                        },
+                        "M1057/byR6B": {
+                          "content": "Generating"
+                        },
+                        "M1057/FsuNX": {
+                          "enabled": true,
+                          "content": "0:14"
+                        },
+                        "ZufQH": {
+                          "enabled": false
+                        },
+                        "Opg7S": {
+                          "enabled": false
+                        },
+                        "XmhDU": {
+                          "enabled": true
+                        },
+                        "XmhDU/o63Qy": {
+                          "width": 120
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "q2zG9",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Generating · first run · swarm, Prompt and Images connected",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "WBPIw",
+                  "name": "Cell · Generating again · last image at 50%, swarm on top",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "GOPxv",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "Y5jjx",
+                      "name": "Canvas / Node / Generate / Generating / Swarm / Re-run",
+                      "descendants": {
+                        "g0PW4": {
+                          "fill": [
+                            "$surface",
+                            {
+                              "type": "image",
+                              "opacity": 0.5,
+                              "enabled": true,
+                              "url": "https://images.unsplash.com/photo-1509515571118-8181eca8767d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzczOTN8&ixlib=rb-4.1.0&q=80&w=1080",
+                              "mode": "fill"
+                            }
+                          ]
+                        },
+                        "zSopC": {
+                          "type": "frame",
+                          "id": "qRQzO",
+                          "layoutPosition": "absolute",
+                          "x": 0,
+                          "y": 0,
+                          "name": "Voxels",
+                          "width": 320,
+                          "height": 427,
+                          "fill": {
+                            "type": "shader",
+                            "enabled": true,
+                            "url": "design/shaders/voxel-swarm.glsl",
+                            "uniforms": {
+                              "u_color": "$accent",
+                              "u_cells": 80,
+                              "u_backing": 0.72,
+                              "u_phase": -1,
+                              "u_period": 3.2,
+                              "u_mode": 0,
+                              "u_seed": 42,
+                              "u_ports": [
+                                0.4168618266978923,
+                                -1,
+                                -1
+                              ],
+                              "u_link": 2.4,
+                              "u_arrive": 1.6,
+                              "u_settle": 2.4
+                            }
+                          }
+                        },
+                        "mXpue": {
+                          "enabled": true
+                        },
+                        "M1057/Sa6IB": {
+                          "icon": "loader"
+                        },
+                        "M1057/byR6B": {
+                          "content": "Generating"
+                        },
+                        "M1057/FsuNX": {
+                          "enabled": true,
+                          "content": "0:09"
+                        },
+                        "ZufQH": {
+                          "enabled": false
+                        },
+                        "Opg7S": {
+                          "enabled": false
+                        },
+                        "XmhDU": {
+                          "enabled": true
+                        },
+                        "XmhDU/o63Qy": {
+                          "width": 80
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "ThyFr",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Generating again · last image at 50%, swarm on top",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Y0EZeL",
+                  "name": "Cell · Generating again · hover, Stop replaces Run",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "GuEln",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "Y5jjx",
+                      "name": "Canvas / Node / Generate / Generating / Swarm / Hover",
+                      "descendants": {
+                        "g0PW4": {
+                          "fill": [
+                            "$surface",
+                            {
+                              "type": "image",
+                              "opacity": 0.5,
+                              "enabled": true,
+                              "url": "https://images.unsplash.com/photo-1509515571118-8181eca8767d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzczOTN8&ixlib=rb-4.1.0&q=80&w=1080",
+                              "mode": "fill"
+                            }
+                          ]
+                        },
+                        "zSopC": {
+                          "type": "frame",
+                          "id": "T86ZX",
+                          "layoutPosition": "absolute",
+                          "x": 0,
+                          "y": 0,
+                          "name": "Voxels",
+                          "width": 320,
+                          "height": 427,
+                          "fill": {
+                            "type": "shader",
+                            "enabled": true,
+                            "url": "design/shaders/voxel-swarm.glsl",
+                            "uniforms": {
+                              "u_color": "$accent",
+                              "u_cells": 80,
+                              "u_backing": 0.72,
+                              "u_phase": -1,
+                              "u_period": 3.2,
+                              "u_mode": 0,
+                              "u_seed": 87,
+                              "u_ports": [
+                                0.4168618266978923,
+                                -1,
+                                -1
+                              ],
+                              "u_link": 2.4,
+                              "u_arrive": 1.6,
+                              "u_settle": 2.4
+                            }
+                          }
+                        },
+                        "mXpue": {
+                          "enabled": true
+                        },
+                        "M1057/Sa6IB": {
+                          "icon": "loader"
+                        },
+                        "M1057/byR6B": {
+                          "content": "Generating"
+                        },
+                        "M1057/FsuNX": {
+                          "enabled": true,
+                          "content": "0:09"
+                        },
+                        "Mh9DV": {
+                          "enabled": true
+                        },
+                        "Q1h2r": {
+                          "enabled": false
+                        },
+                        "GnRxu": {
+                          "enabled": true
+                        },
+                        "Opg7S": {
+                          "enabled": false
+                        },
+                        "XmhDU": {
+                          "enabled": true
+                        },
+                        "XmhDU/o63Qy": {
+                          "width": 80
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "jGWXF",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Generating again · hover, Stop replaces Run",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "WIXRg",
+                  "name": "Cell · Waiting · the swarm idles, slower and dimmer",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "F6tHd",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "Y5jjx",
+                      "name": "Canvas / Node / Generate / Waiting / Swarm",
+                      "descendants": {
+                        "g0PW4": {
+                          "fill": "$elevated"
+                        },
+                        "zSopC": {
+                          "type": "frame",
+                          "id": "XCtL2",
+                          "layoutPosition": "absolute",
+                          "x": 0,
+                          "y": 0,
+                          "name": "Voxels",
+                          "width": 320,
+                          "height": 427,
+                          "fill": {
+                            "type": "shader",
+                            "enabled": true,
+                            "url": "design/shaders/voxel-swarm.glsl",
+                            "uniforms": {
+                              "u_color": "$accent",
+                              "u_cells": 80,
+                              "u_backing": 0,
+                              "u_phase": -1,
+                              "u_period": 3.2,
+                              "u_mode": 1,
+                              "u_seed": 7,
+                              "u_ports": [
+                                -1,
+                                -1,
+                                -1
+                              ],
+                              "u_link": 2.4,
+                              "u_arrive": 1.6,
+                              "u_settle": 2.4
+                            }
+                          }
+                        },
+                        "mXpue": {
+                          "enabled": true,
+                          "fill": "#00000000"
+                        },
+                        "M1057/Sa6IB": {
+                          "icon": "clock-3"
+                        },
+                        "M1057/byR6B": {
+                          "content": "Waiting"
+                        },
+                        "M1057/XvAyW": {
+                          "enabled": true,
+                          "content": "2nd in line"
+                        },
+                        "ZufQH": {
+                          "enabled": false
+                        },
+                        "Opg7S": {
+                          "enabled": false
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "kgf1j",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Waiting · the swarm idles, slower and dimmer",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "pm9ca",
+                  "name": "Cell · Waiting at provider · the swarm idles, the note stays",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "LNEIH",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "Y5jjx",
+                      "name": "Canvas / Node / Generate / Waiting at provider / Swarm",
+                      "descendants": {
+                        "g0PW4": {
+                          "fill": "$elevated"
+                        },
+                        "zSopC": {
+                          "type": "frame",
+                          "id": "ZJxE3",
+                          "layoutPosition": "absolute",
+                          "x": 0,
+                          "y": 0,
+                          "name": "Voxels",
+                          "width": 320,
+                          "height": 427,
+                          "fill": {
+                            "type": "shader",
+                            "enabled": true,
+                            "url": "design/shaders/voxel-swarm.glsl",
+                            "uniforms": {
+                              "u_color": "$accent",
+                              "u_cells": 80,
+                              "u_backing": 0,
+                              "u_phase": -1,
+                              "u_period": 3.2,
+                              "u_mode": 1,
+                              "u_seed": 23,
+                              "u_ports": [
+                                -1,
+                                -1,
+                                -1
+                              ],
+                              "u_link": 2.4,
+                              "u_arrive": 1.6,
+                              "u_settle": 2.4
+                            }
+                          }
+                        },
+                        "mXpue": {
+                          "enabled": true,
+                          "fill": "#00000000"
+                        },
+                        "M1057/Sa6IB": {
+                          "icon": "hourglass"
+                        },
+                        "M1057/byR6B": {
+                          "content": "Waiting at Google"
+                        },
+                        "M1057/XvAyW": {
+                          "enabled": true,
+                          "content": "Batch"
+                        },
+                        "ZufQH": {
+                          "enabled": false
+                        },
+                        "Opg7S": {
+                          "enabled": true
+                        },
+                        "V3Rfk": {
+                          "enabled": false
+                        },
+                        "GNJnE": {
+                          "content": "Usually done within a few hours",
+                          "fontFamily": "Inter"
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "YH5u2",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Waiting at provider · the swarm idles, the note stays",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "oQ27O",
+                  "name": "Cell · Swarm keyframes",
+                  "width": 900,
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "uatFA",
+                      "name": "Title",
+                      "fill": "$text-primary",
+                      "content": "Particle swarm · keyframes",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "Moeph",
+                      "name": "Keyframes · Swarm",
+                      "width": "fill_container",
+                      "fill": "$elevated",
+                      "cornerRadius": 14,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "gap": 20,
+                      "padding": [
+                        20,
+                        24
+                      ],
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "XijXE",
+                          "name": "Frame · 0.0 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "xG6kQ",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.1,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 3,
+                                    "u_ports": [
+                                      -1,
+                                      -1,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "pvbeL",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "0.3 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "y8rHK",
+                          "name": "Frame · 0.8 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "UpzpS",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.3,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 3,
+                                    "u_ports": [
+                                      -1,
+                                      -1,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "PqRa7",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "1.0 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "owQ5i",
+                          "name": "Frame · 1.6 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "q399ch",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.5,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 3,
+                                    "u_ports": [
+                                      -1,
+                                      -1,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "YPitS",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "1.6 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "W6Fo2A",
+                          "name": "Frame · 2.4 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "Q45HS",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.7,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 3,
+                                    "u_ports": [
+                                      -1,
+                                      -1,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "CPwFx",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "2.2 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "rQCgY",
+                          "name": "Frame · idle",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "C8ZpP",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.3,
+                                    "u_period": 3.2,
+                                    "u_mode": 1,
+                                    "u_seed": 3,
+                                    "u_ports": [
+                                      -1,
+                                      -1,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "x4VtHm",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "idle",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "p4o4k",
+                      "name": "Keyframes · Injection (Prompt and Images)",
+                      "width": "fill_container",
+                      "fill": "$elevated",
+                      "cornerRadius": 14,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "gap": 20,
+                      "padding": [
+                        20,
+                        24
+                      ],
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "mjuWb",
+                          "name": "Frame · link lands +0.0 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "XSF3i",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 1.2812499999999998,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 393,
+                                    "u_ports": [
+                                      0.4168618266978923,
+                                      0.5011709601873536,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6,
+                                    "u_settle": 2.4
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "XSUvb",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "+0.1 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "KTNWy",
+                          "name": "Frame · link lands +0.1 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "yEEmd",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 1.3437499999999998,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 393,
+                                    "u_ports": [
+                                      0.4168618266978923,
+                                      0.5011709601873536,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6,
+                                    "u_settle": 2.4
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "Wggre",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "+0.3 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "kbP3s",
+                          "name": "Frame · link lands +0.3 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "W3lDvm",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 1.4374999999999998,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 393,
+                                    "u_ports": [
+                                      0.4168618266978923,
+                                      0.5011709601873536,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6,
+                                    "u_settle": 2.4
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "y6lL5D",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "+0.6 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "CClcF",
+                          "name": "Frame · link lands +0.7 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "Kg8sk",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 1.5625,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 393,
+                                    "u_ports": [
+                                      0.4168618266978923,
+                                      0.5011709601873536,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6,
+                                    "u_settle": 2.4
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "iYzsc",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "+1.0 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "EBb5p",
+                          "name": "Frame · link lands +1.2 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "hAbK3",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 1.7499999999999998,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 393,
+                                    "u_ports": [
+                                      0.4168618266978923,
+                                      0.5011709601873536,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6,
+                                    "u_settle": 2.4
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "HbTWk",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "+1.6 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Htjsr",
+                          "name": "Frame · link lands +1.8 s",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "M555cN",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 1.9375,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 393,
+                                    "u_ports": [
+                                      0.4168618266978923,
+                                      0.5011709601873536,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6,
+                                    "u_settle": 2.4
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "RECXB",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "+2.2 s",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "xiIbr",
+                      "name": "Keyframes · Seeds",
+                      "width": "fill_container",
+                      "fill": "$elevated",
+                      "cornerRadius": 14,
+                      "stroke": "$border",
+                      "strokeWidth": 1,
+                      "gap": 20,
+                      "padding": [
+                        20,
+                        24
+                      ],
+                      "alignItems": "end",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "z0w19",
+                          "name": "Frame · seed 1",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "Bu19X",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.3,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 131,
+                                    "u_ports": [
+                                      -1,
+                                      -1,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "IpYJl",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "seed 131",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "aAWDh",
+                          "name": "Frame · seed 2",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "JoZvg",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.3,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 262,
+                                    "u_ports": [
+                                      -1,
+                                      -1,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "xsbEu",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "seed 262",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "E30nc",
+                          "name": "Frame · seed 3",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "AfIoO",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.3,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 393,
+                                    "u_ports": [
+                                      -1,
+                                      -1,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "QePJn",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "seed 393",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "sutFf",
+                          "name": "Frame · seed 4",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "ZQgpC",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.3,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 524,
+                                    "u_ports": [
+                                      -1,
+                                      -1,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "JbNqm",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "seed 524",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "z6vJx",
+                          "name": "Frame · seed 5",
+                          "layout": "vertical",
+                          "gap": 8,
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "frame",
+                              "id": "HmOIw",
+                              "name": "Voxels",
+                              "clip": true,
+                              "width": 120,
+                              "height": 160,
+                              "fill": [
+                                "$elevated-2",
+                                {
+                                  "type": "shader",
+                                  "enabled": true,
+                                  "url": "design/shaders/voxel-swarm.glsl",
+                                  "uniforms": {
+                                    "u_color": "$accent",
+                                    "u_cells": 80,
+                                    "u_backing": 0,
+                                    "u_phase": 0.3,
+                                    "u_period": 3.2,
+                                    "u_mode": 0,
+                                    "u_seed": 655,
+                                    "u_ports": [
+                                      -1,
+                                      -1,
+                                      -1
+                                    ],
+                                    "u_link": 2.4,
+                                    "u_arrive": 1.6
+                                  }
+                                }
+                              ],
+                              "cornerRadius": 6
+                            },
+                            {
+                              "type": "text",
+                              "id": "u8kkuH",
+                              "name": "Time",
+                              "fill": "$text-tertiary",
+                              "content": "seed 655",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "GkrPE",
+                      "name": "Spec · Particles",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "hN2re",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Particles",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "tLFPO",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Single 4 px cells (3 px squares, 1 px gaps) across the whole card, about two for every three cells. Each drifts in a slow loop of under 2 cells around its own home, so the swarm shimmers without going anywhere.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "YZcbD",
+                      "name": "Spec · Clouds",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "K1NdS",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Clouds",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "I6xFC",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "A slowly churning, self-warped cloud field shapes the swarm into billowy puffs. Their thick cores are solid voxels; towards their edges only drifting particles show, thinning to scattered specks, and the puffs run off the card's edges. Light comes from the top left: the tops of puffs are brighter and their undersides fall into shade, with dithered steps so the shading reads as a gradient.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "M49wF",
+                      "name": "Spec · Glowing pockets",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "KsUxY",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Glowing pockets",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "VlQxa",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Five soft spots, 12 to 22 cells across, each light up and fade over 3.2 s, staggered, at new places inside the clouds each time. Particles there glow brighter and gather a little closer.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "g22AP4",
+                      "name": "Spec · Injection",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "PDj5i",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Injection",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "v4EJbM",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Tied to the links' pulse (Edges, motion spec): every link runs on one 2.4 s clock and its glow lands at the input port 1.6 s in. Each time, a puff of new cloud swells out in a circle from each connected port on the card's left edge: about 15 cells at most, easing out over 1 s, with a cloud's uneven edge and a denser middle. It's added to the cloud's own thickness, so it has the same solid core, particle edges, light and shade as any puff, and runs together with the cloud and with neighbouring ports' puffs. It carries a touch of the link's glow as it appears and settles into the sky within the cycle. The rest of the card doesn't move for it. Unconnected ports take nothing; waiting cards take no puffs.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "w9FRrv",
+                      "name": "Spec · Seed",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "b8PyCk",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Seed",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "hiwaa",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Each card has its own seed, taken from its run's id, which moves the cloud field, the particles and the pockets. No two generating cards on a canvas look alike, and a card keeps its own sky for the whole run, even after a reload.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "rJDym",
+                      "name": "Spec · Colour",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "r1HLAD",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Colour",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "b9u8c",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "$accent in six brightness steps, from 5% for empty cells to 95% at a pocket's peak.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "jZtHt",
+                      "name": "Spec · Waiting",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "yAKWL",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Waiting",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "dDYdg",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "The same swarm at half speed and about half brightness, with no glowing pockets. Waiting at provider keeps its note in the middle.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "dvs9I",
+                      "name": "Spec · Over an image",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "tLRqY",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Over an image",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "IG2SQ",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "On a re-run the last image stays at 50%. Lit particles get a #0E1012 backing, up to 72%, so they read over any picture; the rest of the image stays clear.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "wnBWX",
+                      "name": "Spec · Reduced motion",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "MMmAa",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Reduced motion",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "d1t9Hg",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "One still frame of the swarm, no drift and no pockets.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "DHsAT",
+                      "name": "Spec · Reference",
+                      "width": "fill_container",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "Q46Cns",
+                          "name": "Key",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": 140,
+                          "content": "Reference",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        },
+                        {
+                          "type": "text",
+                          "id": "H86Cvv",
+                          "name": "Value",
+                          "fill": "$text-secondary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "design/shaders/voxel-swarm.glsl draws every frame here and is the reference for the build.",
+                          "lineHeight": 1.5,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
               "id": "J6jLYa",
               "name": "Row · Hover, selected and more",
               "width": "fill_container",
@@ -61052,9 +64706,6 @@
                       "descendants": {
                         "g0PW4": {
                           "fill": "#FFFFFF"
-                        },
-                        "J98AB": {
-                          "content": "White ceramic vase on a white plinth, soft window light"
                         }
                       }
                     },
@@ -61090,10 +64741,6 @@
                       "ref": "rWoXj",
                       "name": "Generate · Empty · no prompt yet",
                       "descendants": {
-                        "J98AB": {
-                          "content": "Add a prompt to run this",
-                          "fill": "$text-tertiary"
-                        },
                         "Q1h2r": {
                           "opacity": 0.4
                         }
@@ -61105,6 +64752,328 @@
                       "name": "Caption",
                       "fill": "$text-tertiary",
                       "content": "Empty with no prompt · Run waits at 40%",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "uwVfe",
+              "name": "Row · Reference images (proposal)",
+              "width": "fill_container",
+              "fill": "$surface",
+              "gap": 30,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "NvEqx",
+                  "name": "Cell · Hover · 2 references above the prompt",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "lRkiT",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "Y5jjx",
+                      "name": "Canvas / Node / Generate / Hover / References",
+                      "descendants": {
+                        "mXpue": {
+                          "enabled": true
+                        },
+                        "Mh9DV": {
+                          "enabled": true
+                        },
+                        "FgDFK": {
+                          "enabled": true
+                        },
+                        "O4hEo": {
+                          "enabled": false
+                        },
+                        "zcCM7": {
+                          "enabled": false
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "VR6Ce",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Hover · 2 references above the prompt",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "pMSLD",
+                  "name": "Cell · Hover · 5 references: three, then +2",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "ySBUv",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "Y5jjx",
+                      "name": "Canvas / Node / Generate / Hover / References / More",
+                      "descendants": {
+                        "mXpue": {
+                          "enabled": true
+                        },
+                        "Mh9DV": {
+                          "enabled": true
+                        },
+                        "FgDFK": {
+                          "enabled": true
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "pB0VR",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Hover · 5 references: three, then +2",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "NUwyP",
+                  "name": "Cell · Generating again · hover, 3 references",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "M0FX13",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "Y5jjx",
+                      "name": "Canvas / Node / Generate / Generating / Hover / References",
+                      "descendants": {
+                        "g0PW4": {
+                          "fill": [
+                            "$surface",
+                            {
+                              "type": "image",
+                              "opacity": 0.5,
+                              "enabled": true,
+                              "url": "https://images.unsplash.com/photo-1509515571118-8181eca8767d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w4NDM0ODN8MHwxfHJhbmRvbXx8fHx8fHx8fDE3OTAxMzczOTN8&ixlib=rb-4.1.0&q=80&w=1080",
+                              "mode": "fill"
+                            }
+                          ]
+                        },
+                        "mXpue": {
+                          "enabled": true
+                        },
+                        "M1057/Sa6IB": {
+                          "icon": "loader"
+                        },
+                        "M1057/byR6B": {
+                          "content": "Generating"
+                        },
+                        "M1057/FsuNX": {
+                          "enabled": true,
+                          "content": "0:09"
+                        },
+                        "Mh9DV": {
+                          "enabled": true
+                        },
+                        "FgDFK": {
+                          "enabled": true
+                        },
+                        "zcCM7": {
+                          "enabled": false
+                        },
+                        "Q1h2r": {
+                          "enabled": false
+                        },
+                        "GnRxu": {
+                          "enabled": true
+                        },
+                        "XmhDU": {
+                          "enabled": true
+                        },
+                        "XmhDU/o63Qy": {
+                          "width": 80
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "HUH7N",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Generating again · hover, 3 references",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "gOtjQ",
+                  "name": "Cell · Empty · 1 reference, at rest with the prompt",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "gl5jN",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "Y5jjx",
+                      "name": "Canvas / Node / Generate / Empty / References",
+                      "descendants": {
+                        "g0PW4": {
+                          "fill": "$elevated"
+                        },
+                        "Mh9DV": {
+                          "enabled": true,
+                          "fill": "#00000000"
+                        },
+                        "FgDFK": {
+                          "enabled": true
+                        },
+                        "KsSC1": {
+                          "enabled": false
+                        },
+                        "O4hEo": {
+                          "enabled": false
+                        },
+                        "zcCM7": {
+                          "enabled": false
+                        },
+                        "Opg7S": {
+                          "enabled": true
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "BFHLq",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Empty · 1 reference, at rest with the prompt",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "ALmKc",
+                  "name": "Cell · Inspector · 3 references, the order hint below",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "Qm0fr",
+                      "type": "ref",
+                      "ref": "AWQzm",
+                      "name": "Canvas / Inspector / References",
+                      "descendants": {
+                        "b8yIS": {
+                          "enabled": true
+                        },
+                        "l45D5": {
+                          "enabled": true
+                        },
+                        "E2nVYJ": {
+                          "enabled": true
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "fxiaL",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Inspector · 3 references before the + in the prompt, drag to reorder",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "desHN",
+                  "name": "Cell · Inspector · 1 reference, no order to set",
+                  "fill": "$surface",
+                  "layout": "vertical",
+                  "gap": 14,
+                  "padding": [
+                    26,
+                    12,
+                    0,
+                    12
+                  ],
+                  "children": [
+                    {
+                      "id": "DpnQa",
+                      "type": "ref",
+                      "ref": "AWQzm",
+                      "name": "Canvas / Inspector / References",
+                      "descendants": {
+                        "b8yIS": {
+                          "enabled": true
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "MEAD1",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Inspector · 1 reference before the +",
                       "fontFamily": "Inter",
                       "fontSize": 11,
                       "fontWeight": "normal"
@@ -61148,9 +65117,6 @@
                         "Mh9DV": {
                           "enabled": true,
                           "fill": "#00000000"
-                        },
-                        "J98AB": {
-                          "content": "Lighthouse at dusk, long exposure, soft sea mist…"
                         },
                         "Q1h2r": {
                           "enabled": false
@@ -61464,9 +65430,6 @@
                         "Mh9DV": {
                           "enabled": true,
                           "fill": "#00000000"
-                        },
-                        "J98AB": {
-                          "content": "Lighthouse at dusk, long exposure, soft sea mist…"
                         },
                         "Q1h2r": {
                           "enabled": false
@@ -61850,9 +65813,6 @@
                           "width": 320,
                           "y": 84
                         },
-                        "J98AB": {
-                          "content": "Lighthouse at dusk, long exposure, soft sea…"
-                        },
                         "XmhDU": {
                           "width": 320,
                           "y": 178
@@ -61913,9 +65873,6 @@
                           "width": 320,
                           "y": 84
                         },
-                        "J98AB": {
-                          "content": "Lighthouse at dusk, long exposure, soft sea…"
-                        },
                         "XmhDU": {
                           "width": 320,
                           "y": 178
@@ -61975,9 +65932,6 @@
                         "Mh9DV": {
                           "width": 320,
                           "y": 84
-                        },
-                        "J98AB": {
-                          "content": "Lighthouse at dusk, long exposure, soft sea…"
                         },
                         "XmhDU": {
                           "width": 320,
@@ -62183,12 +66137,7 @@
                       "id": "MuV7H",
                       "type": "ref",
                       "ref": "eXVfc",
-                      "name": "Generate · 3:4 · Long prompt",
-                      "descendants": {
-                        "J98AB": {
-                          "content": "Lighthouse at dusk on a rocky headland, long exposure, soft…"
-                        }
-                      }
+                      "name": "Generate · 3:4 · Long prompt"
                     },
                     {
                       "type": "text",
@@ -62227,9 +66176,6 @@
                         },
                         "Mh9DV": {
                           "enabled": true
-                        },
-                        "J98AB": {
-                          "content": "Lighthouse at dusk on a rocky headland, long exposure, soft…"
                         }
                       }
                     },
@@ -62278,9 +66224,6 @@
                         },
                         "Mh9DV": {
                           "enabled": true
-                        },
-                        "J98AB": {
-                          "content": "Lighthouse at dusk on a rocky headland, long exposure, soft sea…"
                         }
                       }
                     },
@@ -62321,9 +66264,6 @@
                         },
                         "Mh9DV": {
                           "enabled": true
-                        },
-                        "J98AB": {
-                          "content": "Lighthouse at dusk on a rocky headland, long exposure, soft sea…"
                         },
                         "Q1h2r/QGMMg": {
                           "content": "~$0.01–0.08"
@@ -62367,9 +66307,6 @@
                         },
                         "Mh9DV": {
                           "enabled": true
-                        },
-                        "J98AB": {
-                          "content": "Lighthouse at dusk on a rocky headland, long exposure, soft sea…"
                         },
                         "Q1h2r/QGMMg": {
                           "content": "Cost unknown",
@@ -70948,9 +74885,6 @@
             "Mh9DV": {
               "y": 304
             },
-            "J98AB": {
-              "content": "Stoneware mug on linen, soft morning light, a curl of steam…"
-            },
             "XmhDU": {
               "y": 398
             },
@@ -75880,10 +79814,6 @@
                     6
                   ]
                 },
-                "J98AB": {
-                  "content": "White tulips in a clear vase, soft spring light. Pale pink wall…",
-                  "fontSize": 6.5
-                },
                 "Q1h2r": {
                   "height": 16,
                   "gap": 3,
@@ -76382,10 +80312,6 @@
                     6
                   ]
                 },
-                "J98AB": {
-                  "content": "Square crop for the feed, close on the petals",
-                  "fontSize": 6.5
-                },
                 "Q1h2r": {
                   "height": 16,
                   "gap": 3,
@@ -76724,10 +80650,6 @@
                     6,
                     6
                   ]
-                },
-                "J98AB": {
-                  "content": "Tall crop for stories, room above the flowers",
-                  "fontSize": 6.5
                 },
                 "Q1h2r": {
                   "height": 16,
@@ -77331,9 +81253,6 @@
                 "mode": "fill"
               }
             },
-            "J98AB": {
-              "content": "Blue espresso cup and saucer on gray concrete, shot from…"
-            },
             "GHCTd": {
               "id": "Nv0HD",
               "type": "ref",
@@ -77863,9 +81782,6 @@
                     9
                   ]
                 },
-                "J98AB": {
-                  "fontSize": 9.75
-                },
                 "Q1h2r": {
                   "height": 24,
                   "gap": 4.5,
@@ -78201,10 +82117,6 @@
                     9,
                     9
                   ]
-                },
-                "J98AB": {
-                  "content": "A famous singer on stage, close-up",
-                  "fontSize": 9.75
                 },
                 "Q1h2r": {
                   "height": 24,
@@ -78553,10 +82465,6 @@
                     9,
                     9
                   ]
-                },
-                "J98AB": {
-                  "content": "Same lighthouse in snow, blue hour",
-                  "fontSize": 9.75
                 },
                 "Q1h2r": {
                   "height": 24,
@@ -79376,10 +83284,6 @@
                     9
                   ]
                 },
-                "J98AB": {
-                  "content": "Lighthouse at dawn, watercolor",
-                  "fontSize": 9.75
-                },
                 "Q1h2r": {
                   "height": 24,
                   "gap": 4.5,
@@ -79908,9 +83812,6 @@
             },
             "Q5nnOV": {
               "enabled": true
-            },
-            "J98AB": {
-              "content": "Handmade ceramic vase on a stone plinth, soft window light…"
             },
             "Q1h2r/QGMMg": {
               "content": "~$0.52"
