@@ -1,17 +1,17 @@
+import { EMPTY_ENGINE_CONTEXT } from "@openfield/canvas/engine/context-base";
+import { assetsSpec } from "@openfield/canvas/nodes/assets/spec";
+import type { ImageListParams } from "@openfield/canvas/nodes/upload/spec";
 import { t } from "@openfield/core";
 import { Button } from "@openfield/ui";
 import { Images } from "lucide-react";
 import { memo, useEffect, useState } from "react";
-import { EMPTY_ENGINE_CONTEXT } from "../../engine/context-base";
 import { useCanvasActions, useReadOnly } from "../../store/context";
 import { takeOpenPicker } from "../picker-intent";
 import type { NodeComponentProps } from "../registry";
 import { NodeShell } from "../shell/node-shell";
 import { AssetImage } from "../shell/thumb";
 import { useNodeBasics, useParsedParams } from "../shell/use-node";
-import type { ImageListParams } from "../upload/spec";
 import { LibraryPicker } from "./library-picker";
-import { assetsSpec } from "./spec";
 
 // Canvas / Node / Assets (design x3MoC) and / Empty (pRq6B): images picked from the library, the
 // first four in a 2×2 grid. The folder line and folder source wait for folders; until then the

@@ -1,5 +1,7 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
+import { generateSpec } from "@openfield/canvas/nodes/generate/spec";
+import { promptSpec } from "@openfield/canvas/nodes/prompt/spec";
 import type { CanvasDetail, CanvasVersion } from "@openfield/core";
 import type { CanvasDocument, CanvasEdge, CanvasNode } from "@openfield/core/canvas";
 import { createAutosave, type SaveOutcome } from "../src/canvas/editor/autosave";
@@ -37,8 +39,6 @@ import { nextInWalk, walkOrder } from "../src/canvas/editor/keyboard-nav";
 import { matchShortcut, shortcutSheet, toolKey } from "../src/canvas/editor/shortcuts";
 import { groupVersions } from "../src/canvas/editor/versions/rows";
 import { matchScore } from "../src/canvas/nodes/add-node-menu";
-import { generateSpec } from "../src/canvas/nodes/generate/spec";
-import { promptSpec } from "../src/canvas/nodes/prompt/spec";
 import type { NodeDefinition } from "../src/canvas/nodes/registry";
 import {
   applyOps,

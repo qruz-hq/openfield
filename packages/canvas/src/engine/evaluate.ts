@@ -1,5 +1,5 @@
 import { CANVAS_RUN_MAX_JOBS, type CostEstimate } from "@openfield/core";
-import type { NodeDefinition, NodeRegistry } from "../nodes/registry";
+import type { NodeRegistry, NodeSpec } from "../nodes/registry";
 import { ancestorsOf, incomingEdges, topoOrder } from "../store/graph";
 import type { DocSlice } from "../store/ops";
 import { engineNode, isPendingFingerprint } from "./fingerprint";
@@ -38,7 +38,7 @@ export interface EvaluateInput {
 
 export interface NodeEvaluation {
   id: string;
-  definition: NodeDefinition | undefined;
+  definition: NodeSpec | undefined;
   node: EngineNode;
   inputs: ResolvedInputs;
   outputs: OutputValues;

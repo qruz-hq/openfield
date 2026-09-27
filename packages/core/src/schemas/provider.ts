@@ -185,3 +185,14 @@ export type KeyTestResponse = z.infer<typeof keyTestResponseSchema>;
 export type ModelListItem = z.infer<typeof modelListItemSchema>;
 export type ModelsListResponse = z.infer<typeof modelsListResponseSchema>;
 export type ModelsRefreshResponse = z.infer<typeof modelsRefreshResponseSchema>;
+
+/**
+ * Whether a company is early (meta.stable false, §6.2): it shows only with Settings > Experimental
+ * on, and its models are never picked for the person.
+ */
+export function isEarly(
+  providers: readonly Pick<ProviderSummary, "id" | "meta">[] | undefined,
+  providerId: string,
+): boolean {
+  return providers?.find((p) => p.id === providerId)?.meta.stable === false;
+}

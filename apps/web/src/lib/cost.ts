@@ -1,6 +1,5 @@
 import { type CostEstimate, formatCost, type ModelListItem, type SpeedId, t } from "@openfield/core";
-import { estimateRun, resolveValues } from "./controls";
-import type { RunSpeed } from "./provider-settings";
+import { estimateRun, type RunSpeed, resolveValues } from "@openfield/providers/manifest";
 
 /** "~$0.067" for chips, tags and option rows, or nothing when the price isn't known. */
 export function tightCost(estimate: CostEstimate): string | undefined {

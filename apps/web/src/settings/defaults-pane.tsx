@@ -1,9 +1,9 @@
 import { type AspectRatio, MAX_CONCURRENCY, type ModelKey, SETTINGS_DEFAULTS, t } from "@openfield/core";
+import { aspectLabel } from "@openfield/providers/manifest";
 import { Select, SelectItem, Stepper, Switch } from "@openfield/ui";
 import { useId } from "react";
 import { useModels } from "../api/hooks/models";
 import { useSettings, useUpdateSettings } from "../api/hooks/settings";
-import { aspectLabel } from "../lib/controls";
 import { SettingRow, SettingsSection } from "./section";
 
 // Settings · Defaults: what the composer starts with, how many runs go at once overall, and what

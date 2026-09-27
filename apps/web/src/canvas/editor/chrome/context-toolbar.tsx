@@ -1,3 +1,4 @@
+import { roundToCents, sumEstimates } from "@openfield/canvas/engine/cost";
 import { type MessageKey, t } from "@openfield/core";
 import { Button, Divider, IconButton, Surface, Tooltip } from "@openfield/ui";
 import { type ReactFlowState, useStore } from "@xyflow/react";
@@ -19,7 +20,6 @@ import {
 import { type ReactElement, useCallback } from "react";
 import { shallow } from "zustand/shallow";
 import { tightCost } from "../../../lib/cost";
-import { roundToCents, sumEstimates } from "../../engine/cost";
 import { useEngineStore } from "../../engine/engine-store";
 import { nodeRegistry } from "../../nodes/registry";
 import { useCanvas } from "../../store";

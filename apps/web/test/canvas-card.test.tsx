@@ -1,5 +1,16 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import type { EngineContext } from "@openfield/canvas/engine/types";
+import { idleRuntime } from "@openfield/canvas/engine/types";
+import {
+  type CardMediaView,
+  cardBox,
+  cardLayout,
+  restBox,
+  restKey,
+} from "@openfield/canvas/nodes/generate/card-size";
+import { GENERATE_PORTS, generateSpec } from "@openfield/canvas/nodes/generate/spec";
+import { createNodeRegistry } from "@openfield/canvas/nodes/registry";
 import type { ModelListItem } from "@openfield/core";
 import type { CanvasEdge, CanvasNode } from "@openfield/core/canvas";
 import { Position } from "@xyflow/react";
@@ -17,19 +28,15 @@ import {
 } from "../src/canvas/editor/flow/pulse";
 import { type PulseParts, startPulse } from "../src/canvas/editor/flow/pulse-clock";
 import { createBoxFollower, followBoxes } from "../src/canvas/engine/boxes";
-import type { EngineContext } from "../src/canvas/engine/types";
-import { idleRuntime } from "../src/canvas/engine/types";
-import { cardMedia, rememberImageSize, showImage } from "../src/canvas/nodes/generate/card-media";
 import {
-  type CardMediaView,
-  cardBox,
-  cardLayout,
-  restBox,
-  restKey,
-} from "../src/canvas/nodes/generate/card-size";
+  cardMedia,
+  generateBox,
+  generateRest,
+  rememberImageSize,
+  showImage,
+} from "../src/canvas/nodes/generate/card-media";
 import { cardView } from "../src/canvas/nodes/generate/card-state";
-import { GENERATE_PORTS, generateSpec } from "../src/canvas/nodes/generate/spec";
-import { createNodeRegistry, type NodeDefinition } from "../src/canvas/nodes/registry";
+import type { NodeDefinition } from "../src/canvas/nodes/registry";
 import { companyWaitOf } from "../src/canvas/nodes/shell/company-wait";
 import { railLayout } from "../src/canvas/nodes/shell/ports";
 import {
@@ -83,6 +90,13 @@ const box = (ratio: number) => {
   const { w, h, contain } = cardBox(ratio);
   return [Math.round(w * 100) / 100, Math.round(h * 100) / 100, contain];
 };
+
+/** Generate as the editor registers it: its spec plus the box that follows the image on show. */
+const generateDefinition = {
+  ...generateSpec,
+  box: generateBox,
+  rest: generateRest,
+} as unknown as NodeDefinition;
 
 describe("card size", () => {
   test("320 wide and 320 ÷ ratio tall, between 180 and 480, as the height rule lists", () => {
@@ -166,7 +180,7 @@ describe("card size", () => {
 
   test("the node type's box follows its card, and React Flow gets it as the node's size", () => {
     const frame = { id: "g", type: "image.generate" as const, position: { x: 0, y: 0 }, parentId: null };
-    const layout = generateSpec.box!({
+    const layout = generateBox({
       frame: { ...frame, collapsed: false, title: null, presetLocks: [], typeVersion: 1 },
       params: { model: "google:banana", size: { kind: "aspect", ratio: "4:5" } },
       result: null,
@@ -217,7 +231,7 @@ describe("card size", () => {
 });
 
 describe("new cards", () => {
-  const registry = createNodeRegistry([generateSpec as unknown as NodeDefinition]);
+  const registry = createNodeRegistry([generateDefinition]);
   const at = { x: 0, y: 0 };
 
   test("a new Generate node starts at the shape its default aspect ratio asks for", () => {
@@ -509,7 +523,7 @@ describe("ports", () => {
 });
 
 describe("saved size", () => {
-  const registry = createNodeRegistry([generateSpec as unknown as NodeDefinition]);
+  const registry = createNodeRegistry([generateDefinition]);
   const wide = { model: "google:banana", size: { kind: "aspect", ratio: "16:9" } };
   const docWith = (nodes: CanvasNode[]) =>
     fromDocument({ ...emptyDocument(CANVAS_ID, "Boxes"), nodes }).slice;

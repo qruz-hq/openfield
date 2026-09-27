@@ -1,9 +1,9 @@
+import { nodeTitle } from "@openfield/canvas/engine/describe";
+import { incomingEdges } from "@openfield/canvas/store/graph";
+import type { CanvasOp } from "@openfield/canvas/store/ops";
 import { t } from "@openfield/core";
 import { type DragEvent, type KeyboardEvent, useMemo, useState } from "react";
-import { nodeTitle } from "../../engine/describe";
 import { useCanvas, useCanvasStoreApi, useReadOnly } from "../../store/context";
-import { incomingEdges } from "../../store/graph";
-import type { CanvasOp } from "../../store/ops";
 import { nodeRegistry } from "../registry";
 import { InspectorField } from "../shell/inspector-parts";
 import { AssetImage } from "../shell/thumb";

@@ -1,4 +1,4 @@
-import type { NodeRuntime } from "../engine/types";
+import type { NodeRuntime } from "@openfield/canvas/engine/types";
 import type { CanvasState } from "./types";
 
 // Plain selectors, usable with useCanvas, useCanvasShallow or getState().

@@ -1,7 +1,7 @@
+import type { EngineContext } from "@openfield/canvas/engine/types";
+import type { CanvasOp, DocSlice } from "@openfield/canvas/store/ops";
 import type { NodeRegistry } from "../nodes/registry";
-import type { CanvasOp, DocSlice } from "../store/ops";
 import type { CanvasStore } from "../store/store";
-import type { EngineContext } from "./types";
 
 // Saved sizes of nodes whose box follows what they show (Generate's image card, design Y5jjx).
 // React Flow draws the live box (NodeDefinition.box); this keeps the saved size in step so a

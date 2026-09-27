@@ -1,8 +1,8 @@
+import type { SeedParam } from "@openfield/canvas/nodes/params";
 import { type ModelListItem, t } from "@openfield/core";
 import { resolveControl } from "@openfield/providers/manifest";
 import { Segmented, SegmentedItem } from "@openfield/ui";
 import { Dices } from "lucide-react";
-import type { SeedParam } from "../params";
 import { InspectorField } from "../shell/inspector-parts";
 
 // The seed setting (§7.7, §0.11): on a model without seeds, the core control shows disabled with

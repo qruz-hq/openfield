@@ -4,6 +4,7 @@ import {
   isLegalSettingValue,
   LIMITS_PANEL_ID,
   type ModelManifest,
+  type ProviderSettingsResponse,
   type ProviderSettingsSchema,
   type ResolvedProviderSettings,
   type SettingCondition,
@@ -13,6 +14,7 @@ import {
   type SettingValue,
   type SpeedId,
   settingFields,
+  speedName,
 } from "@openfield/core";
 import { resolveSpeed } from "./speed";
 
@@ -118,6 +120,32 @@ export function resolveProviderSettings(
     if (field.kind === "select" && field.role === "speed") speed = value as SpeedId;
   }
   return { values, speed, speedRequested, notes };
+}
+
+export interface RunSpeed {
+  /** What the model runs at. */
+  speed: SpeedId;
+  /** What the company's settings ask for. */
+  requested: SpeedId;
+  /** The model doesn't offer the requested speed, so it runs at Standard. */
+  fellBack: boolean;
+  /** Both speeds by the company's own names ("Flex"). */
+  name: string;
+  requestedName: string;
+}
+
+/** The speed a run of `model` uses under its company's current settings. Standard until they load. */
+export function runSpeed(settings: ProviderSettingsResponse | undefined, model: ModelManifest): RunSpeed {
+  const resolved = settings
+    ? resolveProviderSettings(settings.schema, settings.values, model)
+    : { speed: "standard" as const, speedRequested: "standard" as const };
+  return {
+    speed: resolved.speed,
+    requested: resolved.speedRequested,
+    fellBack: resolved.speed !== resolved.speedRequested,
+    name: speedName(settings?.schema, resolved.speed),
+    requestedName: speedName(settings?.schema, resolved.speedRequested),
+  };
 }
 
 /**

@@ -1,24 +1,24 @@
+import { speedOf } from "@openfield/canvas/engine/context-base";
+import { modelKeyOf, modelsFitting } from "@openfield/canvas/engine/inputs";
+import { type GenerateParams, generateSpec } from "@openfield/canvas/nodes/generate/spec";
+import { uploadSpec } from "@openfield/canvas/nodes/upload/spec";
+import { incomingEdges, newEdgeId, newNodeId } from "@openfield/canvas/store/graph";
 import { type ModelListItem, t } from "@openfield/core";
+import { clampBatch } from "@openfield/providers/manifest";
 import { Badge, Button, cn, Divider, IconButton, MiniChip, Stepper } from "@openfield/ui";
 import { ChevronDown, Link, Plus, SlidersHorizontal, Timer } from "lucide-react";
 import { type ReactNode, useId, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { UPLOAD_ACCEPT, uploadImages } from "../../../api/hooks/uploads";
 import { errorMessage } from "../../../api/raw";
-import { clampBatch } from "../../../lib/controls";
 import { notifyError } from "../../../lib/notify";
-import { speedOf } from "../../engine/context-base";
 import { useCanvasEngineContext, useNodeAnalysis } from "../../engine/engine-store";
-import { modelKeyOf, modelsFitting } from "../../engine/inputs";
 import { useCanvasStoreApi, useNodeFrame, useReadOnly } from "../../store/context";
-import { incomingEdges, newEdgeId, newNodeId } from "../../store/graph";
 import { InspectorRun, ModelField, SizeField } from "../shell/inspector-parts";
 import { useNodeDisplay, useParsedParams, useRunNode, useSetParams } from "../shell/use-node";
-import { uploadSpec } from "../upload/spec";
 import { sizeControls, useModelSwitch } from "./controls";
 import { ReferenceOrder } from "./reference-order";
 import { SeedField } from "./seed-field";
-import { type GenerateParams, generateSpec } from "./spec";
 
 // Generate's settings (design AWQzm): the prompt card (add a reference, the whole prompt coming in
 // from a Prompt node, the node's own words), the model and its speed note, the size fields

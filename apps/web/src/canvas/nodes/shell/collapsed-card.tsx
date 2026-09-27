@@ -1,9 +1,9 @@
+import type { NodeDisplay } from "@openfield/canvas/engine/types";
 import { t } from "@openfield/core";
 import { cn, IconButton } from "@openfield/ui";
 import { Maximize2 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useProviders } from "../../../api/hooks/keys";
-import type { NodeDisplay } from "../../engine/types";
 import { useCanvasActions, useReadOnly } from "../../store/context";
 import { blockerCopy } from "./blocker-copy";
 import { AssetImage } from "./thumb";

@@ -1,3 +1,4 @@
+import { isTerminalNode } from "@openfield/canvas/engine/runtime";
 import { CANVAS_RUN_MAX_JOBS, t } from "@openfield/core";
 import { Button, Spinner, Tooltip } from "@openfield/ui";
 import { Play, Square } from "lucide-react";
@@ -6,7 +7,6 @@ import { tightCost } from "../../lib/cost";
 import { useCanvas, useCanvasStoreApi } from "../store/context";
 import { selectAnyRunning } from "../store/selectors";
 import { activeRuns, useEngineStore } from "./engine-store";
-import { isTerminalNode } from "./runtime";
 
 // The top bar's run controls (design byh7K, TW3j1, ghBKJ): Run all with the price of what would
 // run, off when nothing on the canvas runs; while anything is in flight, a spinner, "2 of 6 done"

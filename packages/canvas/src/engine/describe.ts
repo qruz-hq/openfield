@@ -1,5 +1,5 @@
 import { formatLocale, parseModelKey, t } from "@openfield/core";
-import { qualityLabel } from "../../lib/controls";
+import { qualityLabel } from "@openfield/providers/manifest";
 import type { NodeRegistry } from "../nodes/registry";
 import type { NodeFrame } from "../store/ops";
 import type { EngineContext, RunPlanItem } from "./types";

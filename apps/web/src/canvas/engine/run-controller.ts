@@ -1,3 +1,7 @@
+import { type CompileOutcome, compileRun } from "@openfield/canvas/engine/compile";
+import { buildPreview } from "@openfield/canvas/engine/preview";
+import { blockerFromReason } from "@openfield/canvas/engine/runtime";
+import type { CompiledNode, EngineContext, NodeRuntime } from "@openfield/canvas/engine/types";
 import {
   CANVAS_CONFIRM_JOBS,
   CANVAS_RUN_MAX_JOBS,
@@ -9,11 +13,8 @@ import { ApiError, errorMessage } from "../../api/raw";
 import { notify, notifyError } from "../../lib/notify";
 import type { NodeRegistry } from "../nodes/registry";
 import type { CanvasStore } from "../store/store";
-import { type CompileOutcome, compileRun } from "./compile";
 import { activeRuns, useEngineStore } from "./engine-store";
-import { buildPreview } from "./preview";
-import { blockerFromReason } from "./runtime";
-import type { CompiledNode, EngineContext, NodeRuntime, RunController, RunRequest } from "./types";
+import type { RunController, RunRequest } from "./run-request";
 
 // The run controller (§7.7): compile, ask when it has to, post, and seed the node states until
 // the first canvas_run.updated frame lands. Installed on the store by CanvasEngine; the editor's

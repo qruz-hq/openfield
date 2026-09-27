@@ -1,25 +1,8 @@
-import { type ModelKey, t } from "@openfield/core";
-import { BrandMark, ModelCaption, ProviderLogo, Segmented, SegmentedItem, StepperChip } from "@openfield/ui";
-import { X } from "lucide-react";
-import { memo, useMemo } from "react";
-import { estimateRun } from "../../../lib/controls";
-import { tightCost } from "../../../lib/cost";
-import { logoFor } from "../../../lib/provider";
-import { EMPTY_ENGINE_CONTEXT } from "../../engine/context-base";
-import { modelName } from "../../engine/describe";
-import { useNodeAnalysis } from "../../engine/engine-store";
-import { modelKeyOf, modelsFitting } from "../../engine/inputs";
-import type { EngineContext } from "../../engine/types";
-import { useNodeResult, useReadOnly } from "../../store/context";
-import { carriedFor } from "../generate/settings";
-import type { NodeComponentProps } from "../registry";
-import { CollapsedStatus } from "../shell/collapsed-card";
-import { NodeShell } from "../shell/node-shell";
-import { ResultGrid, sourceLabel } from "../shell/results";
-import { RunPill } from "../shell/run-pill";
-import { StateBand } from "../shell/state-band";
-import { useNodeBasics, useNodeDisplay, useParsedParams, useSetParams } from "../shell/use-node";
-import { AddModelPicker } from "./add-model";
+import { EMPTY_ENGINE_CONTEXT } from "@openfield/canvas/engine/context-base";
+import { modelName } from "@openfield/canvas/engine/describe";
+import { modelKeyOf, modelsFitting } from "@openfield/canvas/engine/inputs";
+import type { EngineContext } from "@openfield/canvas/engine/types";
+import { carriedFor } from "@openfield/canvas/nodes/generate/settings";
 import {
   LIST_MAX,
   modelList,
@@ -29,7 +12,24 @@ import {
   type VariationStrategy,
   type VariationsParams,
   variationsSpec,
-} from "./spec";
+} from "@openfield/canvas/nodes/variations/spec";
+import { type ModelKey, t } from "@openfield/core";
+import { estimateRun } from "@openfield/providers/manifest";
+import { BrandMark, ModelCaption, ProviderLogo, Segmented, SegmentedItem, StepperChip } from "@openfield/ui";
+import { X } from "lucide-react";
+import { memo, useMemo } from "react";
+import { tightCost } from "../../../lib/cost";
+import { logoFor } from "../../../lib/provider";
+import { useNodeAnalysis } from "../../engine/engine-store";
+import { useNodeResult, useReadOnly } from "../../store/context";
+import type { NodeComponentProps } from "../registry";
+import { CollapsedStatus } from "../shell/collapsed-card";
+import { NodeShell } from "../shell/node-shell";
+import { ResultGrid, sourceLabel } from "../shell/results";
+import { RunPill } from "../shell/run-pill";
+import { StateBand } from "../shell/state-band";
+import { useNodeBasics, useNodeDisplay, useParsedParams, useSetParams } from "../shell/use-node";
+import { AddModelPicker } from "./add-model";
 
 // Canvas / Node / Variations (design zodbS; Models mode mdu6t): results over the strategy switch
 // (New takes · Prompts · Models) and that strategy's own control, then the run pill. An incoming

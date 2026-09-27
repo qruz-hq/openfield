@@ -1,6 +1,7 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { beforeAll, describe, expect, test } from "bun:test";
 import { type SelectSettingField, type SettingsPanel, setFormatLocale } from "@openfield/core";
+import { runSpeed } from "@openfield/providers/manifest";
 import { defaultPrice, speedPrice } from "../src/lib/cost";
 import {
   batchExpiryDays,
@@ -10,7 +11,6 @@ import {
   isAsyncSpeed,
   optionAvailability,
   optionPriceRange,
-  runSpeed,
   settingSummaries,
 } from "../src/lib/provider-settings";
 import { lite, pro, speedSettings } from "./fixtures";

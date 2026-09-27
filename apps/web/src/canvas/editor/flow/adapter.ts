@@ -1,7 +1,7 @@
+import type { EngineContext, PortType } from "@openfield/canvas/engine/types";
 import { t } from "@openfield/core";
 import type { CanvasEdge } from "@openfield/core/canvas";
 import type { Edge, Node } from "@xyflow/react";
-import type { EngineContext, PortType } from "../../engine/types";
 import type { NodeDefinition } from "../../nodes/registry";
 import { type DocSlice, type NodeFrame, parentsFirst, type Size } from "../../store";
 import type { CanvasTool, SelectionState } from "../../store/types";

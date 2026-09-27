@@ -6,8 +6,7 @@ import {
   type SizeSpec,
   VARIATION_STRATEGIES,
 } from "@openfield/core";
-import { LayoutGrid } from "lucide-react";
-import { estimateRun, type Resolved } from "../../../lib/controls";
+import { estimateRun, type Resolved } from "@openfield/providers/manifest";
 import { speedOf } from "../../engine/context-base";
 import { scaleEstimate, sumEstimates } from "../../engine/cost";
 import {
@@ -31,15 +30,8 @@ import type {
   RunCall,
 } from "../../engine/types";
 import { carriedFor, newNodeSize, resolveFor, type SizeParams, wireSettings } from "../generate/settings";
-import {
-  type NodeSpec,
-  readInt,
-  readModel,
-  readModels,
-  readQuality,
-  readResolution,
-  readSize,
-} from "../params";
+import { readInt, readModel, readModels, readQuality, readResolution, readSize } from "../params";
+import type { NodeSpec } from "../registry";
 
 // Variations (design zodbS, Models mode mdu6t, M4-21): several takes of one image at once.
 // New takes (same-prompt) repeats the same request; on a model that takes seeds the server picks a
@@ -314,7 +306,6 @@ export const variationsSpec: NodeSpec<VariationsParams> = {
   label: "canvas.nodes.variations.label",
   description: "canvas.nodes.variations.description",
   keywords: ["takes", "compare", "models", "prompts", "several"],
-  icon: LayoutGrid,
   category: "generate",
   menu: { group: "image", order: 2 },
   // Sized by its content: 320×360 (design zodbS), 634 wide in Models mode (mdu6t).

@@ -1,3 +1,4 @@
+import { isAnnotationHandle } from "@openfield/canvas/engine/types";
 import { t } from "@openfield/core";
 import { cn } from "@openfield/ui";
 import {
@@ -21,7 +22,6 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { isAnnotationHandle } from "../../engine/types";
 import { useCompanyWait } from "../../nodes/shell/company-wait";
 import { useCanvas, useCanvasActions, useReadOnly } from "../../store";
 import { ANNOTATION_EDGE_TYPE, DATA_EDGE_TYPE, type FlowEdge } from "./adapter";

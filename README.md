@@ -187,6 +187,7 @@ apps/
 packages/
   core/         @openfield/core       Shared zod schemas, constants, i18n. Runs anywhere.
   providers/    @openfield/providers  Adapters, model registry, cost estimates
+  canvas/       @openfield/canvas     Canvas engine: node types, fingerprints, run compiler
   db/           @openfield/db         Drizzle schema and migrations (SQLite)
   ui/           @openfield/ui         Design tokens and presentational components
 e2e/                                  Playwright tests

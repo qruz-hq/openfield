@@ -7,10 +7,10 @@ import {
   speedName,
   t,
 } from "@openfield/core";
+import { type RunSpeed, runSpeed } from "@openfield/providers/manifest";
 import { queryOptions, useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { notifyError } from "../../lib/notify";
-import { type RunSpeed, runSpeed } from "../../lib/provider-settings";
 import { api, call, queryClient, queryKeys } from "../client";
 import { useProviders } from "./keys";
 

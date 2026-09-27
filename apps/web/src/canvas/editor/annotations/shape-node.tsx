@@ -1,3 +1,4 @@
+import { SHAPE_MIN, shapeSpec } from "@openfield/canvas/nodes/annotations";
 import { t } from "@openfield/core";
 import { cn } from "@openfield/ui";
 import { Square } from "lucide-react";
@@ -11,13 +12,6 @@ import { EditableText, useEditingText } from "./editable-text";
 // Shape. The design has no node for it yet; this is the plan's proposal from kit values: a
 // 210×126 rectangle on $elevated-2 with a 1 px $border-strong line, radius 8, and a centred
 // 14/500 label. Only rectangles for now; `shape` is saved so more can follow.
-
-export interface ShapeParams {
-  shape: "rectangle";
-  text: string;
-}
-
-const SHAPE_MIN = { w: 40, h: 40 };
 
 const ShapeNode = memo(function ShapeNode({ id, selected, lod }: NodeComponentProps) {
   const params = useNodeParams(id);
@@ -49,23 +43,4 @@ const ShapeNode = memo(function ShapeNode({ id, selected, lod }: NodeComponentPr
   );
 });
 
-export const shapeNode = defineNode<ShapeParams>({
-  type: "shape",
-  typeVersion: 1,
-  label: "canvas.editor.annotations.shape",
-  description: "canvas.editor.annotations.shapeLine",
-  keywords: ["rectangle", "box"],
-  icon: Square,
-  category: "annotation",
-  // From the toolbar (R) only.
-  menu: null,
-  size: { w: 210, h: 126 },
-  minSize: SHAPE_MIN,
-  resizable: true,
-  annotation: true,
-  ports: [],
-  defaults: () => ({ shape: "rectangle", text: "" }),
-  parseParams: (raw) => ({ shape: "rectangle", text: typeof raw.text === "string" ? raw.text : "" }),
-  runnable: false,
-  Component: ShapeNode,
-});
+export const shapeNode = defineNode({ ...shapeSpec, icon: Square, Component: ShapeNode });

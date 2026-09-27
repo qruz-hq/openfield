@@ -1,10 +1,23 @@
+import { idleRuntime, type NodeRuntime } from "@openfield/canvas/engine/types";
+import { fromDocument, toDocument } from "@openfield/canvas/store/document";
+import {
+  type CanvasFragment,
+  containedIn,
+  extractFragment,
+  remapFragment,
+} from "@openfield/canvas/store/graph";
+import {
+  applyOps,
+  type CanvasOp,
+  CanvasOpError,
+  type DocSlice,
+  lockedTargets,
+  type Point,
+} from "@openfield/canvas/store/ops";
 import type { CanvasDetail } from "@openfield/core";
 import { createStore, type StoreApi } from "zustand/vanilla";
-import { idleRuntime, NOOP_RUN_CONTROLLER, type NodeRuntime } from "../engine/types";
-import { fromDocument, toDocument } from "./document";
-import { type CanvasFragment, containedIn, extractFragment, remapFragment } from "./graph";
+import { NOOP_RUN_CONTROLLER } from "../engine/run-request";
 import { emptyHistory, pushEntry, sealTop } from "./history";
-import { applyOps, type CanvasOp, CanvasOpError, type DocSlice, lockedTargets, type Point } from "./ops";
 import type {
   ApplyOptions,
   ApplyResult,

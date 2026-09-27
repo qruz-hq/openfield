@@ -1,3 +1,4 @@
+import type { NodeBlocker, NodeDisplay } from "@openfield/canvas/engine/types";
 import { ERROR_PRIMARY_ACTION, type ErrorCode, errorCopy, t } from "@openfield/core";
 import { Button, cn, ProgressBar, Spinner } from "@openfield/ui";
 import { Check, CircleAlert, Clock3, Info, KeyRound, Play } from "lucide-react";
@@ -5,7 +6,6 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useProviders } from "../../../api/hooks/keys";
 import { companyName, providerOfKey } from "../../../lib/provider";
-import type { NodeBlocker, NodeDisplay } from "../../engine/types";
 import { useCanvasActions, useCanvasStoreApi, useNodeResult, useNodeRuntime } from "../../store/context";
 import { blockerCopy, companyOf } from "./blocker-copy";
 import { type CompanyWait, useCompanyWait } from "./company-wait";

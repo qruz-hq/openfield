@@ -1,4 +1,4 @@
-import type { CanvasOp } from "./ops";
+import type { CanvasOp } from "@openfield/canvas/store/ops";
 
 // Undo and redo (§7.8): 100 entries, and continuous gestures coalesce into one. A drag passes a key
 // unique to the gesture; typing passes one key per field and merges while the pauses stay under 500 ms.

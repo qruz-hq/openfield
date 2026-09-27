@@ -1,10 +1,10 @@
+import { modelKeyOf } from "@openfield/canvas/engine/inputs";
+import type { EngineContext, NodeRuntime } from "@openfield/canvas/engine/types";
+import { readModel } from "@openfield/canvas/nodes/params";
 import type { ModelListItem } from "@openfield/core";
 import { type LiveBatch, useLive } from "../../../lib/live";
 import { useCanvasEngineContext } from "../../engine/engine-store";
-import { modelKeyOf } from "../../engine/inputs";
-import type { EngineContext, NodeRuntime } from "../../engine/types";
 import { useNodeParams, useNodeRuntime } from "../../store/context";
-import { readModel } from "../params";
 
 // A run that waits at its company instead of working in the open (§2.4): a Batch run, which can
 // take hours, or a Flex call, which can take minutes. There's no progress to show, so the card

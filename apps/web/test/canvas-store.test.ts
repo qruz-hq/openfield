@@ -1,10 +1,11 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
+import type { EngineContext, PortSpec } from "@openfield/canvas/engine/types";
+import { createNodeRegistry, railOffsets } from "@openfield/canvas/nodes/registry";
 import type { CanvasDetail } from "@openfield/core";
 import { type CanvasDocument, type CanvasNode, canvasDocumentSchema } from "@openfield/core/canvas";
 import { Type } from "lucide-react";
-import type { EngineContext, PortSpec } from "../src/canvas/engine/types";
-import { createNodeRegistry, defineNode, railOffsets } from "../src/canvas/nodes/registry";
+import { defineNode } from "../src/canvas/nodes/registry";
 import {
   applyOps,
   type CanvasOp,
@@ -13,6 +14,7 @@ import {
   extractFragment,
   fromDocument,
   incomingEdges,
+  type PendingConnection,
   topoOrder,
   wouldCreateCycle,
 } from "../src/canvas/store";
@@ -269,22 +271,17 @@ describe("node registry", () => {
 
   test("groups the menu in catalogue order and filters it for a dropped connection", () => {
     expect(registry.menu(ctx).map((g) => g.group)).toEqual(["references", "image", "utilities"]);
-    const fromImage = registry.menu(ctx, {
+    // A connection dragged out of an Upload node's images.
+    const pending: PendingConnection = {
       nodeId: "u",
       handleId: "images",
       handleType: "source",
       portType: "image",
-    });
+    };
+    const fromImage = registry.menu(ctx, pending);
     expect(fromImage[0]).toMatchObject({ group: "connects" });
     expect(fromImage[0]!.items.map((d) => d.type)).toEqual(["image.generate"]);
-    expect(
-      registry.fittingPort("image.generate", {
-        nodeId: "u",
-        handleId: "images",
-        handleType: "source",
-        portType: "image",
-      })?.id,
-    ).toBe("input_images");
+    expect(registry.fittingPort("image.generate", pending)?.id).toBe("input_images");
     expect(registry.ports("image.generate", "in").map((p) => p.id)).toEqual(["prompt", "input_images"]);
   });
 

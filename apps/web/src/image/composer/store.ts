@@ -1,7 +1,7 @@
 import type { ModelKey } from "@openfield/core";
+import type { ComposerValues } from "@openfield/providers/manifest";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { ComposerValues } from "../../lib/controls";
 import { safeStorage } from "../../lib/storage";
 
 // What the person has set up in the composer. Submitting never clears it, and it survives a

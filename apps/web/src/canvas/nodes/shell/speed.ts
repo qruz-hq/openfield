@@ -1,9 +1,9 @@
+import type { EngineContext } from "@openfield/canvas/engine/types";
 import { type ModelListItem, t } from "@openfield/core";
 import { useProviders } from "../../../api/hooks/keys";
 import { speedFallbackHint } from "../../../lib/cost";
 import { companyName } from "../../../lib/provider";
 import { useCanvasEngineContext } from "../../engine/engine-store";
-import type { EngineContext } from "../../engine/types";
 
 // What a node's price says about its company's speed (§0.3), in the composer's words: nothing at
 // Standard, the speed in the tooltip otherwise, and "Standard for this model" when the model lacks

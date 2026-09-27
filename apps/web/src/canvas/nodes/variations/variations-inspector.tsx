@@ -1,12 +1,12 @@
+import { speedOf } from "@openfield/canvas/engine/context-base";
+import { modelKeyOf, modelsFitting } from "@openfield/canvas/engine/inputs";
+import { type VariationsParams, variationsSpec } from "@openfield/canvas/nodes/variations/spec";
 import { useMemo } from "react";
-import { speedOf } from "../../engine/context-base";
 import { useCanvasEngineContext, useNodeAnalysis } from "../../engine/engine-store";
-import { modelKeyOf, modelsFitting } from "../../engine/inputs";
 import { useReadOnly } from "../../store/context";
 import { sizeControls, useModelSwitch } from "../generate/controls";
 import { InspectorRun, ModelField, SizeField } from "../shell/inspector-parts";
 import { useNodeDisplay, useParsedParams, useRunNode, useSetParams } from "../shell/use-node";
-import { type VariationsParams, variationsSpec } from "./spec";
 
 // Variations' settings: the model for New takes and Prompts (Models mode picks its models on the
 // node), the size fields every run shares, then Run. Each model in Models mode clamps them to what
