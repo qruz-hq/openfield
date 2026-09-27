@@ -1,11 +1,12 @@
 import { type McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
-import { getAsset, libraryPage } from "@openfield/db";
+import { getAsset, getCanvas, libraryPage } from "@openfield/db";
+import { canvasUrl, describeCanvas } from "./canvas";
 import { imageInfo, PREVIEW_EDGE, preview } from "./images";
 import type { ToolContext } from "./kit";
 
-// Library images as resources, for apps that let the person attach one (openfield://asset/<id>).
-// The canvas resource joins with the canvas tools.
+// Library images and canvases as resources, for apps that let the person attach one
+// (openfield://asset/<id>, openfield://canvas/<id>).
 
 /** How many recent images the resource list offers. */
 const RECENT = 50;
@@ -44,6 +45,40 @@ export function registerResources(server: McpServer, ctx: ToolContext): void {
         contents: [
           ...(image ? [{ uri: uri.href, mimeType: image.mimeType, blob: image.data }] : []),
           { uri: uri.href, mimeType: "application/json", text: JSON.stringify(details, null, 2) },
+        ],
+      };
+    },
+  );
+
+  server.registerResource(
+    "canvas",
+    new ResourceTemplate("openfield://canvas/{id}", {
+      list: async () => ({
+        resources: ctx.svc.canvases.list().map((c) => ({
+          uri: `openfield://canvas/${c.id}`,
+          name: c.name,
+          mimeType: "application/json",
+        })),
+      }),
+    }),
+    {
+      title: "Canvas",
+      description:
+        "An Openfield canvas: its nodes, their settings and states, and its connections, as get_canvas gives them.",
+      mimeType: "application/json",
+    },
+    async (uri, { id }) => {
+      if (!getCanvas(ctx.svc.db, String(id))) {
+        throw new McpError(ErrorCode.InvalidParams, `There's no canvas with the id ${String(id)}.`);
+      }
+      const { view } = await describeCanvas(ctx, String(id));
+      return {
+        contents: [
+          {
+            uri: uri.href,
+            mimeType: "application/json",
+            text: JSON.stringify({ ...view, url: canvasUrl(ctx, view.canvasId) }, null, 2),
+          },
         ],
       };
     },

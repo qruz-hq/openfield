@@ -4,13 +4,16 @@ import { INSTRUCTIONS } from "./instructions";
 import type { AgentSession, ToolContext } from "./kit";
 import { registerResources } from "./resources";
 import { accountTools } from "./tools/account";
+import { canvasTools } from "./tools/canvas";
+import { canvasRunTools } from "./tools/canvas-runs";
 import { folderTools } from "./tools/folders";
 import { generateTools } from "./tools/generate";
 import { libraryTools } from "./tools/library";
 import { modelTools } from "./tools/models";
+import { presenceTools } from "./tools/presence";
 import { runTools } from "./tools/runs";
 
-// One MCP server per connected app. Tools come in groups; the canvas group joins this list.
+// One MCP server per connected app, its tools in groups.
 
 export type ToolGroup = (server: McpServer, ctx: ToolContext) => void;
 
@@ -20,6 +23,9 @@ export const TOOL_GROUPS: readonly ToolGroup[] = [
   runTools,
   libraryTools,
   folderTools,
+  canvasTools,
+  canvasRunTools,
+  presenceTools,
   accountTools,
 ];
 
