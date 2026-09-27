@@ -12,8 +12,8 @@ import {
 import { buildPreview } from "@openfield/canvas/engine/preview";
 import type { EngineContext, NodeRuntime, RunNodeState, RunState } from "@openfield/canvas/engine/types";
 import { idleRuntime } from "@openfield/canvas/engine/types";
-import { createNodeRegistry } from "@openfield/canvas/nodes/registry";
-import { DATA_SPECS } from "@openfield/canvas/nodes/specs";
+import { createNodeRegistry, type NodeRegistry } from "@openfield/canvas/nodes/registry";
+import { DATA_SPECS, specRegistry } from "@openfield/canvas/nodes/specs";
 import { type CanvasRunBody, HASH_RE, type ModelListItem, type ProviderSummary } from "@openfield/core";
 import {
   type CanvasEdge,
@@ -26,7 +26,7 @@ import { checkConnection } from "../src/canvas/engine/connect";
 import { useEngineStore } from "../src/canvas/engine/engine-store";
 import { createFollower } from "../src/canvas/engine/follow";
 import { createRunController } from "../src/canvas/engine/run-controller";
-import type { NodeDefinition } from "../src/canvas/nodes/registry";
+import { type NodeDefinition, nodeRegistry } from "../src/canvas/nodes/registry";
 import { nodeSpeed } from "../src/canvas/nodes/shell/speed";
 import {
   applyOps,
@@ -311,6 +311,25 @@ describe("compiler", () => {
     expect(out.items[0]!.item.bypassCache).toBe(true);
     expect(out.upToDate).toEqual([]);
     expect(out.jobs).toBe(1);
+  });
+});
+
+describe("the server's registry", () => {
+  test("compiles what the editor's does, from the specs alone", async () => {
+    // The editor's registry adds icons, components and Generate's measured box; none of it may
+    // change a plan, or a canvas run from the server would differ from the same run in a tab.
+    const doc = apply(chain(), { op: "addNode", node: node("n", "note", { text: "Shoot at blue hour" }) });
+    const compileWith = async (with_: NodeRegistry) =>
+      compileRun({
+        doc,
+        registry: with_,
+        ctx,
+        fingerprints: await resolveFingerprints(planFingerprints(doc, with_, ctx), new Map()),
+        request: { scope: "all", nodeIds: [] },
+      });
+    const editor = await compileWith(nodeRegistry);
+    expect(editor.kind).toBe("plan");
+    expect(await compileWith(specRegistry)).toEqual(editor);
   });
 });
 
