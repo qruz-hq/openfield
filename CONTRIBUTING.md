@@ -29,10 +29,11 @@ To try restarts by hand: send a Google image tagged `#fake:slow` and one to the 
 
 | Workspace | Owns | May import |
 |---|---|---|
-| `apps/web` | The React app | `core`, `ui`, `@openfield/providers/manifest`, and the `AppType` type from `@openfield/server/app-type` |
-| `apps/server` | Hono server, queue, files, keys | `core`, `db`, `@openfield/providers/server`, `@openfield/providers/manifest` |
+| `apps/web` | The React app | `core`, `ui`, `canvas`, `@openfield/providers/manifest`, and the `AppType` type from `@openfield/server/app-type` |
+| `apps/server` | Hono server, queue, files, keys | `core`, `db`, `canvas`, `@openfield/providers/server`, `@openfield/providers/manifest` |
 | `packages/core` | zod schemas, constants, i18n | nothing in the repo (only `zod` and `ulid`) |
 | `packages/providers` | Adapters, registry, `estimate()`, `resolveControl()` | `core` |
+| `packages/canvas` | Canvas document model and engine: node specs, fingerprints, the run compiler | `core`, `@openfield/providers/manifest` |
 | `packages/db` | Drizzle schema, migrations, queries | `core` |
 | `packages/ui` | Tokens and presentational components | `core` (types and `t()` only) |
 
@@ -43,6 +44,7 @@ The rules behind the table:
 3. `@openfield/providers` has two entries. `/manifest` is browser-safe. `/server` holds the registry and the adapters. An adapter imports only `../types`, its own folder and `@openfield/core`, never another adapter.
 4. Only `apps/server` imports `packages/db`, and SQL lives only in `packages/db`.
 5. `packages/core` is a leaf that runs in the browser, the server and tests alike.
+6. `packages/canvas` runs in the browser and the server, so it has no React, no browser state and no `bun:` or `node:` module. What only the editor draws stays in `apps/web`.
 
 Biome enforces these per folder (`biome.json`), and `bun run check:bundle` builds the web app and fails if server code or a key-shaped string lands in the bundle, source maps included.
 

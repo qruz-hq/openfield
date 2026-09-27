@@ -26,6 +26,7 @@ const WATCHED = process.env.OPENFIELD_DEV_WATCH?.split(delimiter).filter(Boolean
   "apps/server/src",
   "packages/core/src",
   "packages/providers/src",
+  "packages/canvas/src",
   "packages/db/src",
   "packages/db/migrations",
 ];
