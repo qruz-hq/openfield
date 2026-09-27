@@ -45,7 +45,7 @@ export class McpSessions {
   ) {
     this.#idleMs = opts.idleMs ?? IDLE_MS;
     this.#now = opts.now ?? Date.now;
-    this.#sweep = setInterval(() => this.#expire(), SWEEP_MS);
+    this.#sweep = setInterval(() => this.sweep(), SWEEP_MS);
     this.#sweep.unref?.();
   }
 
@@ -137,7 +137,8 @@ export class McpSessions {
     if (oldest) this.#drop(oldest.id);
   }
 
-  #expire(): void {
+  /** Ends sessions idle past the limit. Runs every minute. */
+  sweep(): void {
     const cutoff = this.#now() - this.#idleMs;
     for (const live of [...this.#live.values()]) if (live.lastUsed < cutoff) this.#drop(live.id);
   }

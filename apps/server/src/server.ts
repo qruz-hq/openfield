@@ -412,7 +412,7 @@ function agentLaunch(paths: HomePaths, port: number, configuredPort: number): Ag
   const env: Record<string, string> = {};
   if (paths.root !== resolveHome({})) env.OPENFIELD_HOME = paths.root;
   if (port !== configuredPort) env.OPENFIELD_PORT = String(port);
-  return { command: process.execPath, args: ["run", "--cwd", REPO_ROOT, "mcp"], env };
+  return { command: process.execPath, args: ["run", "--silent", "--cwd", REPO_ROOT, "mcp"], env };
 }
 
 /** The Openfield checkout this server runs from. */

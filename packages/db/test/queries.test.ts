@@ -6,6 +6,7 @@ import {
   activeJobs,
   activeProviderBatches,
   addToFolder,
+  agentUsageSince,
   assetVersions,
   canceledWithHandle,
   clearCanceledHandles,
@@ -41,6 +42,7 @@ import {
   markJobResumed,
   type OpenDb,
   openDb,
+  pendingAgentEstimateUsd,
   providerBatchesForJobSets,
   readSettings,
   recordBatchPoll,
@@ -71,8 +73,6 @@ import {
   updateProviderSettings,
   upsertModels,
   usageMinutes,
-  agentUsageSince,
-  pendingAgentEstimateUsd,
   usageRollup,
   writeSettings,
 } from "../src";
@@ -796,9 +796,22 @@ describe("usage", () => {
     const base = { providerId: "google", modelId: "m", operation: "generate" as const };
     const at = "2026-09-27T09:00:00.000Z";
     insertUsage(db(), { ...base, jobSetId: claude.id, ts: at, outcome: "succeeded", costUsd: 0.1 });
-    insertUsage(db(), { ...base, jobSetId: claude.id, ts: at, outcome: "canceled", discarded: true, costUsd: 0.1 });
+    insertUsage(db(), {
+      ...base,
+      jobSetId: claude.id,
+      ts: at,
+      outcome: "canceled",
+      discarded: true,
+      costUsd: 0.1,
+    });
     insertUsage(db(), { ...base, jobSetId: claude.id, ts: at, outcome: "failed", costUsd: 0 });
-    insertUsage(db(), { ...base, jobSetId: cursor.id, ts: "2026-09-26T09:00:00.000Z", outcome: "succeeded", costUsd: 0.2 });
+    insertUsage(db(), {
+      ...base,
+      jobSetId: cursor.id,
+      ts: "2026-09-26T09:00:00.000Z",
+      outcome: "succeeded",
+      costUsd: 0.2,
+    });
     insertUsage(db(), { ...base, jobSetId: person.id, ts: at, outcome: "succeeded", costUsd: 0.4 });
     expect(agentUsageSince(db(), "2026-09-27T00:00:00.000Z")).toEqual([
       { agent: "Claude Code", images: 1, usd: 0.2 },

@@ -108,7 +108,15 @@ export function usageMinutes(db: Executor, q: { from?: string; to?: string }): U
     .where(
       and(q.from ? gte(usageLog.ts, q.from) : undefined, q.to ? lt(usageLog.ts, q.to) : undefined, counted),
     )
-    .groupBy(minute, usageLog.providerId, usageLog.modelId, resolution, quality, jobSets.source, jobSets.agent)
+    .groupBy(
+      minute,
+      usageLog.providerId,
+      usageLog.modelId,
+      resolution,
+      quality,
+      jobSets.source,
+      jobSets.agent,
+    )
     .orderBy(minute)
     .all();
 }
