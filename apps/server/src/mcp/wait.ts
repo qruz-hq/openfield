@@ -5,9 +5,10 @@ import type { Extra, ToolContext } from "./kit";
 
 // Tools that start images wait for them, up to `wait` seconds, telling the app how far along they
 // are. Past that they hand back the run id for wait_for. A Batch-speed run takes hours, so it's
-// handed back at once.
+// handed back at once. The default stays under a minute: several apps give up on a tool call after
+// 60 seconds (Codex's tool_timeout_sec, the MCP SDK's request timeout).
 
-export const DEFAULT_WAIT_S = 120;
+export const DEFAULT_WAIT_S = 50;
 export const MAX_WAIT_S = 600;
 
 export const waitField = z

@@ -2,7 +2,7 @@ import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
+import { type CallToolResult, CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { AGENT_KEY_PREFIX, agentsStatusSchema } from "@openfield/core";
 import { getJobSet, listJobSets } from "@openfield/db";
 import sharp from "sharp";
@@ -243,7 +243,7 @@ describe("making images", () => {
     );
     await Bun.sleep(50);
     gate.release();
-    const result = await waiting;
+    const result = (await waiting) as CallToolResult;
     const summary = JSON.parse((result.content[0] as { text: string }).text);
     expect(summary.finished).toBe(true);
     expect(summary.runs[0].images).toHaveLength(2);

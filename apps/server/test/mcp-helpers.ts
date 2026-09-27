@@ -49,7 +49,8 @@ export async function call(client: Client, name: string, args: Record<string, un
   return {
     isError: result.isError === true,
     text,
-    json: json as Record<string, unknown> & { [key: string]: never },
+    // Loose on purpose: each test checks the shape it cares about.
+    json: (json ?? {}) as Record<string, unknown>,
     images: rest.filter((b) => b.type === "image"),
   };
 }

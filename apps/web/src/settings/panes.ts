@@ -1,5 +1,6 @@
 import type { MessageKey } from "@openfield/core";
 import {
+  Bot,
   CircleHelp,
   FlaskConical,
   HardDrive,
@@ -12,7 +13,7 @@ import {
   Sun,
 } from "lucide-react";
 
-// The nine panes of Settings, in the order of §6.17, with the icons the design puts on the rail.
+// The ten panes of Settings, in the order of §6.17, with the icons the design puts on the rail.
 
 export interface Pane {
   slug: string;
@@ -64,6 +65,13 @@ export const PANES: readonly Pane[] = [
     label: "settings.rail.spending",
     title: "settings.spending.title",
     intro: "settings.spending.intro",
+  },
+  {
+    slug: "agents",
+    icon: Bot,
+    label: "settings.rail.agents",
+    title: "settings.agents.title",
+    intro: "settings.agents.intro",
   },
   {
     slug: "privacy",
