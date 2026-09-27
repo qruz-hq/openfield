@@ -259,7 +259,9 @@ float plumes(vec2 p, vec2 size, float time, out float fresh) {
 
 void main() {
   vec2 size = vec2(u_cells, u_cells * u_resolution.y / u_resolution.x);
-  vec2 q = gl_FragCoord.xy / u_resolution * size - size * 0.5;
+  // Centred on a whole cell, so the grid lines up the same whichever way the cells add up: with
+  // size * 0.5 an odd count (a 16:9 card is 80 by 45) put every fragment on a cell's edge.
+  vec2 q = gl_FragCoord.xy / u_resolution * size - floor(size * 0.5);
   vec2 inCell = fract(q);
   if (inCell.x < GAP || inCell.y < GAP) {
     gl_FragColor = vec4(0.0);

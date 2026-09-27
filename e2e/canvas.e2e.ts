@@ -427,6 +427,71 @@ test("links into a generating card pulse, and a stop says Canceled on the card",
   }
 });
 
+test("the generating swarm fills a card of any shape, and Variations' images too", async ({
+  page,
+  request,
+}) => {
+  const webgl = await page.evaluate(() => !!document.createElement("canvas").getContext("webgl"));
+  test.skip(!webgl, "Without WebGL the cards keep their glyph");
+  const token = await sessionToken(request);
+  const { id } = await api<CanvasDetail>(request, token, "POST", "/api/canvases", { name: "Swarm shapes" });
+  const model = "google:gemini-3.1-flash-image";
+  // 16:9 is 80 by 45 cells and 3:4 is 80 by 107: an odd count of cells either way once lost the
+  // whole swarm to the gaps between cells.
+  const card = (as: string, ratio: string, x: number) => ({
+    op: "add_node",
+    as,
+    type: "image.generate",
+    position: { x, y: 0 },
+    params: { model, prompt: `#fake:slow ${as} a lighthouse`, size: { kind: "aspect", ratio } },
+  });
+  const { aliases } = await api<{ aliases: Record<string, string> }>(
+    request,
+    token,
+    "POST",
+    `/api/canvases/${id}/edits`,
+    {
+      edits: [
+        card("wide", "16:9", 0),
+        card("tall", "3:4", 400),
+        {
+          op: "add_node",
+          as: "words",
+          type: "prompt",
+          position: { x: 800, y: 0 },
+          params: { text: "#fake:slow a lighthouse" },
+        },
+        {
+          op: "add_node",
+          as: "takes",
+          type: "image.variations",
+          position: { x: 1200, y: 0 },
+          params: { model },
+        },
+        { op: "connect", source: "words", target: "takes" },
+      ],
+    },
+  );
+  await page.goto(`/canvas/${id}`);
+  await runAll(page).click();
+  await page.getByRole("dialog").getByRole("button", { name: /^Run/ }).click();
+
+  // Share of the swarm's pixels that are lit: every cell draws something, the gaps between don't.
+  const lit = (node: Locator) =>
+    node.locator("canvas.of-card-voxels").evaluate((el: HTMLCanvasElement) => {
+      const { data } = el.getContext("2d")!.getImageData(0, 0, el.width, el.height);
+      let on = 0;
+      for (let i = 3; i < data.length; i += 4) if (data[i]! > 0) on++;
+      return on / (data.length / 4);
+    });
+  for (const as of ["wide", "tall", "takes"]) {
+    const node = pane(page).locator(`.react-flow__node[data-id="${aliases[as]}"]`);
+    await expect(node.locator("canvas.of-card-voxels")).toHaveCount(1, { timeout: 15_000 });
+    await expect.poll(() => lit(node), { timeout: 10_000 }).toBeGreaterThan(0.4);
+  }
+  await page.getByRole("button", { name: "Stop", exact: true }).click();
+});
+
 test("Version history on an index card opens the canvas with its history", async ({ page, request }) => {
   const token = await sessionToken(request);
   const name = `History ${Date.now()}`;

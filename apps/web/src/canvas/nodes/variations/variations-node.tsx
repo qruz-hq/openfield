@@ -9,6 +9,7 @@ import {
   promptLines,
   TAKES_MAX,
   TAKES_MIN,
+  VARIATIONS_PORTS,
   type VariationStrategy,
   type VariationsParams,
   variationsSpec,
@@ -22,8 +23,11 @@ import { tightCost } from "../../../lib/cost";
 import { logoFor } from "../../../lib/provider";
 import { useNodeAnalysis } from "../../engine/engine-store";
 import { useNodeResult, useReadOnly } from "../../store/context";
+import { voxelsSupported } from "../generate/voxel/renderer";
+import { VoxelField } from "../generate/voxel/voxel-field";
 import type { NodeComponentProps } from "../registry";
 import { CollapsedStatus } from "../shell/collapsed-card";
+import { useCompanyWait } from "../shell/company-wait";
 import { NodeShell } from "../shell/node-shell";
 import { ResultGrid, sourceLabel } from "../shell/results";
 import { RunPill } from "../shell/run-pill";
@@ -87,6 +91,12 @@ export const VariationsNode = memo(function VariationsNode(props: NodeComponentP
   const key = modelKeyOf(params.model, ctx);
   const model = ctx.model(key);
   const models = useMemo(() => modelList(params), [params]);
+  // The Generate card's voxel swarm over each image area while it runs (design wKzQJ): the swarm
+  // while generating, idle while it waits, here or at the company. WebGL is set up on the first run.
+  const live = display.state === "running" || display.state === "queued";
+  const voxels = useMemo(() => live && voxelsSupported(), [live]);
+  const wait = useCompanyWait(id);
+  const swarm = voxels ? (display.state === "running" && !wait ? "active" : "idle") : null;
 
   if (!basics) return null;
   const { frame } = basics;
@@ -121,15 +131,27 @@ export const VariationsNode = memo(function VariationsNode(props: NodeComponentP
       <StateBand id={id} display={display} model={key} name={name} />
     </div>
   );
+  // Over no images yet the swarm takes the mark's place, as it takes the Generate card's glyph.
   const empty = (
     <div className="absolute inset-0 flex items-center justify-center bg-surface">
-      <BrandMark size={24} className="opacity-30" />
+      {swarm ? null : <BrandMark size={24} className="opacity-30" />}
     </div>
   );
+  // Puffs come in from the node's input ports, whose rail sits on the node's middle. Only the
+  // area on the node's left edge takes them; Models mode's other columns don't touch that edge.
+  const field = (withPorts: boolean, backing: boolean) =>
+    swarm ? (
+      <VoxelField
+        nodeId={id}
+        mode={swarm}
+        backing={backing}
+        rail={withPorts && props.height ? { ports: VARIATIONS_PORTS, middle: props.height / 2 } : null}
+      />
+    ) : null;
 
   const results = byModel ? (
     <div className="relative flex w-full gap-2">
-      {(models.length ? models : [key ?? ""]).map((modelKey) => {
+      {(models.length ? models : [key ?? ""]).map((modelKey, column) => {
         const own = images.filter((_, i) => outputs[i]?.model === modelKey);
         const m = ctx.model(modelKey);
         const logo = logoFor(m?.providerId);
@@ -141,17 +163,18 @@ export const VariationsNode = memo(function VariationsNode(props: NodeComponentP
         const price = cost && run?.fellBack ? `${cost} ${t("speed.suffix", { speed: run.name })}` : cost;
         return (
           <div key={modelKey} className="flex min-w-0 flex-1 flex-col">
-            <div className="relative w-full" style={{ height: MODEL_IMAGE_HEIGHT }}>
+            <div className="relative w-full overflow-hidden" style={{ height: MODEL_IMAGE_HEIGHT }}>
               {own.length ? (
                 <ResultGrid
                   assetIds={own}
                   height={MODEL_IMAGE_HEIGHT}
-                  dim={stale}
+                  dim={stale || !!swarm}
                   className="absolute inset-0"
                 />
               ) : (
                 empty
               )}
+              {field(column === 0, own.length > 0)}
             </div>
             <div className="flex w-full px-12 py-10">
               {logo ? (
@@ -173,18 +196,19 @@ export const VariationsNode = memo(function VariationsNode(props: NodeComponentP
       {band}
     </div>
   ) : (
-    <div className="relative w-full" style={{ height: RESULTS_HEIGHT }}>
+    <div className="relative w-full overflow-hidden" style={{ height: RESULTS_HEIGHT }}>
       {images.length ? (
         <ResultGrid
           assetIds={images}
           labelOf={labelOf}
           height={RESULTS_HEIGHT}
-          dim={stale}
+          dim={stale || !!swarm}
           className="absolute inset-0"
         />
       ) : (
         empty
       )}
+      {field(true, images.length > 0)}
       {band}
     </div>
   );
