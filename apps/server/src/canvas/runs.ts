@@ -1,7 +1,16 @@
 import {
+  compileRun,
+  type EngineContext,
+  fromDocument,
+  planFingerprints,
+  resolveFingerprints,
+  specRegistry,
+} from "@openfield/canvas";
+import {
   CANVAS_CONFIRM_JOBS,
   CANVAS_RUN_MAX_JOBS,
   type CancelResponse,
+  type CanvasActor,
   type CanvasBlockReason,
   type CanvasRunBody,
   type CanvasRunCall,
@@ -10,8 +19,11 @@ import {
   type CanvasRunNodeState,
   type CanvasRunPlanItem,
   type CanvasRunResponse,
+  type CanvasRunScopeBody,
+  type CanvasRunScopeResponse,
   type CanvasRunState,
   type CostEstimate,
+  canvasRunScopeBodySchema,
   ERROR_CODES,
   type ErrorCode,
   type GenerateRequest,
@@ -20,6 +32,7 @@ import {
   type JobSetState,
   type ModelManifest,
   newId,
+  type ProviderSummary,
   type ReferenceInput,
   type SpeedId,
   safeParseModelKey,
@@ -62,6 +75,8 @@ import type { Runner } from "../runner/runner";
 import type { CredentialService } from "../services/credentials";
 import type { ModelService } from "../services/models";
 import type { ProviderSettingsService } from "../services/provider-settings";
+import { blockerMessage } from "./blockers";
+import { readDocument } from "./documents";
 
 // Canvas runs (§7.7, M4-10). The browser compiles the graph into a plan; this schedules it.
 // Items start when everything they read from has finished, through the ordinary job queue, so
@@ -100,6 +115,12 @@ export interface CanvasRunDeps {
    * which needs the result the node had.
    */
   writeResults?(canvasId: string, nodes: ReadonlyMap<string, CanvasRunNodeState>, at: string): void;
+  /** The engine's view of models and settings, for runs compiled here (runScope). */
+  engineContext?: () => EngineContext;
+  /** Company names, for what a blocked node says. */
+  providerSummaries?: () => ProviderSummary[];
+  /** Saves "Before <agent>" before an agent session's first change to a canvas. Its id, or null. */
+  saveAgentVersion?(canvasId: string, actor: CanvasActor): string | null;
 }
 
 interface NodeRun {
@@ -241,6 +262,113 @@ export class CanvasRunService {
   }
 
   /** Every node value must point at an earlier item, so the plan runs in the order it was sent. */
+  /** Nodes of this canvas queued or running now. */
+  busyNodes(canvasId: string): Set<string> {
+    const busy = new Set<string>();
+    for (const run of this.#runs.values()) {
+      if (run.canvasId !== canvasId) continue;
+      for (const node of run.nodes.values()) {
+        if (!NODE_TERMINAL.includes(node.state.state)) busy.add(node.item.nodeId);
+      }
+    }
+    return busy;
+  }
+
+  /**
+   * A run asked for by scope rather than by plan (§7.11): the saved canvas is compiled here with the
+   * editor's own engine, so an agent runs a canvas exactly as its Run button would, with or without
+   * a tab open. Open tabs follow it on canvas_run.updated like any other run.
+   */
+  async runScope(
+    canvasId: string,
+    input: CanvasRunScopeBody,
+    actor?: CanvasActor,
+  ): Promise<CanvasRunScopeResponse> {
+    const body = canvasRunScopeBodySchema.parse(input);
+    const row = getCanvas(this.deps.db, canvasId);
+    if (!row) throw new ApiFailure(404, "not_found", "That canvas doesn't exist", { field: "id" });
+    if (!this.deps.engineContext) throw new Error("runScope needs an engine context");
+    const ctx = this.deps.engineContext();
+    const { slice } = fromDocument(readDocument(row.graph));
+    const fingerprints = await resolveFingerprints(planFingerprints(slice, specRegistry, ctx), new Map());
+    const outcome = compileRun({
+      doc: slice,
+      registry: specRegistry,
+      ctx,
+      fingerprints,
+      request: {
+        scope: body.scope,
+        nodeIds: body.nodeIds,
+        ...(body.bypassCache !== undefined && { bypassCache: body.bypassCache }),
+        ...(body.includeUpstream !== undefined && { includeUpstream: body.includeUpstream }),
+      },
+      busy: this.busyNodes(canvasId),
+    });
+    const none: CanvasRunScopeResponse = {
+      outcome: "nothing",
+      runId: null,
+      planned: [],
+      upToDate: [],
+      blocked: [],
+      upstream: [],
+      jobs: 0,
+      estimate: freeEstimate(),
+      nodes: [],
+      jobSets: [],
+    };
+    if (outcome.kind === "cycle") {
+      throw new ApiFailure(409, "conflict", "Every node asked for is in a loop", {
+        userMessage: t("canvas.nodes.blocked.loop"),
+      });
+    }
+    if (outcome.kind === "busy") return { ...none, outcome: "busy" };
+    if (outcome.kind === "needs_upstream")
+      return { ...none, outcome: "needs_upstream", upstream: outcome.nodeIds };
+
+    const providers = this.deps.providerSummaries?.() ?? [];
+    const blocked = Object.entries(outcome.blocked).map(([nodeId, blocker]) => ({
+      nodeId,
+      reason: blocker.kind,
+      message: blockerMessage(blocker, providers),
+    }));
+    const planned = outcome.items.map((c) => c.item.nodeId);
+    if (!planned.length) return { ...none, blocked, upToDate: outcome.upToDate };
+
+    const versionId =
+      !body.dryRun && actor?.kind === "agent"
+        ? (this.deps.saveAgentVersion?.(canvasId, actor) ?? null)
+        : null;
+    const response = await this.run(canvasId, {
+      scope: body.scope,
+      nodeIds: body.nodeIds,
+      plan: outcome.items.map((c) => c.item),
+      ...(body.dryRun !== undefined && { dryRun: body.dryRun }),
+      ...(body.confirmed !== undefined && { confirmed: body.confirmed }),
+    });
+    if (!body.dryRun && actor?.kind === "agent") {
+      this.deps.events.publish("agent.activity", {
+        canvasId,
+        actor,
+        nodeIds: planned,
+        kind: "running",
+        at: new Date().toISOString(),
+        versionId,
+      });
+    }
+    return {
+      outcome: "plan",
+      runId: response.runId,
+      planned,
+      upToDate: outcome.upToDate,
+      blocked,
+      upstream: [],
+      jobs: response.jobs,
+      estimate: response.estimate,
+      nodes: response.nodes,
+      jobSets: response.jobSets,
+    };
+  }
+
   #checkOrder(plan: CanvasRunPlanItem[]): Map<string, string[]> {
     const seen = new Set<string>();
     const deps = new Map<string, string[]>();
@@ -270,13 +398,7 @@ export class CanvasRunService {
 
   /** A node already waiting or working in another run isn't sent again: it would be paid for twice. */
   #checkNotRunning(canvasId: string, plan: CanvasRunPlanItem[]): void {
-    const busy = new Set<string>();
-    for (const run of this.#runs.values()) {
-      if (run.canvasId !== canvasId) continue;
-      for (const node of run.nodes.values()) {
-        if (!NODE_TERMINAL.includes(node.state.state)) busy.add(node.item.nodeId);
-      }
-    }
+    const busy = this.busyNodes(canvasId);
     const at = plan.findIndex((item) => busy.has(item.nodeId));
     if (at >= 0) {
       throw new ApiFailure(409, "conflict", `${plan[at]!.nodeId} is already running`, {

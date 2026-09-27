@@ -1,10 +1,26 @@
 import { join } from "node:path";
 import {
+  applyOps,
+  type CanvasOp,
+  CanvasOpError,
+  compileEdits,
+  type DocSlice,
+  EditError,
+  type EngineContext,
+  fromDocument,
+  lockedTargets,
+  specRegistry,
+  toDocument,
+  toWireOps,
+} from "@openfield/canvas";
+import {
   CANVAS_AUTO_VERSION_MS,
   CANVAS_PREVIEW_MAX_NODES,
+  type CanvasActor,
   type CanvasConflictResponse,
   type CanvasCreateBody,
   type CanvasDetail,
+  type CanvasEditsResponse,
   type CanvasPatchBody,
   type CanvasPatchResponse,
   type CanvasPreviewResponse,
@@ -18,7 +34,14 @@ import {
   newId,
   t,
 } from "@openfield/core";
-import { CANVAS_SCHEMA_VERSION, type CanvasDocument, resultOfRunNode } from "@openfield/core/canvas";
+import {
+  CANVAS_SCHEMA_VERSION,
+  type CanvasDocument,
+  type CanvasEdit,
+  type CanvasViewport,
+  canvasDocumentSchema,
+  resultOfRunNode,
+} from "@openfield/core/canvas";
 import {
   type CanvasRow,
   type Db,
@@ -78,14 +101,22 @@ export interface CanvasServiceDeps {
   models: ModelService;
   settings: SettingsService;
   logger: Logger;
-  /** Tells other tabs when the canvas's folder follows a rename. */
+  /** Tells other tabs when the canvas's folder follows a rename, and sends live edits (§7.11). */
   events?: EventHub;
+  /** The engine's view of models and settings, for edits that add nodes with their defaults. */
+  engineContext: () => EngineContext;
+  /** Nodes queued or running in this canvas's runs: they can't be deleted or leave their frame. */
+  busyNodes?: (canvasId: string) => ReadonlySet<string>;
   /** Where the bundled templates live. Tests point it elsewhere. */
   templatesDir?: string;
 }
 
+type Built = { ops: CanvasOp[]; doc: DocSlice; touched: string[]; aliases: Record<string, string> };
+
 export class CanvasService {
   readonly templates: CanvasTemplates;
+  /** Agent sessions that saved a version before their first change, per canvas. */
+  readonly #agentSaved = new Set<string>();
 
   constructor(private readonly deps: CanvasServiceDeps) {
     this.templates = new CanvasTemplates(
@@ -341,6 +372,217 @@ export class CanvasService {
     return toCanvasDetail(result.row, result.doc);
   }
 
+  // Live edits (§7.11)
+
+  /**
+   * Edits from an agent or a script, compiled against the saved canvas with the editor's own rules,
+   * saved as the next version of the document and sent to every open tab as the ops to replay. With
+   * graphVersion, a canvas that changed since is a 409, like autosave.
+   */
+  edit(
+    id: string,
+    edits: readonly CanvasEdit[],
+    actor: CanvasActor,
+    opts: { graphVersion?: number } = {},
+  ): CanvasEditsResponse {
+    const ctx = this.deps.engineContext();
+    return this.#change(id, actor, opts, (slice, viewport) => {
+      try {
+        return compileEdits(slice, edits, { specs: specRegistry, ctx, viewport });
+      } catch (error) {
+        if (!(error instanceof EditError)) throw error;
+        throw new ApiFailure(400, "bad_request", error.message, {
+          field: `edits.${error.index}`,
+          userMessage: error.message,
+        });
+      }
+    });
+  }
+
+  /** The editor's own document ops, applied as they are. */
+  applyOps(
+    id: string,
+    ops: readonly CanvasOp[],
+    actor: CanvasActor,
+    opts: { graphVersion?: number } = {},
+  ): CanvasEditsResponse {
+    return this.#change(id, actor, opts, (slice) => {
+      try {
+        const { doc } = applyOps(slice, ops);
+        return { ops: [...ops], doc, touched: touchedBy(ops, doc), aliases: {} };
+      } catch (error) {
+        if (!(error instanceof CanvasOpError)) throw error;
+        throw new ApiFailure(400, "bad_request", error.message, {
+          userMessage: t("canvas.edits.cantApply", { reason: error.message }),
+        });
+      }
+    });
+  }
+
+  /**
+   * Before an agent session's first change to a canvas (an edit or a run), the canvas as it was is
+   * saved as a version, "Before Claude Code", so the person can go back. The version's id, or null
+   * when this session already has one here.
+   */
+  saveAgentVersion(id: string, actor: CanvasActor): string | null {
+    if (actor.kind !== "agent" || this.#agentSaved.has(agentKey(actor, id))) return null;
+    const row = this.#row(id);
+    const version = this.#agentVersion(id, actor, readDocument(row.graph));
+    this.#agentSaved.add(agentKey(actor, id));
+    return version;
+  }
+
+  #change(
+    id: string,
+    actor: CanvasActor,
+    opts: { graphVersion?: number },
+    build: (slice: DocSlice, viewport: CanvasViewport) => Built,
+  ): CanvasEditsResponse {
+    const { db } = this.deps;
+    const at = new Date().toISOString();
+    const result = db.transaction((tx) => {
+      const row = getCanvas(tx, id);
+      if (!row) throw this.#missing();
+      if (opts.graphVersion !== undefined && opts.graphVersion !== row.graphVersion) throw this.#stale(row);
+      const before = readDocument(row.graph);
+      const { slice, viewport, meta } = fromDocument(before);
+      // The canvases.name column is the name of record; the document copy follows it.
+      const built = build({ ...slice, name: row.name }, viewport);
+      if (!built.ops.length) return { kind: "unchanged" as const, row, built };
+      this.#checkNotRunning(id, built.ops);
+      const name = built.doc.name.trim() || row.name;
+      const next = stamp(toDocument(built.doc, meta, viewport, at), {
+        id,
+        name,
+        updatedAt: at,
+        createdAt: row.createdAt,
+      });
+      this.#checkDocument(next, built.touched);
+      const versionId = this.#agentVersion(id, actor, before, at);
+      const saved = saveCanvas(tx, id, row.graphVersion, {
+        graph: next,
+        name,
+        nodeCount: next.nodes.length,
+        coverAssetId: pickCover(db, next),
+        at,
+      });
+      if (!saved.ok) throw this.#stale(saved.current ?? row);
+      if (name !== row.name) this.#renameFolder(row, name);
+      if (this.#autoSnapshotDue(id, at)) {
+        this.#snapshot(id, next, "auto", null, at);
+        pruneVersions(tx, id);
+      }
+      return { kind: "saved" as const, row, saved: saved.row, next, built, versionId };
+    });
+
+    if (result.kind === "unchanged") {
+      return {
+        graphVersion: result.row.graphVersion,
+        updatedAt: result.row.updatedAt,
+        ops: [],
+        touched: [],
+        aliases: result.built.aliases,
+        versionId: null,
+      };
+    }
+    if (actor.kind === "agent") this.#agentSaved.add(agentKey(actor, id));
+    this.#writeThrough(result.next);
+    const { built, versionId } = result;
+    const ops = toWireOps(built.ops);
+    this.deps.events?.publish("canvas.updated", {
+      canvasId: id,
+      fromVersion: result.row.graphVersion,
+      graphVersion: result.saved.graphVersion,
+      updatedAt: result.saved.updatedAt,
+      ops,
+      touched: built.touched,
+      actor,
+      versionId,
+    });
+    if (actor.kind === "agent") {
+      this.deps.events?.publish("agent.activity", {
+        canvasId: id,
+        actor,
+        nodeIds: built.touched,
+        kind: "editing",
+        at,
+        versionId,
+      });
+    }
+    return {
+      graphVersion: result.saved.graphVersion,
+      updatedAt: result.saved.updatedAt,
+      ops,
+      touched: built.touched,
+      aliases: built.aliases,
+      versionId,
+    };
+  }
+
+  #agentVersion(id: string, actor: CanvasActor, before: CanvasDocument, at?: string): string | null {
+    if (actor.kind !== "agent" || this.#agentSaved.has(agentKey(actor, id))) return null;
+    const label = t("canvas.agents.versionLabel", { name: actor.name });
+    // Named, so it's kept like a version the person saved themselves (§7.8).
+    const version = this.#snapshot(id, before, "named", label, at);
+    return version.id;
+  }
+
+  /** A node with a run in flight can't be deleted or taken out of its frame (§7.7). */
+  #checkNotRunning(id: string, ops: readonly CanvasOp[]): void {
+    const busy = this.deps.busyNodes?.(id);
+    if (!busy?.size) return;
+    const locked = [...new Set(lockedTargets(ops).filter((nodeId) => busy.has(nodeId)))];
+    if (!locked.length) return;
+    throw new ApiFailure(409, "conflict", `${locked.join(", ")} running`, {
+      userMessage: t("canvas.edits.running", { count: locked.length }),
+    });
+  }
+
+  /**
+   * The document the edits leave must be one the editor opens. Only what the edits touched is
+   * checked: an older canvas can carry settings this build reads leniently.
+   */
+  #checkDocument(doc: CanvasDocument, touched: readonly string[]): void {
+    const parsed = canvasDocumentSchema.safeParse(doc);
+    if (!parsed.success) {
+      const mine = new Set(touched);
+      const issue = parsed.error.issues.find((i) => {
+        const [key, index] = i.path;
+        if (key !== "nodes" || typeof index !== "number") return true;
+        return mine.has(doc.nodes[index]?.id ?? "");
+      });
+      if (issue) {
+        throw new ApiFailure(400, "bad_request", issue.message, {
+          userMessage: t("canvas.edits.invalid", { reason: issue.message }),
+        });
+      }
+    }
+    // Images a node was given have to be in this library.
+    const named = doc.nodes.flatMap((node) => {
+      const ids = touched.includes(node.id) ? node.params.assetIds : undefined;
+      return Array.isArray(ids) ? ids.filter((v): v is string => typeof v === "string") : [];
+    });
+    if (!named.length) return;
+    const here = new Set(
+      getAssets(this.deps.db, named)
+        .filter((a) => a.fileState === "ok")
+        .map((a) => a.id),
+    );
+    const missing = named.find((assetId) => !here.has(assetId));
+    if (missing) {
+      throw new ApiFailure(400, "bad_request", `No asset ${missing}`, {
+        userMessage: t("canvas.edits.missingAsset", { id: missing }),
+      });
+    }
+  }
+
+  #stale(row: CanvasRow): ApiFailure {
+    return new ApiFailure(409, "conflict", `graphVersion is ${row.graphVersion}`, {
+      field: "graphVersion",
+      userMessage: t("errors.transport.conflict"),
+    });
+  }
+
   // Previews (M4-15)
 
   /**
@@ -441,4 +683,24 @@ export class CanvasService {
       this.deps.logger.warn("Couldn't save the canvas file", { canvasId: doc.id, error });
     }
   }
+}
+
+const agentKey = (actor: Extract<CanvasActor, { kind: "agent" }>, canvasId: string) =>
+  `${actor.sessionId}\u0000${canvasId}`;
+
+/** Nodes a list of document ops adds or changes, that are still there after them. */
+function touchedBy(ops: readonly CanvasOp[], doc: DocSlice): string[] {
+  const ids: string[] = [];
+  for (const op of ops) {
+    const id =
+      op.op === "addNode"
+        ? op.node.id
+        : op.op === "addEdge"
+          ? op.edge.target
+          : "id" in op && op.op !== "deleteEdge" && op.op !== "reconnectEdge" && op.op !== "setEdgeOrder"
+            ? op.id
+            : null;
+    if (id && doc.nodes[id] && !ids.includes(id)) ids.push(id);
+  }
+  return ids;
 }

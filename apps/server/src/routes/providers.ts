@@ -7,23 +7,12 @@ import {
   providerPatchBodySchema,
   providerSettingsPatchBodySchema,
 } from "@openfield/core";
-import { getProvider, listProviders, updateProvider } from "@openfield/db";
+import { getProvider, updateProvider } from "@openfield/db";
 import { Hono } from "hono";
-import type { Env, Services } from "../context";
+import type { Env } from "../context";
 import { notFound, onInvalid } from "../http/errors";
 import { toProviderSummary } from "../mappers/provider";
-
-/**
- * In registry order, like the model picker's groups (§3.4.1), not by id: in fake mode the test company
- * ("fake") would otherwise come before Google and take first run's key field.
- */
-function summaries(svc: Services): ProviderSummary[] {
-  const rows = new Map(listProviders(svc.db).map((row) => [row.id, row]));
-  return svc.providers.flatMap((provider) => {
-    const row = rows.get(provider.meta.id);
-    return row ? [toProviderSummary(row, provider, svc.credentials.status(row.id))] : [];
-  });
-}
+import { providerSummaries as summaries } from "../services/provider-summaries";
 
 export const providersRoutes = new Hono<Env>()
   .get("/providers", (c) => c.json(summaries(c.var.svc) satisfies ProviderSummary[], 200))

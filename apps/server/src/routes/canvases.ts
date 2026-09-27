@@ -1,6 +1,7 @@
 import { zValidator } from "@hono/zod-validator";
 import {
   type CanvasDetail,
+  type CanvasEditsResponse,
   type CanvasPatchResponse,
   type CanvasPreviewResponse,
   type CanvasSummary,
@@ -8,6 +9,7 @@ import {
   type CanvasVersion,
   type CanvasVersionDetail,
   canvasCreateBodySchema,
+  canvasEditsBodySchema,
   canvasesListQuerySchema,
   canvasPatchBodySchema,
   canvasPreviewQuerySchema,
@@ -15,13 +17,16 @@ import {
   canvasVersionParamSchema,
   idParamSchema,
   type OkResponse,
+  TAB_HEADER,
+  tabIdSchema,
 } from "@openfield/core";
 import { Hono } from "hono";
 import type { Env } from "../context";
 import { envelope, onInvalid } from "../http/errors";
 
 // Canvas documents (§8.3): the index, create, autosave with a 409 on a stale graphVersion,
-// duplicate, delete, version history, templates and card previews.
+// edits sent to every open tab (§7.11), duplicate, delete, version history, templates and card
+// previews.
 
 export const canvasesRoutes = new Hono<Env>()
   .get("/canvases", zValidator("query", canvasesListQuerySchema, onInvalid), (c) => {
@@ -44,6 +49,21 @@ export const canvasesRoutes = new Hono<Env>()
       const result = c.var.svc.canvases.save(c.req.valid("param").id, c.req.valid("json"));
       if (!result.ok) return c.json(result.conflict, 409);
       return c.json(result.saved satisfies CanvasPatchResponse, 200);
+    },
+  )
+  // Edits compiled on the server and replayed by every open tab. The editor's own saves stay PATCH.
+  .post(
+    "/canvases/:id/edits",
+    zValidator("param", idParamSchema, onInvalid),
+    zValidator("json", canvasEditsBodySchema, onInvalid),
+    (c) => {
+      const { edits, graphVersion } = c.req.valid("json");
+      const tab = tabIdSchema.safeParse(c.req.header(TAB_HEADER));
+      const actor = { kind: "tab" as const, tabId: tab.success ? tab.data : "unnamed-tab" };
+      const result = c.var.svc.canvases.edit(c.req.valid("param").id, edits, actor, {
+        ...(graphVersion !== undefined && { graphVersion }),
+      });
+      return c.json(result satisfies CanvasEditsResponse, 200);
     },
   )
   .delete("/canvases/:id", zValidator("param", idParamSchema, onInvalid), (c) => {
