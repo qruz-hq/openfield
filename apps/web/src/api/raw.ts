@@ -11,6 +11,7 @@ import {
   t,
 } from "@openfield/core";
 import { useLive } from "../lib/live";
+import { tabId } from "../lib/tab";
 import { renewSessionToken, sessionHeaders, sessionToken } from "./session";
 
 // Plain HTTP for what the typed client can't carry: file bytes and the event stream (§8.3.3).
@@ -151,7 +152,8 @@ export interface EventStreamOptions {
 export async function readEventStream({ signal, lastEventId, onOpen, onEvent }: EventStreamOptions) {
   const headers: Record<string, string> = { Accept: "text/event-stream" };
   if (lastEventId) headers["Last-Event-ID"] = lastEventId;
-  const res = await rawFetch("/api/events", { headers, signal, cache: "no-store" });
+  // The tab id lets the server forget this tab once the stream closes (§7.11).
+  const res = await rawFetch(`/api/events?tab=${tabId}`, { headers, signal, cache: "no-store" });
   if (!res.ok || !res.body) throw await toApiError(res);
   onOpen();
 

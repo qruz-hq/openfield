@@ -8,6 +8,7 @@ import { spaHandler } from "./http/spa";
 import { assetsRoutes } from "./routes/assets";
 import { canvasRunsRoutes } from "./routes/canvas-runs";
 import { canvasesRoutes } from "./routes/canvases";
+import { devAgentRoutes } from "./routes/dev-agent";
 import { eventsRoutes } from "./routes/events";
 import { filesRoutes } from "./routes/files";
 import { foldersRoutes } from "./routes/folders";
@@ -17,6 +18,7 @@ import { jobSetsRoutes } from "./routes/job-sets";
 import { keysRoutes } from "./routes/keys";
 import { libraryRoutes } from "./routes/library";
 import { modelsRoutes } from "./routes/models";
+import { presenceRoutes } from "./routes/presence";
 import { providersRoutes } from "./routes/providers";
 import { settingsRoutes } from "./routes/settings";
 import { statsRoutes } from "./routes/stats";
@@ -42,6 +44,7 @@ const api = new Hono<Env>()
   .route("/", uploadsRoutes)
   .route("/", canvasesRoutes)
   .route("/", canvasRunsRoutes)
+  .route("/", presenceRoutes)
   .route("/", eventsRoutes);
 
 const isBackendPath = (path: string) => /^\/(api|files)(\/|$)/.test(path);
@@ -62,6 +65,8 @@ export const LARGER_BODIES: { method: string; path: RegExp; maxSize: number; use
     },
     { method: "POST", path: /^\/api\/canvases$/, maxSize: CANVAS_DOCUMENT_BYTES },
     { method: "PATCH", path: /^\/api\/canvases\/[^/]+$/, maxSize: CANVAS_DOCUMENT_BYTES },
+    // A batch of edits can add a node per edit, each with its settings.
+    { method: "POST", path: /^\/api\/canvases\/[^/]+\/edits$/, maxSize: CANVAS_DOCUMENT_BYTES },
     // A plan names at most every node of a document, so it fits where the document does.
     { method: "POST", path: /^\/api\/canvases\/[^/]+\/run$/, maxSize: CANVAS_DOCUMENT_BYTES },
     { method: "PUT", path: /^\/api\/canvases\/[^/]+\/preview$/, maxSize: 4 * 1024 * 1024 },
@@ -110,6 +115,8 @@ export function createApp(svc: Services) {
     })
     .route("/api", api)
     .route("/files", filesRoutes);
+  // Fake mode only: stand in for an agent, so tests can watch a live edit arrive (§7.11).
+  if (svc.fake) app.route("/api/dev", devAgentRoutes);
 
   const spa = spaHandler({
     token: svc.token,

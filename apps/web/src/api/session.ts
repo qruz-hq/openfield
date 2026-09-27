@@ -1,4 +1,5 @@
-import { SESSION_HEADER } from "@openfield/core";
+import { SESSION_HEADER, TAB_HEADER } from "@openfield/core";
+import { tabId } from "../lib/tab";
 
 // The server mints a token at boot and puts it in index.html as
 // <meta name="openfield-session" content="…">. Every /api and /files request carries it (§0.6).
@@ -13,8 +14,9 @@ export function sessionToken(): string {
   return cached;
 }
 
+/** The session token, and which tab is asking (§7.11). */
 export function sessionHeaders(): Record<string, string> {
-  return { [SESSION_HEADER]: sessionToken() };
+  return { [SESSION_HEADER]: sessionToken(), [TAB_HEADER]: tabId };
 }
 
 let renewing: Promise<boolean> | null = null;

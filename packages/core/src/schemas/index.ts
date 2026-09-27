@@ -5,6 +5,7 @@ export * from "./cost";
 export * from "./errors";
 export * from "./job";
 export * from "./library";
+export * from "./live";
 export * from "./manifest";
 export * from "./provider";
 export * from "./provider-settings";

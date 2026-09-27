@@ -6,6 +6,8 @@ import { toast } from "sonner";
 
 export interface NotifyOptions {
   tone?: ToastProps["tone"];
+  /** Another icon than the tone's own. */
+  icon?: ToastProps["icon"];
   /** Second line, in the tertiary color. */
   description?: string;
   action?: { label: string; onClick: () => void };
@@ -14,12 +16,13 @@ export interface NotifyOptions {
 
 export function notify(
   message: string,
-  { tone = "neutral", description, action, duration }: NotifyOptions = {},
+  { tone = "neutral", icon, description, action, duration }: NotifyOptions = {},
 ) {
   return toast.custom(
     (id) => (
       <Toast
         tone={tone}
+        icon={icon}
         message={message}
         description={description}
         actionLabel={action?.label}

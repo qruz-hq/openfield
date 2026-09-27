@@ -466,6 +466,9 @@ export const CANVAS_VERSION_KINDS = [
 ] as const;
 export type CanvasVersionKind = (typeof CANVAS_VERSION_KINDS)[number];
 export const CANVAS_TEMPLATE_SOURCES = ["bundled", "user"] as const;
+/** What an agent is doing on a canvas, for agent.activity. */
+export const AGENT_ACTIVITY_KINDS = ["editing", "running", "reading"] as const;
+export type AgentActivityKind = (typeof AGENT_ACTIVITY_KINDS)[number];
 /** A run above this many jobs needs `confirmed: true` (§7.7). */
 export const CANVAS_CONFIRM_JOBS = 32;
 /** No run makes more than this many jobs, confirmed or not, so no node's images outgrow a plan. */
@@ -507,6 +510,12 @@ export const SSE_EVENT_TYPES = [
   "usage.updated",
   "canvas_run.updated",
   "maintenance.progress",
+  /** A canvas changed on the server (an agent's edit): open tabs replay its ops. */
+  "canvas.updated",
+  /** An agent is working on a canvas: the editor shows who, and Follow moves the view along. */
+  "agent.activity",
+  /** Asks one tab to open a canvas or an image. */
+  "ui.navigate",
 ] as const;
 export type SseEventType = (typeof SSE_EVENT_TYPES)[number];
 
@@ -523,3 +532,5 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
 // Server
 export const DEFAULT_PORT = 4317;
 export const SESSION_HEADER = "X-Openfield-Session";
+/** Which tab sent a request (§7.11), so an edit it made is known as its own. */
+export const TAB_HEADER = "X-Openfield-Tab";

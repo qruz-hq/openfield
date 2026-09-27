@@ -1,6 +1,7 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
 import { compileRun } from "@openfield/canvas/engine/compile";
+import { checkConnection } from "@openfield/canvas/engine/connect";
 import { buildEngineContext } from "@openfield/canvas/engine/context-base";
 import { deriveDisplay, visibleBlocker } from "@openfield/canvas/engine/display";
 import {
@@ -22,7 +23,6 @@ import {
   freeEstimate,
 } from "@openfield/core/canvas";
 import { analyzeGraph } from "../src/canvas/engine/analysis";
-import { checkConnection } from "../src/canvas/engine/connect";
 import { useEngineStore } from "../src/canvas/engine/engine-store";
 import { createFollower } from "../src/canvas/engine/follow";
 import { createRunController } from "../src/canvas/engine/run-controller";

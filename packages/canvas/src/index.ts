@@ -3,7 +3,11 @@
 // imports only @openfield/core and @openfield/providers/manifest. Each module is also its own
 // entry, "@openfield/canvas/engine/compile" and so on.
 
+export * from "./edits/compile";
+export * from "./edits/place";
+export * from "./edits/wire";
 export * from "./engine/compile";
+export * from "./engine/connect";
 export * from "./engine/context-base";
 export * from "./engine/cost";
 export * from "./engine/describe";

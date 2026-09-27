@@ -14,6 +14,7 @@ import { createFakeFetch, type FetchLike, type Provider, providersFor } from "@o
 import pkg from "../package.json";
 import { createApp } from "./app";
 import { CanvasService } from "./canvas/canvases";
+import { serverEngineContext } from "./canvas/engine-context";
 import { CanvasRunService } from "./canvas/runs";
 import { ConfigStore } from "./config/config-file";
 import { ensureLayout, type HomePaths, homePaths, keepFilePrivate, resolveHome } from "./config/home";
@@ -33,7 +34,9 @@ import { CredentialService } from "./services/credentials";
 import { batchSnapshot, jobSetViews, markAnnounced } from "./services/job-sets";
 import { LibraryService } from "./services/library";
 import { ModelService } from "./services/models";
+import { PresenceService } from "./services/presence";
 import { defaultCap, ProviderSettingsService } from "./services/provider-settings";
+import { providerSummaries } from "./services/provider-summaries";
 import { SettingsService } from "./services/settings";
 
 // Boot (§0.16): home folder, lock, config, logs, database, services, crash recovery. Nothing here
@@ -223,7 +226,19 @@ async function boot(
   });
   jobLog({ event: "startup.recovery", ...recovery });
   const library = new LibraryService({ db, paths, events, logger, settings });
-  const canvases = new CanvasService({ db, paths, models, settings, logger, events });
+  const engineContext = () =>
+    serverEngineContext({ db, providers, credentials, models, settings, providerSettings });
+  const canvases = new CanvasService({
+    db,
+    paths,
+    models,
+    settings,
+    logger,
+    events,
+    engineContext,
+    // canvasRuns is made below; this is only called once both exist.
+    busyNodes: (canvasId) => canvasRuns.busyNodes(canvasId),
+  });
   // After the runner's pass, so each node's jobs already sit where §0.4's restart rules put them:
   // picked up by id, waiting to run again once, or interrupted. Settled nodes' results go into the
   // saved canvas, so one closed during the run opens with them. Launches recorded but never created
@@ -237,7 +252,11 @@ async function boot(
     events,
     logger,
     writeResults: (canvasId, nodes, at) => canvases.writeRunResults(canvasId, nodes, at),
+    engineContext,
+    providerSummaries: () => providerSummaries({ db, providers, credentials }),
+    saveAgentVersion: (canvasId, actor) => canvases.saveAgentVersion(canvasId, actor),
   });
+  const presence = new PresenceService(events);
   canvasRuns.start();
   undo.push(() => canvasRuns.stop());
   const resumedRuns = await canvasRuns.recover();
@@ -271,6 +290,8 @@ async function boot(
     runner,
     canvases,
     canvasRuns,
+    presence,
+    fake,
     viteOrigin: opts.viteOrigin ?? viteOriginFrom(env),
     webDist:
       opts.webDist === undefined

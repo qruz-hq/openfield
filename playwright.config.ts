@@ -32,6 +32,8 @@ const suites: { name: string; testMatch: string; env?: Record<string, string> }[
   // Slow fakes that take 8 seconds instead of 30 to 60, long enough to restart the server mid-call.
   { name: "resume", testMatch: "resume.e2e.ts", env: { OPENFIELD_FAKE_SLOW_MS: "8000" } },
   { name: "canvas", testMatch: "canvas.e2e.ts" },
+  // Live edits from the server, with the fake-mode agent stand-in (§7.11).
+  { name: "live", testMatch: "live.e2e.ts" },
   { name: "assets", testMatch: "assets.e2e.ts" },
   { name: "spending", testMatch: "spending.e2e.ts" },
   { name: "openai", testMatch: "openai.e2e.ts" },

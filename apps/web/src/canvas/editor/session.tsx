@@ -1,4 +1,4 @@
-import type { CanvasDetail, CanvasVersion } from "@openfield/core";
+import type { AgentActivityKind, CanvasDetail, CanvasVersion } from "@openfield/core";
 import { createContext, type ReactNode, useContext } from "react";
 import { useStore } from "zustand";
 import { createStore, type StoreApi } from "zustand/vanilla";
@@ -42,6 +42,24 @@ export interface EditorUiState {
   flowKey: number;
   /** Alignment guides while a drag lines up with a neighbour (§7.9). */
   guides: readonly Guide[];
+  /** The agent working on this canvas, from agent.activity (§7.11). The pill shows while it's recent. */
+  agent: AgentPresence | null;
+  /** Nodes an agent just added or changed: ringed and tagged with its name for a moment. */
+  agentTouch: { nodeIds: readonly string[]; name: string; at: number } | null;
+  /** Follow: the view moves to what the agent works on, until the person moves it. */
+  following: boolean;
+  /** Nodes to select and bring into view once the pane is ready (an agent's show). */
+  focusNodes: readonly string[] | null;
+}
+
+export interface AgentPresence {
+  name: string;
+  sessionId: string;
+  kind: AgentActivityKind;
+  /** What it last worked on. */
+  nodeIds: readonly string[];
+  /** Date.now() when it was last heard from. */
+  at: number;
 }
 
 export const createEditorUi = (): StoreApi<EditorUiState> =>
@@ -60,6 +78,10 @@ export const createEditorUi = (): StoreApi<EditorUiState> =>
     keyboardConnect: null,
     flowKey: 0,
     guides: [],
+    agent: null,
+    agentTouch: null,
+    following: false,
+    focusNodes: null,
   }));
 
 export interface EditorSession {
@@ -88,6 +110,11 @@ export function EditorSessionProvider({
   children: ReactNode;
 }) {
   return <SessionContext.Provider value={session}>{children}</SessionContext.Provider>;
+}
+
+/** The session when there is one: parts drawn outside the editor (the card capture) have none. */
+export function useSessionOptional(): EditorSession | null {
+  return useContext(SessionContext);
 }
 
 export function useSession(): EditorSession {

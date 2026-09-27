@@ -1,3 +1,4 @@
+import { checkConnection } from "@openfield/canvas/engine/connect";
 import type { MenuGroup } from "@openfield/canvas/nodes/registry";
 import { VARIATIONS_BOX } from "@openfield/canvas/nodes/variations/spec";
 import { newEdgeId } from "@openfield/canvas/store/graph";
@@ -5,7 +6,6 @@ import { applyOps, type CanvasOp, type Size } from "@openfield/canvas/store/ops"
 import { t } from "@openfield/core";
 import { cn, SearchInput, surfaceVariants } from "@openfield/ui";
 import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { checkConnection } from "../engine/connect";
 import { useCanvasEngineContext } from "../engine/engine-store";
 import { useCanvasStoreApi, useUi } from "../store/context";
 import type { AddMenuState } from "../store/types";

@@ -24,6 +24,11 @@ export function useCanvasDetail(id: string) {
   });
 }
 
+/** The saved canvas, fetched outside React (catching up after a missed live edit, §7.11). */
+export function fetchCanvas(id: string): Promise<CanvasDetail> {
+  return call(api.api.canvases[":id"].$get({ param: { id } }));
+}
+
 /** Browsers cap all keepalive bodies in flight at 64 KiB together; this leaves room for others. */
 const KEEPALIVE_LIMIT = 48 * 1024;
 

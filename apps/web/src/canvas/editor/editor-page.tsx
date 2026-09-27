@@ -13,12 +13,14 @@ import {
 } from "../../api/hooks/canvas-doc";
 import { ApiError, errorMessage } from "../../api/raw";
 import { notify, notifyError } from "../../lib/notify";
+import { setCanvasPresence } from "../../lib/presence";
 import { CanvasEngine } from "../engine";
 import { rememberImageSizes } from "../nodes/generate/card-media";
 import { CanvasStoreProvider, createCanvasStore } from "../store";
 import { type Autosave, createAutosave } from "./autosave";
 import { minimapPref } from "./chrome/prefs";
 import { EditorView } from "./editor-view";
+import { startLiveSync } from "./live-sync";
 import { createPreviewCapture } from "./preview-capture";
 import { createEditorUi, type EditorSession, EditorSessionProvider } from "./session";
 
@@ -83,9 +85,18 @@ function createSession(detail: CanvasDetail): { session: EditorSession; attach: 
     },
   };
   const attach = () => {
+    // Edits made on the server (an agent's) land in this copy as they happen (§7.11).
+    const sync = startLiveSync(session);
     const current = createAutosave(main, {
       save: (body, opts) => patchCanvas(canvasId, body, opts),
       onSaved: () => capture.request(),
+      caughtUp: (graphVersion) => sync.caughtUp(graphVersion),
+    });
+    // The server knows this canvas is open here, and what's selected, for "the canvas I have open".
+    setCanvasPresence(canvasId, main.getState().selection.nodeIds);
+    const unsubscribeSelection = main.subscribe((next, prev) => {
+      if (next.selection.nodeIds !== prev.selection.nodeIds)
+        setCanvasPresence(canvasId, next.selection.nodeIds);
     });
     live = current;
     capture.resume();
@@ -94,6 +105,9 @@ function createSession(detail: CanvasDetail): { session: EditorSession; attach: 
     const settle = setTimeout(() => capture.request(), OPEN_CAPTURE_DELAY_MS);
     return () => {
       clearTimeout(settle);
+      sync.stop();
+      unsubscribeSelection();
+      setCanvasPresence(null);
       if (live === current) live = null;
       // Leaving the route: save what's left, then stop, and bring the index card up to date. A
       // remount in the meantime (development's strict mode) means the editor never left.
@@ -174,6 +188,17 @@ function EditorSessionRoot({ detail }: { detail: CanvasDetail }) {
   useEffect(() => {
     if (params.get("panel") !== "versions") return;
     session.main.getState().actions.setUi({ drawer: { panel: "versions", nodeId: null } });
+    setParams({}, { replace: true });
+  }, [params, setParams, session]);
+
+  // An agent's show (?focus=a,b): those nodes, selected and in view once the pane is ready.
+  useEffect(() => {
+    const focus = params.get("focus");
+    if (!focus) return;
+    const { doc, actions } = session.main.getState();
+    const nodeIds = focus.split(",").filter((id) => doc.nodes[id]);
+    actions.setSelection({ nodeIds, edgeIds: [] });
+    if (nodeIds.length) session.ui.setState({ focusNodes: nodeIds });
     setParams({}, { replace: true });
   }, [params, setParams, session]);
 

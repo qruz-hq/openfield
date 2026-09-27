@@ -13,6 +13,7 @@ import type { Runner } from "./runner/runner";
 import type { CredentialService } from "./services/credentials";
 import type { LibraryService } from "./services/library";
 import type { ModelService } from "./services/models";
+import type { PresenceService } from "./services/presence";
 import type { ProviderSettingsService } from "./services/provider-settings";
 import type { SettingsService } from "./services/settings";
 
@@ -43,6 +44,10 @@ export interface Services {
   runner: Runner;
   canvases: CanvasService;
   canvasRuns: CanvasRunService;
+  /** Where each open tab is, for agents and ui.navigate (§7.11). */
+  presence: PresenceService;
+  /** OPENFIELD_FAKE_PROVIDERS=1: fake models, and the test-only routes that act as an agent. */
+  fake: boolean;
   webDist: string | null;
   viteOrigin: string;
 }
