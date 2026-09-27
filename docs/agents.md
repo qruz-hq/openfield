@@ -126,13 +126,23 @@ Canvases are also resources, `openfield://canvas/<id>`.
 
 Images come back with a small preview the agent can look at, the file's path on disk, and a link that opens the image in Openfield. Library images are also resources, `openfield://asset/<id>`, for apps that let you attach them.
 
-Agents can't change settings, keys or their own limits, and can't delete images for good.
+Agents can't change settings, keys, their own limits or what they're allowed to do, and can't delete images for good.
+
+## What agents may do
+
+**Settings > Agents** lists every action agents can take, in five groups: Look around, Build canvases, Make images, Organise library and Delete things. Each action, and each group as a whole, is set to one of:
+
+- **Allow**: the agent goes ahead without asking.
+- **Ask**: Openfield checks with you every time. Apps that can show a prompt (MCP elicitation, as in Claude Code and Cursor) ask you there, with the price for anything that spends. In apps that can't, the agent has to ask you in its chat and say you agreed.
+- **Default**: Openfield's own rule, shown under each action. Most actions are allowed. Making images and running canvases ask above your amount (below). Deleting folders and canvases asks.
+
+A group's switch sets every action in it; when they differ it shows none picked. Whatever you choose, the daily limit still applies.
 
 ## Limits
 
 Agents spend money on your keys, so **Settings > Agents > Spending by agents** sets two limits:
 
-- **Ask before spending more than** (default $0.50). A request estimated above this is refused until the agent shows you the price and you agree. The agent then sends the price back as `confirmCost`.
+- **Ask before spending more than** (default $0.50). What Default means for Making images and Running canvases: anything estimated above this waits for your OK, in the app's prompt, or in the agent's chat when the app can't show one (the agent then sends the price back as `confirmCost`).
 - **Daily limit** (default $5). Once agents together have spent this much today, they stop making images until midnight. Work still going counts at its estimate, and a canvas run counts at its whole estimate until it ends. Two requests at once are checked one after the other, so they can't both slip under it. A request whose price Openfield can't work out is refused once the limit is reached. Clear the field for no limit.
 
 Every tool that spends also takes `dryRun`, which only works out the price.

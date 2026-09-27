@@ -70,3 +70,23 @@ describe("agent snippets", () => {
     );
   });
 });
+
+describe("agent permissions", () => {
+  test("a group shows the value its actions share, or none when they differ", async () => {
+    const { groupPermission, withPermission, actionsOf } = await import("../src/settings/agents/permissions");
+    expect(groupPermission({}, "images")).toBe("default");
+    const one = withPermission({}, ["run_canvases"], "ask");
+    expect(groupPermission(one, "images")).toBeNull();
+    const all = withPermission(one, actionsOf("images"), "allow");
+    expect(groupPermission(all, "images")).toBe("allow");
+    expect(all).toEqual({ make_images: "allow", run_canvases: "allow", stop_runs: "allow" });
+    // Default is kept by leaving the action out.
+    expect(withPermission(all, actionsOf("images"), "default")).toEqual({});
+    expect(actionsOf("delete")).toEqual([
+      "remove_nodes",
+      "trash_images",
+      "delete_folders",
+      "delete_canvases",
+    ]);
+  });
+});

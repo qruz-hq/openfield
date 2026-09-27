@@ -136,6 +136,54 @@ test("the agents' limits save, and their spending opens in Spending", async ({ p
   await expect(page).toHaveURL(/\/settings\/spending$/);
 });
 
+test("what agents may do is set per action or per group, and a tool set to Ask checks first", async ({
+  page,
+  request,
+}) => {
+  const token = await sessionToken(request);
+  await page.goto("/settings/agents");
+  const run = page.getByRole("radiogroup", { name: "Run canvases" });
+  await run.getByRole("radio", { name: "Ask" }).click();
+  await expect(run.getByRole("radio", { name: "Ask" })).toHaveAttribute("aria-checked", "true");
+  // Make images' "All of these" (the third group) now shows none picked: its actions differ.
+  const groups = page.getByRole("radiogroup", { name: "All of these" });
+  await expect(groups).toHaveCount(5);
+  await expect(groups.nth(2).getByRole("radio", { checked: true })).toHaveCount(0);
+  const lookAll = groups.first();
+  await lookAll.getByRole("radio", { name: "Ask" }).click();
+  await expect
+    .poll(
+      async () =>
+        (await api<{ agentPermissions: Record<string, string> }>(request, token, "GET", "/api/settings"))
+          .agentPermissions,
+    )
+    .toEqual({
+      run_canvases: "ask",
+      see_models: "ask",
+      read_canvases: "ask",
+      read_images: "ask",
+      read_spending: "ask",
+    });
+
+  // An app that can't show a prompt is told to ask in its chat first.
+  const { key } = await api<{ key: string }>(request, token, "GET", "/api/agents");
+  const app = await connect(request, key);
+  const refused = await app.call("list_canvases");
+  expect(refused.isError).toBe(true);
+  expect(refused.text).toContain("confirm: true");
+  expect((await app.call("list_canvases", { confirm: true })).isError).toBe(false);
+
+  await lookAll.getByRole("radio", { name: "Default" }).click();
+  await run.getByRole("radio", { name: "Default" }).click();
+  await expect
+    .poll(
+      async () =>
+        (await api<{ agentPermissions: Record<string, string> }>(request, token, "GET", "/api/settings"))
+          .agentPermissions,
+    )
+    .toEqual({});
+});
+
 test("a new key cuts off the old one, and turning agents off closes /mcp", async ({ page, request }) => {
   const token = await sessionToken(request);
   const before = (await api<{ key: string }>(request, token, "GET", "/api/agents")).key;

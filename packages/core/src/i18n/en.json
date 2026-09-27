@@ -703,7 +703,110 @@
       "lastUsed": "Last used {when}",
       "usedToday": "Used earlier today",
       "today": "{count, plural, one {# image} other {# images}} · {spent} today",
-      "nothingToday": "Nothing today"
+      "nothingToday": "Nothing today",
+      "permissions": {
+        "note": "Allow never asks. Ask checks with you in the agent's app every time. Default follows the rule under each action.",
+        "all": "All of these",
+        "allow": "Allow",
+        "ask": "Ask",
+        "default": "Default",
+        "groups": {
+          "look": {
+            "label": "Look around",
+            "about": "See your canvases, images, models, prices and spending."
+          },
+          "build": {
+            "label": "Build canvases",
+            "about": "Add, change and connect nodes. You see each change as it happens."
+          },
+          "images": {
+            "label": "Make images",
+            "about": "Anything that spends with your keys. The daily limit always applies."
+          },
+          "organise": {
+            "label": "Organise library",
+            "about": "Bring images in and file them."
+          },
+          "delete": {
+            "label": "Delete things",
+            "about": "Take things away. Some can't be undone."
+          }
+        },
+        "actions": {
+          "see_models": {
+            "label": "See models and prices",
+            "rule": "Default: allowed"
+          },
+          "read_canvases": {
+            "label": "Read canvases",
+            "rule": "Default: allowed"
+          },
+          "read_images": {
+            "label": "Search and look at images",
+            "rule": "Default: allowed"
+          },
+          "read_spending": {
+            "label": "See spending and settings",
+            "rule": "Default: allowed"
+          },
+          "make_canvases": {
+            "label": "Make canvases",
+            "rule": "Default: allowed"
+          },
+          "change_canvases": {
+            "label": "Change canvases",
+            "rule": "Default: allowed. A version is saved before the first change."
+          },
+          "versions": {
+            "label": "Save and restore versions",
+            "rule": "Default: allowed"
+          },
+          "show": {
+            "label": "Open things in your tab",
+            "rule": "Default: allowed"
+          },
+          "make_images": {
+            "label": "Make images",
+            "rule": "Default: asks above {amount}"
+          },
+          "run_canvases": {
+            "label": "Run canvases",
+            "rule": "Default: asks above {amount}"
+          },
+          "stop_runs": {
+            "label": "Stop runs",
+            "rule": "Default: allowed"
+          },
+          "import_images": {
+            "label": "Bring images in",
+            "rule": "Default: allowed"
+          },
+          "file_images": {
+            "label": "Favourite and file images",
+            "rule": "Default: allowed"
+          },
+          "folders": {
+            "label": "Make and change folders",
+            "rule": "Default: allowed"
+          },
+          "remove_nodes": {
+            "label": "Remove nodes from canvases",
+            "rule": "Default: allowed. A version is saved before the first change."
+          },
+          "trash_images": {
+            "label": "Move images to the Trash",
+            "rule": "Default: allowed. You can restore them."
+          },
+          "delete_folders": {
+            "label": "Delete folders",
+            "rule": "Default: asks. The images stay in your library."
+          },
+          "delete_canvases": {
+            "label": "Delete canvases",
+            "rule": "Default: asks. This can't be undone."
+          }
+        }
+      }
     },
     "experimental": {
       "title": "Experimental",

@@ -7,13 +7,14 @@ import { useAgents, useNewAgentKey, useSetAgentsEnabled } from "../api/hooks/age
 import { useSettings, useUpdateSettings } from "../api/hooks/settings";
 import { notify } from "../lib/notify";
 import { AccessKey, AmountInput, ClientRow, CodeBlock } from "./agents/parts";
+import { PermissionsSection } from "./agents/permissions-section";
 import { AGENT_APPS, type AgentApp, snippetFor } from "./agents/snippets";
 import { SettingRow, SettingsSection } from "./section";
 import { useSpendingPrefs } from "./spending/prefs";
 
 // Settings · Agents (design: Settings · Agents · Off, Settings · Agents, … · Claude Desktop). Off,
-// it says what agents could do. On: the key, how to add Openfield to each app, the agents' own
-// spending limits, and the apps that connected.
+// it says what agents could do. On: the key, how to add Openfield to each app, what agents may do
+// (Allow, Ask or Default per action), their spending limits, and the apps that connected.
 
 const CAN_DO = [
   ["settings.agents.canDoCanvases", "settings.agents.canDoCanvasesHint"],
@@ -54,6 +55,7 @@ export function AgentsPane() {
       {on && status?.key ? (
         <>
           <AddToApp />
+          <PermissionsSection />
           <AgentSpending />
           <ConnectedApps />
         </>
