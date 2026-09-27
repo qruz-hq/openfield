@@ -109,14 +109,18 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
             event.target.value = "";
           }}
         />
-        <IconButton
-          variant="secondary"
-          size={32}
-          icon={Plus}
-          label={t("canvas.nodes.generate.addReference")}
-          disabled={readOnly || !model?.capabilities.references.supported}
-          onClick={() => files.current?.click()}
-        />
+        {/* The references come in first, then the + that adds one (design iy0ZN). */}
+        <div className="flex flex-wrap items-center gap-6">
+          <ReferenceOrder nodeId={nodeId} />
+          <IconButton
+            variant="secondary"
+            size={32}
+            icon={Plus}
+            label={t("canvas.nodes.generate.addReference")}
+            disabled={readOnly || !model?.capabilities.references.supported}
+            onClick={() => files.current?.click()}
+          />
+        </div>
         {/* The whole prompt coming in, then this node's own words after it. */}
         {upstream ? (
           <p className="w-full text-small leading-[1.5] break-words whitespace-pre-wrap text-text-primary">
@@ -142,7 +146,6 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
           />
         ) : null}
       </div>
-      <ReferenceOrder nodeId={nodeId} />
       <ModelField
         models={modelsFitting(ctx.models, { references: analysis?.references ?? 0 }, key)}
         selected={model}

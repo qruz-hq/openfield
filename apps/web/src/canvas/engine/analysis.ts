@@ -35,6 +35,11 @@ export interface NodeAnalysis {
    * (a list there fans out). A model for this node has to take at least this many.
    */
   references: number;
+  /**
+   * Those reference images in the order the model gets them: an asset id, or null for one still to
+   * come from a node upstream. For the card's strip and the inspector (design uwVfe).
+   */
+  referenceImages: readonly (string | null)[];
 }
 
 export interface GraphAnalysis {
@@ -67,15 +72,20 @@ const LOOP_ANALYSIS: NodeAnalysis = {
   held: false,
   upstreamText: "",
   references: 0,
+  referenceImages: [],
 };
 
 const sameEstimate = (a: CostEstimate | null, b: CostEstimate | null) =>
   a === b ||
   (!!a && !!b && a.min === b.min && a.max === b.max && a.confidence === b.confidence && a.basis === b.basis);
 
+const sameList = (a: readonly (string | null)[], b: readonly (string | null)[]) =>
+  a.length === b.length && a.every((v, i) => v === b[i]);
+
 const sameNode = (a: NodeAnalysis, b: NodeAnalysis) =>
   a.upstreamText === b.upstreamText &&
   a.references === b.references &&
+  sameList(a.referenceImages, b.referenceImages) &&
   a.fanOut === b.fanOut &&
   a.jobs === b.jobs &&
   a.upToDate === b.upToDate &&
@@ -124,6 +134,18 @@ export function analyzeGraph(
         const count = imageCount(imagesOf(node.inputs, port.id));
         return sum + (port.arity === "multi" ? count : Math.min(count, 1));
       }, 0),
+      referenceImages: (node.definition?.ports ?? []).flatMap((port) => {
+        if (port.direction !== "in" || port.binding?.to !== "references") return [];
+        const images = imagesOf(node.inputs, port.id).flatMap((v) => {
+          if (v.kind === "asset") return [v.assetId];
+          // A node upstream hands on its images as still to come, even when it's up to date: show
+          // the ones it has now, and empty tiles only where it has none yet.
+          const now = doc.results[v.nodeId]?.assetIds ?? [];
+          const count = Math.max(0, v.expected);
+          return Array.from({ length: count }, (_, i) => now[i] ?? null);
+        });
+        return port.arity === "multi" ? images : images.slice(0, 1);
+      }),
     };
     const before = previous.nodes[id];
     nodes[id] = before && sameNode(before, next) ? before : next;

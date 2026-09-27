@@ -78,9 +78,11 @@ async function runEverything(page: Page, heading: RegExp | null) {
   await expect(stop).toBeHidden({ timeout: 30_000 });
 }
 
+/** The images a node made, not the reference thumbnails above its prompt (.of-card-refs). */
 async function expectImages(node: Locator, count: number) {
-  await expect(node.locator("img")).toHaveCount(count, { timeout: 15_000 });
-  for (const img of await node.locator("img").all()) {
+  const made = node.locator("img:not(.of-card-refs img)");
+  await expect(made).toHaveCount(count, { timeout: 15_000 });
+  for (const img of await made.all()) {
     await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBeGreaterThan(0);
   }
 }

@@ -50,6 +50,9 @@ import { useNodeBasics, useNodeDisplay, useParsedParams, useRunNode } from "../s
 import { CardImage, CardMessage, CardPager, CardPartial, CardPill, type CardPillProps } from "./card";
 import { cardMedia, showImage } from "./card-media";
 import { type CardView, cardView, hasScrim } from "./card-state";
+import { ReferenceStrip } from "./reference-strip";
+import { voxelsSupported } from "./voxel/renderer";
+import { VoxelField } from "./voxel/voxel-field";
 
 // Canvas / Node / Generate (design Y5jjx): the card is the image, at the image's aspect ratio (the
 // chosen one before there's an image). At rest: the image, the label and the ports, and a pill
@@ -201,11 +204,15 @@ function GenerateCard({ id, name, selected, display, layout, prompt, params, par
   // multi-selection only the outline shows.
   const solo = useCanvas((s) => s.selection.nodeIds.length === 1);
   const bars = (selected && solo) || !!menu?.isOpen;
+  // The voxel swarm needs WebGL, set up the first time a card runs or waits.
+  const live = display.state === "running" || display.state === "queued";
+  const voxels = useMemo(() => live && voxelsSupported(), [live]);
   const view = cardView({
     state: display.state,
     images: layout.images.length > 0,
     atCompany: !!wait,
     partial: !!partial,
+    voxels,
   });
   const key = modelKeyOf(params.model, ctx);
   const model = ctx.model(key);
@@ -233,6 +240,15 @@ function GenerateCard({ id, name, selected, display, layout, prompt, params, par
         <CardPartial path={partial} opacity={opacity} />
       ) : layout.assetId && view.media !== "placeholder" ? (
         <CardImage assetId={layout.assetId} height={layout.h} contain={layout.contain} opacity={opacity} />
+      ) : null}
+      {view.voxels ? (
+        <VoxelField
+          nodeId={id}
+          mode={view.voxels}
+          backing={view.media !== "placeholder"}
+          width={layout.w}
+          height={layout.h}
+        />
       ) : null}
       {view.stripes ? <div aria-hidden className="of-card-stripes of-blocked-stripes" /> : null}
       <div className="of-card-top" data-paint={paint}>
@@ -263,9 +279,12 @@ function GenerateCard({ id, name, selected, display, layout, prompt, params, par
         )}
       </div>
       <div className={view.bottomAtRest ? "of-card-bottom" : "of-card-bottom of-reveal"} data-paint={paint}>
-        <p className="of-card-prompt" data-placeholder={(noPrompt && view.phase === "empty") || undefined}>
-          {prompt || (view.phase === "empty" && noPrompt ? t("canvas.nodes.card.noPrompt") : "")}
-        </p>
+        <div className="of-card-text">
+          <ReferenceStrip images={analysis?.referenceImages ?? []} />
+          <p className="of-card-prompt" data-placeholder={(noPrompt && view.phase === "empty") || undefined}>
+            {prompt || (view.phase === "empty" && noPrompt ? t("canvas.nodes.card.noPrompt") : "")}
+          </p>
+        </div>
         {view.action === "run" ? (
           <RunPill
             id={id}
@@ -401,7 +420,8 @@ function EmptyGlyph({
       : null;
   return (
     <div className="flex flex-col items-center gap-8">
-      <ImageIcon size={24} aria-hidden className="text-text-tertiary" />
+      {/* Over the voxels only a wait note stays; the swarm takes the glyph's place. */}
+      {view.voxels ? null : <ImageIcon size={24} aria-hidden className="text-text-tertiary" />}
       {note ? (
         <span
           className={

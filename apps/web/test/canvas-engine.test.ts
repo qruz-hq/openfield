@@ -208,6 +208,33 @@ describe("compiler", () => {
     expect(both.items.map((i) => i.item.nodeId)).toEqual(["g", "v"]);
   });
 
+  test("a node's reference images are the ones it would send, an earlier node's current ones first", async () => {
+    let doc = docOf(
+      [
+        node("up", "image.upload", { assetIds: [ULID(90)] }),
+        node("g", "image.generate", { model: "google:banana", prompt: "a", batch: 3 }),
+        node("b", "image.generate", { model: "google:banana", prompt: "b", batch: 1 }),
+      ],
+      [edge("up", "images", "b", "input_images"), edge("g", "images", "b", "input_images")],
+    );
+    const fingerprints = await fingerprintsOf(doc);
+    // Before g has run, its three images are still to come: empty tiles.
+    expect(analyzeGraph(doc, registry, ctx, fingerprints).nodes.b?.referenceImages).toEqual([
+      ULID(90),
+      null,
+      null,
+      null,
+    ]);
+    // Once it has images, they're shown, even though Run all would ask for new ones.
+    doc = apply(doc, { op: "setResult", id: "g", result: done(fingerprints.g!, 3, 10) });
+    expect(analyzeGraph(doc, registry, ctx, fingerprints).nodes.b?.referenceImages).toEqual([
+      ULID(90),
+      ULID(10),
+      ULID(11),
+      ULID(12),
+    ]);
+  });
+
   test("an earlier node with current images is read, not run", async () => {
     let doc = chain();
     const fingerprints = await fingerprintsOf(doc);

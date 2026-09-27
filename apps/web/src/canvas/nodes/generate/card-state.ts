@@ -28,6 +28,11 @@ export interface CardView {
   media: CardMedia;
   /** The glyph and ratio (or a wait note) in the middle of a placeholder. */
   emptyGlyph: boolean;
+  /**
+   * The voxel swarm over the card (voxel/voxel-field.tsx): it runs while generating and idles while
+   * waiting, in place of the glyph and ratio. A wait at the company keeps its note over it.
+   */
+  voxels: "active" | "idle" | null;
   /** Failed, blocked and canceled say so in the middle, with their action. */
   message: boolean;
   /** Next to the prompt: Run, Stop (running), Cancel (queued), or nothing (the message acts). */
@@ -48,15 +53,18 @@ export interface CardStateInput {
   atCompany: boolean;
   /** A preview frame of the image being made has arrived. */
   partial: boolean;
+  /** The browser can draw the voxel swarm (WebGL); without it the card keeps its glyph. */
+  voxels?: boolean;
 }
 
-export function cardView({ state, images, atCompany, partial }: CardStateInput): CardView {
+export function cardView({ state, images, atCompany, partial, voxels = false }: CardStateInput): CardView {
   const base: CardView = {
     phase: "empty",
     pillAtRest: true,
     noPill: false,
     media: images ? "dimmed" : "placeholder",
     emptyGlyph: !images,
+    voxels: null,
     message: false,
     action: "run",
     bottomAtRest: false,
@@ -67,8 +75,18 @@ export function cardView({ state, images, atCompany, partial }: CardStateInput):
   switch (state) {
     case "queued":
     case "running": {
-      if (atCompany) return { ...base, phase: "atCompany", action: "cancel", longPill: true };
-      if (state === "queued") return { ...base, phase: "waiting", action: "cancel", longPill: true };
+      const idle = voxels ? ("idle" as const) : null;
+      if (atCompany) return { ...base, phase: "atCompany", action: "cancel", longPill: true, voxels: idle };
+      if (state === "queued") {
+        return {
+          ...base,
+          phase: "waiting",
+          action: "cancel",
+          longPill: true,
+          voxels: idle,
+          emptyGlyph: base.emptyGlyph && !voxels,
+        };
+      }
       // A preview frame of the new image dims like the last image does under a run (OPInN), so
       // Generating looks the same whether or not the model sends previews.
       const shown = images || partial;
@@ -76,7 +94,8 @@ export function cardView({ state, images, atCompany, partial }: CardStateInput):
         ...base,
         phase: "generating",
         media: shown ? "dimmed" : "placeholder",
-        emptyGlyph: !shown,
+        emptyGlyph: !shown && !voxels,
+        voxels: voxels ? "active" : null,
         action: "stop",
         progress: true,
         longPill: true,

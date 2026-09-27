@@ -136,6 +136,18 @@
   inset: 0;
 }
 
+/*
+ * The voxel swarm (generate/voxel): drawn a cell per pixel and scaled up crisp. Its colours come
+ * from here: the accent for the cells and the surface for the backing over an image.
+ */
+.of-card-voxels {
+  position: absolute;
+  pointer-events: none;
+  image-rendering: pixelated;
+  color: var(--of-accent);
+  border: 0 solid var(--of-surface);
+}
+
 .of-card-top {
   position: absolute;
   top: 0;
@@ -190,6 +202,52 @@
   height: 176px;
 }
 
+/* The prompt, with the reference strip above it when there is one (design uwVfe). */
+.of-card-text {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.of-card[data-narrow] .of-card-text {
+  flex: none;
+  width: 100%;
+}
+
+.of-card-refs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.of-card-ref {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: var(--of-elevated-2);
+  outline: 1px solid var(--of-border-strong);
+  outline-offset: -1px;
+}
+
+.of-card-ref-more {
+  display: flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--of-overlay);
+  outline: 1px solid var(--of-border);
+  outline-offset: -1px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--of-text-secondary);
+}
+
 .of-card-prompt {
   flex: 1 1 0;
   min-width: 0;
@@ -208,7 +266,8 @@
   color: var(--of-text-tertiary);
 }
 
-.of-card[data-narrow] .of-card-prompt {
+/* In its column the prompt takes the full width; the column itself does the flexing. */
+.of-card-text .of-card-prompt {
   flex: none;
   width: 100%;
 }

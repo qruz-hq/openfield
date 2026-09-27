@@ -1375,7 +1375,7 @@
         "promptField": "Prompt for this node",
         "fromPrompt": "From the Prompt node",
         "addReference": "Add a reference image",
-        "references": "Reference order",
+        "references": "Reference images",
         "referencesHint": "The model gets them in this order. Drag one to move it.",
         "referenceItem": "{name}, {index} of {count}"
       },
@@ -1518,6 +1518,7 @@
       },
       "card": {
         "noPrompt": "Add a prompt to run this",
+        "references": "{count, plural, one {# reference image} other {# reference images}}",
         "stop": "Stop",
         "stopNamed": "Stop {name}",
         "cancelNamed": "Cancel {name}",
