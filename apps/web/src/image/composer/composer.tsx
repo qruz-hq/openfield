@@ -40,7 +40,7 @@ import {
 } from "../../lib/controls";
 import { speedFallbackHint } from "../../lib/cost";
 import { notify, notifyError } from "../../lib/notify";
-import { companyName } from "../../lib/provider";
+import { companyName, isEarly } from "../../lib/provider";
 import { askToNotifyOnce } from "../../lib/system-notify";
 import { focusPrompt, registerPrompt } from "./focus";
 import { GenerateButton, type GenerateSpeed } from "./generate-button";
@@ -89,11 +89,12 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
   const prompt = useRef<HTMLTextAreaElement>(null);
 
   const anyReady = models.some((m) => m.ready);
-  // The picked model, else the default the server chose when the first key worked, else any ready one.
+  // The picked model, else the default the server chose when the first key worked, else any ready
+  // one from a company that isn't early.
   const model =
     findModel(models, composer.model) ??
     findModel(models, settings?.defaultModel) ??
-    models.find((m) => m.ready);
+    models.find((m) => m.ready && !isEarly(providers, m.providerId));
   const picked = anyReady || composer.model ? model : undefined;
   // With no model yet, chips preview the first model's so the bar keeps its shape.
   const caps: Capabilities | undefined = (model ?? models[0])?.capabilities;

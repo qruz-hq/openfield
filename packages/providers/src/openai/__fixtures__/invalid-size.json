@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/generations"
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "error": {
+        "message": "Invalid size '1000x1000'. Width and height must both be divisible by 16.",
+        "type": "invalid_request_error",
+        "param": "size",
+        "code": "invalid_value"
+      }
+    }
+  }
+}

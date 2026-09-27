@@ -74,7 +74,7 @@ describe("typed client", () => {
 
     const res = await client.api.providers.$get();
     const providers: ProviderSummary[] = await res.json();
-    expect(providers.map((p) => p.id)).toEqual(["google"]);
+    expect(providers.map((p) => p.id)).toEqual(["google", "openai", "higgsfield"]);
 
     // Compile-time: the 202 body of POST /api/generate is the accepted job set.
     type Accepted = InferResponseType<typeof client.api.generate.$post, 202>;

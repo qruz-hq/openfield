@@ -13,16 +13,19 @@ const context = () =>
     credentials: { apiKey: "registry-test-key" },
   });
 
+/** Every built-in company's static catalog, in registration order. */
+const catalogKeys = () => builtinProviders.flatMap((p) => p.catalog().map((m) => m.key));
+
 describe("registry", () => {
   test("boots from static catalogs with no key and no network", () => {
     const registry = createModelRegistry({ hasCredentials: () => false, context: () => null });
-    expect(registry.models().map((m) => m.key)).toEqual(GOOGLE_MODELS.map((m) => m.key));
+    expect(registry.models().map((m) => m.key)).toEqual(catalogKeys());
     expect(registry.models({ ready: true })).toEqual([]);
-    expect(registry.providers().map((p) => p.meta.id)).toEqual(["google"]);
+    expect(registry.providers().map((p) => p.meta.id)).toEqual(builtinProviders.map((p) => p.meta.id));
   });
 
-  test("builtinProviders ships Google only for now", () => {
-    expect(builtinProviders.map((p) => p.meta.id)).toEqual(["google"]);
+  test("builtinProviders ships Google, OpenAI, then Higgsfield", () => {
+    expect(builtinProviders.map((p) => p.meta.id)).toEqual(["google", "openai", "higgsfield"]);
   });
 
   test("refresh adds recognised models and lists the rest as not supported", async () => {
@@ -55,7 +58,7 @@ describe("registry", () => {
     const registry = createModelRegistry({ hasCredentials: () => true, context: both });
     const [report] = await registry.refresh("google");
     expect(report?.added).toEqual([]);
-    expect(registry.models().map((m) => m.key)).toEqual(GOOGLE_MODELS.map((m) => m.key));
+    expect(registry.models().map((m) => m.key)).toEqual(catalogKeys());
   });
 
   test("with no key, refresh does nothing and says so quietly", async () => {

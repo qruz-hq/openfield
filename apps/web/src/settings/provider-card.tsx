@@ -327,21 +327,19 @@ export function ProviderCard({
       )}
       <div className="flex w-full items-center justify-between gap-12">
         <div className="flex min-w-0 flex-wrap items-center gap-6">
-          {logo
-            ? models.map((model) => {
-                const { price, note, hint } = speedPrice(model, runSpeed(settings, model));
-                return (
-                  <ModelTag
-                    key={model.key}
-                    provider={logo}
-                    name={model.displayName}
-                    price={price}
-                    note={note}
-                    title={hint}
-                  />
-                );
-              })
-            : null}
+          {models.map((model) => {
+            const { price, note, hint } = speedPrice(model, runSpeed(settings, model));
+            return (
+              <ModelTag
+                key={model.key}
+                provider={logo}
+                name={model.displayName}
+                price={price}
+                note={note}
+                title={hint}
+              />
+            );
+          })}
         </div>
         <div className="flex shrink-0 items-center gap-8">
           {state === "connected"

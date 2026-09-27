@@ -28,7 +28,11 @@ export function useUpdateSettings() {
       if (context?.previous) queryClient.setQueryData(queryKeys.settings, context.previous);
       notifyError(errorMessage(error));
     },
-    onSuccess: (settings) => queryClient.setQueryData(queryKeys.settings, settings),
+    onSuccess: (settings, patch) => {
+      queryClient.setQueryData(queryKeys.settings, settings);
+      // The server leaves early companies' models off the list until this is on.
+      if ("showExperimental" in patch) void queryClient.invalidateQueries({ queryKey: queryKeys.models });
+    },
   });
 }
 

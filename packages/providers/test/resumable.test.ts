@@ -188,10 +188,11 @@ describe("the resumable test model", () => {
 
 describe("registration", () => {
   test("the test company exists only in fake mode", () => {
-    expect(builtinProviders.map((p) => p.meta.id)).toEqual(["google"]);
+    const builtin = builtinProviders.map((p) => p.meta.id);
+    expect(builtin).not.toContain("fake");
     expect(fakeOnlyProviders.map((p) => p.meta.id)).toEqual(["fake"]);
-    expect(providersFor({ fake: false }).map((p) => p.meta.id)).toEqual(["google"]);
-    expect(providersFor({ fake: true }).map((p) => p.meta.id)).toEqual(["google", "fake"]);
+    expect(providersFor({ fake: false }).map((p) => p.meta.id)).toEqual(builtin);
+    expect(providersFor({ fake: true }).map((p) => p.meta.id)).toEqual([...builtin, "fake"]);
   });
 
   test("the default fake fetch answers for it", async () => {

@@ -1,0 +1,21 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/generations"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "created": 1790467200,
+      "output_format": "png",
+      "data": [
+        {
+          "url": "https://images.example.com/generated/abc.png"
+        }
+      ]
+    }
+  }
+}

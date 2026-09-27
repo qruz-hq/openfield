@@ -3,16 +3,19 @@ import { useEffect } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { useKeys, useProviders } from "../api/hooks/keys";
 import { useModels } from "../api/hooks/models";
+import { useSettings } from "../api/hooks/settings";
 import { errorMessage } from "../api/raw";
 import { ProviderCard } from "./provider-card";
 
 // Settings · API keys: one card per company. Each company's own settings open in a modal from
-// its card, never inline under it (§6.17).
+// its card, never inline under it (§6.17). An early company's card shows only with Settings >
+// Experimental > Show early models on (§6.2).
 
 export function ApiKeysPane() {
   const providers = useProviders();
   const keys = useKeys();
   const models = useModels();
+  const showEarly = useSettings().data?.showExperimental ?? false;
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state as { focusKey?: boolean; providerSettings?: string } | null;
@@ -28,12 +31,13 @@ export function ApiKeysPane() {
   if (providers.isError) return <Banner variant="error" message={errorMessage(providers.error)} />;
   if (!providers.data) return null;
 
+  const shown = providers.data.filter((p) => p.meta.stable || showEarly);
   // First run lands here with the first company that has no key ready to paste into.
-  const firstMissing = providers.data.find((p) => p.credentialSource === "unset")?.id;
+  const firstMissing = shown.find((p) => p.credentialSource === "unset")?.id;
 
   return (
     <>
-      {providers.data.map((provider) => (
+      {shown.map((provider) => (
         <ProviderCard
           key={provider.id}
           provider={provider}

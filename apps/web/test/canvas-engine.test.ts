@@ -1,6 +1,6 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
-import { type CanvasRunBody, HASH_RE, type ModelListItem } from "@openfield/core";
+import { type CanvasRunBody, HASH_RE, type ModelListItem, type ProviderSummary } from "@openfield/core";
 import {
   type CanvasEdge,
   type CanvasNode,
@@ -310,6 +310,23 @@ describe("compiler", () => {
     expect(out.items[0]!.item.bypassCache).toBe(true);
     expect(out.upToDate).toEqual([]);
     expect(out.jobs).toBe(1);
+  });
+});
+
+describe("the default model", () => {
+  const meta = (stable: boolean) => ({ stable }) as ProviderSummary["meta"];
+  const early = { ...flare, ready: true, key: "early:flare", providerId: "early" } as ModelListItem;
+  const companies = [
+    { id: "early", enabled: true, meta: meta(false) },
+    { id: "google", enabled: true, meta: meta(true) },
+  ];
+
+  test("skips an early company's models unless the person chose one (§6.2)", () => {
+    const locked = { ...banana, ready: false };
+    expect(buildEngineContext([early, locked], undefined, companies).defaultModel).toBe(banana.key);
+    expect(buildEngineContext([early], undefined, companies).defaultModel).toBeNull();
+    const chosen = { defaultModel: early.key, defaultBatch: 1, defaultAspect: null } as const;
+    expect(buildEngineContext([early, locked], chosen, companies).defaultModel).toBe(early.key);
   });
 });
 

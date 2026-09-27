@@ -1,0 +1,27 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/v1/text2image/soul-styles"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json",
+      "x-correlation-id": "7b1f2c9e-54aa-4f0e-8d3b-2a6c1e9f0d47"
+    },
+    "body": [
+      {
+        "id": "464ea177-8d40-4940-8d9d-b438bab269c7",
+        "name": "General",
+        "description": "A balanced, all-purpose style.",
+        "preview_url": "https://cdn.higgsfield.ai/styles/general.jpg"
+      },
+      {
+        "id": "1cb4b936-77bf-4f9a-9039-f3d349a4cdbe",
+        "name": "Editorial",
+        "description": "A polished editorial image style.",
+        "preview_url": "https://cdn.higgsfield.ai/styles/editorial.jpg"
+      }
+    ]
+  }
+}

@@ -101,7 +101,7 @@ export function documentCounts(doc: CanvasDocument): { nodeCount: number; edgeCo
 export function defaultModel(models: ModelService, settings: SettingsService): ModelKey | null {
   const chosen = settings.get().defaultModel;
   if (chosen && models.get(chosen)) return chosen;
-  const ready = models.list().models.find((m) => m.ready && m.enabled);
+  const ready = models.list().models.find((m) => m.ready && m.enabled && !models.early(m.providerId));
   return ready?.key ?? null;
 }
 

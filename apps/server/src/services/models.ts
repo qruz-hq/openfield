@@ -69,12 +69,15 @@ export class ModelService {
     this.#registry = createModelRegistry({
       providers: opts.providers,
       hasCredentials: (id) => opts.credentials.resolve(id).present,
+      // No context means no call: the check skips it like a company with no key.
       context: (id) =>
-        opts.contexts.for(
-          this.#provider(id),
-          AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
-          noWrites((assetId) => opts.ingest.read(assetId)),
-        ),
+        this.#asks(id)
+          ? opts.contexts.for(
+              this.#provider(id),
+              AbortSignal.timeout(DISCOVERY_TIMEOUT_MS),
+              noWrites((assetId) => opts.ingest.read(assetId)),
+            )
+          : null,
     });
   }
 
@@ -119,7 +122,25 @@ export class ModelService {
     return { provider, manifest, model: provider.model(manifest.key, manifest) };
   }
 
+  /**
+   * An early company (meta.stable false, §6.2): its models stay off the list until Settings >
+   * Experimental shows them, and are never picked for the person.
+   */
+  early(providerId: string): boolean {
+    return this.opts.providers.find((p) => p.meta.id === providerId)?.meta.stable === false;
+  }
+
+  /**
+   * Whether the model check may call this company: it has a key, and isn't a hidden early one. A
+   * key found in the environment is never sent to a company the person can't see.
+   */
+  #asks(providerId: string): boolean {
+    const shown = !this.early(providerId) || this.opts.settings.get().showExperimental;
+    return shown && this.opts.credentials.resolve(providerId).present;
+  }
+
   list(query: { provider?: string | undefined; modality?: string | undefined } = {}): ModelsListResponse {
+    const showEarly = this.opts.settings.get().showExperimental;
     const providerEnabled = new Map(listProviders(this.opts.db).map((r) => [r.id, r.enabled]));
     const modelEnabled = new Map(
       listModels(this.opts.db).map((r) => [`${r.providerId}:${r.modelId}`, r.enabled]),
@@ -135,6 +156,7 @@ export class ModelService {
     return {
       models: manifests
         .filter((m) => !query.provider || m.providerId === query.provider)
+        .filter((m) => showEarly || !this.early(m.providerId))
         .map((m) =>
           toModelListItem(m, {
             ready: ready.get(m.providerId) ?? false,
@@ -189,7 +211,7 @@ export class ModelService {
   async #refresh(providerId?: string): Promise<ModelsRefreshResponse> {
     const withKey = this.opts.providers
       .filter((p) => providerId === undefined || p.meta.id === providerId)
-      .filter((p) => this.opts.credentials.resolve(p.meta.id).present)
+      .filter((p) => this.#asks(p.meta.id))
       .map((p) => p.meta.id);
     const reports = await this.#registry.refresh(providerId);
     const fresh = this.#registry.models();

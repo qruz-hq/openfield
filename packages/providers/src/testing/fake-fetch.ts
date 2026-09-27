@@ -1,5 +1,7 @@
 import type { FetchLike } from "../types";
 import { googleFake } from "./google";
+import { higgsfieldFake } from "./higgsfield";
+import { openAiFake } from "./openai";
 import { resumableFake } from "./resumable";
 import { type FakeRoute, type FakeScenario, wait } from "./types";
 
@@ -10,7 +12,7 @@ import { type FakeRoute, type FakeScenario, wait } from "./types";
  * One fake per built-in adapter (docs/adding-a-provider.md, step 14), plus the test company that
  * only exists in fake mode (testing/resumable.ts).
  */
-export const builtinFakes: readonly FakeRoute[] = [googleFake, resumableFake];
+export const builtinFakes: readonly FakeRoute[] = [googleFake, openAiFake, higgsfieldFake, resumableFake];
 
 export interface FakeFetchOptions {
   /** Forces one outcome for every call. Otherwise a "#fake:<name>" prompt tag picks it. */

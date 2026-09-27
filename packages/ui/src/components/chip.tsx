@@ -201,7 +201,8 @@ export function MiniChip({
 }
 
 export interface ModelTagProps extends Omit<ComponentProps<"span">, "children"> {
-  provider: ProviderLogoId;
+  /** Leave it out for a company we ship no logo for: the tag shows the name alone. */
+  provider?: ProviderLogoId | undefined;
   name: ReactNode;
   /** Compact price such as "~$0.04". Leave it out when there's no price. */
   price?: ReactNode;
@@ -219,7 +220,7 @@ export function ModelTag({ provider, name, price, note, className, ...props }: M
       )}
       {...props}
     >
-      <ProviderLogo provider={provider} />
+      {provider ? <ProviderLogo provider={provider} /> : null}
       <span className="text-caption text-text-primary">{name}</span>
       {price ? <span className="text-mono-11 text-text-tertiary">{price}</span> : null}
       {note ? <span className="-ml-2 text-caption text-text-tertiary">{note}</span> : null}

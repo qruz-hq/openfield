@@ -71,9 +71,10 @@ export const keysRoutes = new Hono<Env>()
           .catch((error) => logger.warn("Couldn't update the model list", { error }));
       }
       // First run (§2.10 step 5): the first key that works picks the default model, the head of
-      // that company's catalog. A default the person chose is never replaced.
+      // that company's catalog. A default the person chose is never replaced, and an early
+      // company's model is never picked for them (§6.2).
       const first = provider.catalog()[0];
-      if (result.ok && first && settings.get().defaultModel === null) {
+      if (result.ok && first && provider.meta.stable && settings.get().defaultModel === null) {
         settings.update({ defaultModel: first.key });
       }
       return c.json(result satisfies KeyTestResponse, 200);

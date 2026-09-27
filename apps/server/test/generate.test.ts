@@ -43,11 +43,10 @@ describe("generate to asset", () => {
     providersListResponseSchema.parse((await call("/api/providers")).body);
 
     const before = modelsListResponseSchema.parse((await call("/api/models")).body);
-    expect(before.models.map((m) => m.displayName)).toEqual([
-      "Nano Banana Pro",
-      "Nano Banana 2",
-      "Nano Banana 2 Lite",
-    ]);
+    const names = (company: string) =>
+      before.models.filter((m) => m.providerId === company).map((m) => m.displayName);
+    expect(names("google")).toEqual(["Nano Banana Pro", "Nano Banana 2", "Nano Banana 2 Lite"]);
+    expect(names("openai")).toEqual(["GPT Image 2.5 Sunburst", "GPT Image 2.5 Flare", "GPT Image 2"]);
     expect(before.models.every((m) => !m.ready)).toBe(true);
 
     const saved = keyStatusSchema.parse(
@@ -59,7 +58,9 @@ describe("generate to asset", () => {
     expect(check.body).toMatchObject({ ok: true });
 
     const after = modelsListResponseSchema.parse((await call("/api/models")).body);
-    expect(after.models.every((m) => m.ready)).toBe(true);
+    // A Google key readies Google's models only. The other companies wait for their own key.
+    expect(after.models.filter((m) => m.providerId === "google").every((m) => m.ready)).toBe(true);
+    expect(after.models.filter((m) => m.providerId !== "google").some((m) => m.ready)).toBe(false);
 
     const body = generateBody({ batch: 2 });
     const accepted = await call("/api/generate", { method: "POST", body });

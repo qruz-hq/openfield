@@ -117,9 +117,25 @@ function perToken(
   const tier = req.resolution ?? caps.resolution?.default;
   const sizeKey = req.size && "width" in req.size ? `${req.size.width}x${req.size.height}` : undefined;
 
+  // An aspect-mode request looks up "3:4@1K" when the table is keyed by shape and tier. With no
+  // size given, the model's default shape, as with the tier and quality.
+  const aspect = req.size
+    ? "aspect" in req.size
+      ? req.size.aspect
+      : undefined
+    : caps.size.mode === "aspect"
+      ? caps.size.default
+      : undefined;
+  const shapeKey = aspect && aspect !== "auto" && tier ? `${aspect}@${tier}` : undefined;
+
+  // A quality with no rows ("auto") could be any of them.
   const rows = price.outputTokenTable.filter((r) => !quality || r.quality === quality);
-  const exact = rows.find((r) => r.size === sizeKey) ?? rows.find((r) => r.size === tier);
-  const candidates = exact ? [exact] : rows.length ? rows : price.outputTokenTable;
+  const pool = rows.length ? rows : price.outputTokenTable;
+  const bySize = (key: string | undefined) => (key ? pool.filter((r) => r.size === key) : []);
+  const matched = [sizeKey, shapeKey, tier].map(bySize).find((m) => m.length) ?? [];
+  // An "auto" size still has a tier: its shapes give the range.
+  const inTier = !matched.length && tier ? pool.filter((r) => r.size.endsWith(`@${tier}`)) : [];
+  const candidates = matched.length ? matched : inTier.length ? inTier : pool;
   if (!candidates.length) return unknownCost(price.pricedAt);
 
   const tokens = candidates.map((r) => r.tokens);

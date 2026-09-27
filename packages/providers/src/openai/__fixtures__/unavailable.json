@@ -1,0 +1,21 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/generations"
+  },
+  "response": {
+    "status": 503,
+    "headers": {
+      "content-type": "application/json",
+      "retry-after": "5"
+    },
+    "body": {
+      "error": {
+        "message": "The server is overloaded or not ready yet.",
+        "type": "service_unavailable_error",
+        "param": null,
+        "code": "server_is_overloaded"
+      }
+    }
+  }
+}

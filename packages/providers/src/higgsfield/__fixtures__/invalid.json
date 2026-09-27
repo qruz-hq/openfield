@@ -1,0 +1,23 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/higgsfield-ai/soul/v2/standard"
+  },
+  "response": {
+    "status": 422,
+    "headers": {
+      "content-type": "application/json",
+      "x-correlation-id": "7b1f2c9e-54aa-4f0e-8d3b-2a6c1e9f0d47"
+    },
+    "body": {
+      "detail": [
+        {
+          "type": "enum",
+          "loc": ["body", "aspect_ratio"],
+          "msg": "Input should be '9:16', '16:9', '4:3', '3:4', '1:1', '2:3' or '3:2'",
+          "input": "5:4"
+        }
+      ]
+    }
+  }
+}

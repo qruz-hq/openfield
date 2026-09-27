@@ -1,6 +1,8 @@
 import type { ModelKey, ModelManifest, ProviderErrorData, ProviderId, RefreshReport } from "@openfield/core";
 import { safeParseModelKey } from "@openfield/core";
 import { createGoogleProvider } from "./google";
+import { createHiggsfieldProvider } from "./higgsfield";
+import { createOpenAiProvider } from "./openai";
 import { createResumableFakeProvider } from "./testing/resumable";
 import {
   type CallContext,
@@ -16,7 +18,11 @@ import {
  * Every adapter Openfield ships. Static on purpose: adding one is a pull request, with no plugin
  * loading and no remote code (§6.12).
  */
-export const builtinProviders: readonly Provider[] = [createGoogleProvider()];
+export const builtinProviders: readonly Provider[] = [
+  createGoogleProvider(),
+  createOpenAiProvider(),
+  createHiggsfieldProvider(),
+];
 
 /**
  * Companies that exist only with OPENFIELD_FAKE_PROVIDERS=1: the test company and its resumable

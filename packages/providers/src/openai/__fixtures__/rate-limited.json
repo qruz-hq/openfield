@@ -1,0 +1,21 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/generations"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "content-type": "application/json",
+      "retry-after": "12"
+    },
+    "body": {
+      "error": {
+        "message": "Rate limit reached for gpt-image-2.5-flare in organization org-Xy7Fake on images per min (IPM): Limit 5, Used 5, Requested 1. Please try again in 12s.",
+        "type": "requests",
+        "param": null,
+        "code": null
+      }
+    }
+  }
+}

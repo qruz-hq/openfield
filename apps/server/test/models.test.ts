@@ -26,22 +26,32 @@ describe("model registry", () => {
     server = await startTestServer();
     const res = await server.json<ModelsListResponse>("/api/models");
     const list = modelsListResponseSchema.parse(res.body);
+    // Higgsfield is an early company, off the list until Settings > Experimental (higgsfield.test.ts).
     expect(list.models.map((m) => m.key)).toEqual([
       "google:gemini-3-pro-image",
       "google:gemini-3.1-flash-image",
       "google:gemini-3.1-flash-lite-image",
+      "openai:gpt-image-2.5-sunburst",
+      "openai:gpt-image-2.5-flare",
+      "openai:gpt-image-2",
     ]);
     expect(list.models.every((m) => !m.ready && m.enabled)).toBe(true);
     expect(list.staleAt).toBeNull();
-    expect(listModels(server.services.db)).toHaveLength(3);
+    // The models table keeps every company's rows; only the list hides early ones.
+    const rows = listModels(server.services.db).filter((r) => r.providerId !== "higgsfield");
+    expect(rows).toHaveLength(6);
     // Speeds travel with the manifest (and into the models table); the batch path never does.
     expect(list.models.map((m) => m.speeds?.map((o) => o.id))).toEqual([
       ["batch", "flex", "priority"],
       ["batch"],
       ["batch"],
+      // OpenAI: only GPT Image 2 offers Batch.
+      undefined,
+      undefined,
+      ["batch"],
     ]);
     expect((res.body as { models: object[] }).models.every((m) => !("batch" in m))).toBe(true);
-    expect(listModels(server.services.db).map((r) => r.speeds?.length)).toEqual([3, 1, 1]);
+    expect(rows.map((r) => r.speeds?.length)).toEqual([3, 1, 1, undefined, undefined, 1]);
   });
 
   test("a discovered model's manifest carries its speeds but never the batch path", async () => {
@@ -104,7 +114,9 @@ describe("model registry", () => {
     expect(res.body.errors).toEqual([
       { providerId: "google", code: "auth_invalid", message: "This key was rejected." },
     ]);
-    expect((await server.json<ModelsListResponse>("/api/models")).body.models).toHaveLength(3);
+    // Google's last good list stays. The companies with no key were never asked.
+    const models = (await server.json<ModelsListResponse>("/api/models")).body.models;
+    expect(models.filter((m) => m.providerId === "google")).toHaveLength(3);
     expect(server.services.settings.get().modelRefreshedAt).toBeNull();
   });
 

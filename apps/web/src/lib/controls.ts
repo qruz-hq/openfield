@@ -170,11 +170,17 @@ export function estimateRun(
   prompt: string,
   speed: SpeedId = "standard",
 ): CostEstimate {
+  // A model that takes a ratio is priced by that ratio, as the server prices the finished run.
+  const spec = sizeSpec(model.capabilities, resolved);
+  const size =
+    model.capabilities.size.mode === "aspect" && spec.kind !== "pixels"
+      ? { aspect: spec.kind === "aspect" ? spec.ratio : ("auto" as const) }
+      : expectedSize(model.capabilities, resolved);
   return estimate(model, {
     batch: resolved.batch,
     resolution: resolved.resolution,
     quality: resolved.quality,
-    size: expectedSize(model.capabilities, resolved),
+    size,
     prompt,
     speed,
   });

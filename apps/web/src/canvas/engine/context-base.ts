@@ -5,6 +5,7 @@ import type {
   Settings,
   SpeedId,
 } from "@openfield/core";
+import { isEarly } from "../../lib/provider";
 import { runSpeed } from "../../lib/provider-settings";
 import type { EngineContext } from "./types";
 
@@ -15,15 +16,17 @@ import type { EngineContext } from "./types";
 export function buildEngineContext(
   models: readonly ModelListItem[],
   settings: Pick<Settings, "defaultModel" | "defaultBatch" | "defaultAspect"> | undefined,
-  providers: readonly Pick<ProviderSummary, "id" | "enabled">[] | undefined,
+  providers: readonly Pick<ProviderSummary, "id" | "enabled" | "meta">[] | undefined,
   providerSettings?: ReadonlyMap<string, ProviderSettingsResponse>,
 ): EngineContext {
   const byKey = new Map(models.map((m) => [m.key as string, m]));
   const wanted = settings?.defaultModel;
+  // Never an early company's model unless the person chose it (§6.2).
+  const pickable = models.filter((m) => !isEarly(providers, m.providerId));
   const defaultModel =
     (wanted && byKey.has(wanted) ? wanted : null) ??
-    models.find((m) => m.ready)?.key ??
-    models[0]?.key ??
+    pickable.find((m) => m.ready)?.key ??
+    pickable[0]?.key ??
     null;
   const off = new Set(providers?.filter((p) => !p.enabled).map((p) => p.id));
   return {

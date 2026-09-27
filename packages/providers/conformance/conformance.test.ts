@@ -177,19 +177,17 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
   test("8. seeds: sent only when supported, echoed when declared", async () => {
     for (const manifest of catalog) {
       const caps = manifest.capabilities;
-      const h = harness(kit);
-      const { normalized, handles, model } = await generate(
-        kit,
-        manifest,
-        request(manifest, { seed: 42 }),
-        h,
-      );
       if (!caps.seed.supported) {
-        expect(normalized.calls.every((c) => c.seed === undefined)).toBe(true);
+        // A seed the model can't take is dropped with a warning, or refused, as the manifest says.
+        const normalized = await normalize(manifest, request(manifest, { seed: 42 }), { jobSetId: newId() });
         expect(normalized.diagnostics.map((d) => d.field)).toContain("seed");
+        if (caps.unsupportedParamPolicy === "reject") expect(normalized.error?.field).toBe("seed");
+        else expect(normalized.calls.every((c) => c.seed === undefined)).toBe(true);
         expect(caps.unsupported?.seed?.reason).toBeTruthy();
         continue;
       }
+      const h = harness(kit);
+      const { handles, model } = await generate(kit, manifest, request(manifest, { seed: 42 }), h);
       if (caps.seed.echoed) {
         const result = (await finish(model, handles[0]!, h)).result;
         expect(result?.images[0]?.seed).toBe(42);

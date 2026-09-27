@@ -115,6 +115,16 @@ function manualClock(): ManualClock {
 }
 
 function parseBody(body: unknown): unknown {
+  // Multipart: each field in order, files by name and type (their sizes differ by OS, see below).
+  if (body instanceof FormData) {
+    return {
+      form: [...body.entries()].map(([name, value]) =>
+        typeof value === "string"
+          ? [name, value]
+          : [name, `<file ${(value as Blob & { name?: string }).name} ${(value as Blob).type}>`],
+      ),
+    };
+  }
   if (typeof body !== "string") return body === undefined || body === null ? undefined : "[non-JSON body]";
   try {
     return JSON.parse(body);
@@ -157,6 +167,8 @@ export async function prepare(
   const normalized = await normalize(manifest, req, {
     jobSetId: newId(),
     settings: { ...(kit.provider.settings && { schema: kit.provider.settings }), stored },
+    // A model that takes seeds gets one when none is asked for; a fixed one keeps golden payloads stable.
+    randomSeed: () => 1234,
   });
   if (normalized.error) throw normalized.error;
   h.ctx.speed = normalized.request.speed;
@@ -220,12 +232,13 @@ export async function addImage(h: Harness, width = 24, height = 32): Promise<str
   return h.ctx.assets.add(await gradientPng(width, height, width * 31 + height));
 }
 
-/** Replaces base64 image data so golden snapshots stay readable and stable. */
+/**
+ * Replaces base64 image data so golden snapshots stay readable and stable. Not its length: the test
+ * PNGs are deflated by the runtime's own zlib, which packs them to different sizes on each OS.
+ */
 export function withoutImageBytes(value: unknown): unknown {
   return JSON.parse(
-    JSON.stringify(value, (key, v) =>
-      key === "data" && typeof v === "string" ? `<${v.length} base64 chars>` : v,
-    ),
+    JSON.stringify(value, (key, v) => (key === "data" && typeof v === "string" ? "<base64 image>" : v)),
   );
 }
 

@@ -13,19 +13,19 @@ exports[`google 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, 
               },
               {
                 "inlineData": {
-                  "data": "<964 base64 chars>",
+                  "data": "<base64 image>",
                   "mimeType": "image/png",
                 },
               },
               {
                 "inlineData": {
-                  "data": "<516 base64 chars>",
+                  "data": "<base64 image>",
                   "mimeType": "image/png",
                 },
               },
               {
                 "inlineData": {
-                  "data": "<580 base64 chars>",
+                  "data": "<base64 image>",
                   "mimeType": "image/png",
                 },
               },
@@ -114,19 +114,19 @@ exports[`google 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, 
               },
               {
                 "inlineData": {
-                  "data": "<964 base64 chars>",
+                  "data": "<base64 image>",
                   "mimeType": "image/png",
                 },
               },
               {
                 "inlineData": {
-                  "data": "<516 base64 chars>",
+                  "data": "<base64 image>",
                   "mimeType": "image/png",
                 },
               },
               {
                 "inlineData": {
-                  "data": "<580 base64 chars>",
+                  "data": "<base64 image>",
                   "mimeType": "image/png",
                 },
               },
@@ -215,19 +215,19 @@ exports[`google 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, 
               },
               {
                 "inlineData": {
-                  "data": "<964 base64 chars>",
+                  "data": "<base64 image>",
                   "mimeType": "image/png",
                 },
               },
               {
                 "inlineData": {
-                  "data": "<516 base64 chars>",
+                  "data": "<base64 image>",
                   "mimeType": "image/png",
                 },
               },
               {
                 "inlineData": {
-                  "data": "<580 base64 chars>",
+                  "data": "<base64 image>",
                   "mimeType": "image/png",
                 },
               },
@@ -432,6 +432,841 @@ exports[`google 24. speed on the wire: golden payloads per sync speed, and cost 
         },
       },
       "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite-image:generateContent",
+    },
+  ],
+}
+`;
+
+exports[`openai 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: openai:gpt-image-2.5-sunburst 1`] = `
+{
+  "edit": [
+    {
+      "body": {
+        "form": [
+          [
+            "model",
+            "gpt-image-2.5-sunburst",
+          ],
+          [
+            "prompt",
+            "Make the sky stormy",
+          ],
+          [
+            "n",
+            "1",
+          ],
+          [
+            "size",
+            "1024x1024",
+          ],
+          [
+            "quality",
+            "medium",
+          ],
+          [
+            "image[]",
+            "<file image-0.png image/png>",
+          ],
+          [
+            "image[]",
+            "<file image-1.png image/png>",
+          ],
+          [
+            "image[]",
+            "<file image-2.png image/png>",
+          ],
+        ],
+      },
+      "url": "https://api.openai.com/v1/images/edits",
+    },
+  ],
+  "inpaint": {
+    "op": "inpaint",
+  },
+  "t2i": [
+    {
+      "body": {
+        "model": "gpt-image-2.5-sunburst",
+        "n": 2,
+        "prompt": "A red kite over a green hill",
+        "quality": "medium",
+        "size": "768x1024",
+      },
+      "url": "https://api.openai.com/v1/images/generations",
+    },
+  ],
+}
+`;
+
+exports[`openai 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: openai:gpt-image-2.5-flare 1`] = `
+{
+  "edit": [
+    {
+      "body": {
+        "form": [
+          [
+            "model",
+            "gpt-image-2.5-flare",
+          ],
+          [
+            "prompt",
+            "Make the sky stormy",
+          ],
+          [
+            "n",
+            "1",
+          ],
+          [
+            "size",
+            "1024x1024",
+          ],
+          [
+            "quality",
+            "medium",
+          ],
+          [
+            "image[]",
+            "<file image-0.png image/png>",
+          ],
+          [
+            "image[]",
+            "<file image-1.png image/png>",
+          ],
+          [
+            "image[]",
+            "<file image-2.png image/png>",
+          ],
+        ],
+      },
+      "url": "https://api.openai.com/v1/images/edits",
+    },
+  ],
+  "inpaint": {
+    "op": "inpaint",
+  },
+  "t2i": [
+    {
+      "body": {
+        "model": "gpt-image-2.5-flare",
+        "n": 2,
+        "prompt": "A red kite over a green hill",
+        "quality": "medium",
+        "size": "768x1024",
+      },
+      "url": "https://api.openai.com/v1/images/generations",
+    },
+  ],
+}
+`;
+
+exports[`openai 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: openai:gpt-image-2 1`] = `
+{
+  "edit": [
+    {
+      "body": {
+        "form": [
+          [
+            "model",
+            "gpt-image-2",
+          ],
+          [
+            "prompt",
+            "Make the sky stormy",
+          ],
+          [
+            "n",
+            "1",
+          ],
+          [
+            "size",
+            "1024x1024",
+          ],
+          [
+            "quality",
+            "medium",
+          ],
+          [
+            "image[]",
+            "<file image-0.png image/png>",
+          ],
+          [
+            "image[]",
+            "<file image-1.png image/png>",
+          ],
+          [
+            "image[]",
+            "<file image-2.png image/png>",
+          ],
+        ],
+      },
+      "url": "https://api.openai.com/v1/images/edits",
+    },
+  ],
+  "inpaint": {
+    "op": "inpaint",
+  },
+  "t2i": [
+    {
+      "body": {
+        "model": "gpt-image-2",
+        "n": 2,
+        "prompt": "A red kite over a green hill",
+        "quality": "medium",
+        "size": "768x1024",
+      },
+      "url": "https://api.openai.com/v1/images/generations",
+    },
+  ],
+}
+`;
+
+exports[`openai 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: openai:gpt-image-2.5-sunburst speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "model": "gpt-image-2.5-sunburst",
+        "n": 1,
+        "prompt": "A red kite over a green hill",
+        "quality": "medium",
+        "size": "1024x1024",
+      },
+      "url": "https://api.openai.com/v1/images/generations",
+    },
+  ],
+}
+`;
+
+exports[`openai 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: openai:gpt-image-2.5-flare speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "model": "gpt-image-2.5-flare",
+        "n": 1,
+        "prompt": "A red kite over a green hill",
+        "quality": "medium",
+        "size": "1024x1024",
+      },
+      "url": "https://api.openai.com/v1/images/generations",
+    },
+  ],
+}
+`;
+
+exports[`openai 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: openai:gpt-image-2 speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "model": "gpt-image-2",
+        "n": 1,
+        "prompt": "A red kite over a green hill",
+        "quality": "medium",
+        "size": "1024x1024",
+      },
+      "url": "https://api.openai.com/v1/images/generations",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: higgsfield:soul 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "720p",
+        "seed": 1234,
+      },
+      "url": "https://api.higgsfield.ai/higgsfield-ai/soul/standard",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "720p",
+        "seed": 1235,
+      },
+      "url": "https://api.higgsfield.ai/higgsfield-ai/soul/standard",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: higgsfield:soul-v2 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "720p",
+        "seed": 1234,
+      },
+      "url": "https://api.higgsfield.ai/higgsfield-ai/soul/v2/standard",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "720p",
+        "seed": 1235,
+      },
+      "url": "https://api.higgsfield.ai/higgsfield-ai/soul/v2/standard",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: higgsfield:soul-cinema 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "720p",
+        "seed": 1234,
+      },
+      "url": "https://api.higgsfield.ai/higgsfield-ai/soul/cinema",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "720p",
+        "seed": 1235,
+      },
+      "url": "https://api.higgsfield.ai/higgsfield-ai/soul/cinema",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: higgsfield:marketing-studio-image 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "quality": "high",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/marketing-studio/image",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "quality": "high",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/marketing-studio/image",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: higgsfield:marketing-studio-image-2.5-flare 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "quality": "high",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/marketing-studio/image/flare",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "quality": "high",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/marketing-studio/image/flare",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: higgsfield:marketing-studio-image-2.5-sunburst 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "quality": "high",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/marketing-studio/image/sunburst",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "quality": "high",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/marketing-studio/image/sunburst",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: higgsfield:grok-imagine-image-2.0 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "quality": "medium",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/xai/grok-imagine-image-2.0",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "quality": "medium",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/xai/grok-imagine-image-2.0",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: higgsfield:recraft-v4.1 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/recraft/v4.1/text-to-image",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/recraft/v4.1/text-to-image",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: higgsfield:recraft-v4.1-utility 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/recraft/v4.1/utility/text-to-image",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/recraft/v4.1/utility/text-to-image",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: higgsfield:recraft-v4.1-pro 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "2k",
+      },
+      "url": "https://api.higgsfield.ai/recraft/v4.1/pro/text-to-image",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "2k",
+      },
+      "url": "https://api.higgsfield.ai/recraft/v4.1/pro/text-to-image",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: higgsfield:recraft-v4.1-utility-pro 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "2k",
+      },
+      "url": "https://api.higgsfield.ai/recraft/v4.1/utility/pro/text-to-image",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "2k",
+      },
+      "url": "https://api.higgsfield.ai/recraft/v4.1/utility/pro/text-to-image",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: higgsfield:qwen-image-3 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "1k",
+        "seed": 1234,
+      },
+      "url": "https://api.higgsfield.ai/alibaba/qwen-image-3/text-to-image",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "1k",
+        "seed": 1235,
+      },
+      "url": "https://api.higgsfield.ai/alibaba/qwen-image-3/text-to-image",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: higgsfield:ideogram-4.0 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "rendering_speed": "DEFAULT",
+      },
+      "url": "https://api.higgsfield.ai/ideogram/v4.0",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "rendering_speed": "DEFAULT",
+      },
+      "url": "https://api.higgsfield.ai/ideogram/v4.0",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: higgsfield:z-image-turbo 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "1k",
+        "seed": 1234,
+      },
+      "url": "https://api.higgsfield.ai/z-image/turbo",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "resolution": "1k",
+        "seed": 1235,
+      },
+      "url": "https://api.higgsfield.ai/z-image/turbo",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: higgsfield:soul speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "4:3",
+        "prompt": "A red kite over a green hill",
+        "resolution": "720p",
+        "seed": 1234,
+      },
+      "url": "https://api.higgsfield.ai/higgsfield-ai/soul/standard",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: higgsfield:soul-v2 speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "1:1",
+        "prompt": "A red kite over a green hill",
+        "resolution": "720p",
+        "seed": 1234,
+      },
+      "url": "https://api.higgsfield.ai/higgsfield-ai/soul/v2/standard",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: higgsfield:soul-cinema speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "1:1",
+        "prompt": "A red kite over a green hill",
+        "resolution": "720p",
+        "seed": 1234,
+      },
+      "url": "https://api.higgsfield.ai/higgsfield-ai/soul/cinema",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: higgsfield:marketing-studio-image speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "auto",
+        "prompt": "A red kite over a green hill",
+        "quality": "high",
+        "resolution": "2k",
+      },
+      "url": "https://api.higgsfield.ai/marketing-studio/image",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: higgsfield:marketing-studio-image-2.5-flare speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "auto",
+        "prompt": "A red kite over a green hill",
+        "quality": "high",
+        "resolution": "2k",
+      },
+      "url": "https://api.higgsfield.ai/marketing-studio/image/flare",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: higgsfield:marketing-studio-image-2.5-sunburst speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "auto",
+        "prompt": "A red kite over a green hill",
+        "quality": "high",
+        "resolution": "2k",
+      },
+      "url": "https://api.higgsfield.ai/marketing-studio/image/sunburst",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: higgsfield:grok-imagine-image-2.0 speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "auto",
+        "prompt": "A red kite over a green hill",
+        "quality": "medium",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/xai/grok-imagine-image-2.0",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: higgsfield:recraft-v4.1 speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "1:1",
+        "prompt": "A red kite over a green hill",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/recraft/v4.1/text-to-image",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: higgsfield:recraft-v4.1-utility speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "1:1",
+        "prompt": "A red kite over a green hill",
+        "resolution": "1k",
+      },
+      "url": "https://api.higgsfield.ai/recraft/v4.1/utility/text-to-image",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: higgsfield:recraft-v4.1-pro speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "1:1",
+        "prompt": "A red kite over a green hill",
+        "resolution": "2k",
+      },
+      "url": "https://api.higgsfield.ai/recraft/v4.1/pro/text-to-image",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: higgsfield:recraft-v4.1-utility-pro speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "1:1",
+        "prompt": "A red kite over a green hill",
+        "resolution": "2k",
+      },
+      "url": "https://api.higgsfield.ai/recraft/v4.1/utility/pro/text-to-image",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: higgsfield:qwen-image-3 speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "1:1",
+        "prompt": "A red kite over a green hill",
+        "resolution": "1k",
+        "seed": 1234,
+      },
+      "url": "https://api.higgsfield.ai/alibaba/qwen-image-3/text-to-image",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: higgsfield:ideogram-4.0 speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "1:1",
+        "prompt": "A red kite over a green hill",
+        "rendering_speed": "DEFAULT",
+      },
+      "url": "https://api.higgsfield.ai/ideogram/v4.0",
+    },
+  ],
+}
+`;
+
+exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: higgsfield:z-image-turbo speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "1:1",
+        "prompt": "A red kite over a green hill",
+        "resolution": "1k",
+        "seed": 1234,
+      },
+      "url": "https://api.higgsfield.ai/z-image/turbo",
     },
   ],
 }
