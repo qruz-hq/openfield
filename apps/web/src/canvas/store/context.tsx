@@ -1,9 +1,9 @@
+import type { NodeRuntime } from "@openfield/canvas/engine/types";
+import type { NodeFrame, NodeParams } from "@openfield/canvas/store/ops";
 import type { CanvasNodeResult } from "@openfield/core/canvas";
 import { createContext, type ReactNode, useContext } from "react";
 import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
-import type { NodeRuntime } from "../engine/types";
-import type { NodeFrame, NodeParams } from "./ops";
 import type { CanvasStore } from "./store";
 import type { CanvasActions, CanvasState, CanvasUiState } from "./types";
 

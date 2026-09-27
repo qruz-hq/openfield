@@ -1,11 +1,11 @@
+import { PORT_SPACING, type PortSpec, type PortType, portFlow } from "@openfield/canvas/engine/types";
+import { wouldCreateCycle } from "@openfield/canvas/store/graph";
 import { t } from "@openfield/core";
 import { cn, Tooltip } from "@openfield/ui";
 import { Handle, Position } from "@xyflow/react";
 import { Image, type LucideIcon, Palette, SquareDashed, Type } from "lucide-react";
 import { memo } from "react";
-import { PORT_SPACING, type PortSpec, type PortType, portFlow } from "../../engine/types";
 import { useCanvas } from "../../store/context";
-import { wouldCreateCycle } from "../../store/graph";
 import type { CanvasState } from "../../store/types";
 
 // Typed ports (§7.6, design pUPWt): 24 px circles centred on the node's edge, inputs on the left and

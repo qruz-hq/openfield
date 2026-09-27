@@ -1,3 +1,4 @@
+import type { NodeSpec } from "@openfield/canvas/nodes/registry";
 import { t } from "@openfield/core";
 import { cn } from "@openfield/ui";
 import {
@@ -12,7 +13,6 @@ import {
 import { AnnotationHandles } from "../../editor/annotation-handles";
 import { CanvasNodeResizer } from "../../editor/node-resizer";
 import { useCanvasActions, useReadOnly } from "../../store/context";
-import type { NodeSpec } from "../params";
 import type { NodeComponentProps } from "../registry";
 import { CollapsedCard } from "./collapsed-card";
 import { NodeLabel } from "./node-label";

@@ -1,3 +1,9 @@
+import {
+  composerValues,
+  resolveFor,
+  type SizeParams,
+  sizeFromAspect,
+} from "@openfield/canvas/nodes/generate/settings";
 import { formatLocale, type ModelListItem, type ResolutionTier, type SpeedId, t } from "@openfield/core";
 import { aspectLabel, carryValues, qualityLabel, visibleControls } from "@openfield/providers/manifest";
 import { AspectGlyph, GroupLabel, Popover, PopoverContent, PopoverTrigger } from "@openfield/ui";
@@ -11,7 +17,6 @@ import {
 import { focusSelected, Listbox, Option } from "../../../lib/listbox";
 import { notify } from "../../../lib/notify";
 import { useCanvasStoreApi } from "../../store/context";
-import { composerValues, resolveFor, type SizeParams, sizeFromAspect } from "./settings";
 
 // The size chips a node shows, straight from the model's manifest through resolveControl() (§0.3):
 // resolution, quality and aspect, never a house list, with the rows the composer's chips open

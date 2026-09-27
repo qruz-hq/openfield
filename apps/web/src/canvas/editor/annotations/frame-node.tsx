@@ -1,3 +1,4 @@
+import { FRAME_MIN, frameSpec } from "@openfield/canvas/nodes/annotations";
 import { t } from "@openfield/core";
 import { cn } from "@openfield/ui";
 import { ChevronDown, ChevronRight, Frame } from "lucide-react";
@@ -12,8 +13,6 @@ import { useEditingText } from "./editable-text";
 // radius 16 over an $elevated tint at half strength. The title pill hangs 32 above the top-left:
 // collapse chevron, name, node count. Nodes inside are React Flow children (parentId), so moving
 // the frame moves them; collapsing folds it to a strip and hides them.
-
-const FRAME_MIN = { w: 160, h: 120 };
 
 const FrameNode = memo(function FrameNode({ id, selected }: NodeComponentProps) {
   const frame = useNodeFrame(id);
@@ -113,22 +112,4 @@ function TitleInput({ id, initial, placeholder }: { id: string; initial: string;
   );
 }
 
-export const frameNode = defineNode<Record<string, never>>({
-  type: "frame",
-  typeVersion: 1,
-  label: "canvas.editor.annotations.frame",
-  description: "canvas.editor.annotations.frameLine",
-  keywords: ["group", "section", "area"],
-  icon: Frame,
-  category: "annotation",
-  menu: { group: "utilities", order: 2 },
-  size: { w: 640, h: 420 },
-  minSize: FRAME_MIN,
-  resizable: true,
-  annotation: true,
-  ports: [],
-  defaults: () => ({}),
-  parseParams: () => ({}),
-  runnable: false,
-  Component: FrameNode,
-});
+export const frameNode = defineNode({ ...frameSpec, icon: Frame, Component: FrameNode });

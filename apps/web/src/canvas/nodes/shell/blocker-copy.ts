@@ -1,6 +1,6 @@
+import type { NodeBlocker } from "@openfield/canvas/engine/types";
 import { type ProviderSummary, safeParseModelKey, t } from "@openfield/core";
 import { companyName } from "../../../lib/provider";
-import type { NodeBlocker } from "../../engine/types";
 
 // The words and the fix for each blocker (the hatched band, §7.5). Fixes are what a person can do
 // from here: add a key, pick another model, or turn the company back on.

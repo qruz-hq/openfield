@@ -1,10 +1,10 @@
+import { isAnnotationHandle } from "@openfield/canvas/engine/types";
+import { railOffsets } from "@openfield/canvas/nodes/registry";
 import { t } from "@openfield/core";
 import { cn } from "@openfield/ui";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { CircleHelp } from "lucide-react";
 import { memo } from "react";
-import { isAnnotationHandle } from "../../engine/types";
-import { railOffsets } from "../../nodes/registry";
 import { useCanvasShallow, useNodeFrame } from "../../store";
 import { AnnotationHandles } from "../annotation-handles";
 

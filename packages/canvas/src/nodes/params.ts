@@ -9,13 +9,9 @@ import {
   sizeSpecSchema,
   ulidSchema,
 } from "@openfield/core";
-import type { NodeDefinition } from "./registry";
 
 // Lenient readers for saved params: a value that doesn't fit is dropped for the default, never
 // thrown on, so an old or hand-edited canvas still opens (parseParams' contract).
-
-/** Everything about a node type except its React parts, so the engine and its tests can use it alone. */
-export type NodeSpec<P extends object> = Omit<NodeDefinition<P>, "Component" | "Inspector">;
 
 type Raw = Readonly<Record<string, unknown>>;
 

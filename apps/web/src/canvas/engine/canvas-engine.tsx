@@ -1,3 +1,11 @@
+import { nodeTitle } from "@openfield/canvas/engine/describe";
+import {
+  type FingerprintCache,
+  isPendingFingerprint,
+  knownFingerprints,
+  planFingerprints,
+  resolveFingerprints,
+} from "@openfield/canvas/engine/fingerprint";
 import { t } from "@openfield/core";
 import { useEffect, useMemo, useRef } from "react";
 import { subscribeEvents } from "../../api/events";
@@ -17,19 +25,11 @@ import { useCanvas, useCanvasStoreApi } from "../store/context";
 import { analyzeGraph } from "./analysis";
 import { followBoxes } from "./boxes";
 import { useEngineContextState } from "./context";
-import { nodeTitle } from "./describe";
 import { activeRuns, useEngineStore } from "./engine-store";
-import {
-  type FingerprintCache,
-  isPendingFingerprint,
-  knownFingerprints,
-  planFingerprints,
-  resolveFingerprints,
-} from "./fingerprint";
 import { createFollower } from "./follow";
 import { busyNodes, createRunController } from "./run-controller";
 import { RunDialogs } from "./run-dialogs";
-import { NOOP_RUN_CONTROLLER } from "./types";
+import { NOOP_RUN_CONTROLLER } from "./run-request";
 
 // The engine's React half, mounted once inside the canvas store provider. It keeps fingerprints and
 // the live analysis current (one pass per frame after a change), installs the run controller,

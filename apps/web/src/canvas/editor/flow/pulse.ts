@@ -1,4 +1,4 @@
-import type { NodeRuntime } from "../../engine/types";
+import type { NodeRuntime } from "@openfield/canvas/engine/types";
 
 // The light that runs along a link while the node it feeds is generating (design YQPWR, motion
 // spec IMRkA). Pure: what state a link is in, and where its pulse is at a moment of the shared

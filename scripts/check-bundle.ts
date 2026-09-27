@@ -30,6 +30,7 @@ const SERVER_ONLY_PACKAGES = ["sharp", "drizzle-orm", "drizzle-kit", "drizzle-zo
 const WORKSPACE_DIRS: Record<string, string> = {
   server: "apps/server",
   web: "apps/web",
+  canvas: "packages/canvas",
   core: "packages/core",
   db: "packages/db",
   providers: "packages/providers",

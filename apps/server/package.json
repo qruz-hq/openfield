@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@hono/zod-validator": "0.9.1",
+    "@openfield/canvas": "workspace:*",
     "@openfield/core": "workspace:*",
     "@openfield/db": "workspace:*",
     "@openfield/providers": "workspace:*",

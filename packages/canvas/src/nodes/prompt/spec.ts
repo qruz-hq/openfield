@@ -1,7 +1,7 @@
-import { Type } from "lucide-react";
 import { joinPrompt, textOf } from "../../engine/inputs";
 import type { NodeEngine, PortSpec } from "../../engine/types";
-import { type NodeSpec, readString } from "../params";
+import { readString } from "../params";
+import type { NodeSpec } from "../registry";
 
 // Prompt (design pFPMj): text written once and handed to any node with a text input. An
 // upstream prompt is prepended, so prompts chain.
@@ -54,7 +54,6 @@ export const promptSpec: NodeSpec<PromptParams> = {
   label: "canvas.nodes.prompt.label",
   description: "canvas.nodes.prompt.description",
   keywords: ["text", "words", "describe"],
-  icon: Type,
   category: "utility",
   menu: { group: "utilities", order: 0 },
   size: { w: 296, h: 151 },

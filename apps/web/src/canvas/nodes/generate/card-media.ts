@@ -1,5 +1,12 @@
+import {
+  type CardMediaView,
+  cardLayout,
+  type ImageSize,
+  restBox,
+  restKey,
+} from "@openfield/canvas/nodes/generate/card-size";
+import type { NodeSpec } from "@openfield/canvas/nodes/registry";
 import { createStore } from "zustand/vanilla";
-import type { CardMediaView, ImageSize } from "./card-size";
 
 // What the Generate cards know about their images, outside the document: each image's size and
 // which image a card with several shows. The card takes the shape of the image on show, so both
@@ -50,3 +57,17 @@ export function showImage(nodeId: string, assetId: string): void {
   if (shown[nodeId] === assetId) return;
   cardMedia.setState({ shown: { ...shown, [nodeId]: assetId } });
 }
+
+/**
+ * Generate's box in the editor: the card takes the shape of the image on show, which only the
+ * browser has measured, so the node type's spec (@openfield/canvas) leaves it to this.
+ */
+export const generateBox: NonNullable<NodeSpec["box"]> = ({ frame, params, result, ctx }) => {
+  const { w, h } = cardLayout({ frame, params, result, ctx, media: cardMedia.getState() });
+  return { w, h };
+};
+
+export const generateRest: NonNullable<NodeSpec["rest"]> = {
+  key: ({ params, result }) => restKey(params, result),
+  box: (input) => restBox(input, cardMedia.getState()),
+};

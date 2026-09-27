@@ -437,6 +437,66 @@
       }
     },
     {
+      "includes": ["packages/canvas/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["bun:*", "node:*"],
+                    "message": "The canvas engine runs in the browser too."
+                  },
+                  {
+                    "group": [
+                      "@openfield/db",
+                      "@openfield/db/**",
+                      "@openfield/ui",
+                      "@openfield/ui/**",
+                      "@openfield/server",
+                      "@openfield/server/**",
+                      "@openfield/web",
+                      "@openfield/web/**",
+                      "@openfield/providers/server"
+                    ],
+                    "message": "The canvas engine imports only @openfield/core and @openfield/providers/manifest."
+                  },
+                  {
+                    "group": [
+                      "**/packages/db/**",
+                      "**/db/src/**",
+                      "**/ui/src/**",
+                      "**/apps/**",
+                      "**/server/src/**",
+                      "**/web/src/**",
+                      "**/providers/src/**"
+                    ],
+                    "message": "The canvas engine imports only @openfield/core and @openfield/providers/manifest."
+                  },
+                  {
+                    "group": [
+                      "react",
+                      "react/**",
+                      "react-dom",
+                      "react-dom/**",
+                      "lucide-react",
+                      "zustand",
+                      "zustand/**",
+                      "@xyflow/react",
+                      "@tanstack/*"
+                    ],
+                    "message": "No React or browser state here: the server runs this code too. The web app adds those parts."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "includes": ["apps/server/**"],
       "linter": {
         "rules": {

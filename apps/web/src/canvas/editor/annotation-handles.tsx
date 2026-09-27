@@ -1,12 +1,12 @@
-import { cn } from "@openfield/ui";
-import { Handle, Position } from "@xyflow/react";
-import { type CSSProperties, memo } from "react";
 import {
   ANNOTATION_SIDES,
   type AnnotationSide,
   annotationSourceHandle,
   annotationTargetHandle,
-} from "../engine/types";
+} from "@openfield/canvas/engine/types";
+import { cn } from "@openfield/ui";
+import { Handle, Position } from "@xyflow/react";
+import { type CSSProperties, memo } from "react";
 import { useEditorUiOptional } from "./session";
 
 // The eight arrow handles every node carries (§7.5): a source and a target on each side, for

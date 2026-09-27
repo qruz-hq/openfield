@@ -9,6 +9,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@openfield/canvas": "workspace:*",
     "@openfield/core": "workspace:*",
     "@openfield/providers": "workspace:*",
     "@openfield/ui": "workspace:*",

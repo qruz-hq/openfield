@@ -1,17 +1,18 @@
+import type { MenuGroup } from "@openfield/canvas/nodes/registry";
+import { VARIATIONS_BOX } from "@openfield/canvas/nodes/variations/spec";
+import { newEdgeId } from "@openfield/canvas/store/graph";
+import { applyOps, type CanvasOp, type Size } from "@openfield/canvas/store/ops";
 import { t } from "@openfield/core";
 import { cn, SearchInput, surfaceVariants } from "@openfield/ui";
 import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { checkConnection } from "../engine/connect";
 import { useCanvasEngineContext } from "../engine/engine-store";
 import { useCanvasStoreApi, useUi } from "../store/context";
-import { newEdgeId } from "../store/graph";
-import { applyOps, type CanvasOp, type Size } from "../store/ops";
 import type { AddMenuState } from "../store/types";
 import { markOpenPicker, OPENS_AT_ONCE } from "./picker-intent";
-import { type MenuGroup, type NodeDefinition, nodeRegistry } from "./registry";
+import { type NodeDefinition, nodeRegistry } from "./registry";
 import { nodeWrapper } from "./shell/focus";
 import { railLayout } from "./shell/ports";
-import { VARIATIONS_BOX } from "./variations/spec";
 
 // Canvas / Add node menu (design CnYWZ, 320 wide): search, then References, Image and Utilities.
 // Opened at a point (double-click, A, the + tool) it adds the node there. Opened by dropping a

@@ -1,15 +1,15 @@
+import { RUN_ONLY_BLOCKERS } from "@openfield/canvas/engine/display";
+import { engineNode } from "@openfield/canvas/engine/fingerprint";
+import { modelKeyOf } from "@openfield/canvas/engine/inputs";
+import { isTerminalNode, resultFor, runtimeFor } from "@openfield/canvas/engine/runtime";
+import type { EngineContext, NodeRuntime, RunState } from "@openfield/canvas/engine/types";
+import { descendantsOf } from "@openfield/canvas/store/graph";
+import type { CanvasOp } from "@openfield/canvas/store/ops";
 import type { ModelKey, SseEvent } from "@openfield/core";
 import type { CanvasNodeResult } from "@openfield/core/canvas";
 import type { NodeRegistry } from "../nodes/registry";
-import { descendantsOf } from "../store/graph";
-import type { CanvasOp } from "../store/ops";
 import type { CanvasStore } from "../store/store";
-import { RUN_ONLY_BLOCKERS } from "./display";
 import { useEngineStore } from "./engine-store";
-import { engineNode } from "./fingerprint";
-import { modelKeyOf } from "./inputs";
-import { isTerminalNode, resultFor, runtimeFor } from "./runtime";
-import type { EngineContext, NodeRuntime, RunState } from "./types";
 
 // Following runs: canvas_run.updated frames (and GET …/runs on open) set each node's live state
 // and, once a node finishes, write its result into the document. The server has already written the

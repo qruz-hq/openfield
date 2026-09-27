@@ -1,3 +1,9 @@
+import { EMPTY_ENGINE_CONTEXT } from "@openfield/canvas/engine/context-base";
+import { joinPrompt, modelKeyOf } from "@openfield/canvas/engine/inputs";
+import type { NodeBlocker, NodeDisplay } from "@openfield/canvas/engine/types";
+import { type CardLayout, cardLayout } from "@openfield/canvas/nodes/generate/card-size";
+import { resolveFor } from "@openfield/canvas/nodes/generate/settings";
+import { type GenerateParams, generateSpec } from "@openfield/canvas/nodes/generate/spec";
 import { type AspectRatio, type ModelListItem, t } from "@openfield/core";
 import { aspectLabel } from "@openfield/providers/manifest";
 import { Button, IconButton, ProgressBar } from "@openfield/ui";
@@ -24,10 +30,7 @@ import { memo, useLayoutEffect, useMemo, useRef } from "react";
 import { useStore } from "zustand";
 import { useProviders } from "../../../api/hooks/keys";
 import { companyName } from "../../../lib/provider";
-import { EMPTY_ENGINE_CONTEXT } from "../../engine/context-base";
 import { useNodeAnalysis } from "../../engine/engine-store";
-import { joinPrompt, modelKeyOf } from "../../engine/inputs";
-import type { NodeBlocker, NodeDisplay } from "../../engine/types";
 import { useCanvas, useNodeParams, useNodeResult, useNodeRuntime, useReadOnly } from "../../store/context";
 import type { NodeComponentProps } from "../registry";
 import { CollapsedStatus } from "../shell/collapsed-card";
@@ -46,10 +49,7 @@ import {
 import { useNodeBasics, useNodeDisplay, useParsedParams, useRunNode } from "../shell/use-node";
 import { CardImage, CardMessage, CardPager, CardPartial, CardPill, type CardPillProps } from "./card";
 import { cardMedia, showImage } from "./card-media";
-import { type CardLayout, cardLayout } from "./card-size";
 import { type CardView, cardView, hasScrim } from "./card-state";
-import { resolveFor } from "./settings";
-import { type GenerateParams, generateSpec } from "./spec";
 
 // Canvas / Node / Generate (design Y5jjx): the card is the image, at the image's aspect ratio (the
 // chosen one before there's an image). At rest: the image, the label and the ports, and a pill

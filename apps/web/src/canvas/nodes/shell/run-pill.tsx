@@ -1,3 +1,4 @@
+import type { NodeBlocker } from "@openfield/canvas/engine/types";
 import { type CostEstimate, type ModelListItem, t } from "@openfield/core";
 import { cn, Tooltip } from "@openfield/ui";
 import { Play } from "lucide-react";
@@ -5,7 +6,6 @@ import { useProviders } from "../../../api/hooks/keys";
 import { tightCost } from "../../../lib/cost";
 import { altKeyName } from "../../editor/shortcuts";
 import { useCanvasEngineContext, useEngineStore } from "../../engine/engine-store";
-import type { NodeBlocker } from "../../engine/types";
 import { useCanvas } from "../../store/context";
 import { blockerCopy } from "./blocker-copy";
 import { useNodeSpeed } from "./speed";

@@ -1,9 +1,9 @@
+import { isAnnotationHandle, type PortFlow, type PortType, portFlow } from "@openfield/canvas/engine/types";
+import { incomingEdges, wouldCreateCycle } from "@openfield/canvas/store/graph";
+import type { DocSlice } from "@openfield/canvas/store/ops";
 import { t } from "@openfield/core";
 import { type NodeRegistry, nodeRegistry } from "../nodes/registry";
-import { incomingEdges, wouldCreateCycle } from "../store/graph";
-import type { DocSlice } from "../store/ops";
 import type { CanvasState } from "../store/types";
-import { isAnnotationHandle, type PortFlow, type PortType, portFlow } from "./types";
 
 // Connection rules (§7.6): compatible types, visible ports, no loops, annotation handles only to
 // annotation handles. The editor hands this to React Flow's isValidConnection and toasts `reason`.

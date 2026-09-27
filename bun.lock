@@ -16,6 +16,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@hono/zod-validator": "0.9.1",
+        "@openfield/canvas": "workspace:*",
         "@openfield/core": "workspace:*",
         "@openfield/db": "workspace:*",
         "@openfield/providers": "workspace:*",
@@ -28,6 +29,7 @@
       "name": "@openfield/web",
       "version": "0.0.0",
       "dependencies": {
+        "@openfield/canvas": "workspace:*",
         "@openfield/core": "workspace:*",
         "@openfield/providers": "workspace:*",
         "@openfield/ui": "workspace:*",
@@ -50,6 +52,14 @@
         "@vitejs/plugin-react": "6.1.1",
         "tailwindcss": "4.3.3",
         "vite": "8.3.0",
+      },
+    },
+    "packages/canvas": {
+      "name": "@openfield/canvas",
+      "version": "0.0.0",
+      "dependencies": {
+        "@openfield/core": "workspace:*",
+        "@openfield/providers": "workspace:*",
       },
     },
     "packages/core": {
@@ -262,6 +272,8 @@
     "@jridgewell/sourcemap-codec": ["@jridgewell/sourcemap-codec@1.6.0", "", {}, "sha512-T7jf+5zgsZHwNJ4lvQ7/aezbyk0nNX+zJVWpmHA7VYsEx7a7qr5Rg5IbtJFqkgze5Y2sruq1RUY8Q837Od7iFw=="],
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
+
+    "@openfield/canvas": ["@openfield/canvas@workspace:packages/canvas"],
 
     "@openfield/core": ["@openfield/core@workspace:packages/core"],
 

@@ -1,6 +1,6 @@
+import { newEdgeId, newNodeId } from "@openfield/canvas/store/graph";
 import { formatBytes, t } from "@openfield/core";
 import { type CanvasDocument, CanvasVersionError, migrateCanvasDocument } from "@openfield/core/canvas";
-import { newEdgeId, newNodeId } from "../store/graph";
 
 // Canvas files (§7.8): export writes the document as {name}.ofcanvas.json; import reads one back,
 // brings it up to the current version, checks it and gives every node and connection a new id,

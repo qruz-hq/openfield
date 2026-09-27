@@ -1,7 +1,10 @@
+import { deriveDisplay, visibleBlocker } from "@openfield/canvas/engine/display";
+import type { EngineContext, NodeDisplay } from "@openfield/canvas/engine/types";
+import type { NodeSpec } from "@openfield/canvas/nodes/registry";
+import type { NodeFrame } from "@openfield/canvas/store/ops";
 import { useCallback, useMemo } from "react";
-import { deriveDisplay, visibleBlocker } from "../../engine/display";
 import { useCanvasEngineContext, useNodeAnalysis } from "../../engine/engine-store";
-import type { EngineContext, NodeDisplay, RunRequest } from "../../engine/types";
+import type { RunRequest } from "../../engine/run-request";
 import {
   useCanvasActions,
   useCanvasStoreApi,
@@ -11,8 +14,6 @@ import {
   useNodeResult,
   useNodeRuntime,
 } from "../../store/context";
-import type { NodeFrame } from "../../store/ops";
-import type { NodeSpec } from "../params";
 
 // What a node component reads about itself: its frame, its params as its type reads them, its
 // result and live state, and what to draw. Each piece is its own store selector, so a node

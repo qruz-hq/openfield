@@ -1,3 +1,5 @@
+import { listOf, nodeTitle, runDetail } from "@openfield/canvas/engine/describe";
+import type { PreviewRow } from "@openfield/canvas/engine/preview";
 import { CANVAS_CONFIRM_JOBS, type CostEstimate, costParts, formatCost, t } from "@openfield/core";
 import { Button, Divider, Popover, PopoverAnchor, PopoverContent, ProviderLogo } from "@openfield/ui";
 import { Check, Play, Sparkles } from "lucide-react";
@@ -7,9 +9,7 @@ import { companyName, logoFor, providerOfKey } from "../../lib/provider";
 import { nodeRegistry } from "../nodes/registry";
 import { useCanvas } from "../store/context";
 import { useEngineContext } from "./context";
-import { listOf, nodeTitle, runDetail } from "./describe";
 import { type RunDialog, useEngineStore } from "./engine-store";
-import type { PreviewRow } from "./preview";
 
 // The run confirmation (§7.7): the run preview (design qlYUt, M4-18). When a single node has to run
 // earlier nodes first, the same preview says so and its button reads "Run them too", so one answer

@@ -1,0 +1,17 @@
+{
+  "name": "@openfield/canvas",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@openfield/core": "workspace:*",
+    "@openfield/providers": "workspace:*"
+  }
+}

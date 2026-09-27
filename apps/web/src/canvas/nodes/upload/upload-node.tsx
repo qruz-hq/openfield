@@ -1,3 +1,5 @@
+import { EMPTY_ENGINE_CONTEXT } from "@openfield/canvas/engine/context-base";
+import { type ImageListParams, uploadSpec } from "@openfield/canvas/nodes/upload/spec";
 import { t } from "@openfield/core";
 import { Button, cn, IconButton } from "@openfield/ui";
 import { Plus, Upload, X } from "lucide-react";
@@ -5,14 +7,12 @@ import { type DragEvent, memo, useEffect, useRef, useState } from "react";
 import { UPLOAD_ACCEPT, uploadImages } from "../../../api/hooks/uploads";
 import { errorMessage } from "../../../api/raw";
 import { notifyError } from "../../../lib/notify";
-import { EMPTY_ENGINE_CONTEXT } from "../../engine/context-base";
 import { useCanvasStoreApi, useReadOnly } from "../../store/context";
 import { takeOpenPicker } from "../picker-intent";
 import type { NodeComponentProps } from "../registry";
 import { NodeShell } from "../shell/node-shell";
 import { AssetImage } from "../shell/thumb";
 import { useNodeBasics, useParsedParams } from "../shell/use-node";
-import { type ImageListParams, uploadSpec } from "./spec";
 
 // Canvas / Node / Upload (design GTnB2) and / Empty (d0l3m). The first image fills the node; the
 // rest sit in the footer strip, where clicking one brings it to the front, dragging (or ⌥←/→)

@@ -1,12 +1,12 @@
+import { buildEngineContext } from "@openfield/canvas/engine/context-base";
+import type { EngineContext } from "@openfield/canvas/engine/types";
 import { useMemo } from "react";
 import { useProviders } from "../../api/hooks/keys";
 import { useModels } from "../../api/hooks/models";
 import { useAllProviderSettings } from "../../api/hooks/provider-settings";
 import { useSettings } from "../../api/hooks/settings";
-import { buildEngineContext } from "./context-base";
-import type { EngineContext } from "./types";
 
-export { buildEngineContext, EMPTY_ENGINE_CONTEXT, speedOf } from "./context-base";
+export { buildEngineContext, EMPTY_ENGINE_CONTEXT, speedOf } from "@openfield/canvas/engine/context-base";
 
 // The engine context from the models, settings, providers and company settings queries.
 // CanvasEngine builds it once and shares it through the engine store; nodes read it there

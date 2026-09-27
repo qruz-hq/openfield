@@ -1,6 +1,6 @@
-import { Upload } from "lucide-react";
 import type { NodeEngine, PortSpec } from "../../engine/types";
-import { type NodeSpec, readAssetIds } from "../params";
+import { readAssetIds } from "../params";
+import type { NodeSpec } from "../registry";
 
 // Upload (design GTnB2, empty d0l3m): images from this computer, in the order shown. Each file is
 // stored in the library once (POST /api/uploads), so the node only keeps asset ids.
@@ -44,7 +44,6 @@ export const uploadSpec: NodeSpec<ImageListParams> = {
   label: "canvas.nodes.upload.label",
   description: "canvas.nodes.upload.description",
   keywords: ["file", "photo", "reference", "import"],
-  icon: Upload,
   category: "reference",
   menu: { group: "references", order: 0 },
   size: { w: 280, h: 280 },

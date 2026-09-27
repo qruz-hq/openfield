@@ -1,3 +1,4 @@
+import { isAnnotationHandle } from "@openfield/canvas/engine/types";
 import { t } from "@openfield/core";
 import { cn, Menu, MenuContent, MenuItem, MenuTrigger } from "@openfield/ui";
 import {
@@ -31,7 +32,6 @@ import { createPortal } from "react-dom";
 import { useStore as useZustand } from "zustand";
 import { type ConnectionEnds, canConnect } from "../../engine/connect";
 import { useCanvasEngineContext } from "../../engine/engine-store";
-import { isAnnotationHandle } from "../../engine/types";
 import { takeFitOnOpen } from "../../fit-on-open";
 import { cardMedia } from "../../nodes/generate/card-media";
 import { nodeRegistry } from "../../nodes/registry";

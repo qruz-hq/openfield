@@ -1,6 +1,5 @@
 import type { ModelKey, ModelListItem, SizeSpec } from "@openfield/core";
 import { estimateRun } from "@openfield/providers/manifest";
-import { Sparkles } from "lucide-react";
 import { speedOf } from "../../engine/context-base";
 import {
   imageCount,
@@ -22,7 +21,6 @@ import type {
   RunCall,
 } from "../../engine/types";
 import {
-  type NodeSpec,
   readBatch,
   readBoolean,
   readModel,
@@ -34,8 +32,8 @@ import {
   readString,
   type SeedParam,
 } from "../params";
-import { cardMedia } from "./card-media";
-import { CARD_WIDTH, cardLayout, restBox, restKey } from "./card-size";
+import type { NodeSpec } from "../registry";
+import { CARD_WIDTH } from "./card-size";
 import { newNodeSize, resolveFor, type SizeParams, wireSettings } from "./settings";
 
 // Generate (design Y5jjx): the canvas's composer. A prompt from upstream plus its own text,
@@ -231,20 +229,12 @@ export const generateSpec: NodeSpec<GenerateParams> = {
   label: "canvas.nodes.generate.label",
   description: "canvas.nodes.generate.description",
   keywords: ["image", "create", "model", "make"],
-  icon: Sparkles,
   category: "generate",
   menu: { group: "image", order: 0 },
-  // Auto's square, until the node has an aspect ratio or an image (card-size.ts).
+  // Auto's square, until the node has an aspect ratio or an image (card-size.ts). The editor's
+  // box follows the image on show, which only the browser has measured (card-media.ts).
   size: { w: CARD_WIDTH, h: CARD_WIDTH },
   resizable: false,
-  box: ({ frame, params, result, ctx }) => {
-    const { w, h } = cardLayout({ frame, params, result, ctx, media: cardMedia.getState() });
-    return { w, h };
-  },
-  rest: {
-    key: ({ params, result }) => restKey(params, result),
-    box: (input) => restBox(input, cardMedia.getState()),
-  },
   annotation: false,
   ports: GENERATE_PORTS,
   defaults: (ctx) => ({

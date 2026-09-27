@@ -1,13 +1,13 @@
+import { EMPTY_ENGINE_CONTEXT } from "@openfield/canvas/engine/context-base";
+import { PROMPT_MAX, type PromptParams, promptSpec } from "@openfield/canvas/nodes/prompt/spec";
 import { t } from "@openfield/core";
 import { memo, useEffect, useRef } from "react";
-import { EMPTY_ENGINE_CONTEXT } from "../../engine/context-base";
 import { useReadOnly } from "../../store/context";
 import { takeOpenPicker } from "../picker-intent";
 import type { NodeComponentProps } from "../registry";
 import { leaveField } from "../shell/focus";
 import { NodeShell } from "../shell/node-shell";
 import { useNodeBasics, useParsedParams, useSetParams } from "../shell/use-node";
-import { PROMPT_MAX, type PromptParams, promptSpec } from "./spec";
 
 // Canvas / Node / Prompt (design pFPMj): 8 padding around a Surface / Block (w6khK) with the text
 // (13/1.5) and the mono count "70 / 4000" at the bottom.

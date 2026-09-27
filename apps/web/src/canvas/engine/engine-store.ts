@@ -1,10 +1,10 @@
+import { EMPTY_ENGINE_CONTEXT } from "@openfield/canvas/engine/context-base";
+import type { RunPreview } from "@openfield/canvas/engine/preview";
+import { isTerminalRun } from "@openfield/canvas/engine/runtime";
+import type { CompiledNode, EngineContext, RunState } from "@openfield/canvas/engine/types";
 import type { CanvasRunResponse } from "@openfield/core";
 import { create } from "zustand";
 import { EMPTY_ANALYSIS, type GraphAnalysis, type NodeAnalysis } from "./analysis";
-import { EMPTY_ENGINE_CONTEXT } from "./context-base";
-import type { RunPreview } from "./preview";
-import { isTerminalRun } from "./runtime";
-import type { CompiledNode, EngineContext, RunState } from "./types";
 
 // Engine state the canvas store doesn't hold: the live analysis nodes draw from, the runs this
 // canvas has going, and the one confirmation that can be open. One open canvas at a time, so one

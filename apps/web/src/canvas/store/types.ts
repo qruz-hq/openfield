@@ -1,10 +1,11 @@
+import type { NodeRuntime, PortType } from "@openfield/canvas/engine/types";
+import type { DocMeta } from "@openfield/canvas/store/document";
+import type { CanvasFragment } from "@openfield/canvas/store/graph";
+import type { CanvasOp, DocSlice, Point } from "@openfield/canvas/store/ops";
 import type { CanvasDetail } from "@openfield/core";
 import type { CanvasDocument, CanvasViewport } from "@openfield/core/canvas";
-import type { NodeRuntime, PortType, RunController } from "../engine/types";
-import type { DocMeta } from "./document";
-import type { CanvasFragment } from "./graph";
+import type { RunController } from "../engine/run-request";
 import type { History, PushOptions } from "./history";
-import type { CanvasOp, DocSlice, Point } from "./ops";
 
 // The canvas store's shape: the contract the editor and the nodes both code against.
 // One store per open canvas (a version preview gets its own, read-only). Slices:
