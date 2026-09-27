@@ -18,6 +18,8 @@ export interface AgentSession {
   readonly id: string | undefined;
   /** The app's display name, such as "Claude Code". */
   readonly client: string;
+  /** The app can show the person a yes or no prompt for us (MCP elicitation). */
+  readonly canAsk?: boolean;
 }
 
 export interface ToolContext {

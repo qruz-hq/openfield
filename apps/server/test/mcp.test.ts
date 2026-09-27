@@ -388,7 +388,8 @@ describe("the library", () => {
     expect(loop.text).toContain("can't go inside itself");
     const moved = await call(c, "update_folder", { folderId: inner, name: "Cups", parentId: null });
     expect(moved.json).toMatchObject({ path: "Cups", parentId: null });
-    const gone = await call(c, "delete_folder", { folderId: outer });
+    expect((await call(c, "delete_folder", { folderId: outer })).text).toContain("check with them");
+    const gone = await call(c, "delete_folder", { folderId: outer, confirm: true });
     expect(gone.json.deletedFolderIds).toEqual([outer]);
     expect(s.events.some((e) => e.event === "folder.updated")).toBe(true);
   });

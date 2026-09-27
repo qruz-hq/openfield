@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Services } from "../context";
 import { INSTRUCTIONS } from "./instructions";
 import type { AgentSession, ToolContext } from "./kit";
+import { withPermissions } from "./permissions";
 import { registerResources } from "./resources";
 import { accountTools } from "./tools/account";
 import { canvasTools } from "./tools/canvas";
@@ -35,6 +36,7 @@ export function createMcpServer(svc: Services, session: AgentSession): McpServer
     { instructions: INSTRUCTIONS },
   );
   const ctx: ToolContext = { svc, session };
+  withPermissions(server, ctx);
   for (const group of TOOL_GROUPS) group(server, ctx);
   registerResources(server, ctx);
   return server;

@@ -82,7 +82,12 @@ describe("canvases", () => {
 
     const copy = j(await call(c, "duplicate_canvas", { canvas: blank.canvasId, name: "Mood board 2" }));
     expect(copy).toMatchObject({ name: "Mood board 2" });
-    const gone = j(await call(c, "delete_canvas", { canvas: copy.canvasId }));
+    // Deleting a canvas asks first by default. This app can't show a prompt, so the agent asks in
+    // its chat and says so with confirm.
+    const asks = await call(c, "delete_canvas", { canvas: copy.canvasId });
+    expect(asks.isError).toBe(true);
+    expect(asks.text).toContain("confirm: true");
+    const gone = j(await call(c, "delete_canvas", { canvas: copy.canvasId, confirm: true }));
     expect(gone.deleted).toBe(copy.canvasId);
     const missing = await call(c, "get_canvas", { canvas: copy.canvasId });
     expect(missing.isError).toBe(true);

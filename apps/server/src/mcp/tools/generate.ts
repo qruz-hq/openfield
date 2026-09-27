@@ -3,7 +3,7 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { CostEstimate } from "@openfield/core";
 import { getJobSet } from "@openfield/db";
 import { z } from "zod";
-import { checkSpend, priceOf, spendFields } from "../guard";
+import { approveSpend, checkSpend, priceOf, spendFields, spendMode } from "../guard";
 import { guarded, Refusal, reply, type ToolContext } from "../kit";
 import { buildRequest, imageRequestFields } from "../request";
 import { describeRun } from "../runs";
@@ -35,9 +35,16 @@ export function generateTools(server: McpServer, ctx: ToolContext): void {
     },
     guarded(ctx, "generate_image", async (args, extra) => {
       const request = await buildRequest(ctx, args);
+      const mode = spendMode(ctx, "make_images");
+      const count = request.batch === 1 ? "an image" : `${request.batch} images`;
+      const asked = await approveSpend(ctx, extra, (await ctx.svc.runner.quote(request)).estimate, args, {
+        mode,
+        what: `make ${count}`,
+      });
+      if ("stop" in asked) return asked.stop;
       const started = await ctx.svc.agents.spending(async (): Promise<Started> => {
         const quote = await ctx.svc.runner.quote(request);
-        const stop = checkSpend(ctx, quote.estimate, args);
+        const stop = checkSpend(ctx, quote.estimate, { ...args, confirmCost: asked.confirmCost }, mode);
         if (stop) return { stop };
         const accepted = await ctx.svc.runner.createJobSet(request, { agent: ctx.session.client });
         return { runId: accepted.jobSet.id, estimate: quote.estimate };
@@ -80,8 +87,11 @@ export function generateTools(server: McpServer, ctx: ToolContext): void {
         basis: `Same as run ${set.id}`,
         pricedAt: "",
       };
+      const mode = spendMode(ctx, "make_images");
+      const asked = await approveSpend(ctx, extra, price, args, { mode, what: "make a run again" });
+      if ("stop" in asked) return asked.stop;
       const started = await ctx.svc.agents.spending(async (): Promise<Started> => {
-        const stop = checkSpend(ctx, price, args);
+        const stop = checkSpend(ctx, price, { ...args, confirmCost: asked.confirmCost }, mode);
         if (stop) return { stop };
         return {
           runId: ctx.svc.runner.recreate(set.id, { agent: ctx.session.client }).jobSet.id,

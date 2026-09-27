@@ -9,6 +9,7 @@ import {
   THEMES,
   THUMB_ENGINES,
 } from "../constants";
+import { agentPermissionsSchema } from "./agents";
 import { aspectRatioSchema, modelKeySchema, timestampSchema } from "./common";
 
 // Every §6.17 key and its default. The settings table stores each key's JSON value.
@@ -49,6 +50,8 @@ const settingValues = {
   agentAskAboveUsd: z.number().min(0).max(10_000),
   /** What agents may spend in a day, local midnight to midnight, in USD. null: no limit. */
   agentDailyCapUsd: z.number().positive().max(100_000).nullable(),
+  /** Allow, Ask or Default per agent action. Absent: Default. */
+  agentPermissions: agentPermissionsSchema,
 };
 
 type SettingValues = typeof settingValues;
@@ -78,6 +81,7 @@ export const SETTINGS_DEFAULTS: Settings = {
   rerunInterrupted: true,
   agentAskAboveUsd: 0.5,
   agentDailyCapUsd: 5,
+  agentPermissions: {},
 };
 
 function withDefaults<S extends z.ZodRawShape>(shape: S, defaults: { [K in keyof S]: z.output<S[K]> }) {

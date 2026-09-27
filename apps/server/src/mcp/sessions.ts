@@ -100,6 +100,9 @@ export class McpSessions {
       get client() {
         return clientDisplayName(live.server.server.getClientVersion()?.name);
       },
+      get canAsk() {
+        return !!live.server.server.getClientCapabilities()?.elicitation;
+      },
     };
     const transport = new WebStandardStreamableHTTPServerTransport({
       sessionIdGenerator: () => crypto.randomUUID(),

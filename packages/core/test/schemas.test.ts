@@ -252,6 +252,7 @@ describe("settings", () => {
         "rerunInterrupted",
         "agentAskAboveUsd",
         "agentDailyCapUsd",
+        "agentPermissions",
       ].sort(),
     );
   });

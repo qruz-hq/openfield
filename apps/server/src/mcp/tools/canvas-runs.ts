@@ -10,7 +10,7 @@ import {
 } from "@openfield/core";
 import { z } from "zod";
 import { actorOf, canvasField, describeCanvasRun, reading, resolveCanvas, waitForCanvasRun } from "../canvas";
-import { checkSpend, needsConfirmCost, priceOf, spendFields } from "../guard";
+import { approveSpend, checkSpend, needsConfirmCost, priceOf, spendFields, spendMode } from "../guard";
 import { guarded, Refusal, refuse, reply, type ToolContext } from "../kit";
 import { DEFAULT_WAIT_S, waitField } from "../wait";
 
@@ -70,6 +70,21 @@ export function canvasRunTools(server: McpServer, ctx: ToolContext): void {
         ...(args.rerun && { bypassCache: true }),
       };
       const actor = actorOf(ctx);
+      const mode = spendMode(ctx, "run_canvases");
+      // Asked before taking a turn at the limit: the person may take a while to answer.
+      let confirmCost = args.confirmCost;
+      if (!args.dryRun) {
+        const first = await ctx.svc.canvasRuns.runScope(canvas.id, { ...body, dryRun: true }, actor);
+        if (first.jobs > 0) {
+          const images = first.jobs === 1 ? "an image" : `${first.jobs} images`;
+          const asked = await approveSpend(ctx, extra, first.estimate, args, {
+            mode,
+            what: `run ${canvas.name}, making ${images},`,
+          });
+          if ("stop" in asked) return asked.stop;
+          confirmCost = asked.confirmCost;
+        }
+      }
       const started = await ctx.svc.agents.spending(async (): Promise<Started> => {
         const plan = await ctx.svc.canvasRuns.runScope(canvas.id, { ...body, dryRun: true }, actor);
         const nothing = explainNothing(plan);
@@ -81,20 +96,20 @@ export function canvasRunTools(server: McpServer, ctx: ToolContext): void {
               dryRun: true,
               ...planSummary(plan),
               price: priceOf(plan.estimate),
-              needsConfirmCost: needsConfirmCost(ctx, plan.estimate) || plan.jobs > CANVAS_CONFIRM_JOBS,
+              needsConfirmCost: needsConfirmCost(ctx, plan.estimate, mode) || plan.jobs > CANVAS_CONFIRM_JOBS,
               spentTodayUsd: today.usd,
               dailyLimitUsd: ctx.svc.settings.get().agentDailyCapUsd,
             }),
           };
         }
-        if (plan.jobs > CANVAS_CONFIRM_JOBS && args.confirmCost === undefined) {
+        if (plan.jobs > CANVAS_CONFIRM_JOBS && confirmCost === undefined) {
           return {
             stop: refuse(
               `This run makes ${plan.jobs} images, each billed separately, for up to ${formatMoney(plan.estimate.max)}. Show the person the price. If they agree, call again with confirmCost.`,
             ),
           };
         }
-        const stop = checkSpend(ctx, plan.estimate, args);
+        const stop = checkSpend(ctx, plan.estimate, { ...args, confirmCost }, mode);
         if (stop) return { stop };
         const run = await ctx.svc.canvasRuns.runScope(
           canvas.id,
