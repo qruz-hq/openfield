@@ -25,6 +25,11 @@ export type SaveOutcome =
 
 export interface AutosaveDeps {
   save(body: CanvasPatchBody, opts: { keepalive: boolean }): Promise<SaveOutcome>;
+  /**
+   * After a 409: true once this tab has replayed the live edits that led to the server's version
+   * (§7.11), so the same save can go again on top of them instead of raising the conflict banner.
+   */
+  caughtUp?(graphVersion: number): Promise<boolean>;
   /** Called after a successful save, e.g. to refresh the canvas preview. */
   onSaved?(): void;
   now?: () => number;
@@ -121,7 +126,15 @@ export function createAutosave(store: CanvasStore, deps: AutosaveDeps): Autosave
       deps.onSaved?.();
     } else if (outcome.kind === "conflict") {
       failures = 0;
-      actions.markConflict(outcome.server);
+      // The server moved on through edits this tab replays (an agent's): once it holds them, what
+      // wasn't saved goes again on top. Anything else (another tab's save) is a real conflict.
+      if (deps.caughtUp && !disposed && (await deps.caughtUp(outcome.server.graphVersion))) {
+        const { persist } = store.getState();
+        const unsaved = docDirty() || viewDirty();
+        if (persist.status === "saving") {
+          store.setState({ persist: { ...persist, status: unsaved ? "dirty" : "saved" } });
+        }
+      } else actions.markConflict(outcome.server);
     } else if (outcome.kind === "failed") {
       failures = 0;
       refusedAt = snap.revision;
