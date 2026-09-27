@@ -532,3 +532,5 @@ export type LogLevel = (typeof LOG_LEVELS)[number];
 // Server
 export const DEFAULT_PORT = 4317;
 export const SESSION_HEADER = "X-Openfield-Session";
+/** Which tab sent a request (§7.11), so an edit it made is known as its own. */
+export const TAB_HEADER = "X-Openfield-Tab";

@@ -4,7 +4,7 @@ import { canvasEdgeSchema, canvasNodeResultSchema, canvasNodeSchema, localIdSche
 
 // Two op sets meet here. The editor's own document ops (§7.8, @openfield/canvas store/ops) are what
 // canvas.updated carries to every open tab, which replays them; this is their wire form. And the
-// edits an agent or a script sends (EditOp): friendlier, with aliases, defaults and placement, which
+// edits an agent or a script sends (CanvasEdit): friendlier, with aliases, defaults and placement, which
 // @openfield/canvas compiles down to document ops.
 
 const point = z.object({ x: z.number().finite(), y: z.number().finite() });
@@ -73,7 +73,7 @@ const params = z
   .record(z.string(), z.unknown())
   .describe("Settings for the node type. For update_node, only the keys given change; null removes one");
 
-export const editOpSchema = z.discriminatedUnion("op", [
+export const canvasEditSchema = z.discriminatedUnion("op", [
   z.object({
     op: z.literal("add_node"),
     as: alias.optional(),
@@ -126,8 +126,8 @@ export const editOpSchema = z.discriminatedUnion("op", [
 
 /** At most this many edits in one batch. */
 export const CANVAS_EDITS_MAX = 500;
-export const editOpsSchema = z.array(editOpSchema).min(1).max(CANVAS_EDITS_MAX);
+export const canvasEditsSchema = z.array(canvasEditSchema).min(1).max(CANVAS_EDITS_MAX);
 
 export type CanvasWireOp = z.infer<typeof canvasWireOpSchema>;
-export type EditOp = z.infer<typeof editOpSchema>;
-export type EditOpName = EditOp["op"];
+export type CanvasEdit = z.infer<typeof canvasEditSchema>;
+export type CanvasEditName = CanvasEdit["op"];

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { canvasWireOpSchema, editOpsSchema } from "../canvas/ops";
+import { canvasEditsSchema, canvasWireOpSchema } from "../canvas/ops";
 import { localIdSchema } from "../canvas/schema";
 import { AGENT_ACTIVITY_KINDS, CANVAS_MAX_NODES, CANVAS_RUN_SCOPES } from "../constants";
 import { canvasRunNodeResultSchema } from "./canvas";
@@ -27,7 +27,7 @@ export const canvasActorSchema = z.discriminatedUnion("kind", [
 
 /** POST /api/canvases/:id/edits. With graphVersion, a canvas that changed since is a 409. */
 export const canvasEditsBodySchema = z.object({
-  edits: editOpsSchema,
+  edits: canvasEditsSchema,
   graphVersion: z.int().min(1).optional(),
 });
 export const canvasEditsResponseSchema = z.object({
@@ -62,6 +62,8 @@ export const agentActivitySchema = z.object({
   nodeIds: z.array(localIdSchema).max(CANVAS_MAX_NODES),
   kind: z.enum(AGENT_ACTIVITY_KINDS),
   at: timestampSchema,
+  /** The version saved before this session's first change here, when this is that change. */
+  versionId: ulidSchema.nullable().optional(),
 });
 
 export const navigateTargetSchema = z.discriminatedUnion("kind", [

@@ -1,5 +1,5 @@
 import { canonicalJson, type MessageKey, type MessageVars, t } from "@openfield/core";
-import { type CanvasEdge, type CanvasViewport, type EditOp, localIdSchema } from "@openfield/core/canvas";
+import { type CanvasEdge, type CanvasEdit, type CanvasViewport, localIdSchema } from "@openfield/core/canvas";
 import { type ConnectionEnds, checkConnection } from "../engine/connect";
 import { type EngineContext, isAnnotationHandle, type PortSpec, portFlow } from "../engine/types";
 import type { NodeRegistry, NodeSpec } from "../nodes/registry";
@@ -59,7 +59,7 @@ const DEFAULT_ARROW = { source: "arrow-source-right", target: "arrow-target-left
 
 export function compileEdits(
   base: DocSlice,
-  edits: readonly EditOp[],
+  edits: readonly CanvasEdit[],
   opts: CompileEditsOptions,
 ): CompiledEdits {
   const { specs, ctx } = opts;
@@ -412,7 +412,7 @@ function bestPair(outs: readonly PortSpec[], ins: readonly PortSpec[]) {
  * An input comes from its left, so a node that feeds another goes to that node's left.
  */
 function nearFor(
-  edits: readonly EditOp[],
+  edits: readonly CanvasEdit[],
   index: number,
   alias: string | undefined,
   aliases: Readonly<Record<string, string>>,

@@ -1,6 +1,11 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
-import { type CanvasWireOp, canvasWireOpSchema, type EditOp, editOpsSchema } from "@openfield/core/canvas";
+import {
+  type CanvasEdit,
+  type CanvasWireOp,
+  canvasEditsSchema,
+  canvasWireOpSchema,
+} from "@openfield/core/canvas";
 import { compileEdits, EditError } from "../src/edits/compile";
 import { nodeRect, PLACE_MARGIN, placeNode } from "../src/edits/place";
 import { fromWireOps, toWireOps } from "../src/edits/wire";
@@ -9,8 +14,11 @@ import { absolutePosition } from "../src/store/graph";
 import { applyOps, type CanvasOp, type DocSlice } from "../src/store/ops";
 import { banana, counters, ctx, docOf, edge, node } from "./fixtures";
 
-const compile = (doc: DocSlice, edits: EditOp[], extra: Parameters<typeof compileEdits>[2] | object = {}) =>
-  compileEdits(doc, editOpsSchema.parse(edits), { specs: specRegistry, ctx, ...counters(), ...extra });
+const compile = (
+  doc: DocSlice,
+  edits: CanvasEdit[],
+  extra: Parameters<typeof compileEdits>[2] | object = {},
+) => compileEdits(doc, canvasEditsSchema.parse(edits), { specs: specRegistry, ctx, ...counters(), ...extra });
 
 function failure(run: () => unknown): EditError {
   try {
