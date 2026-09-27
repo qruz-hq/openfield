@@ -131,7 +131,7 @@ Press `?` in a canvas to see every shortcut.
 
 ## Agents
 
-AI apps like Claude Code, Claude Desktop, Cursor and Codex can use Openfield for you while it runs: make and edit images, search and file your library, and check prices and spending. Turn it on in **Settings > Agents**, which has a ready-made snippet for each app. Agents use your keys without ever seeing them, show you the price before anything above the amount you set, and stop at a daily limit. [docs/agents.md](docs/agents.md) has the details.
+AI apps like Claude Code, Claude Desktop, Cursor and Codex can use Openfield for you while it runs: build and run canvases while you watch them change, make and edit images, search and file your library, and check prices and spending. Turn it on in **Settings > Agents**, which has a ready-made snippet for each app. Agents use your keys without ever seeing them, show you the price before anything above the amount you set, and stop at a daily limit. [docs/agents.md](docs/agents.md) has the details.
 
 ## Running without keys
 

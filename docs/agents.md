@@ -1,6 +1,6 @@
 # Agents
 
-AI apps like Claude Code, Claude Desktop, Cursor and Codex can use Openfield for you while it runs: make and edit images, find and file them in your library, check prices and spending. They connect over [MCP](https://modelcontextprotocol.io), the protocol these apps use for tools.
+AI apps like Claude Code, Claude Desktop, Cursor and Codex can use Openfield for you while it runs: build and run canvases while you watch, make and edit images, find and file them in your library, check prices and spending. They connect over [MCP](https://modelcontextprotocol.io), the protocol these apps use for tools.
 
 Agents use your API keys but never see them, and only within the limits you set. Everything they make shows up in Openfield like anything you make yourself, with the app's name on it in **Settings > Spending**.
 
@@ -71,7 +71,44 @@ args = ["run", "--silent", "--cwd", "/Users/you/openfield", "mcp"]
 
 Apps that connect over HTTP (Streamable HTTP) use `http://127.0.0.1:4317/mcp` with the header `Authorization: Bearer <your access key>`. Apps that start a program run `bun run --silent --cwd <openfield folder> mcp`.
 
-## What agents can do
+## Canvases
+
+Agents build and run canvases with you. Say "add a variation of the selected node" or "build me a moodboard canvas for these references", and the agent reads the canvas, changes it and runs it, the same way you would.
+
+- **You see it happen.** When the canvas is open, each change appears as it's made. A pill at the top says which app is editing, with **Follow** to keep its work in view, and a tag marks the nodes it just touched. Runs it starts show on the nodes like your own.
+- **Nothing is lost.** Before an app's first change to a canvas, Openfield saves the canvas as a version, "Before Claude Code", so you can go back from **Version history**.
+- **"The canvas I have open."** Agents can use `active` for the canvas in the Openfield tab you used last, and see which nodes you've selected there.
+- **Same rules as the editor.** Connections follow the port rules you see when dragging, nodes the agent doesn't place are put next to what they connect to, and runs skip nodes that are already up to date, for free.
+
+A canvas is built from nodes: **Prompt** hands text on, **Generate** and **Variations** make images, **Upload** and **Assets** hand on images from the library, and **Note**, **Frame**, **Text** and **Shape** are for layout. Each node has input and output ports; a connection goes from an output to an input of the same kind, written `"node.port"`:
+
+```json
+{
+  "canvas": "active",
+  "edits": [
+    { "op": "add_node", "as": "p", "type": "prompt", "params": { "text": "A stoneware mug on linen" } },
+    { "op": "add_node", "as": "g", "type": "image.generate", "params": { "aspect": "1:1" } },
+    { "connect": "p.text", "to": "g.prompt" }
+  ]
+}
+```
+
+`as` names a new node so later edits in the same batch can refer to it. A batch applies whole or not at all; a refused edit says which one and why. `list_node_types` lists every type, its ports and settings.
+
+| Tool | Does |
+|---|---|
+| `list_canvases`, `create_canvas`, `get_canvas` | Find, make (blank or from a template) and read canvases. `get_canvas` gives each node's settings and whether it's done, out of date or needs something. |
+| `edit_canvas` | A batch of changes: add, change, move and remove nodes, connect and disconnect, rename. |
+| `add_nodes`, `connect`, `update_node`, `move_node`, `delete_nodes` | The same changes one kind at a time. |
+| `run_canvas`, `get_run`, `stop_run` | Run all of a canvas, one node, a node and what follows it, or a selection; follow the run; stop it or one node. Goes through the same limits as `generate_image`. |
+| `list_versions`, `save_version`, `restore_version` | Versions. Restoring saves what's there first, and open tabs show the restore live. |
+| `rename_canvas`, `duplicate_canvas`, `delete_canvas` | Tidy up. Deleting a canvas keeps its images in the library. |
+| `list_node_types` | Every node type, its ports and settings. |
+| `get_active_canvas`, `show` | What you have open and selected; open a canvas, image or page in your tab. |
+
+Canvases are also resources, `openfield://canvas/<id>`.
+
+## Images and the library
 
 | Tool | Does |
 |---|---|
@@ -96,13 +133,13 @@ Agents can't change settings, keys or their own limits, and can't delete images 
 Agents spend money on your keys, so **Settings > Agents > Spending by agents** sets two limits:
 
 - **Ask before spending more than** (default $0.50). A request estimated above this is refused until the agent shows you the price and you agree. The agent then sends the price back as `confirmCost`.
-- **Daily limit** (default $5). Once agents together have spent this much today, they stop making images until midnight. Runs still going count at their estimate. Clear the field for no limit.
+- **Daily limit** (default $5). Once agents together have spent this much today, they stop making images until midnight. Work still going counts at its estimate, and a canvas run counts at its whole estimate until it ends. Two requests at once are checked one after the other, so they can't both slip under it. A request whose price Openfield can't work out is refused once the limit is reached. Clear the field for no limit.
 
 Every tool that spends also takes `dryRun`, which only works out the price.
 
 ## Waiting for images
 
-Tools that make images wait up to 50 seconds for them by default (`wait`, up to 600). Several apps give up on a tool call after a minute, so a slower run answers with its run id instead, and the agent picks it up with `wait_for`. Runs at the Batch speed can take hours and always answer at once.
+Tools that make images wait up to 50 seconds for them by default (`wait`, up to 600). Several apps give up on a tool call after a minute, so a slower run answers with its run id instead, and the agent picks it up with `wait_for` (or `get_run` for a canvas). Runs at the Batch speed can take hours and always answer at once.
 
 ## Turning it off, and new keys
 
@@ -120,4 +157,4 @@ Turning agents off ends every connection at once, and `/mcp` stops answering. Th
 
 ## How it works
 
-`/mcp` is part of the Openfield server, on the same address as the app. It checks the Host and the page origin like every other route, then the access key instead of the browser's session token. Each app gets its own session, kept in memory and ended after half an hour idle. The key lives in `config.json` beside your company keys, readable only by your user account, and is removed from logs. The tools call the same code the app does, so an agent's images, edits and folders reach open tabs as they happen.
+`/mcp` is part of the Openfield server, on the same address as the app. It checks the Host and the page origin like every other route, then the access key instead of the browser's session token. Each app gets its own session, kept in memory and ended after half an hour idle. The key lives in `config.json` beside your company keys, readable only by your user account, and is removed from logs. The tools call the same code the app does, so an agent's images, canvas edits, runs and folders reach open tabs as they happen. Canvas edits are compiled on the server with the editor's own rules and sent to every open tab as the document changes to replay.
