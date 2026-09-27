@@ -3,8 +3,10 @@ import { useEffect } from "react";
 import { type BatchNameLookups, batchNotice } from "../lib/batch-copy";
 import { announce, useLive } from "../lib/live";
 import { notify } from "../lib/notify";
+import { useNavigateRequest } from "../lib/presence";
 import { inCanvas, revealCanvas, revealJobSet } from "../lib/reveal";
 import { systemNotify } from "../lib/system-notify";
+import { tabId } from "../lib/tab";
 import { queryClient, queryKeys } from "./client";
 import { patchAsset, prependAsset, removeAssets } from "./hooks/assets";
 import { patchBatch, patchJob, patchJobSet, upsertJobSet } from "./hooks/job-sets";
@@ -193,9 +195,13 @@ function applyToCache(event: SseEvent) {
     case "batch.updated":
       batchUpdated(event.data);
       return;
+    case "ui.navigate":
+      // An agent asked this tab, and only this one, to open something (§7.11).
+      if (event.data.tabId === tabId) useNavigateRequest.getState().request(event.data.to);
+      return;
     default:
-      // Canvas runs reach the canvas engine through subscribeEvents. Partial previews, folders and
-      // maintenance aren't on these screens yet.
+      // Canvas runs and live edits reach the canvas editor through subscribeEvents. Partial
+      // previews, folders and maintenance aren't on these screens yet.
       return;
   }
 }

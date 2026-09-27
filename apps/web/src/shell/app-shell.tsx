@@ -6,12 +6,14 @@ import { Outlet, useLocation, useNavigate } from "react-router";
 import { Toaster } from "sonner";
 import { useEventStream } from "../api/events";
 import { useLive } from "../lib/live";
+import { pathFor, useNavigateRequest, usePresence } from "../lib/presence";
 import { useReveal } from "../lib/reveal";
 import { useThemeSync } from "../lib/theme";
 import { TopNav } from "./top-nav";
 
 export function AppShell() {
   useEventStream();
+  usePresence();
   useThemeSync();
   const { pathname } = useLocation();
   const navigate = useNavigate();
@@ -25,6 +27,14 @@ export function AppShell() {
   useEffect(() => {
     if (revealing && !onImage) navigate("/image");
   }, [revealing, onImage, navigate]);
+
+  // An agent's "show": the canvas or image it asked this tab to open (§7.11).
+  const navigateTo = useNavigateRequest((s) => s.target);
+  useEffect(() => {
+    if (!navigateTo) return;
+    useNavigateRequest.getState().done();
+    navigate(pathFor(navigateTo));
+  }, [navigateTo, navigate]);
 
   // A canvas run's Show opens its canvas, where the node has the result.
   useEffect(() => {
