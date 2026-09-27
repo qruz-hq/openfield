@@ -31,6 +31,11 @@ export const canvasRunRecordSchema = z.object({
   canceled: z.boolean().default(false),
   /** Nodes whose own Cancel was pressed. They and what reads from them stop; the rest carries on. */
   canceledNodes: z.array(localIdSchema).default([]),
+  /**
+   * The agent app that started the run, such as "Claude Code". Each job set it makes carries it, so
+   * the agents' daily limit and Spending count it. Null when a person did; absent in older records.
+   */
+  agent: z.string().max(80).nullable().default(null),
 });
 
 export type CanvasRunLaunch = z.infer<typeof canvasRunLaunchSchema>;

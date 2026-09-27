@@ -836,6 +836,7 @@ describe("crash recovery (§8.4.5)", () => {
       ],
       canceled: false,
       canceledNodes: [],
+      agent: null,
     };
     const opened = openDb(`${home}/openfield.db`);
     insertCanvasRun(opened.db, { id: runId, canvasId: canvas.id, scope: "all", plan: record, priority: 5 });
