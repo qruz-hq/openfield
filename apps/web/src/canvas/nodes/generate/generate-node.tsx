@@ -1,4 +1,5 @@
 import { type AspectRatio, type ModelListItem, t } from "@openfield/core";
+import { aspectLabel } from "@openfield/providers/manifest";
 import { Button, IconButton, ProgressBar } from "@openfield/ui";
 import { useStoreApi } from "@xyflow/react";
 import {
@@ -22,7 +23,6 @@ import {
 import { memo, useLayoutEffect, useMemo, useRef } from "react";
 import { useStore } from "zustand";
 import { useProviders } from "../../../api/hooks/keys";
-import { aspectLabel } from "../../../lib/controls";
 import { companyName } from "../../../lib/provider";
 import { EMPTY_ENGINE_CONTEXT } from "../../engine/context-base";
 import { useNodeAnalysis } from "../../engine/engine-store";

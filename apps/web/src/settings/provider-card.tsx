@@ -7,6 +7,7 @@ import {
   type ProviderSummary,
   t,
 } from "@openfield/core";
+import { runSpeed } from "@openfield/providers/manifest";
 import {
   Button,
   KeyInput,
@@ -31,7 +32,7 @@ import { errorMessage } from "../api/raw";
 import { speedPrice } from "../lib/cost";
 import { notify, notifyError } from "../lib/notify";
 import { logoFor } from "../lib/provider";
-import { runSpeed, settingSummaries } from "../lib/provider-settings";
+import { settingSummaries } from "../lib/provider-settings";
 import { ProviderSettingsModal } from "./provider-settings-modal";
 
 // Settings / Provider card / {Connected, Not connected, Key rejected, Checking, Set outside}. The

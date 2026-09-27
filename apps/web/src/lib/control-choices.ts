@@ -1,6 +1,10 @@
 import { type AspectRatio, type ModelListItem, type ResolutionTier, type SpeedId, t } from "@openfield/core";
-import type { ControlResolution } from "@openfield/providers/manifest";
-import { aspectLabel, estimateRun, type Resolved } from "./controls";
+import {
+  aspectLabel,
+  type ControlResolution,
+  estimateRun,
+  type Resolved,
+} from "@openfield/providers/manifest";
 import { tightCost } from "./cost";
 
 // The rows a resolution, quality or aspect chip opens, built once for the composer and the canvas

@@ -12,7 +12,8 @@ import {
   type SpeedId,
   t,
 } from "@openfield/core";
-import { estimate, nearestRatio, placeholderSize } from "@openfield/providers/manifest";
+import { estimate } from "./estimate";
+import { nearestRatio, placeholderSize } from "./size";
 
 // Pure composer logic: which value each chip shows, what a model switch keeps, what a run
 // costs and sends. No React here, so it's all unit tested. Settings shares it for prices and labels.

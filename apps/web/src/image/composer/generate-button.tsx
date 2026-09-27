@@ -1,7 +1,7 @@
 import { type CostEstimate, costParts, formatDate, t, tParts } from "@openfield/core";
+import type { GenerateState } from "@openfield/providers/manifest";
 import { cn, Spinner, Tooltip } from "@openfield/ui";
 import type { ReactNode } from "react";
-import type { GenerateState } from "../../lib/controls";
 
 // Composer / Generate / {Ready, Range, Working, Cost unknown, Needs key, Disabled}. 144×84, radius 12.
 

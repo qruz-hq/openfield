@@ -18,7 +18,7 @@ import type {
   SizeSpec,
 } from "@openfield/core";
 import type { CanvasNodeResult } from "@openfield/core/canvas";
-import type { RunSpeed } from "../../lib/provider-settings";
+import type { RunSpeed } from "@openfield/providers/manifest";
 
 // Shared engine vocabulary (§7.6, §7.7, §0.11). Pure types plus a few constant tables: no React,
 // no store, no fetch, so the compiler, fingerprints and their tests stay plain functions.

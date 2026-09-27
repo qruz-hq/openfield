@@ -26,13 +26,30 @@ export type {
   SpeedId,
   SpeedOffer,
 } from "@openfield/core";
+export {
+  type Adjustment,
+  aspectLabel,
+  type ComposerValues,
+  carryValues,
+  clampBatch,
+  estimateRun,
+  expectedSize,
+  type GenerateState,
+  generateBody,
+  generateState,
+  qualityLabel,
+  type Resolved,
+  resolveValues,
+} from "./manifest/controls";
 export { type EstimateRequest, estimate } from "./manifest/estimate";
 export {
   checkSettingsPatch,
   conditionHolds,
   modelsOffering,
   modelsUsing,
+  type RunSpeed,
   resolveProviderSettings,
+  runSpeed,
   type SettingsPatchResult,
   settingShown,
   settingValues,

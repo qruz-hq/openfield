@@ -1,12 +1,12 @@
-import type {
-  ModelListItem,
-  ProviderSettingsResponse,
-  ProviderSummary,
-  Settings,
-  SpeedId,
+import {
+  isEarly,
+  type ModelListItem,
+  type ProviderSettingsResponse,
+  type ProviderSummary,
+  type Settings,
+  type SpeedId,
 } from "@openfield/core";
-import { isEarly } from "../../lib/provider";
-import { runSpeed } from "../../lib/provider-settings";
+import { runSpeed } from "@openfield/providers/manifest";
 import type { EngineContext } from "./types";
 
 // The engine's view of the app: enabled models with their manifests, the defaults from Settings,

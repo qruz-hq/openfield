@@ -1,8 +1,8 @@
 import { type ModelKey, t } from "@openfield/core";
+import { estimateRun } from "@openfield/providers/manifest";
 import { BrandMark, ModelCaption, ProviderLogo, Segmented, SegmentedItem, StepperChip } from "@openfield/ui";
 import { X } from "lucide-react";
 import { memo, useMemo } from "react";
-import { estimateRun } from "../../../lib/controls";
 import { tightCost } from "../../../lib/cost";
 import { logoFor } from "../../../lib/provider";
 import { EMPTY_ENGINE_CONTEXT } from "../../engine/context-base";

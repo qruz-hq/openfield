@@ -1,6 +1,6 @@
 import type { ModelKey, ModelListItem, SizeSpec } from "@openfield/core";
+import { estimateRun } from "@openfield/providers/manifest";
 import { Sparkles } from "lucide-react";
-import { estimateRun } from "../../../lib/controls";
 import { speedOf } from "../../engine/context-base";
 import {
   imageCount,

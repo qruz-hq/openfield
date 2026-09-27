@@ -1,5 +1,5 @@
 import { formatLocale, type ModelListItem, type ResolutionTier, type SpeedId, t } from "@openfield/core";
-import { visibleControls } from "@openfield/providers/manifest";
+import { aspectLabel, carryValues, qualityLabel, visibleControls } from "@openfield/providers/manifest";
 import { AspectGlyph, GroupLabel, Popover, PopoverContent, PopoverTrigger } from "@openfield/ui";
 import { type ReactNode, useCallback, useRef, useState } from "react";
 import {
@@ -8,7 +8,6 @@ import {
   qualityChoices,
   resolutionChoices,
 } from "../../../lib/control-choices";
-import { aspectLabel, carryValues, qualityLabel } from "../../../lib/controls";
 import { focusSelected, Listbox, Option } from "../../../lib/listbox";
 import { notify } from "../../../lib/notify";
 import { useCanvasStoreApi } from "../../store/context";

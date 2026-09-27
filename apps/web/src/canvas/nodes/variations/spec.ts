@@ -6,8 +6,8 @@ import {
   type SizeSpec,
   VARIATION_STRATEGIES,
 } from "@openfield/core";
+import { estimateRun, type Resolved } from "@openfield/providers/manifest";
 import { LayoutGrid } from "lucide-react";
-import { estimateRun, type Resolved } from "../../../lib/controls";
 import { speedOf } from "../../engine/context-base";
 import { scaleEstimate, sumEstimates } from "../../engine/cost";
 import {

@@ -1,11 +1,11 @@
 import { type ModelListItem, t } from "@openfield/core";
+import { clampBatch } from "@openfield/providers/manifest";
 import { Badge, Button, cn, Divider, IconButton, MiniChip, Stepper } from "@openfield/ui";
 import { ChevronDown, Link, Plus, SlidersHorizontal, Timer } from "lucide-react";
 import { type ReactNode, useId, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { UPLOAD_ACCEPT, uploadImages } from "../../../api/hooks/uploads";
 import { errorMessage } from "../../../api/raw";
-import { clampBatch } from "../../../lib/controls";
 import { notifyError } from "../../../lib/notify";
 import { speedOf } from "../../engine/context-base";
 import { useCanvasEngineContext, useNodeAnalysis } from "../../engine/engine-store";

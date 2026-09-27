@@ -2,12 +2,23 @@ import {
   type AspectRatio,
   type Capabilities,
   formatLocale,
+  isEarly,
   isModelKey,
   type ModelListItem,
   newId,
   t,
 } from "@openfield/core";
-import { type ControlResolution, visibleControls } from "@openfield/providers/manifest";
+import {
+  aspectLabel,
+  type ControlResolution,
+  carryValues,
+  expectedSize,
+  generateBody,
+  generateState,
+  qualityLabel,
+  resolveValues,
+  visibleControls,
+} from "@openfield/providers/manifest";
 import { AspectGlyph, StepperChip, Tooltip } from "@openfield/ui";
 import {
   Dices,
@@ -29,18 +40,9 @@ import { useRunSpeed } from "../../api/hooks/provider-settings";
 import { useSettings } from "../../api/hooks/settings";
 import { errorMessage } from "../../api/raw";
 import { aspectChoices, qualityChoices, resolutionChoices } from "../../lib/control-choices";
-import {
-  aspectLabel,
-  carryValues,
-  expectedSize,
-  generateBody,
-  generateState,
-  qualityLabel,
-  resolveValues,
-} from "../../lib/controls";
 import { speedFallbackHint } from "../../lib/cost";
 import { notify, notifyError } from "../../lib/notify";
-import { companyName, isEarly } from "../../lib/provider";
+import { companyName } from "../../lib/provider";
 import { askToNotifyOnce } from "../../lib/system-notify";
 import { focusPrompt, registerPrompt } from "./focus";
 import { GenerateButton, type GenerateSpeed } from "./generate-button";

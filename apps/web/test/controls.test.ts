@@ -9,7 +9,7 @@ import {
   generateState,
   qualityLabel,
   resolveValues,
-} from "../src/lib/controls";
+} from "@openfield/providers/manifest";
 import { banana, flare, lite } from "./fixtures";
 
 const labels = { quality: qualityLabel };

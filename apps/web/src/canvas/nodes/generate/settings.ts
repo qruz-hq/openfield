@@ -6,7 +6,7 @@ import {
   qualityLabel,
   type Resolved,
   resolveValues,
-} from "../../../lib/controls";
+} from "@openfield/providers/manifest";
 import type { EngineContext } from "../../engine/types";
 
 // Size, resolution and quality on a node, read through the composer's own rules (lib/controls):
