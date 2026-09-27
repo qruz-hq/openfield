@@ -35,6 +35,11 @@ export function priceOf(estimate: CostEstimate) {
   };
 }
 
+/** Whether this price needs the person's OK: above the ask-first amount, or unknown. */
+export function needsConfirmCost(ctx: ToolContext, estimate: CostEstimate): boolean {
+  return estimate.confidence === "unknown" || estimate.max > ctx.svc.settings.get().agentAskAboveUsd + 1e-9;
+}
+
 /** Null to go ahead, or what to answer instead. */
 export function checkSpend(
   ctx: ToolContext,
@@ -58,9 +63,13 @@ export function checkSpend(
       dailyLimitUsd: cap,
     });
   }
-  if (cap !== null && !unknown && today.usd + cost > cap + 1e-9) {
+  // A price nobody knows can't be checked against what's left, but once nothing is left it waits.
+  if (cap !== null && (unknown ? today.usd >= cap - 1e-9 : today.usd + cost > cap + 1e-9)) {
+    const costs = unknown
+      ? "Openfield can't work out what this costs"
+      : `this costs up to ${formatMoney(cost)}`;
     return refuse(
-      `This would pass the daily limit for agents: ${formatMoney(cap)}. Agents have spent ${formatMoney(today.usd)} today and this costs up to ${formatMoney(cost)}. ` +
+      `This would pass the daily limit for agents: ${formatMoney(cap)}. Agents have spent ${formatMoney(today.usd)} today and ${costs}. ` +
         "The limit starts again at midnight. The person can raise it in Openfield, Settings > Agents.",
     );
   }

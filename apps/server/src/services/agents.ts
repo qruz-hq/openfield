@@ -5,15 +5,23 @@ import {
   type AgentLaunch,
   type AgentSpend,
   type AgentsStatus,
+  type CanvasRunState,
+  isTerminalState,
   t,
 } from "@openfield/core";
-import { agentUsageSince, type Db, pendingAgentEstimateUsd } from "@openfield/db";
+import { agentUsageSince, canvasRunSpendSince, type Db, pendingAgentEstimateUsd } from "@openfield/db";
 import { type ConfigData, ConfigFileError, type ConfigStore } from "../config/config-file";
+import type { EventHub } from "../events/hub";
 import { ApiFailure } from "../http/errors";
 
 // Settings > Agents: whether agent apps may connect, the key they connect with, and what they've
 // done today. The key sits in config.json beside the company keys (0600, §6.11). Turning agents off
 // or making a new key ends every connection at once (see mcp/sessions.ts).
+//
+// What agents spent today feeds their daily limit, so it has to be right while work is in flight:
+// job sets still going count at their estimate, and a canvas run holds its whole estimate until it
+// ends, since its later nodes make their job sets only once earlier ones finish. Checking the limit
+// and starting the work happen one caller at a time (spending()), so two agents can't both pass.
 
 /** An app used within this long reads as connected now. */
 const ACTIVE_MS = 60_000;
@@ -25,6 +33,8 @@ export interface AgentServiceDeps {
   endpoint: string;
   /** How apps that only start programs reach it (the stdio bridge). */
   launch: AgentLaunch;
+  /** For canvas_run.updated, which ends a canvas run's hold. */
+  events?: EventHub;
   now?: () => number;
 }
 
@@ -32,8 +42,17 @@ export class AgentService {
   /** App name to when it last did something, since this start. */
   readonly #seen = new Map<string, number>();
   readonly #listeners = new Set<() => void>();
+  /** Agent canvas runs still going, and the estimate each holds. */
+  readonly #held = new Map<string, number>();
+  #spending: Promise<unknown> = Promise.resolve();
 
-  constructor(private readonly deps: AgentServiceDeps) {}
+  constructor(private readonly deps: AgentServiceDeps) {
+    deps.events?.subscribe((event, data) => {
+      if (event !== "canvas_run.updated") return;
+      const run = data as CanvasRunState;
+      if (isTerminalState(run.status)) this.#held.delete(run.runId);
+    });
+  }
 
   /** On, and with a key to check against. */
   get enabled(): boolean {
@@ -100,12 +119,38 @@ export class AgentService {
     this.#seen.set(name, this.#now());
   }
 
-  /** What agents spent since local midnight, runs still going counted at their estimate. */
+  /**
+   * What agents spent since local midnight. Job sets still going count at their estimate, and each
+   * agent canvas run still going at its whole estimate, or at what it has run up if that's more.
+   */
   today(): AgentSpend {
-    const rows = agentUsageSince(this.deps.db, startOfToday(this.#now()));
-    const usd = rows.reduce((sum, r) => sum + r.usd, 0) + pendingAgentEstimateUsd(this.deps.db);
+    const from = startOfToday(this.#now());
+    const rows = agentUsageSince(this.deps.db, from);
+    let usd = rows.reduce((sum, r) => sum + r.usd, 0) + pendingAgentEstimateUsd(this.deps.db);
+    const runs = canvasRunSpendSince(this.deps.db, from, [...this.#held.keys()]);
+    for (const [runId, estimate] of this.#held) usd += Math.max(0, estimate - (runs.get(runId) ?? 0));
     const images = rows.reduce((sum, r) => sum + r.images, 0);
     return { usd: round(usd), images };
+  }
+
+  /**
+   * Runs `start` (check the limit, then start the work) with no other agent spending in between,
+   * so what one caller starts counts before the next one checks.
+   */
+  spending<T>(start: () => Promise<T>): Promise<T> {
+    const turn = this.#spending.then(start, start);
+    this.#spending = turn.catch(() => {});
+    return turn;
+  }
+
+  /** An agent's canvas run holds its whole estimate against the daily limit until it ends. */
+  hold(runId: string, estimateUsd: number): void {
+    this.#held.set(runId, estimateUsd);
+  }
+
+  /** The run ended before its hold was placed. */
+  release(runId: string): void {
+    this.#held.delete(runId);
   }
 
   /** Apps seen since this start, and any that made something today, most recent first. */

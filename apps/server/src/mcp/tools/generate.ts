@@ -1,4 +1,5 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { CostEstimate } from "@openfield/core";
 import { getJobSet } from "@openfield/db";
 import { z } from "zod";
@@ -9,7 +10,11 @@ import { describeRun } from "../runs";
 import { DEFAULT_WAIT_S, waitField, waitForRuns } from "../wait";
 
 // Making images. They land in the person's Image feed like any other run, with the agent's name on
-// them in Spending.
+// them in Spending. The limit check and the start happen in one turn (agents.spending), so two
+// calls at once can't both slip under the daily limit.
+
+/** A run started, or what to answer instead. */
+type Started = { stop: CallToolResult } | { stop?: undefined; runId: string; estimate: CostEstimate };
 
 export function generateTools(server: McpServer, ctx: ToolContext): void {
   server.registerTool(
@@ -30,14 +35,17 @@ export function generateTools(server: McpServer, ctx: ToolContext): void {
     },
     guarded(ctx, "generate_image", async (args, extra) => {
       const request = await buildRequest(ctx, args);
-      const quote = await ctx.svc.runner.quote(request);
-      const stop = checkSpend(ctx, quote.estimate, args);
-      if (stop) return stop;
-      const accepted = await ctx.svc.runner.createJobSet(request, { agent: ctx.session.client });
-      const runId = accepted.jobSet.id;
-      await waitForRuns(ctx, [runId], args.wait ?? DEFAULT_WAIT_S, extra);
-      const { summary, blocks } = await describeRun(ctx, runId, { previews: true });
-      return reply({ ...summary, price: priceOf(quote.estimate) }, blocks);
+      const started = await ctx.svc.agents.spending(async (): Promise<Started> => {
+        const quote = await ctx.svc.runner.quote(request);
+        const stop = checkSpend(ctx, quote.estimate, args);
+        if (stop) return { stop };
+        const accepted = await ctx.svc.runner.createJobSet(request, { agent: ctx.session.client });
+        return { runId: accepted.jobSet.id, estimate: quote.estimate };
+      });
+      if (started.stop) return started.stop;
+      await waitForRuns(ctx, [started.runId], args.wait ?? DEFAULT_WAIT_S, extra);
+      const { summary, blocks } = await describeRun(ctx, started.runId, { previews: true });
+      return reply({ ...summary, price: priceOf(started.estimate) }, blocks);
     }),
   );
 
@@ -72,10 +80,16 @@ export function generateTools(server: McpServer, ctx: ToolContext): void {
         basis: `Same as run ${set.id}`,
         pricedAt: "",
       };
-      const stop = checkSpend(ctx, price, args);
-      if (stop) return stop;
-      const accepted = ctx.svc.runner.recreate(set.id, { agent: ctx.session.client });
-      const runId = accepted.jobSet.id;
+      const started = await ctx.svc.agents.spending(async (): Promise<Started> => {
+        const stop = checkSpend(ctx, price, args);
+        if (stop) return { stop };
+        return {
+          runId: ctx.svc.runner.recreate(set.id, { agent: ctx.session.client }).jobSet.id,
+          estimate: price,
+        };
+      });
+      if (started.stop) return started.stop;
+      const { runId } = started;
       await waitForRuns(ctx, [runId], args.wait ?? DEFAULT_WAIT_S, extra);
       const { summary, blocks } = await describeRun(ctx, runId, { previews: true });
       return reply({ ...summary, recreatedFrom: set.id, price: priceOf(price) }, blocks);

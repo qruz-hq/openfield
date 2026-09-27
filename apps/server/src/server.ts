@@ -273,6 +273,7 @@ async function boot(
     db,
     endpoint: `http://127.0.0.1:${port}/mcp`,
     launch: agentLaunch(paths, port, config.data.port ?? DEFAULT_PORT),
+    events,
   });
   const mcp = new McpSessions(() => services);
 

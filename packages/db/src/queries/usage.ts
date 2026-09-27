@@ -1,4 +1,4 @@
-import type { JobSource } from "@openfield/core/constants";
+import { ACTIVE_JOB_STATES, type JobSource } from "@openfield/core/constants";
 import { and, desc, eq, gte, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
 import type { Executor } from "../client";
 import type { NewUsageLogRow, UsageLogRow } from "../rows";
@@ -155,4 +155,35 @@ export function agentUsageSince(db: Executor, from: string): AgentUsageRow[] {
     .where(and(gte(usageLog.ts, from), isNotNull(jobSets.agent), counted))
     .groupBy(jobSets.agent)
     .all();
+}
+
+/**
+ * What each of these canvas runs has spent since `from`, counting its job sets still going at their
+ * estimate. The agents' daily limit holds a run's whole estimate while it runs, since its later
+ * nodes haven't made their job sets yet, and takes whichever is more.
+ */
+export function canvasRunSpendSince(db: Executor, from: string, runIds: readonly string[]): Map<string, number> {
+  const out = new Map<string, number>(runIds.map((id) => [id, 0]));
+  if (!runIds.length) return out;
+  const spent = db
+    .select({
+      runId: sql<string>`${jobSets.canvasRunId}`,
+      usd: sql<number>`coalesce(sum(CASE WHEN ${usageLog.outcome} IN ('succeeded', 'canceled') THEN ${cost} ELSE 0 END), 0)`,
+    })
+    .from(usageLog)
+    .innerJoin(jobSets, eq(jobSets.id, usageLog.jobSetId))
+    .where(and(gte(usageLog.ts, from), inArray(jobSets.canvasRunId, [...runIds]), counted))
+    .groupBy(jobSets.canvasRunId)
+    .all();
+  const pending = db
+    .select({
+      runId: sql<string>`${jobSets.canvasRunId}`,
+      usd: sql<number>`coalesce(sum(${jobSets.costEstimateUsd}), 0)`,
+    })
+    .from(jobSets)
+    .where(and(inArray(jobSets.canvasRunId, [...runIds]), inArray(jobSets.status, [...ACTIVE_JOB_STATES])))
+    .groupBy(jobSets.canvasRunId)
+    .all();
+  for (const row of [...spent, ...pending]) out.set(row.runId, (out.get(row.runId) ?? 0) + row.usd);
+  return out;
 }
