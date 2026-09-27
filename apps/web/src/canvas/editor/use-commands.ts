@@ -1,10 +1,10 @@
+import { canConnect } from "@openfield/canvas/engine/connect";
 import type { CanvasRunScope } from "@openfield/core";
 import { t } from "@openfield/core";
 import type { CanvasEdge } from "@openfield/core/canvas";
 import { type Connection, type ReactFlowInstance, useReactFlow } from "@xyflow/react";
 import { useMemo } from "react";
 import { notify } from "../../lib/notify";
-import { canConnect } from "../engine/connect";
 import { useEngineStore } from "../engine/engine-store";
 import { nodeRegistry } from "../nodes/registry";
 import {

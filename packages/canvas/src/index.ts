@@ -4,6 +4,7 @@
 // entry, "@openfield/canvas/engine/compile" and so on.
 
 export * from "./engine/compile";
+export * from "./engine/connect";
 export * from "./engine/context-base";
 export * from "./engine/cost";
 export * from "./engine/describe";
