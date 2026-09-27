@@ -162,7 +162,11 @@ export function agentUsageSince(db: Executor, from: string): AgentUsageRow[] {
  * estimate. The agents' daily limit holds a run's whole estimate while it runs, since its later
  * nodes haven't made their job sets yet, and takes whichever is more.
  */
-export function canvasRunSpendSince(db: Executor, from: string, runIds: readonly string[]): Map<string, number> {
+export function canvasRunSpendSince(
+  db: Executor,
+  from: string,
+  runIds: readonly string[],
+): Map<string, number> {
   const out = new Map<string, number>(runIds.map((id) => [id, 0]));
   if (!runIds.length) return out;
   const spent = db

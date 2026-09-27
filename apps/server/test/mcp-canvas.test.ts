@@ -28,6 +28,7 @@ async function ready(opts: Parameters<typeof startTestServer>[0] = {}) {
   return { server: s, client: c };
 }
 
+// biome-ignore lint/suspicious/noExplicitAny: tool answers are free-form JSON; each test checks what it needs.
 type Json = Record<string, any>;
 const j = (r: { json: unknown }) => r.json as Json;
 
@@ -427,6 +428,7 @@ describe("the daily limit under pressure", () => {
     // Spent 0.0672: the limit comes down to meet it.
     await s.json("/api/settings", { method: "PATCH", body: { agentDailyCapUsd: 0.05 } });
     const refused = checkSpend(ctx, unknown, { confirmCost: 1 });
-    expect((refused?.content[0] as { text: string }).text).toContain("daily limit");
+    expect(refused).not.toBeNull();
+    expect((refused!.content[0] as { text: string }).text).toContain("daily limit");
   });
 });
