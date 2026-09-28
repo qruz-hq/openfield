@@ -383,6 +383,7 @@ function ModelList({
           ctx={ctx}
           params={params}
           modelKey={modelKey}
+          inputImages={references}
           onRemove={readOnly ? undefined : () => onChange(models.filter((m) => m !== modelKey))}
         />
       ))}
@@ -396,16 +397,22 @@ function ModelList({
   );
 }
 
-/** Inspector / Model row (design Wbiov): the logo, the name, one take's price at its company's speed, ×. */
+/**
+ * Inspector / Model row (design Wbiov): the logo, the name, one take's price at its company's speed
+ * with the image it reads, ×.
+ */
 function ModelRow({
   ctx,
   params,
   modelKey,
+  inputImages,
   onRemove,
 }: {
   ctx: EngineContext;
   params: VariationsParams;
   modelKey: ModelKey;
+  /** Images each run reads: the incoming one, when an image is connected. */
+  inputImages: number;
   onRemove?: () => void;
 }) {
   const model = ctx.model(modelKey);
@@ -413,7 +420,7 @@ function ModelRow({
   const name = model?.displayName ?? modelKey;
   const run = model ? ctx.runSpeed?.(model) : undefined;
   const cost = model
-    ? tightCost(estimateRun(model, carriedFor(model, params), "", run?.speed, {}, ctx.askPrice))
+    ? tightCost(estimateRun(model, carriedFor(model, params), "", run?.speed, { inputImages }, ctx.askPrice))
     : undefined;
   const price = cost && run?.fellBack ? `${cost} ${t("speed.suffix", { speed: run.name })}` : cost;
   return (
