@@ -57053,6 +57053,24 @@
                                   }
                                 },
                                 {
+                                  "id": "tQKtH",
+                                  "type": "ref",
+                                  "ref": "U7CWh",
+                                  "name": "Item Lock",
+                                  "width": "fill_container",
+                                  "descendants": {
+                                    "T3GeS": {
+                                      "icon": "lock"
+                                    },
+                                    "cCub4": {
+                                      "content": "Lock"
+                                    },
+                                    "Ta06r/N1xhr": {
+                                      "content": "⇧⌘L"
+                                    }
+                                  }
+                                },
+                                {
                                   "id": "QwICo",
                                   "type": "ref",
                                   "ref": "vnL4X",
@@ -102437,6 +102455,402 @@
               ]
             }
           ]
+        },
+        {
+          "type": "frame",
+          "id": "lGxjd",
+          "name": "Section · Locked nodes",
+          "width": "fill_container",
+          "layout": "vertical",
+          "gap": 20,
+          "children": [
+            {
+              "type": "frame",
+              "id": "apZTC",
+              "name": "Section header",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 10,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "aTGXv",
+                  "name": "Title row",
+                  "width": "fill_container",
+                  "gap": 10,
+                  "alignItems": "end",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "s7q3DE",
+                      "name": "Section title",
+                      "fill": "$text-primary",
+                      "content": "Locked nodes",
+                      "fontFamily": "Inter",
+                      "fontSize": 16,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "text",
+                      "id": "z1NtQT",
+                      "name": "Section note",
+                      "fill": "$text-tertiary",
+                      "content": "A locked node keeps its images: it never runs again and can't be deleted, but it still moves. Its settings are read-only until it's unlocked.",
+                      "fontFamily": "Inter",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "rectangle",
+                  "id": "B6kqy",
+                  "name": "Hairline",
+                  "fill": "$border",
+                  "width": "fill_container",
+                  "height": 1
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "gWIIh",
+              "name": "Row · Parts",
+              "fill": "$canvas",
+              "gap": 48,
+              "padding": 32,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "oNmTI",
+                  "name": "Cell · Label",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "noHjj",
+                      "name": "Canvas / Node / Label / Locked",
+                      "reusable": true,
+                      "gap": 6,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "f75mI",
+                          "name": "Lock",
+                          "width": 12,
+                          "height": 12,
+                          "icon": "lock",
+                          "library": "lucide",
+                          "fill": "$text-tertiary"
+                        },
+                        {
+                          "type": "text",
+                          "id": "LMbLL",
+                          "name": "Title",
+                          "fill": "$text-secondary",
+                          "content": "Key visual",
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "GlDRe",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Canvas / Node / Label / Locked · a lock before the name, always shown",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "y86Jl",
+                  "name": "Cell · Pill",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "id": "zbJ7h",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "aDnHY",
+                      "name": "Canvas / Card / Pill / Locked",
+                      "descendants": {
+                        "Sa6IB": {
+                          "icon": "lock"
+                        },
+                        "byR6B": {
+                          "content": "Locked"
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "S80hk",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Canvas / Card / Pill / Locked · the card's state on hover; no Run beside it",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "OLDRR",
+                  "name": "Cell · Note",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "P4Cv8",
+                      "name": "Canvas / Inspector / Locked note",
+                      "reusable": true,
+                      "width": 330,
+                      "fill": "$accent-soft",
+                      "cornerRadius": 10,
+                      "stroke": "$accent-line",
+                      "strokeWidth": 1,
+                      "gap": 10,
+                      "padding": [
+                        8,
+                        8,
+                        8,
+                        12
+                      ],
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "icon",
+                          "id": "uxYza",
+                          "name": "Icon",
+                          "width": 14,
+                          "height": 14,
+                          "icon": "lock",
+                          "library": "lucide",
+                          "fill": "$accent"
+                        },
+                        {
+                          "type": "text",
+                          "id": "JysSc",
+                          "name": "Text",
+                          "fill": "$text-primary",
+                          "textGrowth": "fixed-width",
+                          "width": "fill_container",
+                          "content": "Locked. Its images stay as they are, and it won't run again.",
+                          "lineHeight": 1.4,
+                          "fontFamily": "Inter",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "id": "HFUS2",
+                          "type": "ref",
+                          "ref": "ohpFX",
+                          "name": "Unlock",
+                          "descendants": {
+                            "D27v8a": {
+                              "icon": "lock-open"
+                            },
+                            "VV3Wp": {
+                              "content": "Unlock"
+                            }
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "YJtdP",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Canvas / Inspector / Locked note · top of the side sheet; the settings under it are read-only",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "shgZA",
+                  "name": "Cell · Menu",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "id": "ZcljG",
+                      "type": "ref",
+                      "ref": "L8nXKV",
+                      "name": "Canvas / Node / Menu (with Lock)"
+                    },
+                    {
+                      "type": "text",
+                      "id": "BMvGr",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Canvas / Node / Menu · Lock sits above Delete, ⇧⌘L",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "AJ3uy",
+                  "name": "Cell · Menu locked",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "children": [
+                    {
+                      "id": "NoE6t",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "L8nXKV",
+                      "name": "Canvas / Node / Menu / Locked",
+                      "descendants": {
+                        "GsUle": {
+                          "opacity": 0.4
+                        },
+                        "j1fAu": {
+                          "opacity": 0.4
+                        },
+                        "tQKtH/T3GeS": {
+                          "icon": "lock-open"
+                        },
+                        "tQKtH/cCub4": {
+                          "content": "Unlock"
+                        },
+                        "ZUrNT": {
+                          "opacity": 0.4
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "ETEBr",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "… / Locked · Run and Delete wait for Unlock; Duplicate, Collapse and Rename still work",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "T1s4YL",
+                  "name": "Cell · Frame locked",
+                  "layout": "vertical",
+                  "gap": 10,
+                  "padding": [
+                    32,
+                    0,
+                    0,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "id": "LFv5M",
+                      "type": "ref",
+                      "reusable": true,
+                      "ref": "sV9Pa",
+                      "name": "Canvas / Node / Frame / Locked",
+                      "width": 420,
+                      "height": 260,
+                      "descendants": {
+                        "e1cls": {
+                          "width": 420,
+                          "height": 260
+                        },
+                        "B3AsC": {
+                          "type": "frame",
+                          "id": "PjJbr",
+                          "x": 0,
+                          "y": -32,
+                          "name": "Title",
+                          "height": 24,
+                          "fill": "$elevated-2",
+                          "cornerRadius": 8,
+                          "stroke": "$border",
+                          "strokeWidth": 1,
+                          "gap": 6,
+                          "padding": [
+                            0,
+                            8
+                          ],
+                          "alignItems": "center",
+                          "children": [
+                            {
+                              "type": "icon",
+                              "id": "zXTO3",
+                              "name": "Collapse",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "chevron-down",
+                              "library": "lucide",
+                              "fill": "$text-tertiary"
+                            },
+                            {
+                              "type": "icon",
+                              "id": "k0Dpa",
+                              "name": "Lock",
+                              "width": 12,
+                              "height": 12,
+                              "icon": "lock",
+                              "library": "lucide",
+                              "fill": "$text-tertiary"
+                            },
+                            {
+                              "type": "text",
+                              "id": "Ngzqu",
+                              "name": "Name",
+                              "fill": "$text-primary",
+                              "content": "Approved looks",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "500"
+                            },
+                            {
+                              "type": "text",
+                              "id": "VEWTE",
+                              "name": "Count",
+                              "fill": "$text-tertiary",
+                              "content": "3 nodes, locked",
+                              "fontFamily": "Inter",
+                              "fontSize": 12,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    {
+                      "type": "text",
+                      "id": "bhlfT",
+                      "name": "Caption",
+                      "fill": "$text-tertiary",
+                      "content": "Canvas / Node / Frame / Locked · everything inside is locked with it; nodes move within it but can't leave, and nothing new drops in",
+                      "fontFamily": "Inter",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
         }
       ]
     },
@@ -103147,6 +103561,516 @@
           "name": "Spend details",
           "x": 1036,
           "y": 58
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "uHpIQ",
+      "x": 34320,
+      "y": 18708,
+      "name": "Canvas · Locked node",
+      "clip": true,
+      "width": 1440,
+      "height": 900,
+      "fill": "$canvas",
+      "layout": "none",
+      "children": [
+        {
+          "id": "tRDNo",
+          "type": "ref",
+          "ref": "DSM0X",
+          "name": "Pane",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "x3lNNv",
+          "type": "ref",
+          "ref": "USl4U",
+          "x": 320,
+          "y": 405,
+          "width": 40,
+          "height": 3,
+          "name": "Edge · Prompt to Generate",
+          "descendants": {
+            "Bjkf9": {
+              "width": 40,
+              "height": 2,
+              "viewBox": [
+                0,
+                0,
+                40,
+                2
+              ],
+              "geometry": "M0 0c20 0 20 2 40 2"
+            }
+          }
+        },
+        {
+          "id": "S4eAr",
+          "type": "ref",
+          "ref": "USl4U",
+          "x": 680,
+          "y": 424,
+          "width": 50,
+          "height": 20,
+          "name": "Edge · Generate to Variations",
+          "descendants": {
+            "Bjkf9": {
+              "width": 50,
+              "height": 19.5,
+              "viewBox": [
+                0,
+                0,
+                50,
+                19.5
+              ],
+              "geometry": "M0 19.5c25 0 25-19.5 50-19.5"
+            }
+          }
+        },
+        {
+          "id": "zpWqh",
+          "type": "ref",
+          "ref": "pFPMj",
+          "x": 24,
+          "y": 330,
+          "name": "Prompt",
+          "descendants": {
+            "sGfuB": {
+              "content": "70 / 4000"
+            }
+          }
+        },
+        {
+          "id": "SboZl",
+          "type": "ref",
+          "ref": "njYDO",
+          "name": "Variations",
+          "x": 730,
+          "y": 283,
+          "stroke": "#00000000",
+          "strokeWidth": 0,
+          "strokeAlignment": "outer"
+        },
+        {
+          "id": "C6ikW",
+          "type": "ref",
+          "ref": "eXVfc",
+          "name": "Key visual (locked)",
+          "x": 360,
+          "y": 230,
+          "descendants": {
+            "oDoE2": {
+              "id": "puMYN",
+              "type": "ref",
+              "ref": "noHjj",
+              "name": "Label",
+              "x": 0,
+              "y": -22,
+              "layoutPosition": "absolute",
+              "descendants": {
+                "LMbLL": {
+                  "content": "Key visual"
+                }
+              }
+            },
+            "M1057/Sa6IB": {
+              "icon": "lock"
+            },
+            "M1057/byR6B": {
+              "content": "Locked"
+            },
+            "Q1h2r": {
+              "enabled": false
+            }
+          }
+        },
+        {
+          "id": "OOoEi",
+          "type": "ref",
+          "ref": "JDH76",
+          "name": "Top bar left",
+          "x": 12,
+          "y": 12,
+          "descendants": {
+            "jEWck": {
+              "content": "Lighthouse series"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "c2Gbt",
+          "x": 1036,
+          "y": 12,
+          "name": "Right cluster",
+          "gap": 12,
+          "alignItems": "center",
+          "children": [
+            {
+              "id": "OfbEw",
+              "type": "ref",
+              "ref": "f9fk2S",
+              "name": "Spend"
+            },
+            {
+              "id": "DZnVf",
+              "type": "ref",
+              "ref": "B9bh4",
+              "name": "Save state"
+            },
+            {
+              "id": "T52T5P",
+              "type": "ref",
+              "ref": "byh7K",
+              "name": "Run all",
+              "descendants": {
+                "W9VQg": {
+                  "content": "~$0.65"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "xUrSD",
+          "type": "ref",
+          "ref": "p1WXGf",
+          "name": "Toolbar",
+          "x": 547,
+          "y": 840
+        },
+        {
+          "id": "hG7Wr",
+          "type": "ref",
+          "ref": "ehbF7",
+          "name": "Zoom",
+          "x": 12,
+          "y": 848
+        },
+        {
+          "id": "q18I3",
+          "type": "ref",
+          "ref": "NoE6t",
+          "name": "Node menu (locked)",
+          "x": 652,
+          "y": 276
+        },
+        {
+          "id": "u47ehv",
+          "type": "ref",
+          "ref": "oRVir",
+          "name": "Toast · Locked stays",
+          "x": 468,
+          "y": 772,
+          "descendants": {
+            "Ee7DR": {
+              "icon": "lock"
+            },
+            "j1ZXyT": {
+              "content": "Key visual is locked, so it stayed. Unlock it to delete it."
+            },
+            "w8F6r/NllYk": {
+              "content": "Unlock"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "frame",
+      "id": "kT2oj",
+      "x": 35880,
+      "y": 18708,
+      "name": "Canvas · Locked node · Side sheet",
+      "clip": true,
+      "width": 1440,
+      "height": 900,
+      "fill": "$canvas",
+      "layout": "none",
+      "children": [
+        {
+          "id": "KfOql",
+          "type": "ref",
+          "ref": "DSM0X",
+          "name": "Pane",
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "eSe8a",
+          "type": "ref",
+          "ref": "USl4U",
+          "x": 320,
+          "y": 405,
+          "width": 40,
+          "height": 3,
+          "name": "Edge · Prompt to Generate",
+          "descendants": {
+            "Bjkf9": {
+              "width": 40,
+              "height": 2,
+              "viewBox": [
+                0,
+                0,
+                40,
+                2
+              ],
+              "geometry": "M0 0c20 0 20 2 40 2"
+            }
+          }
+        },
+        {
+          "id": "nRTI8",
+          "type": "ref",
+          "ref": "USl4U",
+          "x": 680,
+          "y": 424,
+          "width": 50,
+          "height": 20,
+          "name": "Edge · Generate to Variations",
+          "descendants": {
+            "Bjkf9": {
+              "width": 50,
+              "height": 19.5,
+              "viewBox": [
+                0,
+                0,
+                50,
+                19.5
+              ],
+              "geometry": "M0 19.5c25 0 25-19.5 50-19.5"
+            }
+          }
+        },
+        {
+          "id": "w5hF0d",
+          "type": "ref",
+          "ref": "pFPMj",
+          "x": 24,
+          "y": 330,
+          "name": "Prompt",
+          "descendants": {
+            "sGfuB": {
+              "content": "70 / 4000"
+            }
+          }
+        },
+        {
+          "id": "xYSBr",
+          "type": "ref",
+          "ref": "njYDO",
+          "name": "Variations",
+          "x": 730,
+          "y": 283,
+          "stroke": "#00000000",
+          "strokeWidth": 0,
+          "strokeAlignment": "outer"
+        },
+        {
+          "id": "Ng8SC",
+          "type": "ref",
+          "ref": "eXVfc",
+          "name": "Key visual (locked)",
+          "x": 360,
+          "y": 230,
+          "stroke": "$accent",
+          "strokeWidth": 2,
+          "strokeAlignment": "outer",
+          "descendants": {
+            "oDoE2": {
+              "id": "iqwZT",
+              "type": "ref",
+              "ref": "noHjj",
+              "name": "Label",
+              "x": 0,
+              "y": -22,
+              "layoutPosition": "absolute",
+              "descendants": {
+                "LMbLL": {
+                  "content": "Key visual"
+                }
+              }
+            },
+            "M1057/Sa6IB": {
+              "icon": "lock"
+            },
+            "M1057/byR6B": {
+              "content": "Locked"
+            },
+            "Q1h2r": {
+              "enabled": false
+            }
+          }
+        },
+        {
+          "id": "DcvQR",
+          "type": "ref",
+          "ref": "JDH76",
+          "name": "Top bar left",
+          "x": 12,
+          "y": 12,
+          "descendants": {
+            "jEWck": {
+              "content": "Lighthouse series"
+            }
+          }
+        },
+        {
+          "type": "frame",
+          "id": "x5auB",
+          "x": 1036,
+          "y": 12,
+          "name": "Right cluster",
+          "gap": 12,
+          "alignItems": "center",
+          "children": [
+            {
+              "id": "my5JS",
+              "type": "ref",
+              "ref": "f9fk2S",
+              "name": "Spend"
+            },
+            {
+              "id": "a0IIvQ",
+              "type": "ref",
+              "ref": "B9bh4",
+              "name": "Save state"
+            },
+            {
+              "id": "vCDyH",
+              "type": "ref",
+              "ref": "byh7K",
+              "name": "Run all",
+              "descendants": {
+                "W9VQg": {
+                  "content": "~$0.65"
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "B0OjX",
+          "type": "ref",
+          "ref": "p1WXGf",
+          "name": "Toolbar",
+          "x": 547,
+          "y": 840
+        },
+        {
+          "id": "w9mXYy",
+          "type": "ref",
+          "ref": "ehbF7",
+          "name": "Zoom",
+          "x": 12,
+          "y": 848
+        },
+        {
+          "id": "L79Zt",
+          "type": "ref",
+          "ref": "AWQzm",
+          "name": "Side sheet (locked)",
+          "x": 1074,
+          "y": 64,
+          "descendants": {
+            "tkcIW": {
+              "type": "frame",
+              "id": "RoltN",
+              "name": "Header",
+              "width": "fill_container",
+              "layout": "vertical",
+              "gap": 12,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "aN45O",
+                  "name": "Title row",
+                  "width": "fill_container",
+                  "gap": 8,
+                  "padding": [
+                    2,
+                    2,
+                    0,
+                    6
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "icon",
+                      "id": "Iamn0",
+                      "name": "Icon",
+                      "width": 16,
+                      "height": 16,
+                      "icon": "sparkles",
+                      "library": "lucide",
+                      "fill": "$text-secondary"
+                    },
+                    {
+                      "type": "text",
+                      "id": "GfTIB",
+                      "name": "Title",
+                      "fill": "$text-primary",
+                      "textGrowth": "fixed-width",
+                      "width": "fill_container",
+                      "content": "Key visual",
+                      "fontFamily": "Inter",
+                      "fontSize": 14,
+                      "fontWeight": "600"
+                    },
+                    {
+                      "type": "icon",
+                      "id": "W8xr1f",
+                      "name": "Locked",
+                      "width": 14,
+                      "height": 14,
+                      "icon": "lock",
+                      "library": "lucide",
+                      "fill": "$text-tertiary"
+                    },
+                    {
+                      "id": "jSxJV",
+                      "type": "ref",
+                      "ref": "TovGQ",
+                      "name": "Close",
+                      "descendants": {
+                        "B4EbBS": {
+                          "icon": "x"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "n5roCX",
+                  "type": "ref",
+                  "ref": "P4Cv8",
+                  "name": "Locked note",
+                  "width": "fill_container"
+                }
+              ]
+            },
+            "iy0ZN": {
+              "opacity": 0.45
+            },
+            "uYkep": {
+              "opacity": 0.45
+            },
+            "HuDXy": {
+              "opacity": 0.45
+            },
+            "MZcS3": {
+              "opacity": 0.45
+            },
+            "iWF7C": {
+              "opacity": 0.45
+            },
+            "C0Ph6": {
+              "opacity": 0.35
+            }
+          }
         }
       ]
     }
