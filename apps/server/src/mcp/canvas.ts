@@ -4,6 +4,7 @@ import {
   evaluateGraph,
   fromDocument,
   lockedBy,
+  nodeRect,
   nodeTitle,
   planFingerprints,
   resolveFingerprints,
@@ -128,7 +129,12 @@ export interface NodeView {
   id: string;
   type: string;
   title: string;
-  position: { x: number; y: number };
+  /**
+   * Where it sits and how big it is, in canvas coordinates (inside a frame too): x, y is the corner
+   * move_node takes. An image card's is the shape of its image, or its aspect ratio before one.
+   */
+  box: { x: number; y: number; w: number; h: number };
+  /** The frame it's in. */
   parentId?: string;
   params: Record<string, unknown>;
   /** Locked by the person: it keeps its images, never runs, and only connections to it can change. */
@@ -165,8 +171,13 @@ export async function describeCanvas(
   const doc = readDocument(row.graph);
   const { slice } = fromDocument(doc);
   const named = doc.nodes.flatMap((n) => n.result?.assetIds ?? []);
-  const here = new Set(getAssets(ctx.svc.db, named).map((a) => a.id));
+  const assets = getAssets(ctx.svc.db, named);
+  const here = new Set(assets.map((a) => a.id));
   const engine = { ...serverEngineContext(ctx.svc), missing: new Set(named.filter((id) => !here.has(id))) };
+  // Image cards at their images' shape, as edits place them (edits/place.ts).
+  const sizes = Object.fromEntries(
+    assets.filter((a) => a.width > 0 && a.height > 0).map((a) => [a.id, { w: a.width, h: a.height }]),
+  );
   const fingerprints = await resolveFingerprints(planFingerprints(slice, specRegistry, engine), new Map());
   // As if everything ran, so each node's blockers and inputs are worked out as a Run all would.
   const evaluation = evaluateGraph({
@@ -183,11 +194,12 @@ export async function describeCanvas(
     const spec = specRegistry.get(node.type);
     const ev = evaluation.nodes.get(node.id);
     const by = lockedBy(slice, node.id);
+    const rect = nodeRect(slice, specRegistry, node.id, { ctx: engine, images: sizes })!;
     const view: NodeView = {
       id: node.id,
       type: node.type,
       title: nodeTitle(node, specRegistry),
-      position: node.position,
+      box: { x: Math.round(rect.x), y: Math.round(rect.y), w: Math.round(rect.w), h: Math.round(rect.h) },
       ...(node.parentId && { parentId: node.parentId }),
       params: pick(node.params, SHOWN_PARAMS[node.type]),
       ...(by !== null && { locked: true as const }),

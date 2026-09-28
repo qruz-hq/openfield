@@ -271,7 +271,7 @@ describe("canvases", () => {
     );
     expect(changed.changed).toMatchObject([{ id: g, title: "Hero", params: { batch: 2 } }]);
     const moved = j(await call(c, "move_node", { canvas: canvasId, id: v, position: { x: 900, y: 40 } }));
-    expect(moved.changed).toMatchObject([{ id: v, position: { x: 900, y: 40 } }]);
+    expect(moved.changed).toMatchObject([{ id: v, box: { x: 900, y: 40, w: 320, h: 320 } }]);
     await call(c, "delete_nodes", { canvas: canvasId, ids: [v] });
     const read = j(await call(c, "get_canvas", { canvas: canvasId }));
     expect(read.nodes.map((n: Json) => n.id)).not.toContain(v);

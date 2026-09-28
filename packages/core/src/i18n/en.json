@@ -1678,7 +1678,8 @@
       "stale": "The canvas changed since your last read, so nothing was applied.",
       "staleNext": "Read it again with get_canvas, or leave out onlyIfUnchanged to apply the edits to the canvas as it is now.",
       "staleUnknown": "onlyIfUnchanged needs the version you read: pass its graphVersion, or read the canvas with get_canvas first.",
-      "exactHint": "To keep a position as given, send it again with exact: true."
+      "exactHint": "To keep a position as given, send it again with exact: true.",
+      "imageCardSize": "It takes the shape of its image, or of its aspect ratio before it has one: 320 wide and 180 to 480 tall, or narrower for tall shapes."
     },
     "lock": {
       "note": "Locked. Its images stay as they are, and it won't run again.",

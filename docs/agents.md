@@ -96,9 +96,13 @@ A canvas is built from nodes: **Prompt** hands text on, **Generate** and **Varia
 
 `as` names a new node so later edits in the same batch can refer to it. A batch applies whole or not at all; a refused edit says which one and why. `list_node_types` lists every type, its ports and settings.
 
+Edits apply to the canvas as it is when they arrive, so panning, zooming or changing things in your tab while an agent works never gets its changes refused. The answer says what changed since the agent last read the canvas, such as "Since your last read: Key visual renamed, the view moved." An agent that wants its batch left alone if anything changed sends `onlyIfUnchanged: true`.
+
+New nodes go where they fit at the size they show: an image card at its aspect ratio, or its image's shape once it has one. A position given by hand that lands on another node moves to the nearest free spot, and the answer says by how much; `exact: true` keeps it. A frame grows to hold whatever an agent puts in it, reaching left or up when it has to without moving anything on screen.
+
 | Tool | Does |
 |---|---|
-| `list_canvases`, `create_canvas`, `get_canvas` | Find, make (blank or from a template) and read canvases. `get_canvas` gives each node's settings and whether it's done, out of date or needs something. |
+| `list_canvases`, `create_canvas`, `get_canvas` | Find, make (blank or from a template) and read canvases. `get_canvas` gives each node's box (where it sits and how big it is), its frame, its settings and whether it's done, out of date or needs something. |
 | `edit_canvas` | A batch of changes: add, change, move and remove nodes, connect and disconnect, rename. |
 | `add_nodes`, `connect`, `update_node`, `move_node`, `delete_nodes` | The same changes one kind at a time. |
 | `run_canvas`, `get_run`, `stop_run` | Run all of a canvas, one node, a node and what follows it, or a selection; follow the run; stop it or one node. Goes through the same limits as `generate_image`. |

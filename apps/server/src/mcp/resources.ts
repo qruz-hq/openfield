@@ -67,7 +67,7 @@ export function registerResources(server: McpServer, ctx: ToolContext): void {
     {
       title: "Canvas",
       description:
-        "An Openfield canvas: its nodes, their settings and states, and its connections, as get_canvas gives them.",
+        "An Openfield canvas: its nodes with where they sit and how big they are, their settings and states, and its connections, as get_canvas gives them.",
       mimeType: "application/json",
     },
     async (uri, { id }, extra) => {

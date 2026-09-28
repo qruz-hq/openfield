@@ -277,7 +277,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "Read a canvas",
       description:
-        'What\'s on a canvas: every node with its id, type, title, position and main settings; whether each image node is done, out of date, failed or needs something; the images it made; and the connections as "node.port" pairs. Your edits apply to the canvas as it is when they arrive, and their answer says what changed since you read it.',
+        "What's on a canvas: every node with its id, type, title, box (x, y, w, h in canvas coordinates, at the size it shows), the frame it's in (parentId) and main settings; whether each image node is done, out of date, failed or needs something; the images it made; and the connections as \"node.port\" pairs. Your edits apply to the canvas as it is when they arrive, and their answer says what changed since you read it.",
       inputSchema: {
         canvas: z.string().describe(canvasField),
         previews: z
@@ -457,7 +457,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "Node types",
       description:
-        "Every kind of node a canvas can have: what it does, its input and output ports (for connect), its settings, their defaults and their limits.",
+        "Every kind of node a canvas can have: what it does, its input and output ports (for connect), its settings, their defaults and their limits, and the size a new one takes.",
       inputSchema: {},
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -478,6 +478,8 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
         outputs: specRegistry.ports(spec.type, "out").map((p) => ({ port: p.id, gives: p.type })),
         settings: SETTINGS[spec.type] ?? {},
         defaults: spec.defaults(engine),
+        ...(spec.size && { size: spec.size }),
+        ...(spec.imageBox && { sizedBy: t("canvas.agents.imageCardSize") }),
         ...(spec.type in NODE_LIMITS && { limits: NODE_LIMITS[spec.type as keyof typeof NODE_LIMITS] }),
       }));
       return reply({
