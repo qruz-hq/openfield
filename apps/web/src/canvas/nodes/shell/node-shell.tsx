@@ -15,6 +15,7 @@ import { CanvasNodeResizer } from "../../editor/node-resizer";
 import { useCanvas, useCanvasActions, useReadOnly } from "../../store/context";
 import type { NodeComponentProps } from "../registry";
 import { CollapsedCard } from "./collapsed-card";
+import { useSourceLit } from "./linked-text";
 import { NodeLabel } from "./node-label";
 import { NodeMenu } from "./node-menu";
 import { PortRails } from "./ports";
@@ -105,6 +106,8 @@ export function NodeShell({
   };
   const card = variant === "card" && !collapsed && lod === "full";
   const dropTarget = useCanvas((s) => s.ui.connectOver?.nodeId === id && s.ui.connectOver.portId !== null);
+  // Its words are hovered on a card they go into: a 2 px $accent-line ring outside it (design iVTlK).
+  const sourceLit = useSourceLit(id);
   const name = title?.trim() || t(spec.label);
 
   const onContextMenu = (event: MouseEvent) => {
@@ -184,6 +187,13 @@ export function NodeShell({
           )}
         </div>
       )}
+      {sourceLit ? (
+        <div
+          aria-hidden
+          data-linked-source
+          className="pointer-events-none absolute -inset-2 rounded-16 border-2 border-accent-line"
+        />
+      ) : null}
       {dropTarget ? (
         // A link dragged over the card that a drop here would connect: a dashed ring, like the
         // pending link and its ring at the cursor.

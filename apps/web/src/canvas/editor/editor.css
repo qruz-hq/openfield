@@ -157,6 +157,12 @@
   stroke-width: 2;
 }
 
+/* Its words are hovered on the card they go into (design iVTlK): lit in the accent, 2 px. */
+.of-canvas .react-flow__edge-path.of-edge[data-linked] {
+  stroke: var(--of-accent);
+  stroke-width: 2;
+}
+
 /* The node it feeds is generating (a pulse runs over it) or waits at the company. */
 .of-canvas .react-flow__edge-path.of-edge:is([data-link="active"], [data-link="waiting"]) {
   stroke: var(--of-accent-line);

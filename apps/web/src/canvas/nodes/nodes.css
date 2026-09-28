@@ -268,14 +268,38 @@
   overflow-wrap: anywhere;
 }
 
+/*
+ * Words from a text node (design H6ZURc, nodes/shell/linked-text.tsx): on hover a 1 px $accent-line
+ * outline over $accent-soft, 4 px round, 1 by 4 px of room that sits in a negative margin so the
+ * text never moves. Lines that wrap each get the whole box.
+ */
+.of-linked {
+  margin: 0 -4px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+  transition:
+    background-color 120ms ease-out,
+    box-shadow 120ms ease-out;
+}
+
+.of-linked:hover {
+  background: var(--of-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--of-accent-line);
+}
+
 .of-card-prompt[data-placeholder] {
   color: var(--of-text-tertiary);
 }
 
-/* In its column the prompt takes the full width; the column itself does the flexing. */
+/* In its column the prompt takes the full width; the column itself does the flexing. It reaches
+   4 px past the column each side, so a hovered part's outline (.of-linked) isn't cut off. */
 .of-card-text .of-card-prompt {
   flex: none;
-  width: 100%;
+  width: calc(100% + 8px);
+  margin-inline: -4px;
+  padding-inline: 4px;
 }
 
 /* Message states on short cards keep the prompt to one line, clear of the message (VgxbW). */

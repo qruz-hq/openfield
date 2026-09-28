@@ -1,58 +1,28 @@
 import { EMPTY_ENGINE_CONTEXT } from "@openfield/canvas/engine/context-base";
 import { joinPrompt, modelKeyOf } from "@openfield/canvas/engine/inputs";
-import type { NodeBlocker, NodeDisplay } from "@openfield/canvas/engine/types";
+import type { NodeDisplay } from "@openfield/canvas/engine/types";
 import { type CardLayout, cardLayout } from "@openfield/canvas/nodes/generate/card-size";
 import { resolveFor } from "@openfield/canvas/nodes/generate/settings";
 import { type GenerateParams, generateSpec } from "@openfield/canvas/nodes/generate/spec";
 import { type AspectRatio, type ModelListItem, t } from "@openfield/core";
 import { aspectLabel } from "@openfield/providers/manifest";
-import { Button, IconButton, ProgressBar } from "@openfield/ui";
 import { useStoreApi } from "@xyflow/react";
-import {
-  Check,
-  CircleAlert,
-  CircleStop,
-  Clock3,
-  Ellipsis,
-  Hourglass,
-  Image as ImageIcon,
-  Info,
-  KeyRound,
-  Loader,
-  type LucideIcon,
-  Pencil,
-  Play,
-  RefreshCw,
-  Square,
-  X,
-} from "lucide-react";
+import { Image as ImageIcon } from "lucide-react";
 import { memo, useLayoutEffect, useMemo, useRef } from "react";
 import { useStore } from "zustand";
-import { useProviders } from "../../../api/hooks/keys";
-import { companyName } from "../../../lib/provider";
 import { useNodeAnalysis } from "../../engine/engine-store";
-import { useCanvas, useNodeParams, useNodeResult, useNodeRuntime, useReadOnly } from "../../store/context";
+import { useNodeParams, useNodeResult, useNodeRuntime } from "../../store/context";
 import type { NodeComponentProps } from "../registry";
 import { CollapsedStatus } from "../shell/collapsed-card";
 import { type CompanyWait, useCompanyWait } from "../shell/company-wait";
-import { focusNodeSoon } from "../shell/focus";
-import { NodeShell, useCardMenu } from "../shell/node-shell";
-import { RunPill } from "../shell/run-pill";
-import {
-  clock,
-  useBlockedMessage,
-  useBlockerFix,
-  useCancel,
-  useElapsed,
-  useFailureFix,
-} from "../shell/state-band";
-import { useNodeBasics, useNodeDisplay, useParsedParams, useRunNode } from "../shell/use-node";
-import { CardImage, CardMessage, CardPager, CardPartial, CardPill, type CardPillProps } from "./card";
+import { ImageCard } from "../shell/image-card";
+import { LinkedPrompt } from "../shell/linked-text";
+import { NodeShell } from "../shell/node-shell";
+import { useNodeBasics, useNodeDisplay, useParsedParams } from "../shell/use-node";
+import { CardImage, CardPager, CardPartial } from "./card";
 import { cardMedia, showImage } from "./card-media";
-import { type CardView, cardView, hasScrim } from "./card-state";
+import type { CardView } from "./card-state";
 import { ReferenceStrip } from "./reference-strip";
-import { voxelsSupported } from "./voxel/renderer";
-import { VoxelField } from "./voxel/voxel-field";
 
 // Canvas / Node / Generate (design Y5jjx): the card is the image, at the image's aspect ratio (the
 // chosen one before there's an image). At rest: the image, the label and the ports, and a pill
@@ -192,68 +162,38 @@ interface GenerateCardProps {
   partial: string | null;
 }
 
-/** Media (g0PW4) and its layers, in paint order: image, Stripes, Top, Bottom, Center, Progress. */
+/** The image card (nodes/shell/image-card.tsx) with Generate's image, pager, words and empty glyph. */
 function GenerateCard({ id, name, selected, display, layout, prompt, params, partial }: GenerateCardProps) {
   const basics = useNodeBasics(id);
   const ctx = basics?.ctx ?? EMPTY_ENGINE_CONTEXT;
   const analysis = useNodeAnalysis(id);
-  const menu = useCardMenu();
-  const readOnly = useReadOnly();
   const wait = useCompanyWait(id);
-  // Selected on its own, the card keeps its bars (and while its menu is open); in a
-  // multi-selection only the outline shows.
-  const solo = useCanvas((s) => s.selection.nodeIds.length === 1);
-  const bars = (selected && solo) || !!menu?.isOpen;
-  // The voxel swarm needs WebGL, set up the first time a card runs or waits.
-  const live = display.state === "running" || display.state === "queued";
-  const voxels = useMemo(() => live && voxelsSupported(), [live]);
-  const view = cardView({
-    state: display.state,
-    images: layout.images.length > 0,
-    atCompany: !!wait,
-    partial: !!partial,
-    voxels,
-  });
   const key = modelKeyOf(params.model, ctx);
   const model = ctx.model(key);
   const several = layout.count > 1;
-  const scrim = hasScrim(view);
-  // Over an image the bars and what's on them are dark in both themes (nodes.css).
-  const paint = scrim ? "dark" : undefined;
   const noPrompt = !prompt && (analysis?.references ?? 0) === 0;
-  const opacity = view.media === "dimmed" ? 0.5 : view.media === "faded" ? 0.6 : 1;
 
   return (
-    <div
-      className="of-card"
-      data-media={view.media === "placeholder" ? "placeholder" : "image"}
-      data-tone={view.phase === "failed" ? "danger" : undefined}
-      data-scrim={scrim || undefined}
-      data-bars={bars || undefined}
-      data-narrow={layout.narrow || undefined}
-      data-several={several || undefined}
-      data-short={layout.short || undefined}
-      data-message={view.message || undefined}
-      data-phase={view.phase}
-    >
-      {partial ? (
-        <CardPartial path={partial} opacity={opacity} />
-      ) : layout.assetId && view.media !== "placeholder" ? (
-        <CardImage assetId={layout.assetId} height={layout.h} contain={layout.contain} opacity={opacity} />
-      ) : null}
-      {view.voxels ? (
-        <VoxelField
-          nodeId={id}
-          mode={view.voxels}
-          backing={view.media !== "placeholder"}
-          width={layout.w}
-          height={layout.h}
-        />
-      ) : null}
-      {view.stripes ? <div aria-hidden className="of-card-stripes of-blocked-stripes" /> : null}
-      <div className="of-card-top" data-paint={paint}>
-        {view.noPill ? null : <StatusPill id={id} view={view} display={display} />}
-        {several ? (
+    <ImageCard
+      id={id}
+      name={name}
+      selected={selected}
+      display={display}
+      hasImages={layout.images.length > 0}
+      partial={!!partial}
+      box={layout}
+      narrow={layout.narrow}
+      short={layout.short}
+      several={several}
+      media={(opacity, view) =>
+        partial ? (
+          <CardPartial path={partial} opacity={opacity} />
+        ) : layout.assetId && view.media !== "placeholder" ? (
+          <CardImage assetId={layout.assetId} height={layout.h} contain={layout.contain} opacity={opacity} />
+        ) : null
+      }
+      topExtra={
+        several ? (
           <CardPager
             index={layout.index}
             count={layout.count}
@@ -262,134 +202,33 @@ function GenerateCard({ id, name, selected, display, layout, prompt, params, par
               if (assetId) showImage(id, assetId);
             }}
           />
-        ) : null}
-        <span className="h-1 flex-1" />
-        {readOnly ? null : (
-          <IconButton
-            variant="overlay"
-            size={32}
-            icon={Ellipsis}
-            label={t("canvas.nodes.menu.label")}
-            className="of-card-menu of-reveal nodrag"
-            onClick={(event) => {
-              event.stopPropagation();
-              menu?.open(event.currentTarget);
-            }}
-          />
-        )}
-      </div>
-      <div className={view.bottomAtRest ? "of-card-bottom" : "of-card-bottom of-reveal"} data-paint={paint}>
-        <div className="of-card-text">
+        ) : null
+      }
+      empty={(view) => <EmptyGlyph view={view} params={params} model={model} wait={wait} />}
+      text={(view) => (
+        <>
           <ReferenceStrip images={analysis?.referenceImages ?? []} />
           <p className="of-card-prompt" data-placeholder={(noPrompt && view.phase === "empty") || undefined}>
-            {prompt || (view.phase === "empty" && noPrompt ? t("canvas.nodes.card.noPrompt") : "")}
+            {prompt ? (
+              <LinkedPrompt parts={analysis?.upstreamParts ?? []} own={params.prompt} separator=" " />
+            ) : view.phase === "empty" && noPrompt ? (
+              t("canvas.nodes.card.noPrompt")
+            ) : (
+              ""
+            )}
           </p>
-        </div>
-        {view.action === "run" ? (
-          <RunPill
-            id={id}
-            name={name}
-            estimate={analysis?.estimate ?? null}
-            blocker={display.blocker}
-            upToDate={analysis?.upToDate ?? false}
-            seedless={!model?.capabilities.seed.supported}
-            models={[model]}
-            muted={noPrompt}
-            primary
-          />
-        ) : view.action ? (
-          <StopButton id={id} name={name} cancel={view.action === "cancel"} />
-        ) : null}
-      </div>
-      <div className="of-card-center" data-over-image={(view.message && scrim) || undefined}>
-        {view.emptyGlyph ? <EmptyGlyph view={view} params={params} model={model} wait={wait} /> : null}
-        {view.message ? (
-          <Message id={id} view={view} display={display} model={key} overImage={scrim} />
-        ) : null}
-      </div>
-      {view.progress ? <Progress id={id} /> : null}
-    </div>
-  );
-}
-
-function StatusPill({ id, view, display }: { id: string; view: CardView; display: NodeDisplay }) {
-  const runtime = useNodeRuntime(id);
-  const wait = useCompanyWait(id);
-  const providers = useProviders().data;
-  const elapsed = useElapsed(runtime?.startedAt ?? null, view.phase === "generating");
-  const common = { reveal: !view.pillAtRest, long: view.longPill };
-  const pill = ((): CardPillProps => {
-    switch (view.phase) {
-      case "waiting":
-        return {
-          icon: Clock3,
-          label: t("canvas.nodes.state.waiting"),
-          detail: runtime?.position ? t("canvas.nodes.state.position", { position: runtime.position }) : null,
-        };
-      case "atCompany": {
-        // "Waiting at Google" + "Batch", or "Waiting for Google" + "Flex" (design QZNse).
-        const company = companyName(providers, wait?.providerId ?? "");
-        if (wait?.speed !== "batch")
-          return {
-            icon: Hourglass,
-            label: t("speed.tile.waitingFor", { company }),
-            detail: t("speed.names.flex"),
-          };
-        if (wait.stopping) return { icon: Hourglass, label: t("speed.tile.stopping", { company }) };
-        if (wait.state === "submitting")
-          return { icon: Hourglass, label: t("speed.tile.sending", { company }) };
-        return {
-          icon: Hourglass,
-          label: t("speed.tile.waiting", { company }),
-          detail: t("speed.names.batch"),
-        };
-      }
-      case "generating":
-        return { icon: Loader, spin: true, label: t("canvas.nodes.state.generating"), value: clock(elapsed) };
-      case "changed":
-        return {
-          dot: true,
-          label:
-            display.chip === "older_settings"
-              ? t("canvas.nodes.state.olderSettings")
-              : t("canvas.nodes.state.inputsChanged"),
-        };
-      case "failed":
-        return { icon: CircleAlert, tone: "danger", label: t("canvas.nodes.card.failed") };
-      case "blocked":
-        // "Needs a key" only when the key is missing; a company turned off in Settings has one.
-        return display.blocker?.kind === "no_key"
-          ? { icon: KeyRound, label: t("canvas.nodes.card.needsKey") }
-          : { icon: Info, label: t("canvas.nodes.card.cantRun") };
-      case "canceled":
-        return { icon: CircleStop, label: t("canvas.nodes.card.canceled") };
-      default:
-        return { icon: Check, label: t("canvas.nodes.state.upToDate") };
-    }
-  })();
-  return <CardPill {...pill} {...common} />;
-}
-
-/** Stop for a run under way, Cancel for one waiting (design GnRxu). Named for its node, like Run. */
-function StopButton({ id, name, cancel }: { id: string; name: string; cancel: boolean }) {
-  const stop = useCancel(id);
-  return (
-    <Button
-      variant="overlay"
-      size="s"
-      icon={cancel ? X : Square}
-      aria-label={
-        cancel ? t("canvas.nodes.card.cancelNamed", { name }) : t("canvas.nodes.card.stopNamed", { name })
-      }
-      data-node-primary
-      className="nodrag"
-      onClick={(event) => {
-        event.stopPropagation();
-        stop();
+        </>
+      )}
+      run={{
+        estimate: analysis?.estimate ?? null,
+        blocker: display.blocker,
+        upToDate: analysis?.upToDate ?? false,
+        seedless: !model?.capabilities.seed.supported,
+        models: [model],
+        muted: noPrompt,
       }}
-    >
-      {cancel ? t("canvas.nodes.state.cancel") : t("canvas.nodes.card.stop")}
-    </Button>
+      model={key}
+    />
   );
 }
 
@@ -432,116 +271,5 @@ function EmptyGlyph({
         </span>
       ) : null}
     </div>
-  );
-}
-
-function Message({
-  id,
-  view,
-  display,
-  model,
-  overImage,
-}: {
-  id: string;
-  view: CardView;
-  display: NodeDisplay;
-  model: string | null;
-  overImage: boolean;
-}) {
-  if (view.phase === "failed") return <FailedMessage id={id} model={model} overImage={overImage} />;
-  if (view.phase === "blocked" && display.blocker)
-    return <BlockedMessage id={id} blocker={display.blocker} overImage={overImage} />;
-  if (view.phase === "canceled") return <CanceledMessage id={id} overImage={overImage} />;
-  return null;
-}
-
-const FIX_ICON: Record<string, LucideIcon | undefined> = { try_again: RefreshCw, edit_prompt: Pencil };
-
-function FailedMessage({ id, model, overImage }: { id: string; model: string | null; overImage: boolean }) {
-  const { message, action } = useFailureFix(id, model);
-  return (
-    <CardMessage text={message} overImage={overImage}>
-      <Button
-        variant="ghost-accent"
-        size="s"
-        icon={FIX_ICON[action.kind]}
-        data-node-primary
-        className="nodrag"
-        onClick={(event) => {
-          event.stopPropagation();
-          action.run();
-        }}
-      >
-        {action.label}
-      </Button>
-    </CardMessage>
-  );
-}
-
-function BlockedMessage({
-  id,
-  blocker,
-  overImage,
-}: {
-  id: string;
-  blocker: NodeBlocker;
-  overImage: boolean;
-}) {
-  const { copy, onFix } = useBlockerFix(id, blocker);
-  const text = useBlockedMessage(blocker);
-  return (
-    <CardMessage text={text} overImage={overImage}>
-      {copy.action ? (
-        <Button
-          variant="secondary"
-          size="s"
-          data-node-primary
-          className="nodrag"
-          onClick={(event) => {
-            event.stopPropagation();
-            onFix();
-          }}
-        >
-          {copy.action}
-        </Button>
-      ) : null}
-    </CardMessage>
-  );
-}
-
-function CanceledMessage({ id, overImage }: { id: string; overImage: boolean }) {
-  const run = useRunNode(id);
-  return (
-    <CardMessage text={t("canvas.nodes.card.charged")} overImage={overImage}>
-      <Button
-        variant="ghost-accent"
-        size="s"
-        icon={Play}
-        data-node-primary
-        className="nodrag"
-        onClick={(event) => {
-          event.stopPropagation();
-          void run("node");
-          focusNodeSoon(id);
-        }}
-      >
-        {t("canvas.nodes.state.runAgain")}
-      </Button>
-    </CardMessage>
-  );
-}
-
-/** Progress / Bar on the card's bottom edge while it generates (XmhDU). */
-function Progress({ id }: { id: string }) {
-  const runtime = useNodeRuntime(id);
-  const share =
-    runtime?.progress ??
-    (runtime && runtime.total > 0 && runtime.done > 0 ? runtime.done / runtime.total : null);
-  return (
-    <ProgressBar
-      value={share ?? undefined}
-      label={t("canvas.nodes.state.generating")}
-      className="absolute bottom-0 left-0 w-full"
-    />
   );
 }

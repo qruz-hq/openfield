@@ -23,6 +23,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { useCompanyWait } from "../../nodes/shell/company-wait";
+import { useLinkLit } from "../../nodes/shell/linked-text";
 import { useCanvas, useCanvasActions, useReadOnly } from "../../store";
 import { ANNOTATION_EDGE_TYPE, DATA_EDGE_TYPE, type FlowEdge } from "./adapter";
 import { freshLinkDelay } from "./fresh-links";
@@ -127,6 +128,8 @@ const DataEdge = memo(function DataEdge(props: EdgeProps<FlowEdge>) {
   const actions = useCanvasActions();
   const readOnly = useReadOnly();
   const activity = useLinkActivity(target);
+  // The words it carries are hovered on the card they go into (nodes/shell/linked-text.tsx).
+  const lit = useLinkLit(id);
   // Made by a group drop a moment ago: it draws in from its source, then is an ordinary link.
   const [drawDelay, setDrawDelay] = useState(() => freshLinkDelay(id));
   useEffect(() => {
@@ -228,6 +231,7 @@ const DataEdge = memo(function DataEdge(props: EdgeProps<FlowEdge>) {
           fill="none"
           data-link={selected ? undefined : look}
           data-hover={(hover && !selected) || undefined}
+          data-linked={(lit && !selected) || undefined}
           pathLength={drawDelay === null ? undefined : 1}
           style={{
             ...(still && { stroke: `url(#${stillId})` }),
