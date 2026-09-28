@@ -4,7 +4,8 @@ import type { SaveFailure } from "../store/types";
 
 // Autosave (§7.8): 800 ms after the last change, at least every 10 s while changes keep coming,
 // and at once on blur, hide, route change and reload. Pans and zooms ride along with the next save
-// or go out after 2 s of quiet. One PATCH at a time; a 409 hands the server's copy to the banner and
+// or go out after 2 s of quiet; the server keeps the version for those, as for an image card's
+// measured size, so they never stand in the way of an agent's edits. One PATCH at a time; a 409 hands the server's copy to the banner and
 // stops saving until the person picks Reload or Keep mine; a lost connection or a server hiccup
 // retries with backoff. A refusal that waiting won't fix (the canvas was deleted, it's too big)
 // says so and waits for the next change instead.

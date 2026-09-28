@@ -9,7 +9,9 @@ import type { CanvasStore } from "../store/store";
 // moves it: a run's image landing, a new aspect ratio or model, an undo of either. Opening the
 // canvas, a reload, a thumbnail loading or the pager never saves, so a canvas open in two tabs, or
 // on screens of different density, never saves over itself (every tab that sees a run land writes
-// the same exact size, which the server takes as no change). No undo step of its own.
+// the same exact size, which the server takes as no change). No undo step of its own, and no new
+// version on the server either: nobody resizes these cards by hand, so their saved size isn't an
+// edit, and an agent's next change never meets a conflict over it.
 
 /** A saved size closer than this to the box it should be isn't worth a save. */
 const TOLERANCE = 1;

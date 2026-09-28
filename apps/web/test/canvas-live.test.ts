@@ -208,6 +208,38 @@ describe("autosave meets a live edit", () => {
     h.sync.stop();
   });
 
+  test("a pan and a card's measured size save on the same version, and an agent's edit from it lands", async () => {
+    const h = harness();
+    const saves: { graphVersion: number }[] = [];
+    const autosave = createAutosave(h.main, {
+      setTimer: () => 0,
+      clearTimer: () => {},
+      // The server keeps the version for a save that only moves the view or corrects a measured size.
+      save: async (body) => {
+        saves.push(body);
+        return { kind: "saved", graphVersion: body.graphVersion, updatedAt: AT };
+      },
+      caughtUp: (v) => h.sync.caughtUp(v, 5),
+    });
+    h.main.getState().actions.setViewport({ x: -200, y: 80, zoom: 0.5 });
+    await autosave.flush();
+    const measured: CanvasOp = { op: "resizeNode", id: "a", size: { w: 240, h: 300 } };
+    h.main.getState().actions.apply([measured], { history: false });
+    await autosave.flush();
+    expect(saves.map((s) => s.graphVersion)).toEqual([3, 3]);
+    expect(h.main.getState().persist).toMatchObject({ status: "saved", graphVersion: 3 });
+
+    // An agent that read version 3 edits it: the tab replays that on top, still clean.
+    h.send(h.frame(3, [{ op: "addNode", node: note("b", 400) }]));
+    const { doc, persist } = h.main.getState();
+    expect(doc.order).toEqual(["a", "b"]);
+    expect(doc.nodes.a!.size).toEqual({ w: 240, h: 300 });
+    expect(persist).toMatchObject({ status: "saved", graphVersion: 4 });
+    expect(persist.revision).toBe(persist.savedRevision);
+    autosave.dispose();
+    h.sync.stop();
+  });
+
   test("a 409 from another tab's save still shows the banner", async () => {
     const h = harness();
     const autosave = createAutosave(h.main, {

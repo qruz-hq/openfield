@@ -1,3 +1,4 @@
+import { specRegistry } from "@openfield/canvas";
 import { canonicalJson, type ModelKey, t } from "@openfield/core";
 import {
   CANVAS_SCHEMA,
@@ -62,6 +63,21 @@ export function stamp(
 /** Same content apart from the save time and where the view sits, so panning makes no snapshot. */
 export function sameContent(a: CanvasDocument, b: CanvasDocument): boolean {
   const strip = ({ updatedAt: _u, viewport: _v, ...rest }: CanvasDocument) => rest;
+  return canonicalJson(strip(a)) === canonicalJson(strip(b));
+}
+
+/**
+ * The same apart from what isn't an edit: the view (a pan, a zoom, Follow), and the box an image
+ * card measured for itself in the browser. Nobody can resize those cards by hand, so a change to
+ * their saved size is always the editor catching up with an image or a new aspect ratio.
+ */
+export function sameEdits(a: CanvasDocument, b: CanvasDocument): boolean {
+  const strip = ({ updatedAt: _u, viewport: _v, nodes, ...rest }: CanvasDocument) => ({
+    ...rest,
+    nodes: nodes.map(({ size, ...node }) =>
+      specRegistry.get(node.type)?.resizable === false ? node : { ...node, size },
+    ),
+  });
   return canonicalJson(strip(a)) === canonicalJson(strip(b));
 }
 

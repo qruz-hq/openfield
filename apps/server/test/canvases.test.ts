@@ -30,6 +30,11 @@ afterEach(async () => {
   server = undefined;
 });
 
+/** The document as saved. */
+function readSaved(id: string): CanvasDocument {
+  return canvasDocumentSchema.parse(getCanvas(server!.services.db, id)!.graph);
+}
+
 /** A small graph: a prompt wired into a generator. */
 function withNodes(doc: CanvasDocument, text = "a lighthouse"): CanvasDocument {
   return {
@@ -174,6 +179,53 @@ describe("canvas documents", () => {
     expect(same.status).toBe(200);
     expect(canvasPatchResponseSchema.parse(same.body).graphVersion).toBe(2);
     expect(getCanvas(server.services.db, canvas.id)!.nodeCount).toBe(2);
+  });
+
+  test("a pan, a zoom or a card's measured size is saved without a new version", async () => {
+    server = await startTestServer();
+    const canvas = await newCanvas(server);
+    const graph = withNodes(canvas.graph);
+    const patch = async (body: { graph: CanvasDocument; graphVersion: number }) =>
+      canvasPatchResponseSchema.parse(
+        (await server!.json(`/api/canvases/${canvas.id}`, { method: "PATCH", body })).body,
+      );
+    expect((await patch({ graph, graphVersion: 1 })).graphVersion).toBe(2);
+    const edited = getCanvas(server.services.db, canvas.id)!;
+
+    // The view moves: saved, same version, and the canvas isn't "edited" again.
+    const panned = { ...graph, viewport: { x: -320, y: 40, zoom: 0.5 } };
+    expect(await patch({ graph: panned, graphVersion: 2 })).toEqual({
+      graphVersion: 2,
+      updatedAt: edited.updatedAt,
+    });
+    expect(readSaved(canvas.id).viewport).toEqual({ x: -320, y: 40, zoom: 0.5 });
+
+    // A Generate card takes its image's shape: nobody resizes those by hand, so it's no edit either.
+    const measured = {
+      ...panned,
+      nodes: panned.nodes.map((n) => (n.id === "n_gen" ? { ...n, size: { w: 270, h: 480 } } : n)),
+    };
+    expect((await patch({ graph: measured, graphVersion: 2 })).graphVersion).toBe(2);
+    expect(readSaved(canvas.id).nodes[1]!.size).toEqual({ w: 270, h: 480 });
+
+    // An agent that read version 2 before all that still edits it.
+    const edit = await server.json(`/api/canvases/${canvas.id}/edits`, {
+      method: "POST",
+      body: {
+        edits: [{ op: "update_node", id: "n_prompt", params: { text: "a harbour" } }],
+        graphVersion: 2,
+      },
+    });
+    expect(edit.status).toBe(200);
+
+    // Resizing a Prompt node is the person's own change: a new version.
+    const resized = {
+      ...readSaved(canvas.id),
+      nodes: readSaved(canvas.id).nodes.map((n) =>
+        n.id === "n_prompt" ? { ...n, size: { w: 400, h: 200 } } : n,
+      ),
+    };
+    expect((await patch({ graph: resized, graphVersion: 3 })).graphVersion).toBe(4);
   });
 
   test("the server keeps the id and name, whatever the document says", async () => {
@@ -353,7 +405,7 @@ describe("version history (M4-11)", () => {
     expect(listCanvasVersions(server.services.db, canvas.id)).toHaveLength(1);
     await server.json(`/api/canvases/${canvas.id}`, {
       method: "PATCH",
-      body: { graph: withNodes(canvas.graph, "b"), graphVersion: 3 },
+      body: { graph: withNodes(canvas.graph, "b"), graphVersion: 2 },
     });
     expect(listCanvasVersions(server.services.db, canvas.id)).toHaveLength(2);
   });

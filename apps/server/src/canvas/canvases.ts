@@ -66,6 +66,7 @@ import {
   newestCanvasVersion,
   pruneVersions,
   saveCanvas,
+  saveCanvasLayout,
   setCanvasPreview,
   setCanvasResults,
   updateFolder,
@@ -94,6 +95,7 @@ import {
   pickCover,
   readDocument,
   sameContent,
+  sameEdits,
   stamp,
 } from "./documents";
 import { copyPreview, removeDocumentFile, removePreview, writeDocumentFile, writePreview } from "./files";
@@ -224,7 +226,9 @@ export class CanvasService {
 
   /**
    * Autosave (§7.8). Rejected with the server's copy when another tab saved first. Snapshots the
-   * new content when the newest automatic snapshot is at least five minutes old.
+   * new content when the newest automatic snapshot is at least five minutes old. A save that only
+   * moves the view or corrects a card's measured size keeps the version (sameEdits), so it never
+   * turns an agent's or another tab's next change into a conflict.
    */
   save(
     id: string,
@@ -243,6 +247,12 @@ export class CanvasService {
         return same ? { kind: "unchanged" as const, row } : { kind: "conflict" as const, row };
       }
       const name = body.name ?? row.name;
+      if (name === row.name && body.graph && sameEdits(body.graph, before)) {
+        const next = stamp(body.graph, { id, name, updatedAt: row.updatedAt, createdAt: row.createdAt });
+        const saved = saveCanvasLayout(tx, id, body.graphVersion, next);
+        if (!saved.ok) return { kind: "conflict" as const, row: saved.current ?? row };
+        return { kind: "saved" as const, row: saved.row, doc: next };
+      }
       const next = stamp(body.graph ?? before, { id, name, updatedAt: at, createdAt: row.createdAt });
       const saved = saveCanvas(tx, id, body.graphVersion, {
         graph: next,

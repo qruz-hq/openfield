@@ -117,6 +117,26 @@ export function saveCanvas(
 }
 
 /**
+ * A save that only moves the view or corrects the size a card measured for itself: written only if
+ * graph_version still equals `expected`, and not an edit, so graph_version and updated_at stay.
+ * Agents and other tabs holding that version go on editing and saving on top of it.
+ */
+export function saveCanvasLayout(
+  db: Executor,
+  id: string,
+  expected: number,
+  graph: CanvasGraph,
+): { ok: true; row: CanvasRow } | { ok: false; current: CanvasRow | undefined } {
+  const row = db
+    .update(canvases)
+    .set({ graph })
+    .where(and(eq(canvases.id, id), eq(canvases.graphVersion, expected), isNull(canvases.deletedAt)))
+    .returning()
+    .get();
+  return row ? { ok: true, row } : { ok: false, current: getCanvas(db, id) };
+}
+
+/**
  * Writes the results a canvas run settled into the saved document. Not an edit: graph_version and
  * updated_at stay, so an open tab's next save (which carries the same results) isn't refused.
  */
