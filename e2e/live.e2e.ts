@@ -16,10 +16,18 @@ async function newCanvas(request: APIRequestContext, token: string, name: string
   return api<CanvasDetail>(request, token, "POST", "/api/canvases", { name });
 }
 
-function agentEdits(request: APIRequestContext, token: string, canvasId: string, edits: unknown[]) {
+/** With graphVersion, the edits are refused if the canvas changed since that version. */
+function agentEdits(
+  request: APIRequestContext,
+  token: string,
+  canvasId: string,
+  edits: unknown[],
+  graphVersion?: number,
+) {
   return api<CanvasEditsResponse>(request, token, "POST", `/api/dev/agent/canvases/${canvasId}/edits`, {
     edits,
     agent: AGENT,
+    ...(graphVersion !== undefined && { graphVersion }),
   });
 }
 
@@ -158,6 +166,65 @@ test("Follow keeps the agent's work in view until the person moves", async ({ pa
   await page.mouse.wheel(0, 300);
   await expect(pill(page)).toHaveText(/Claude Code is editing\s*Follow/);
   await expect(frame).toHaveCount(0);
+});
+
+test("with Follow on, an agent's edits in a row all land, however the tab moves and measures", async ({
+  page,
+  request,
+}) => {
+  const token = await sessionToken(request);
+  const canvas = await newCanvas(request, token, "In a row");
+  await openCanvas(page, canvas.id);
+  const first = await agentEdits(request, token, canvas.id, [
+    { op: "add_node", as: "p", type: "prompt", params: { text: "A lighthouse" }, position: { x: 0, y: 0 } },
+  ]);
+  await pill(page).getByRole("button", { name: "Follow" }).click();
+  await expect(pill(page)).toHaveText(/Following Claude Code/);
+
+  // Each edit lands far off, so Follow pans the view there, and reshapes the card before it, which
+  // the tab measures again. Both save, and neither makes a new version, so every edit sent with the
+  // version the last one answered still lands (the strictest an agent can be).
+  const saved = () =>
+    page.waitForResponse(
+      (r) => r.url().endsWith(`/api/canvases/${canvas.id}`) && r.request().method() === "PATCH",
+    );
+  let version = first.graphVersion;
+  let last: string | null = null;
+  let reshaped: string | null = null;
+  for (let i = 0; i < 4; i++) {
+    const saving = saved();
+    const made = await agentEdits(
+      request,
+      token,
+      canvas.id,
+      [
+        {
+          op: "add_node",
+          as: "g",
+          type: "image.generate",
+          params: { prompt: `take ${i}`, size: { kind: "aspect", ratio: "1:1" } },
+          position: { x: 1600 * (i + 1), y: 1200 * (i % 2) },
+        },
+        ...(last
+          ? [{ op: "update_node", id: last, params: { size: { kind: "aspect", ratio: "9:16" } } }]
+          : []),
+      ],
+      version,
+    );
+    version = made.graphVersion;
+    await expect(pane(page).locator(`.react-flow__node[data-id="${made.aliases.g}"]`)).toBeInViewport();
+    expect((await (await saving).json()).graphVersion).toBe(version);
+    reshaped = last;
+    last = made.aliases.g!;
+  }
+
+  await expect(page.getByText("This canvas changed")).toHaveCount(0);
+  await expect(page.getByRole("status").filter({ hasText: /^Saved$/ })).toBeVisible({ timeout: 10_000 });
+  const detail = await api<CanvasDetail>(request, token, "GET", `/api/canvases/${canvas.id}`);
+  expect(detail.graphVersion).toBe(version);
+  expect(detail.graph.nodes).toHaveLength(5);
+  // The box the tab measured for the card reshaped last, saved without a version of its own.
+  expect(detail.graph.nodes.find((n) => n.id === reshaped)?.size).toEqual({ w: 270, h: 480 });
 });
 
 test("unsaved work in the tab survives the agent's edits", async ({ page, request }) => {
