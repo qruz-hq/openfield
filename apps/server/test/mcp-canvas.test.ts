@@ -49,6 +49,22 @@ async function promptToGenerate(c: Client, name = "Mugs", prompt = "A stoneware 
   return { canvasId: made.canvasId as string, ...created };
 }
 
+type Box = { x: number; y: number; w: number; h: number };
+
+/** No two boxes closer than the 24 px placement keeps between nodes. */
+function apart(boxes: readonly Box[]): boolean {
+  return boxes.every((a, i) =>
+    boxes.every(
+      (b, k) =>
+        i === k ||
+        a.x >= b.x + b.w + 24 ||
+        b.x >= a.x + a.w + 24 ||
+        a.y >= b.y + b.h + 24 ||
+        b.y >= a.y + a.h + 24,
+    ),
+  );
+}
+
 /** A tab showing a canvas, with its event stream open, as the web app reports itself. */
 function openTab(s: TestServer, canvasId: string | null, tabId = "tab-0001-test", selection: string[] = []) {
   s.services.presence.connected(tabId);
@@ -275,6 +291,92 @@ describe("canvases", () => {
     await call(c, "delete_nodes", { canvas: canvasId, ids: [v] });
     const read = j(await call(c, "get_canvas", { canvas: canvasId }));
     expect(read.nodes.map((n: Json) => n.id)).not.toContain(v);
+  });
+
+  test("four image cards added at once land clear of each other at the size they show", async () => {
+    const { client: c } = await ready();
+    const { canvasId, p } = await promptToGenerate(c);
+    const added = j(
+      await call(c, "add_nodes", {
+        canvas: canvasId,
+        nodes: [
+          { as: "tall", type: "image.generate", params: { aspect: "9:16" } },
+          { as: "wide", type: "image.generate", params: { aspect: "16:9" } },
+          { as: "takes", type: "image.variations", params: { aspect: "3:4" } },
+          { as: "square", type: "image.generate", params: { aspect: "1:1" } },
+        ],
+        connections: ["tall", "wide", "takes", "square"].map((to) => ({
+          from: `${p}.text`,
+          to: `${to}.prompt`,
+        })),
+      }),
+    );
+    const read = j(await call(c, "get_canvas", { canvas: canvasId }));
+    const box = (id: string) => read.nodes.find((n: Json) => n.id === id).box as Box;
+    expect(box(added.created.tall)).toMatchObject({ w: 270, h: 480 });
+    expect(box(added.created.wide)).toMatchObject({ w: 320, h: 180 });
+    expect(box(added.created.takes)).toMatchObject({ w: 320, h: 426 });
+    expect(apart(read.nodes.map((n: Json) => n.box as Box))).toBe(true);
+  });
+
+  test("a frame an agent fills holds every node put in it", async () => {
+    const { client: c } = await ready();
+    const made = j(await call(c, "create_canvas", { name: "Looks" }));
+    const edited = j(
+      await call(c, "edit_canvas", {
+        canvas: made.canvasId,
+        edits: [
+          { op: "add_node", as: "f", type: "frame", title: "Approved looks", size: { w: 400, h: 300 } },
+          ...[0, 1, 2, 3, 4].map((i) => ({
+            op: "add_node",
+            as: `g${i}`,
+            type: "image.generate",
+            params: { aspect: i % 2 ? "9:16" : "4:3" },
+            parentId: "f",
+          })),
+          { op: "add_node", as: "n", type: "note", params: { text: "Pick one" }, parentId: "f" },
+        ],
+      }),
+    );
+    const read = j(await call(c, "get_canvas", { canvas: made.canvasId }));
+    const frame = read.nodes.find((n: Json) => n.id === edited.created.f).box as Box;
+    const inside = read.nodes
+      .filter((n: Json) => n.parentId === edited.created.f)
+      .map((n: Json) => n.box as Box);
+    expect(inside).toHaveLength(6);
+    for (const b of inside) {
+      expect(b.x).toBeGreaterThanOrEqual(frame.x + 24);
+      expect(b.y).toBeGreaterThanOrEqual(frame.y + 48);
+      expect(b.x + b.w).toBeLessThanOrEqual(frame.x + frame.w - 24);
+      expect(b.y + b.h).toBeLessThanOrEqual(frame.y + frame.h - 24);
+    }
+    expect(apart(inside)).toBe(true);
+  });
+
+  test("a position on top of another node is nudged clear and says so, unless exact", async () => {
+    const { client: c } = await ready();
+    const { canvasId, p, g } = await promptToGenerate(c);
+    const read = j(await call(c, "get_canvas", { canvas: canvasId }));
+    const target = read.nodes.find((n: Json) => n.id === p).box as Box;
+    const moved = j(
+      await call(c, "move_node", { canvas: canvasId, id: g, position: { x: target.x + 40, y: target.y } }),
+    );
+    expect(moved.nudged[0]).toMatch(
+      /^Nudged Generate \d+px (right|left|up|down)( and \d+px (up|down))? to clear Prompt\.$/,
+    );
+    expect(moved.nudged[1]).toContain("exact: true");
+    expect(apart([target, moved.changed[0].box])).toBe(true);
+
+    const kept = j(
+      await call(c, "move_node", {
+        canvas: canvasId,
+        id: g,
+        position: { x: target.x + 40, y: target.y },
+        exact: true,
+      }),
+    );
+    expect(kept.nudged).toBeUndefined();
+    expect(kept.changed[0].box).toMatchObject({ x: target.x + 40, y: target.y });
   });
 
   test("list_node_types gives ports, settings and defaults", async () => {
