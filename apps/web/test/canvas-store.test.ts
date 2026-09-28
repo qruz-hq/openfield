@@ -326,7 +326,7 @@ describe("locked nodes (§7.9)", () => {
     );
     store.getState().actions.deleteNodes(["f", "g", "q"]);
     const after = store.getState().doc;
-    expect(after.order.sort()).toEqual(["g", "p"]);
+    expect([...after.order].sort()).toEqual(["g", "p"]);
     // Its frame went, so it's on the pane where it was on screen.
     expect(after.nodes.p).toMatchObject({ parentId: null, position: { x: 110, y: 70 } });
   });

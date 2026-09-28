@@ -1027,3 +1027,146 @@ test("Version history on an index card opens the canvas with its history", async
   await expect(page).toHaveURL(/\/canvas\/[0-9A-HJKMNP-TV-Z]{26}$/);
   await expect(page.getByRole("complementary", { name: "Version history" })).toBeVisible();
 });
+
+const toastWith = (page: Page, text: string) => page.locator("[data-sonner-toast]").filter({ hasText: text });
+
+test("a locked node keeps its images: no Run, a read-only side sheet, and it stays when deleted", async ({
+  page,
+  request,
+}) => {
+  const token = await sessionToken(request);
+  const home = await libraryRoot(request, token);
+  const { id, aliases } = await canvasOf(request, "Locked key visual", [
+    { op: "add_node", as: "p", type: "prompt", position: { x: 0, y: 0 }, params: { text: "A lighthouse" } },
+    {
+      op: "add_node",
+      as: "g",
+      type: "image.generate",
+      position: { x: 400, y: 0 },
+      title: "Key visual",
+      params: { model: FLASH },
+    },
+    { op: "connect", source: "p", target: "g" },
+    {
+      op: "add_node",
+      as: "v",
+      type: "image.variations",
+      position: { x: 900, y: 0 },
+      params: { model: FLASH, count: 2 },
+    },
+    { op: "connect", source: "g", target: "v" },
+  ]);
+  await page.goto(`/canvas/${id}`);
+  await runEverything(page, /^Run 2 nodes/);
+  const jobs = countJobs(home, id);
+  const card = pane(page).locator(`.react-flow__node[data-id="${aliases.g}"]`);
+  await expectImages(card, 1);
+
+  // ⇧⌘L on the selected card: a lock before its name, Locked on hover, and nothing to run.
+  await card.click({ position: { x: 40, y: 80 } });
+  await page.keyboard.press("ControlOrMeta+Shift+L");
+  await expect(card.locator("[data-label-lock]")).toBeVisible();
+  await card.hover();
+  await expect(card.getByText("Locked", { exact: true })).toBeVisible();
+  await expect(card.getByRole("button", { name: /^Run / })).toHaveCount(0);
+
+  // New words above it change nothing: it keeps its image, and what reads it stays up to date.
+  await page.getByRole("textbox", { name: "Prompt text" }).fill("A lighthouse in a storm");
+  await expect(page.getByText("Inputs changed")).toHaveCount(0);
+  await runAll(page).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.waitForTimeout(1_000);
+  expect(countJobs(home, id)).toBe(jobs);
+
+  // Its side sheet says so, and nothing in it can change or run.
+  await card.dblclick({ position: { x: 40, y: 80 } });
+  const sheet = page.getByRole("complementary", { name: "Key visual" });
+  await expect(sheet.getByText("Locked. Its images stay as they are, and it won't run again.")).toBeVisible();
+  await expect(sheet.getByRole("textbox", { name: "Prompt" })).toHaveAttribute("readonly", "");
+  await expect(sheet.getByRole("button", { name: /^Run/ })).toBeDisabled();
+  await sheet.getByRole("button", { name: "Unlock" }).click();
+  await expect(sheet.getByText(/^Locked\./)).toHaveCount(0);
+  await expect(card.locator("[data-label-lock]")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  // Lock from the menu; locked, the menu offers Unlock and holds Run and Delete back.
+  await card.click({ button: "right", position: { x: 40, y: 80 } });
+  await page.getByRole("menuitem", { name: /^Lock/ }).click();
+  await expect(card.locator("[data-label-lock]")).toBeVisible();
+  await card.click({ button: "right", position: { x: 40, y: 80 } });
+  const menu = page.getByRole("menu");
+  await expect(menu.getByRole("menuitem", { name: /^Unlock/ })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: /^Run/ }).first()).toHaveAttribute("data-disabled", "");
+  await expect(menu.getByRole("menuitem", { name: "Delete" })).toHaveAttribute("data-disabled", "");
+  await page.keyboard.press("Escape");
+
+  // Delete leaves it where it is and says why; Unlock in the toast frees it.
+  await card.click({ position: { x: 40, y: 80 } });
+  await page.keyboard.press("Backspace");
+  const stayed = toastWith(page, "Key visual is locked, so it stayed. Unlock it to delete it.");
+  await expect(stayed).toBeVisible();
+  await expect(card).toBeVisible();
+  await stayed.getByRole("button", { name: "Unlock" }).click();
+  await expect(card.locator("[data-label-lock]")).toHaveCount(0);
+});
+
+test("a locked frame keeps its nodes inside and takes nothing new", async ({ page, request }) => {
+  const token = await sessionToken(request);
+  const { id, aliases } = await canvasOf(request, "Approved", [
+    {
+      op: "add_node",
+      as: "f",
+      type: "frame",
+      title: "Approved looks",
+      position: { x: 0, y: 0 },
+    },
+    {
+      op: "add_node",
+      as: "n",
+      type: "note",
+      parentId: "f",
+      position: { x: 40, y: 60 },
+      params: { text: "Keep" },
+    },
+    { op: "add_node", as: "q", type: "prompt", position: { x: 900, y: 0 }, params: { text: "Loose" } },
+  ]);
+  await page.goto(`/canvas/${id}`);
+  const node = (alias: string) => pane(page).locator(`.react-flow__node[data-id="${aliases[alias]}"]`);
+  await expect(node("n")).toBeVisible();
+
+  await node("f").click({ position: { x: 600, y: 380 } });
+  await page.keyboard.press("ControlOrMeta+Shift+L");
+  const title = node("f").getByText("1 node, locked");
+  await expect(title).toBeVisible();
+  await expect(node("f").locator("[data-frame-lock]")).toBeVisible();
+
+  // Dragged towards the outside, the note stays within the frame.
+  const frameBox = (await node("f").boundingBox())!;
+  await dragBetween(page, await centreOf(node("n")), { x: frameBox.x + frameBox.width + 300, y: 200 });
+  const noteBox = (await node("n").boundingBox())!;
+  expect(noteBox.x + noteBox.width).toBeLessThanOrEqual(frameBox.x + frameBox.width + 1);
+
+  // The Prompt dropped onto it stays out, and the toast says why.
+  // Held by its 8 px top edge, clear of the arrow handles: its words are a text field.
+  const prompt = node("q");
+  const promptBox = (await prompt.boundingBox())!;
+  await dragBetween(
+    page,
+    { x: promptBox.x + 30, y: promptBox.y + 4 },
+    { x: frameBox.x + frameBox.width / 2, y: frameBox.y + frameBox.height / 2 },
+  );
+  await expect(toastWith(page, "Approved looks is locked, so nothing new can go in it.")).toBeVisible();
+  await page.waitForTimeout(SETTLE_MS);
+  const saved = await api<CanvasDetail>(request, token, "GET", `/api/canvases/${id}`);
+  expect(saved.graph.nodes.find((n) => n.id === aliases.q)?.parentId).toBeNull();
+  expect(saved.graph.nodes.find((n) => n.id === aliases.f)?.locked).toBe(true);
+
+  // Lock the Prompt too, then delete everything: both stay, and the toast counts them.
+  await prompt.click({ position: { x: 30, y: 4 } });
+  await page.keyboard.press("ControlOrMeta+Shift+L");
+  await expect(prompt.locator("[data-label-lock]")).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+a");
+  await page.keyboard.press("Backspace");
+  await expect(toastWith(page, "2 locked nodes stayed. Unlock them to delete them.")).toBeVisible();
+  await expect(pane(page).locator(".react-flow__node")).toHaveCount(3);
+});
