@@ -1,13 +1,10 @@
-import { nodeTitle, specRegistry } from "@openfield/canvas";
+import { listNames, nodeTitle, specRegistry } from "@openfield/canvas";
 import { canonicalJson, type MessageKey, t } from "@openfield/core";
 import type { CanvasDocument, CanvasNode } from "@openfield/core/canvas";
 
 // What changed on a canvas since an agent last had it, in a line it can read at a glance: "2 nodes
 // resized, the view moved, Key visual renamed". Edits apply to the canvas as it is now, so this is
 // how an agent hears about what the person (or another agent) did in between.
-
-/** Two names are said, more are counted. */
-const NAMED_MAX = 2;
 
 export function changesSince(before: CanvasDocument, after: CanvasDocument): string | null {
   const was = new Map(before.nodes.map((n) => [n.id, n]));
@@ -62,11 +59,7 @@ export function changesSince(before: CanvasDocument, after: CanvasDocument): str
   return parts.length ? t("canvas.agents.since.lead", { changes: parts.join(", ") }) : null;
 }
 
-function named(nodes: readonly CanvasNode[]): string {
-  if (nodes.length > NAMED_MAX) return t("canvas.agents.since.nodes", { count: nodes.length });
-  const names = nodes.map((n) => nodeTitle(n, specRegistry));
-  return names.length === 2 ? t("canvas.agents.since.pair", { a: names[0]!, b: names[1]! }) : names[0]!;
-}
+const named = (nodes: readonly CanvasNode[]) => listNames(nodes.map((n) => nodeTitle(n, specRegistry)));
 
 /** Where each node sits on the pane: its own position plus its frames'. */
 function positions(doc: CanvasDocument): Map<string, { x: number; y: number }> {

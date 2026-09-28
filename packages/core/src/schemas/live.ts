@@ -41,6 +41,8 @@ export const canvasEditsResponseSchema = z.object({
   aliases: z.record(z.string(), localIdSchema),
   /** The version saved before an agent's first change to this canvas. */
   versionId: ulidSchema.nullable(),
+  /** Where the canvas did something other than asked, and why: a node nudged clear of another. */
+  notes: z.array(z.string()).optional(),
 });
 
 /** SSE canvas.updated. Tabs holding fromVersion replay the ops and move to graphVersion. */

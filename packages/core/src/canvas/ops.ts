@@ -70,6 +70,11 @@ const alias = z
   .regex(/^[A-Za-z][A-Za-z0-9_-]{0,31}$/)
   .describe("A short name for the new node, so later edits in the same batch can refer to it");
 const position = point.describe("Top-left corner in canvas coordinates, even inside a frame");
+const exact = z
+  .boolean()
+  .describe(
+    "Keep the position exactly as given, even on top of another node. Default: a position that lands on another node moves to the nearest free spot",
+  );
 const params = z
   .record(z.string(), z.unknown())
   .describe("Settings for the node type. For update_node, only the keys given change; null removes one");
@@ -84,6 +89,7 @@ export const canvasEditSchema = z.discriminatedUnion("op", [
     position: position
       .optional()
       .describe("Leave out to place it next to what it connects to, clear of the rest"),
+    exact: exact.optional(),
     size: box.optional(),
     parentId: nodeRef.nullable().optional().describe("A frame to put it in"),
     near: nodeRef.optional().describe("Place it to the right of this node"),
@@ -100,6 +106,7 @@ export const canvasEditSchema = z.discriminatedUnion("op", [
     op: z.literal("move_node"),
     id: nodeRef,
     position: position.optional(),
+    exact: exact.optional(),
     parentId: nodeRef.nullable().optional().describe("A frame to move it into, or null to take it out"),
   }),
   z.object({

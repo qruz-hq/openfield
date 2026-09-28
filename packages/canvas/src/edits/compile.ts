@@ -1,18 +1,20 @@
 import { canonicalJson, type MessageKey, type MessageVars, t } from "@openfield/core";
 import { type CanvasEdge, type CanvasEdit, type CanvasViewport, localIdSchema } from "@openfield/core/canvas";
 import { type ConnectionEnds, checkConnection } from "../engine/connect";
+import { nodeTitle } from "../engine/describe";
 import { type EngineContext, isAnnotationHandle, type PortSpec, portFlow } from "../engine/types";
 import type { ImageSizes, NodeRegistry, NodeSpec } from "../nodes/registry";
 import { absolutePosition, containedIn, incomingEdges, newEdgeId, newNodeId } from "../store/graph";
 import { applyOps, type CanvasOp, CanvasOpError, type DocSlice, type Point } from "../store/ops";
 import { fitFrames } from "./frames";
-import { type BoxSource, framesAround, placeNode } from "./place";
+import { type BoxSource, framesAround, nearestFree, nodeRect, overlaps, placeNode, type Rect } from "./place";
 
 // Edits (§7.11): what an agent or a script asks for, compiled into the editor's own document ops,
 // which the server applies and every open tab replays. Each edit is checked against the canvas as the
 // edits before it left it, with the editor's rules: ports and loops (checkConnection), node types
 // and their settings (the specs), frames. Any edit that doesn't fit stops the whole batch.
-// Nodes count at their real box (place.ts), so new ones go where they fit, and every frame the
+// Nodes count at their real box (place.ts): new ones go where they fit, a position given by hand
+// that lands on another node moves to the nearest free spot (unless `exact`), and every frame the
 // edits reached grows to hold what's in it (frames.ts).
 
 export type EditErrorCode =
@@ -58,6 +60,8 @@ export interface CompiledEdits {
   touched: string[];
   /** Each `as` name, with the id its node got. */
   aliases: Record<string, string>;
+  /** Where the result differs from what was asked, and why: "Nudged Key visual 120px right to clear Prompt." */
+  notes: string[];
 }
 
 const DEFAULT_ARROW = { source: "arrow-source-right", target: "arrow-target-left" };
@@ -77,6 +81,8 @@ export function compileEdits(
   const source: BoxSource = { ctx, ...(opts.images && { images: opts.images }) };
   /** Nodes whose place or box the edits changed: the frames around them may need to grow. */
   const shaped = new Set<string>();
+  /** Positions given by hand, to move clear of other nodes once every edit is in. */
+  const placed: string[] = [];
 
   for (const [index, edit] of edits.entries()) {
     const fail = (code: EditErrorCode, key: MessageKey, values?: MessageVars): never => {
@@ -199,6 +205,7 @@ export function compileEdits(
         if (edit.as !== undefined) aliases[edit.as] = node.id;
         touch(node.id);
         shaped.add(node.id);
+        if (edit.position && !edit.exact) placed.push(node.id);
         break;
       }
 
@@ -244,6 +251,7 @@ export function compileEdits(
         }
         touch(id);
         shaped.add(id);
+        if (edit.position && !edit.exact && !placed.includes(id)) placed.push(id);
         break;
       }
 
@@ -399,6 +407,24 @@ export function compileEdits(
     }
   }
 
+  const notes: string[] = [];
+  // Positions given by hand that landed on another node: the nearest free spot, in the order given.
+  for (const id of placed) {
+    if (!doc.nodes[id]) continue;
+    const nudge = nudgeClear(doc, specs, id, source);
+    if (!nudge) continue;
+    const parentId = doc.nodes[id]!.parentId;
+    const origin = parentId === null ? { x: 0, y: 0 } : absolutePosition(doc, parentId);
+    const op: CanvasOp = {
+      op: "moveNode",
+      id,
+      position: { x: nudge.to.x - origin.x, y: nudge.to.y - origin.y },
+    };
+    doc = applyOps(doc, [op]).doc;
+    ops.push(op);
+    notes.push(nudge.note);
+  }
+
   // Every frame around a node that moved, changed shape or arrived grows to hold what's in it.
   const reached = new Set<string>();
   for (const id of shaped) {
@@ -411,7 +437,63 @@ export function compileEdits(
   ops.push(...fitted.ops);
   for (const id of fitted.grown) if (!touched.includes(id)) touched.push(id);
 
-  return { ops, doc, touched: touched.filter((id) => doc.nodes[id]), aliases };
+  return { ops, doc, touched: touched.filter((id) => doc.nodes[id]), aliases, notes };
+}
+
+/**
+ * A node on top of another, moved to the nearest spot clear of everything but itself, what's in
+ * it and the frames it's in. Null when it's clear where it is.
+ */
+function nudgeClear(
+  doc: DocSlice,
+  specs: NodeRegistry,
+  id: string,
+  source: BoxSource,
+): { to: Point; note: string } | null {
+  const rect = nodeRect(doc, specs, id, source);
+  if (!rect) return null;
+  const own = new Set([id, ...containedIn(doc, id), ...framesAround(doc, doc.nodes[id]!.parentId)]);
+  const others = doc.order
+    .filter((other) => !own.has(other))
+    .flatMap((other) => {
+      const box = nodeRect(doc, specs, other, source);
+      return box ? [{ id: other, box }] : [];
+    });
+  const hits = others.filter((o) => overlaps(rect, o.box, 0));
+  if (!hits.length) return null;
+  const to = nearestFree(
+    { x: rect.x, y: rect.y },
+    { w: rect.w, h: rect.h },
+    others.map((o) => o.box),
+  );
+  if (to.x === rect.x && to.y === rect.y) return null;
+  // Named by how much they overlapped, most first.
+  const area = (b: Rect) =>
+    Math.max(0, Math.min(rect.x + rect.w, b.x + b.w) - Math.max(rect.x, b.x)) *
+    Math.max(0, Math.min(rect.y + rect.h, b.y + b.h) - Math.max(rect.y, b.y));
+  hits.sort((a, b) => area(b.box) - area(a.box));
+  const title = (nodeId: string) => nodeTitle(doc.nodes[nodeId]!, specs);
+  const dx = Math.round(to.x - rect.x);
+  const dy = Math.round(to.y - rect.y);
+  const along = (px: number, key: "right" | "left" | "down" | "up") =>
+    t(`canvas.edits.nudge.${key}`, { px: Math.abs(px) });
+  const x = dx ? along(dx, dx > 0 ? "right" : "left") : null;
+  const y = dy ? along(dy, dy > 0 ? "down" : "up") : null;
+  const shift = x && y ? t("canvas.edits.nudge.both", { x, y }) : (x ?? y)!;
+  return {
+    to,
+    note: t("canvas.edits.nudged", {
+      node: title(id),
+      shift,
+      others: listNames(hits.map((h) => title(h.id))),
+    }),
+  };
+}
+
+/** Two names are said, more are counted. */
+export function listNames(list: readonly string[]): string {
+  if (list.length > 2) return t("canvas.edits.names.many", { count: list.length });
+  return list.length === 2 ? t("canvas.edits.names.pair", { a: list[0]!, b: list[1]! }) : (list[0] ?? "");
 }
 
 /** Ports to choose from, narrowed to the one asked for; `all` lists them for the error. */

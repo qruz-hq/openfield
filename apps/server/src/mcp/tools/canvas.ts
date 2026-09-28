@@ -183,6 +183,7 @@ async function applyEdits(
       versionSaved: `Saved the canvas as a version first ("${t("canvas.agents.versionLabel", { name: ctx.session.client })}"), so the person can go back.`,
     }),
     changed: view.nodes.filter((n) => touched.has(n.id)),
+    ...(result.notes?.length && { nudged: [...result.notes, t("canvas.agents.exactHint")] }),
     ...(result.touched.length === 0 && { note: "Nothing needed changing." }),
   });
 }
@@ -494,8 +495,8 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
       title: "Change a canvas",
       description:
         "Applies a batch of edits in one go: all of them, or none if one is refused (the answer says which). Each edit is one of: " +
-        'add_node {as?, type, params?, title?, position?, parentId?, near?}, update_node {id, params?, title?, collapsed?, size?}, move_node {id, position?, parentId?}, remove_nodes {ids}, connect {source, sourceHandle?, target, targetHandle?}, disconnect {edgeId | source/target}, rename_canvas {name}; or the short form {connect: "p.text", to: "g.prompt"}. ' +
-        "`as` names a new node so later edits in the batch can use it. Leave position out and the node is placed next to what it connects to. Settings have limits (list_node_types gives them, and titles are at most 200 characters); a batch that goes past one is refused and says which, so nothing is cut short or left unable to run. The person sees each change in open tabs as it lands.",
+        'add_node {as?, type, params?, title?, position?, exact?, parentId?, near?}, update_node {id, params?, title?, collapsed?, size?}, move_node {id, position?, exact?, parentId?}, remove_nodes {ids}, connect {source, sourceHandle?, target, targetHandle?}, disconnect {edgeId | source/target}, rename_canvas {name}; or the short form {connect: "p.text", to: "g.prompt"}. ' +
+        "`as` names a new node so later edits in the batch can use it. Leave position out and the node is placed next to what it connects to, clear of the rest at its real size. A position that lands on another node moves to the nearest free spot and the answer says so; exact: true keeps it. Frames grow to hold what goes in them. Settings have limits (list_node_types gives them, and titles are at most 200 characters); a batch that goes past one is refused and says which, so nothing is cut short or left unable to run. The person sees each change in open tabs as it lands.",
       inputSchema: {
         canvas: z.string().describe(canvasField),
         edits: z
@@ -620,7 +621,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "Move a node",
       description:
-        "Moves a node to a position (canvas coordinates of its top-left corner), or into or out of a frame.",
+        "Moves a node to a position (canvas coordinates of its top-left corner), or into or out of a frame. A position on top of another node moves to the nearest free spot unless exact is true.",
       inputSchema: {
         canvas: z.string().describe(canvasField),
         ...canvasEditSchema.options[2].omit({ op: true }).shape,

@@ -131,6 +131,7 @@ type Built = {
   doc: DocSlice;
   touched: string[];
   aliases: Record<string, string>;
+  notes?: string[];
 };
 
 export class CanvasService {
@@ -548,6 +549,7 @@ export class CanvasService {
     if (actor.kind === "agent") this.#agentSaved.add(agentKey(actor, id));
     this.#writeThrough(result.next);
     const { built, versionId } = result;
+    const notes = built.notes ?? [];
     const ops = toWireOps(built.ops);
     this.deps.events?.publish("canvas.updated", {
       canvasId: id,
@@ -576,6 +578,7 @@ export class CanvasService {
       touched: built.touched,
       aliases: built.aliases,
       versionId,
+      ...(notes.length > 0 && { notes }),
     };
   }
 

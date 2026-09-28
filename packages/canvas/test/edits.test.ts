@@ -357,6 +357,45 @@ describe("real boxes", () => {
   });
 });
 
+describe("positions given by hand", () => {
+  const base = () =>
+    docOf([
+      node("n_a", "note", { title: "Prompt", position: { x: 0, y: 0 }, size: { w: 240, h: 240 } }),
+      node("n_b", "note", { title: "Key visual", position: { x: 600, y: 0 }, size: { w: 240, h: 240 } }),
+    ]);
+
+  test("one that lands on another node moves to the nearest free spot, and says so", () => {
+    const added = compile(base(), [
+      { op: "add_node", as: "k", type: "note", title: "Moodboard", position: { x: 120, y: 0 } },
+    ]);
+    expect(absolutePosition(added.doc, added.aliases.k!)).toEqual({ x: 264, y: 0 });
+    expect(added.notes).toEqual(["Nudged Moodboard 144px right to clear Prompt."]);
+    expect(allApart(added.doc)).toBe(true);
+
+    const moved = compile(base(), [{ op: "move_node", id: "n_b", position: { x: 100, y: 100 } }]);
+    expect(absolutePosition(moved.doc, "n_b")).toEqual({ x: 100, y: 264 });
+    expect(moved.notes).toEqual(["Nudged Key visual 164px down to clear Prompt."]);
+  });
+
+  test("exact keeps it where it was put, and a clear spot needs no nudge", () => {
+    const kept = compile(base(), [{ op: "move_node", id: "n_b", position: { x: 100, y: 100 }, exact: true }]);
+    expect(absolutePosition(kept.doc, "n_b")).toEqual({ x: 100, y: 100 });
+    expect(kept.notes).toEqual([]);
+    const clear = compile(base(), [{ op: "move_node", id: "n_b", position: { x: 300, y: 0 } }]);
+    expect(absolutePosition(clear.doc, "n_b")).toEqual({ x: 300, y: 0 });
+    expect(clear.notes).toEqual([]);
+  });
+
+  test("a node that trades places with one moving away in the same batch", () => {
+    const out = compile(base(), [
+      { op: "move_node", id: "n_a", position: { x: 1000, y: 0 } },
+      { op: "move_node", id: "n_b", position: { x: 0, y: 0 } },
+    ]);
+    expect(absolutePosition(out.doc, "n_b")).toEqual({ x: 0, y: 0 });
+    expect(out.notes).toEqual([]);
+  });
+});
+
 describe("frames grow to hold what's in them", () => {
   const framed = (extra: Partial<Parameters<typeof node>[2]> = {}) =>
     docOf([
