@@ -701,6 +701,8 @@ test("Variations on a model with seeds is up to date after a run, and ⌥ makes 
   // Nothing changed: Run all keeps the takes it has.
   await runAll(page).click();
   const takes = pane(page).locator(`.react-flow__node[data-id="${aliases.takes}"]`);
+  // Its state and Run show on hover, as on the Generate card.
+  await takes.hover();
   await expect(takes.getByText("Up to date")).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(countJobs(home, id)).toBe(2);
