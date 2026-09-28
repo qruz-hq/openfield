@@ -4,6 +4,7 @@ import {
   type CanvasEditsResponse,
   type CanvasPatchResponse,
   type CanvasPreviewResponse,
+  type CanvasSpendResponse,
   type CanvasSummary,
   type CanvasTemplate,
   type CanvasVersion,
@@ -40,6 +41,11 @@ export const canvasesRoutes = new Hono<Env>()
   .get("/canvases/:id", zValidator("param", idParamSchema, onInvalid), (c) => {
     const detail = c.var.svc.canvases.get(c.req.valid("param").id);
     return c.json(detail satisfies CanvasDetail, 200);
+  })
+  // What its runs have cost, for the canvas's spend pill. The same rules as Settings > Spending.
+  .get("/canvases/:id/spend", zValidator("param", idParamSchema, onInvalid), (c) => {
+    const spend = c.var.svc.canvases.spend(c.req.valid("param").id);
+    return c.json(spend satisfies CanvasSpendResponse, 200);
   })
   .patch(
     "/canvases/:id",

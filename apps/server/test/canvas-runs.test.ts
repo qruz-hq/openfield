@@ -5,9 +5,11 @@ import {
   canvasRunResponseSchema,
   canvasRunsResponseSchema,
   canvasSource,
+  canvasSpendResponseSchema,
   errorEnvelopeSchema,
   newId,
   type SseEvent,
+  usageResponseSchema,
 } from "@openfield/core";
 import type { CanvasRunRecord } from "@openfield/core/canvas";
 import {
@@ -131,6 +133,42 @@ describe("running a canvas", () => {
       body: { name: "Harbor", graphVersion: 1 },
     });
     expect(listFolders(db).find((f) => f.id === folderId)?.name).toBe("Harbor");
+  });
+
+  test("a canvas's spend counts its own runs by Spending's rules, and nothing from another canvas", async () => {
+    server = await startTestServer();
+    await saveKey(server);
+    const canvas = await newCanvas(server);
+    const other = await newCanvas(server);
+    const spend = async (id: string) => {
+      const res = await server!.json(`/api/canvases/${id}/spend`);
+      expect(res.status).toBe(200);
+      return canvasSpendResponseSchema.parse(res.body);
+    };
+    expect(await spend(canvas.id)).toEqual({ usd: 0, images: 0, usdDiscarded: 0, currency: "USD" });
+
+    const { generate, variations } = chain();
+    const res = await server.json(`/api/canvases/${canvas.id}/run`, {
+      method: "POST",
+      body: { scope: "all", nodeIds: ["n_gen", "n_var"], plan: [generate, variations] },
+    });
+    const started = canvasRunResponseSchema.parse(res.body);
+    expect((await finished(server, started.runId!)).status).toBe("succeeded");
+    // Usage is logged as each image lands; the run's end is after the last.
+    for (const until = Date.now() + 5_000; (await spend(canvas.id)).images < 4 && Date.now() < until; )
+      await Bun.sleep(20);
+
+    // The same figure Settings > Spending and the top nav's Spent today count for these runs.
+    const usage = usageResponseSchema.parse(
+      (await server.json("/api/usage?from=1970-01-01T00:00:00.000Z&groupBy=day")).body,
+    );
+    const mine = await spend(canvas.id);
+    expect(mine.usd).toBe(usage.totalUsd);
+    expect(mine.images).toBe(usage.rows.reduce((sum, r) => sum + r.images, 0));
+    expect(await spend(other.id)).toMatchObject({ usd: 0, images: 0 });
+
+    const missing = await server.json(`/api/canvases/${newId()}/spend`);
+    expect(missing.status).toBe(404);
   });
 
   test("a single node run goes ahead of run-all work", async () => {

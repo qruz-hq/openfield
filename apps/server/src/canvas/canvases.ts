@@ -26,11 +26,13 @@ import {
   type CanvasPreviewResponse,
   type CanvasPreviewTheme,
   type CanvasRunNodeState,
+  type CanvasSpendResponse,
   type CanvasSummary,
   type CanvasTemplate,
   type CanvasVersion,
   type CanvasVersionCreateBody,
   type CanvasVersionDetail,
+  DEFAULT_CURRENCY,
   newId,
   t,
 } from "@openfield/core";
@@ -44,6 +46,7 @@ import {
 } from "@openfield/core/canvas";
 import {
   type CanvasRow,
+  canvasSpend,
   type Db,
   deleteCanvas,
   getAssets,
@@ -188,6 +191,19 @@ export class CanvasService {
    * Opening a canvas: the document in the current shape, the images it names that aren't here, and
    * the size of those that are.
    */
+  /** What this canvas's runs have cost, by Spending's rules (the canvas's spend pill). */
+  spend(id: string): CanvasSpendResponse {
+    this.#row(id);
+    const row = canvasSpend(this.deps.db, id);
+    const round = (usd: number) => Math.round(usd * 1e6) / 1e6;
+    return {
+      usd: round(row.usd),
+      images: row.images,
+      usdDiscarded: round(row.usdDiscarded),
+      currency: DEFAULT_CURRENCY,
+    };
+  }
+
   get(id: string): CanvasDetail {
     const row = this.#row(id);
     const doc = readDocument(row.graph);

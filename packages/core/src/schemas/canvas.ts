@@ -266,6 +266,15 @@ export const canvasPreviewQuerySchema = z.object({
 /** PUT /api/canvases/:id/preview */
 export const canvasPreviewResponseSchema = z.object({ previewUrl: z.string() });
 
+/** GET /api/canvases/:id/spend: what this canvas's runs have cost, by Spending's rules. */
+export const canvasSpendResponseSchema = z.object({
+  usd: z.number().nonnegative(),
+  images: z.int().nonnegative(),
+  /** Canceled after it was sent: may be billed, no image to show for it. */
+  usdDiscarded: z.number().nonnegative(),
+  currency: z.string(),
+});
+
 export type CanvasSummary = z.infer<typeof canvasSummarySchema>;
 export type CanvasesListQuery = z.infer<typeof canvasesListQuerySchema>;
 export type CanvasCreateBody = z.infer<typeof canvasCreateBodySchema>;
@@ -291,4 +300,5 @@ export type CanvasRunsResponse = z.infer<typeof canvasRunsResponseSchema>;
 export type CanvasTemplate = z.infer<typeof canvasTemplateSchema>;
 export type CanvasTemplatesResponse = z.infer<typeof canvasTemplatesResponseSchema>;
 export type CanvasPreviewResponse = z.infer<typeof canvasPreviewResponseSchema>;
+export type CanvasSpendResponse = z.infer<typeof canvasSpendResponseSchema>;
 export type CanvasPreviewQuery = z.infer<typeof canvasPreviewQuerySchema>;

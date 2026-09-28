@@ -1142,6 +1142,13 @@
         "body": "The canvas and its versions are deleted. The images it made stay in your library.",
         "confirm": "Delete canvas"
       },
+      "spend": {
+        "label": "This canvas",
+        "canvas": "This canvas",
+        "today": "Today, everywhere",
+        "images": "{count, plural, one {# image} other {# images}}",
+        "see": "See spending"
+      },
       "save": {
         "saved": "Saved",
         "saving": "Saving…",

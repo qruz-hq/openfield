@@ -15,6 +15,15 @@ export function useSpentToday() {
   });
 }
 
+/** What one canvas's runs have cost, for its spend pill. Refreshed with every spending figure. */
+export function useCanvasSpend(canvasId: string) {
+  return useQuery({
+    queryKey: queryKeys.usageCanvas(canvasId),
+    queryFn: () => call(api.api.canvases[":id"].spend.$get({ param: { id: canvasId } })),
+    retry: false,
+  });
+}
+
 /**
  * What this computer tracked as spent since the start of the month, canceled-but-charged work
  * included: the figure the monthly spending limit is checked against (§6.9).

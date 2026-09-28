@@ -56,6 +56,8 @@ export const queryKeys = {
   usageToday: ["usage", "today"] as const,
   usageMonth: ["usage", "month"] as const,
   usageSeries: (query: Record<string, string>) => ["usage", "series", query] as const,
+  /** What one canvas's runs have cost. Under "usage", so a finished run refreshes it too. */
+  usageCanvas: (id: string) => ["usage", "canvas", id] as const,
   stats: ["stats"] as const,
   /** Settings > Agents: on or off, the key, and the apps that connected. */
   agents: ["agents"] as const,

@@ -191,3 +191,25 @@ export function canvasRunSpendSince(
   for (const row of [...spent, ...pending]) out.set(row.runId, (out.get(row.runId) ?? 0) + row.usd);
   return out;
 }
+
+export interface CanvasSpendRow {
+  images: number;
+  /** Spent on the images it made, by the rollup's rules. */
+  usd: number;
+  /** Canceled after submit: may be billed, no image to show for it. */
+  usdDiscarded: number;
+}
+
+/**
+ * What one canvas's runs have cost so far, for the canvas's spend pill: the rollup's rules (the
+ * figure the top nav's Spent today and Settings > Spending use), over the job sets its runs made.
+ */
+export function canvasSpend(db: Executor, canvasId: string): CanvasSpendRow {
+  const row = db
+    .select({ images: figures.images, usd: figures.usd, usdDiscarded: figures.usdDiscarded })
+    .from(usageLog)
+    .innerJoin(jobSets, eq(jobSets.id, usageLog.jobSetId))
+    .where(and(eq(jobSets.canvasId, canvasId), counted))
+    .get();
+  return { images: row?.images ?? 0, usd: row?.usd ?? 0, usdDiscarded: row?.usdDiscarded ?? 0 };
+}

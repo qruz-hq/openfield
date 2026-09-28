@@ -23,9 +23,10 @@ import { notify, notifyError } from "../../../lib/notify";
 import { RunControls } from "../../engine/run-controls";
 import type { SaveFailure, SaveStatus } from "../../store/types";
 import { useEditorUi, useMain, useSession } from "../session";
+import { SpendPill } from "./spend-pill";
 
 // Top bar (design JDH76 left, buf6z right). Left: the Openfield menu pill and the canvas name pill,
-// each with its menu. Right: the save state, then the run controls.
+// each with its menu. Right: what the canvas has spent, the save state, then the run controls.
 
 const pill = "flex h-40 cursor-pointer items-center rounded-10 bg-elevated inset-ring inset-ring-border";
 
@@ -234,6 +235,7 @@ export function SaveState() {
 export function TopBarRight() {
   return (
     <div className="absolute top-12 right-12 z-10 flex h-40 items-center justify-end gap-12">
+      <SpendPill />
       <SaveState />
       <RunControls />
     </div>
