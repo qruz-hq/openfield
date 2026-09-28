@@ -1,6 +1,6 @@
 import { CANVAS_RUN_MAX_JOBS, type CostEstimate } from "@openfield/core";
 import type { NodeRegistry, NodeSpec } from "../nodes/registry";
-import { ancestorsOf, incomingEdges, isLocked, topoOrder } from "../store/graph";
+import { feedersOf, incomingEdges, isLocked, topoOrder } from "../store/graph";
 import type { DocSlice } from "../store/ops";
 import { engineNode, isPendingFingerprint } from "./fingerprint";
 import { STANDING_BLOCKERS } from "./inputs";
@@ -267,8 +267,9 @@ export function staleAncestors(
   fingerprints: Readonly<Record<string, string>>,
   ids: Iterable<string>,
 ): string[] {
+  // Nothing above a locked node needs to run for the nodes after it: it hands on the images it keeps.
   const ancestors = new Set<string>();
-  for (const id of ids) for (const ancestor of ancestorsOf(doc, id)) ancestors.add(ancestor);
+  for (const id of ids) for (const ancestor of feedersOf(doc, id)) ancestors.add(ancestor);
   if (!ancestors.size) return [];
   const evaluation = evaluateGraph({
     doc,

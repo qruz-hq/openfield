@@ -71,6 +71,24 @@ export function descendantsOf(doc: DocSlice, nodeId: string): Set<string> {
   return walk(nodeId, (id) => outgoingEdges(doc, id).map((e) => e.target));
 }
 
+// A locked node hands on the images it keeps, so nothing above it can change what's below it. The
+// two walks below stop at locked nodes (they include the lock, not what's past it); the node they
+// start from is followed even when it's locked.
+
+/** The nodes whose results can change what this one reads. */
+export function feedersOf(doc: DocSlice, nodeId: string): Set<string> {
+  return walk(nodeId, (id) =>
+    id !== nodeId && isLocked(doc, id) ? [] : incomingEdges(doc, id).map((e) => e.source),
+  );
+}
+
+/** The nodes a new result here can change. */
+export function reachedBy(doc: DocSlice, nodeId: string): Set<string> {
+  return walk(nodeId, (id) =>
+    id !== nodeId && isLocked(doc, id) ? [] : outgoingEdges(doc, id).map((e) => e.target),
+  );
+}
+
 /** True when a data edge source → target would close a loop (§7.6 rule 4). */
 export function wouldCreateCycle(doc: DocSlice, source: string, target: string): boolean {
   return source === target || descendantsOf(doc, target).has(source);

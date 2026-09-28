@@ -1,6 +1,6 @@
 import type { CanvasRunScope, CostEstimate } from "@openfield/core";
 import type { NodeRegistry } from "../nodes/registry";
-import { ancestorsOf, descendantsOf, isLocked, topoOrder } from "../store/graph";
+import { ancestorsOf, isLocked, reachedBy, topoOrder } from "../store/graph";
 import type { DocSlice } from "../store/ops";
 import { sumEstimates } from "./cost";
 import { evaluateGraph, isRunnable, staleAncestors } from "./evaluate";
@@ -54,13 +54,16 @@ export interface CompileInput {
   busy?: ReadonlySet<string>;
 }
 
-/** Nodes a new run leaves alone: those in flight, and everything below them (their inputs are coming). */
+/**
+ * Nodes a new run leaves alone: those in flight, and everything below them (their inputs are
+ * coming), down to any locked node, whose images stay as they are.
+ */
 export function heldBack(doc: DocSlice, busy: ReadonlySet<string>): Set<string> {
   const held = new Set<string>();
   for (const id of busy) {
     if (!doc.nodes[id] || held.has(id)) continue;
     held.add(id);
-    for (const below of descendantsOf(doc, id)) held.add(below);
+    for (const below of reachedBy(doc, id)) if (!isLocked(doc, below)) held.add(below);
   }
   return held;
 }
@@ -83,7 +86,8 @@ function scopeNodes(doc: DocSlice, registry: NodeRegistry, request: CompileReque
     case "downstream": {
       const start = request.nodeIds[0];
       if (!start || !doc.nodes[start]) return [];
-      const below = descendantsOf(doc, start);
+      // What's past a locked node can't change, so Run from here stops there.
+      const below = reachedBy(doc, start);
       return doc.order.filter((id) => (id === start || below.has(id)) && runnable(id));
     }
     case "all":
