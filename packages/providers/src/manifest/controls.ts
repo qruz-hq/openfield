@@ -166,7 +166,10 @@ export function expectedSize(caps: Capabilities, resolved: Resolved): PixelSize 
 }
 
 /** What else a run sends that its company's price can depend on (Z-Image's prompt rewriting, say). */
-export type PriceExtras = Pick<PriceAsk, "enhancePrompt" | "providerOptions" | "negativePrompt">;
+export type PriceExtras = Pick<PriceAsk, "enhancePrompt" | "providerOptions" | "negativePrompt"> & {
+  /** Images the run sends in: references, and an edit's base. */
+  inputImages?: number;
+};
 
 /**
  * `speed` is what the company's settings resolve to; a speed the model lacks prices as Standard.
@@ -210,6 +213,7 @@ export function estimateRun(
     size,
     prompt,
     speed,
+    ...(extras.inputImages && { inputImages: extras.inputImages }),
   });
 }
 

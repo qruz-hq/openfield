@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { type NormalizedRequest, newId } from "@openfield/core";
-import { estimate } from "../src/manifest/estimate";
+import { estimate, inputImageTokens } from "../src/manifest/estimate";
 import { createOpenAiProvider } from "../src/openai";
 import { openAiSize, outputTokens, RATIOS, SIZE_RULES, TIERS } from "../src/openai/capabilities";
 import { manifestFor, mergeDiscovered, recognise, variantOf } from "../src/openai/discovery";
@@ -8,6 +8,7 @@ import { mapError } from "../src/openai/errors";
 import { endpointFor, toImageFields } from "../src/openai/map-request";
 import { costOf, toJobResult, usageOf } from "../src/openai/map-response";
 import { OPENAI_MODELS } from "../src/openai/models";
+import { INPUT_IMAGE_TOKENS } from "../src/openai/pricing";
 import { createTestContext } from "../src/testing/context";
 import { createFakeFetch } from "../src/testing/fake-fetch";
 import { openAiFake } from "../src/testing/openai";
@@ -128,6 +129,43 @@ describe("prices", () => {
     });
     const standard = estimate(gpt2, { batch: 1, size: { aspect: "1:1" }, resolution: "1K", quality: "high" });
     expect(batch.max).toBeCloseTo(standard.max / 2, 4);
+  });
+
+  test("an image sent in costs its patches at $8 per 1M, read once for the whole batch", () => {
+    // The measured gpt-image-2 counts the rule reproduces.
+    const tokens = (width: number, height: number) =>
+      inputImageTokens(INPUT_IMAGE_TOKENS, { width, height }).min;
+    const sides: [number, number][] = [
+      [256, 256],
+      [384, 384],
+      [768, 768],
+      [1024, 1024],
+      [1536, 1536],
+      [2048, 1024],
+    ];
+    expect(sides.map(([w, h]) => tokens(w, h))).toEqual([256, 576, 1024, 1024, 1521, 1458]);
+    // A very wide image is padded out to 3:1 first, then shrunk to fit like any other. Its size
+    // unknown, the range any could come to.
+    expect(tokens(1024, 128)).toBe(32 * 11);
+    expect(tokens(3072, 256)).toBe(66 * 22);
+    expect(inputImageTokens(INPUT_IMAGE_TOKENS)).toEqual({ min: 1024, max: 1536 });
+
+    const base = { batch: 2, size: { aspect: "1:1" as const }, resolution: "1K" as const, quality: "medium" };
+    const plain = estimate(flare, base);
+    const known = estimate(flare, { ...base, inputImageSizes: [{ width: 256, height: 256 }] });
+    expect(known.min - plain.min).toBeCloseTo((256 * 8) / 1e6, 6);
+    expect(known.basis).toBe(`${plain.basis} + 1 reference image ($0.002)`);
+    const later = estimate(flare, { ...base, inputImages: 2 });
+    expect(later.min - plain.min).toBeCloseTo((2 * 1024 * 8) / 1e6, 6);
+    expect(later.max - plain.max).toBeCloseTo((2 * 1536 * 8) / 1e6, 6);
+    // Batch reads them at $4.
+    const batch = estimate(gpt2, { ...base, speed: "batch" });
+    const batchIn = estimate(gpt2, {
+      ...base,
+      speed: "batch",
+      inputImageSizes: [{ width: 1024, height: 1024 }],
+    });
+    expect(batchIn.min - batch.min).toBeCloseTo((1024 * 4) / 1e6, 6);
   });
 
   test("a run is priced from the tokens OpenAI reports", () => {

@@ -23,6 +23,7 @@ import {
   clearCanceledHandles,
   createJobSet,
   type Db,
+  getAssets,
   getJob,
   getJobSet,
   getJobSetByIdempotencyKey,
@@ -290,7 +291,7 @@ export class Runner {
   async quote(body: GenerateRequest): Promise<{ estimate: CostEstimate; request: NormalizedRequest }> {
     const { manifest, result } = await this.#prepare(body);
     const asked = await this.#askPrice(manifest, result.request);
-    return { estimate: asked ?? estimate(manifest, result.request), request: result.request };
+    return { estimate: asked ?? this.#estimate(manifest, result.request), request: result.request };
   }
 
   /** The model, company and settings checks, then normalize (§0.3). Throws what the caller shows. */
@@ -384,6 +385,19 @@ export class Runner {
     });
   }
 
+  /** The local estimate, with the images the request sends in priced at their own sizes. */
+  #estimate(manifest: ModelManifest, request: NormalizedRequest): CostEstimate {
+    const ids = [
+      ...(request.base ? [request.base.assetId] : []),
+      ...(request.references ?? []).map((r) => r.assetId),
+    ];
+    const sizes = new Map(
+      getAssets(this.deps.db, ids).map((a) => [a.id, { width: a.width, height: a.height }]),
+    );
+    const known = ids.flatMap((id) => sizes.get(id) ?? []);
+    return estimate(manifest, { ...request, ...(known.length === ids.length && { inputImageSizes: known }) });
+  }
+
   #insert(
     manifest: ModelManifest,
     request: NormalizedRequest,
@@ -401,7 +415,7 @@ export class Runner {
   ): JobSetAccepted {
     const { providerId, modelId } = parseModelKey(request.model);
     // Priced at the speed this run resolved to (§0.13).
-    const cost = meta.cost ?? estimate(manifest, request);
+    const cost = meta.cost ?? this.#estimate(manifest, request);
     const jobCount = jobIds.length;
     const created = createJobSet(this.deps.db, {
       jobSet: {

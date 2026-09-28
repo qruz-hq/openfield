@@ -16,13 +16,48 @@ const priced = {
   sourceUrl: z.url(),
 };
 
+/**
+ * The input tokens a company counts for one image sent in (a reference or an edit's base): the
+ * same for every image, or counted in square patches of its pixels.
+ */
+export const inputImageTokensSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("fixed"), tokens: z.int().nonnegative() }),
+  z.strictObject({
+    kind: z.literal("patches"),
+    /** Pixels along a patch's side. */
+    patch: z.int().positive(),
+    /** A smaller image is scaled up until its long side reaches this, at most `maxScale` times. */
+    scaleTo: z.int().positive(),
+    maxScale: z.number().min(1),
+    /** A patch grid wider or taller than this ratio is padded to it. */
+    maxRatio: z.number().min(1),
+    /** Past this many patches the image is shrunk to fit. */
+    maxPatches: z.int().positive(),
+    /** An image whose size isn't known yet (still to come from a node upstream). */
+    unknown: z.strictObject({ min: z.int().nonnegative(), max: z.int().nonnegative() }),
+  }),
+]);
+
+/** What one image sent in costs on top of a per-image price. */
+export const inputImagePriceSchema = z.strictObject({
+  tokens: inputImageTokensSchema,
+  perMTok: z.number().nonnegative(),
+});
+
 export const priceModelSchema = z.discriminatedUnion("kind", [
-  z.strictObject({ kind: z.literal("per_image"), ...priced, tiers: z.array(perImagePriceSchema).min(1) }),
+  z.strictObject({
+    kind: z.literal("per_image"),
+    ...priced,
+    tiers: z.array(perImagePriceSchema).min(1),
+    inputImage: inputImagePriceSchema.optional(),
+  }),
   z.strictObject({
     kind: z.literal("per_token"),
     ...priced,
     textInputPerMTok: z.number().nonnegative(),
     imageInputPerMTok: z.number().nonnegative(),
+    /** Input tokens one image sent in costs, at imageInputPerMTok. Absent: not priced. */
+    imageInputTokens: inputImageTokensSchema.optional(),
     imageOutputPerMTok: z.number().nonnegative(),
     cachedInputPerMTok: z.number().nonnegative().optional(),
     /** Output tokens per (quality, size): the only way to estimate before a run. */
@@ -64,6 +99,7 @@ export const usageUnitsSchema = z.object({
 
 export type PerImagePrice = z.infer<typeof perImagePriceSchema>;
 export type PriceModel = z.infer<typeof priceModelSchema>;
+export type InputImageTokens = z.infer<typeof inputImageTokensSchema>;
 export type CostEstimate = z.infer<typeof costEstimateSchema>;
 export type CostActual = z.infer<typeof costActualSchema>;
 export type UsageUnits = z.infer<typeof usageUnitsSchema>;

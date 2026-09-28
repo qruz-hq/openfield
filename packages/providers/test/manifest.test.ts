@@ -70,6 +70,42 @@ describe("estimate", () => {
     expect(e).toMatchObject({ min: 0.134, max: 0.24, confidence: "estimated" });
   });
 
+  test("images sent in are billed on top at Google's fixed count, once per image made", () => {
+    // Pro: 560 tokens an image at $2 per 1M. Google makes a batch one call per image, so each call
+    // reads them again.
+    const each = (560 * 2) / 1e6;
+    const one = estimate(pro, { batch: 1, resolution: "1K", inputImages: 4 });
+    expect(one.min).toBeCloseTo(0.134 + 4 * each, 6);
+    expect(one).toMatchObject({
+      max: one.min,
+      confidence: "estimated",
+      basis: "1 × $0.134 (1K) + 4 reference images ($0.004)",
+    });
+    expect(estimate(pro, { batch: 2, resolution: "1K", inputImages: 1 }).min).toBeCloseTo(
+      2 * (0.134 + each),
+      6,
+    );
+    // Nano Banana 2: 1,120 tokens at $0.50, and Batch halves it like the output.
+    expect(estimate(flash, { batch: 1, resolution: "1K", inputImages: 1 }).min).toBeCloseTo(
+      0.067 + 0.00056,
+      6,
+    );
+    expect(estimate(flash, { batch: 1, resolution: "1K", inputImages: 1, speed: "batch" }).min).toBeCloseTo(
+      0.034 + 0.00028,
+      6,
+    );
+    // A request carries its own: its references and an edit's base.
+    const request = {
+      batch: 1,
+      resolution: "1K" as const,
+      references: [{ assetId: "01K6BQ80000000000000AS0001", role: "subject" as const }],
+      base: { assetId: "01K6BQ80000000000000AS0002", role: "base" as const },
+    };
+    expect(estimate(pro, request).min).toBeCloseTo(0.134 + 2 * each, 6);
+    // None sent in: the price is exact, as before.
+    expect(estimate(pro, { batch: 1, resolution: "1K" }).confidence).toBe("exact");
+  });
+
   test("unknown prices say so", () => {
     const e = estimate(withCaps(pro, {}, { kind: "unknown" }), { batch: 2 });
     expect(e).toMatchObject({ confidence: "unknown", min: 0, max: 0, pricedAt: "" });

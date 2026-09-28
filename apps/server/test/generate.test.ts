@@ -163,6 +163,36 @@ describe("references and lineage", () => {
     const meta = await sharp(Buffer.from(await preview.arrayBuffer())).metadata();
     expect(Math.max(meta.width!, meta.height!)).toBe(Math.max(made.width, made.height));
   });
+
+  test("references are priced on top, in the run's estimate and in the price asked for", async () => {
+    server = await startTestServer();
+    await server.json("/api/settings/keys/google", { method: "PUT", body: { apiKey: TEST_KEY } });
+    const first = jobSetAcceptedSchema.parse(
+      (await server.json("/api/generate", { method: "POST", body: generateBody({ batch: 2 }) })).body,
+    );
+    await completed(server, first.jobSet.id);
+    const reference = assetsListResponseSchema.parse((await server.json("/api/assets")).body).items[0]!;
+    const references = [
+      { assetId: reference.id, role: "subject" },
+      { assetId: reference.id, role: "style" },
+    ];
+
+    // Nano Banana 2 reads each image sent in as 1,120 tokens at $0.50 per 1M, once per image made.
+    const inputs = 2 * 2 * ((1120 * 0.5) / 1e6);
+    const second = jobSetAcceptedSchema.parse(
+      (await server.json("/api/generate", { method: "POST", body: generateBody({ batch: 2, references }) }))
+        .body,
+    );
+    expect(second.jobSet.costEstimateUsd).toBeCloseTo(first.jobSet.costEstimateUsd! + inputs, 6);
+
+    const { body } = await server.json("/api/models/google/gemini-3.1-flash-image/estimate", {
+      method: "POST",
+      body: { op: "generate", batch: 2, size: { kind: "aspect", ratio: "3:4" }, references },
+    });
+    expect(body).toMatchObject({ confidence: "estimated" });
+    expect((body as { basis: string }).basis).toEndWith("+ 2 reference images ($0.002)");
+    await completed(server, second.jobSet.id);
+  });
 });
 
 describe("request validation", () => {

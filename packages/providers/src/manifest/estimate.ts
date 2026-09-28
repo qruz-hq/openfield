@@ -2,6 +2,7 @@ import {
   type CostEstimate,
   DEFAULT_CURRENCY,
   formatMoney,
+  type InputImageTokens,
   type ModelManifest,
   type NormalizedRequest,
   type PerImagePrice,
@@ -17,11 +18,65 @@ import { pricedOp, priceFor, resolveSpeed } from "./speed";
 /**
  * The fields a price depends on. A full NormalizedRequest fits, and so does the composer's state.
  * `speed` is what the company's settings resolve to; a speed the model lacks prices as Standard.
+ * `inputImages` counts the images sent in (references and an edit's base) where the request itself
+ * doesn't carry them, as on a canvas before upstream images exist. `inputImageSizes` are the pixel
+ * sizes of those known so far, in order; the rest are priced as any size could be.
  */
 export type EstimateRequest = Pick<NormalizedRequest, "batch"> &
   Partial<
-    Pick<NormalizedRequest, "resolution" | "quality" | "size" | "prompt" | "promptAfterPreset" | "op">
-  > & { speed?: SpeedId };
+    Pick<
+      NormalizedRequest,
+      "resolution" | "quality" | "size" | "prompt" | "promptAfterPreset" | "op" | "references" | "base"
+    >
+  > & {
+    speed?: SpeedId;
+    inputImages?: number;
+    inputImageSizes?: readonly { width: number; height: number }[];
+  };
+
+/** Images the request sends in: its references and its edit base, unless counted for it. */
+export const inputImagesOf = (req: EstimateRequest): number =>
+  Math.max(
+    req.inputImages ?? (req.references?.length ?? 0) + (req.base ? 1 : 0),
+    req.inputImageSizes?.length ?? 0,
+  );
+
+/**
+ * The input tokens one image sent in is counted at: a fixed number, or its patches, worked out from
+ * its size. Without a size, the range any size could come to.
+ */
+export function inputImageTokens(
+  rule: InputImageTokens,
+  size?: { width: number; height: number },
+): { min: number; max: number } {
+  if (rule.kind === "fixed") return { min: rule.tokens, max: rule.tokens };
+  if (!size) return rule.unknown;
+  const n = patchesOf(rule, size.width, size.height);
+  return { min: n, max: n };
+}
+
+type PatchRule = Extract<InputImageTokens, { kind: "patches" }>;
+
+function patchesOf(rule: PatchRule, width: number, height: number): number {
+  // Whole patches along a side; the tolerance keeps a side that shrank to exactly N patches at N.
+  const along = (px: number) => Math.ceil(px / rule.patch - 1e-9);
+  // A small image is scaled up first, at most maxScale times.
+  const scale = Math.min(rule.maxScale, Math.max(1, rule.scaleTo / Math.max(width, height)));
+  let w = Math.floor(width * scale);
+  let h = Math.floor(height * scale);
+  // One wider or taller than maxRatio is padded out to it.
+  if (w > h * rule.maxRatio) h = w / rule.maxRatio;
+  else if (h > w * rule.maxRatio) w = h / rule.maxRatio;
+  const patches = along(w) * along(h);
+  if (patches <= rule.maxPatches) return patches;
+  // Too many: shrunk to fit, then a little more so both sides end on whole patches.
+  let r = Math.sqrt((rule.patch * rule.patch * rule.maxPatches) / (w * h));
+  r *= Math.min(
+    Math.floor((w * r) / rule.patch) / ((w * r) / rule.patch),
+    Math.floor((h * r) / rule.patch) / ((h * r) / rule.patch),
+  );
+  return Math.min(rule.maxPatches, along(w * r) * along(h * r));
+}
 
 const round = (usd: number) => Math.round(usd * 1e6) / 1e6;
 
@@ -44,9 +99,11 @@ export function estimate(manifest: ModelManifest, req: EstimateRequest): CostEst
   const speedLabel = speed === "standard" ? undefined : t(`speed.names.${speed}`);
   switch (price.kind) {
     case "per_image":
-      return perImage(manifest, price, req, count, speedLabel);
-    case "per_token":
-      return perToken(manifest, price, req, count, speedLabel);
+      return withInputs(manifest, price, req, count, perImage(manifest, price, req, count, speedLabel));
+    case "per_token": {
+      const output = perToken(manifest, price, req, count, speedLabel);
+      return output.confidence === "unknown" ? output : withInputs(manifest, price, req, count, output);
+    }
     case "per_second":
     case "provider_estimate":
       // Images have no duration, and a remote estimate needs estimateRemote().
@@ -58,6 +115,62 @@ export function estimate(manifest: ModelManifest, req: EstimateRequest): CostEst
 
 type PerImagePriceModel = Extract<PriceModel, { kind: "per_image" }>;
 type PerTokenPriceModel = Extract<PriceModel, { kind: "per_token" }>;
+
+/**
+ * What the images sent in add to one call, as a range, or null when there are none or the price
+ * doesn't say what they cost.
+ */
+function inputImageUsd(
+  price: PerImagePriceModel | PerTokenPriceModel,
+  req: EstimateRequest,
+): { count: number; min: number; max: number } | null {
+  const count = inputImagesOf(req);
+  if (!count) return null;
+  const rate =
+    price.kind === "per_image"
+      ? price.inputImage
+      : price.imageInputTokens && { tokens: price.imageInputTokens, perMTok: price.imageInputPerMTok };
+  if (!rate) return null;
+  let min = 0;
+  let max = 0;
+  for (let i = 0; i < count; i++) {
+    const tokens = inputImageTokens(rate.tokens, req.inputImageSizes?.[i]);
+    min += tokens.min;
+    max += tokens.max;
+  }
+  return { count, min: (min * rate.perMTok) / 1e6, max: (max * rate.perMTok) / 1e6 };
+}
+
+/**
+ * Adds the images sent in to an estimate: their cost, and "+ 4 reference images ($0.002)" in the
+ * basis. They're billed per call: a model that makes a batch in one call reads them once, one that
+ * doesn't reads them again for every image.
+ */
+function withInputs(
+  manifest: ModelManifest,
+  price: PerImagePriceModel | PerTokenPriceModel,
+  req: EstimateRequest,
+  count: number,
+  cost: CostEstimate,
+): CostEstimate {
+  const inputs = inputImageUsd(price, req);
+  if (!inputs) return cost;
+  const calls = manifest.capabilities.batch.native ? 1 : count;
+  const low = inputs.min * calls;
+  const high = inputs.max * calls;
+  return {
+    ...cost,
+    min: round(cost.min + low),
+    max: round(cost.max + high),
+    // Counted tokens are the company's rule for the image, not a bill: never exact.
+    confidence: cost.confidence === "exact" ? "estimated" : cost.confidence,
+    basis: t("cost.withInputs", {
+      basis: cost.basis,
+      count: inputs.count,
+      cost: moneyRange(low, high, price.currency),
+    }),
+  };
+}
 
 function perImage(
   manifest: ModelManifest,

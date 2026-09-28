@@ -402,8 +402,10 @@ describe("the daily limit under pressure", () => {
     });
     const run = j(await call(c, "run_canvas", { canvas: canvasId, wait: 0 }));
     expect(run.finished).toBe(false);
-    // Both nodes count now, though only the first has a job set yet.
-    expect(s.services.agents.today().usd).toBe(0.268);
+    // Both nodes count now, though only the first has a job set yet: an image each at $0.134, and
+    // the second card reads the first card's image, 560 tokens at Nano Banana Pro's $2 per 1M.
+    const whole = 0.268 + (560 * 2) / 1e6;
+    expect(s.services.agents.today().usd).toBeCloseTo(whole, 6);
     await s.json("/api/settings", { method: "PATCH", body: { agentDailyCapUsd: 0.3 } });
     const more = await call(c, "generate_image", { prompt: "more", wait: 0 });
     expect(more.text).toContain("daily limit");
@@ -411,7 +413,7 @@ describe("the daily limit under pressure", () => {
     await call(c, "get_run", { canvas: canvasId, runId: run.runId, wait: 20 });
     const state = canvasRunStateSchema.parse(s.services.canvasRuns.state(canvasId, run.runId));
     expect(state.status).toBe("succeeded");
-    expect(s.services.agents.today().usd).toBe(0.268);
+    expect(s.services.agents.today().usd).toBeCloseTo(whole, 6);
   });
 
   test("with the limit reached, a model whose price is unknown is refused too", async () => {

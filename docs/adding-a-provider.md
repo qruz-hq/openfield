@@ -86,7 +86,7 @@ The capability rules:
 
 ## 4. Add prices
 
-`pricing.ts` declares a `PriceModel` for each model, with `pricedAt` and `sourceUrl`. Use `per_image`, `per_token` (with a table of output tokens per quality and size) or `per_second`, and `unknown` when there is no published price. The UI then shows "Cost unknown".
+`pricing.ts` declares a `PriceModel` for each model, with `pricedAt` and `sourceUrl`. Use `per_image`, `per_token` (with a table of output tokens per quality and size) or `per_second`, and `unknown` when there is no published price. The UI then shows "Cost unknown". When the company bills the images a request sends in (references, an edit's base), say how many input tokens one costs: `inputImage` on a `per_image` price, `imageInputTokens` on a `per_token` one. Either a fixed count per image, or a patch rule worked out from the image's size, with the range to use while the size isn't known yet. Every estimate then adds them, as "1 × $0.067 + 4 reference images ($0.002)".
 
 You don't write an estimate function. The shared, pure `estimate(manifest, request)` in `@openfield/providers/manifest` reads your price data, in the browser and on the server alike. Add `estimateRemote()` only when the company has a documented cost endpoint, and give those models `price.kind: "provider_estimate"`. The server then asks it for the composer, the canvas, Settings and each run, through one cache that keeps each answer for a day (`apps/server/src/services/remote-prices.ts`). It swaps the prompt and seed for fixed ones before asking, so check that your company's price doesn't depend on them. Return `confidence: "unknown"` when the company answers without an amount.
 

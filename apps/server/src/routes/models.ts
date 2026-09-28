@@ -60,6 +60,7 @@ export const modelsRoutes = new Hono<Env>()
         ...(body.resolution && { resolution: body.resolution }),
         ...(body.quality && { quality: body.quality }),
         ...(size && { size }),
+        inputImages: (body.references?.length ?? 0) + (body.base ? 1 : 0),
       });
       return c.json(cost satisfies CostEstimate, 200);
     },

@@ -260,13 +260,15 @@ export const variationsEngine: NodeEngine<VariationsParams> = {
     const { calls } = planCalls(node, inputs, ctx);
     const k = fanOutOf(inputs);
     const images = imagesOf(inputs, "image");
+    // Each run sends in one incoming image, the one it fans out over.
+    const inputImages = images.length ? 1 : 0;
     const estimates: CostEstimate[] = calls.map(({ model, resolved, call }) =>
       estimateRun(
         model,
         { ...resolved, batch: call.batch },
         call.prompt,
         speedOf(ctx, model),
-        {},
+        { inputImages },
         ctx.askPrice,
       ),
     );

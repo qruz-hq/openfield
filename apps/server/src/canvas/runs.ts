@@ -455,11 +455,9 @@ export class CanvasRunService {
     const assetIds = plan.flatMap((item) =>
       item.inputs.flatMap((input) => input.values.flatMap((v) => (v.kind === "asset" ? [v.assetId] : []))),
     );
-    const present = new Set(
-      getAssets(this.deps.db, [...new Set(assetIds)])
-        .filter((a) => a.fileState === "ok")
-        .map((a) => a.id),
-    );
+    const rows = getAssets(this.deps.db, [...new Set(assetIds)]).filter((a) => a.fileState === "ok");
+    const present = new Set(rows.map((a) => a.id));
+    const sizes = new Map(rows.map((a) => [a.id, { width: a.width, height: a.height }]));
     for (const item of plan) {
       const upstream = deps.get(item.nodeId)!.map((id) => out.get(id)!);
       // Reusing a result only holds while everything it read is reused too: new images upstream
@@ -485,18 +483,35 @@ export class CanvasRunService {
         out.set(item.nodeId, { skipped: false, blocked, expectedOut: 0, jobs: 0, estimate: freeEstimate() });
         continue;
       }
+      const countOf = (input: CanvasRunPlanItem["inputs"][number]) =>
+        input.values.reduce((sum, v) => sum + (v.kind === "asset" ? 1 : out.get(v.nodeId)!.expectedOut), 0);
       const fanOut = item.inputs
         .filter((input) => input.arity === "single")
-        .reduce((product, input) => {
-          const count = input.values.reduce(
-            (sum, v) => sum + (v.kind === "asset" ? 1 : out.get(v.nodeId)!.expectedOut),
-            0,
-          );
-          return product * Math.max(1, count);
-        }, 1);
+        .reduce((product, input) => product * Math.max(1, countOf(input)), 1);
+      // What each launch sends in, as #plan binds it: every image of a many-image input, one of a
+      // single one. Each is billed on top of the images it makes, at its own size where it's known.
+      let inputImages = 0;
+      const known: { width: number; height: number }[] = [];
+      for (const input of item.inputs) {
+        if (input.to !== "references" && input.to !== "base") continue;
+        if (input.arity === "multi") {
+          inputImages += countOf(input);
+          for (const v of input.values) {
+            const size = v.kind === "asset" ? sizes.get(v.assetId) : undefined;
+            if (size) known.push(size);
+          }
+        } else if (countOf(input) > 0) {
+          inputImages += 1;
+          // A fanned-out input sends a different image each launch; only a lone one has one size.
+          const [only] = input.values;
+          const size =
+            input.values.length === 1 && only?.kind === "asset" ? sizes.get(only.assetId) : undefined;
+          if (size) known.push(size);
+        }
+      }
       const perRun = item.calls.reduce((sum, call) => sum + call.batch, 0);
       const cost = scaleCostEstimate(
-        sumCostEstimates(item.calls.map((c) => asked.get(c) ?? this.#estimate(c))),
+        sumCostEstimates(item.calls.map((c) => asked.get(c) ?? this.#estimate(c, inputImages, known))),
         fanOut,
       );
       out.set(item.nodeId, {
@@ -533,7 +548,11 @@ export class CanvasRunService {
   }
 
   /** Priced at the speed the company's settings resolve to for this model, as the runner will run it. */
-  #estimate(call: CanvasRunCall): CostEstimate {
+  #estimate(
+    call: CanvasRunCall,
+    inputImages = 0,
+    inputImageSizes: readonly { width: number; height: number }[] = [],
+  ): CostEstimate {
     const manifest = this.deps.models.get(call.model);
     if (!manifest) return { ...freeEstimate(), confidence: "unknown" };
     const size = call.size;
@@ -542,6 +561,8 @@ export class CanvasRunService {
       prompt: call.prompt,
       op: call.op,
       speed: this.#speed(manifest, call),
+      inputImages,
+      inputImageSizes,
       ...(call.resolution && { resolution: call.resolution }),
       ...(call.quality && { quality: call.quality }),
       ...(size.kind === "aspect" && { size: { aspect: size.ratio } }),

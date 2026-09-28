@@ -216,7 +216,15 @@ export const generateEngine: NodeEngine<GenerateParams> = {
           cached: null,
         },
         expectedJobs: resolved.batch,
-        estimate: estimateRun(model, resolved, prompt, speedOf(ctx, model), call, ctx.askPrice),
+        // Every image on its reference input is sent in and billed, those still to come too.
+        estimate: estimateRun(
+          model,
+          resolved,
+          prompt,
+          speedOf(ctx, model),
+          { ...call, inputImages: imageCount(images) },
+          ctx.askPrice,
+        ),
         fanOut: 1,
       },
     };

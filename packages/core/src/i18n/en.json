@@ -348,6 +348,7 @@
     "range": "{min}–{max}",
     "basis": "{count} × {each}",
     "basisWith": "{count} × {each} ({detail})",
+    "withInputs": "{basis} + {count, plural, one {# reference image} other {# reference images}} ({cost})",
     "unknown": "Cost unknown",
     "free": "Free",
     "credits": "{credits, plural, one {# credit} other {# credits}}",

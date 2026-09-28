@@ -201,6 +201,45 @@ describe("compiler", () => {
     expect(analysis.referenceImages).toEqual(ids(4));
   });
 
+  test("prices count the images each run sends in", async () => {
+    // A made-up rate that's easy to read: 1,000 tokens an image at $1 per 1M, so $0.001 each.
+    const reads: ModelListItem = {
+      ...banana,
+      price: {
+        ...(banana.price as Extract<ModelListItem["price"], { kind: "per_image" }>),
+        inputImage: { tokens: { kind: "fixed", tokens: 1000 }, perMTok: 1 },
+      },
+    };
+    const readsCtx: EngineContext = {
+      ...ctx,
+      models: [reads],
+      model: (key) => (key === reads.key ? reads : undefined),
+    };
+    const doc = docOf(
+      [
+        node("u", "image.upload", { assetIds: ids(2, 90) }),
+        node("p", "prompt", { text: "Harbor" }),
+        node("v", "image.variations", { count: 4 }),
+        node("g", "image.generate", { prompt: "in watercolour" }),
+      ],
+      [
+        edge("u", "images", "g", "input_images"),
+        edge("p", "text", "v", "prompt"),
+        edge("v", "images", "g", "input_images"),
+        edge("u", "images", "v", "image"),
+      ],
+    );
+    const fingerprints = await resolveFingerprints(planFingerprints(doc, registry, readsCtx), new Map());
+    const analysis = analyzeGraph(doc, registry, readsCtx, fingerprints);
+    // Generate: 2 uploads and 8 takes still to come (4 for each upload Variations fans out over).
+    // Shown to the cent: $0.144.
+    expect(analysis.nodes.g!.estimate).toMatchObject({ min: 0.14, max: 0.14, confidence: "estimated" });
+    expect(analysis.nodes.g!.estimate!.basis).toBe("1 × $0.134 (1K) + 10 reference images ($0.01)");
+    // Variations: each run sends in the one upload it's on, once per take (Google-like, one call each).
+    expect(analysis.nodes.v!.estimate).toMatchObject({ min: 1.08 });
+    expect(analysis.nodes.v!.estimate!.basis).toContain("+ 1 reference image ($0.004)");
+  });
+
   test("refuses a graph with a loop", async () => {
     const doc = docOf(
       [node("a", "image.generate", { prompt: "a" }), node("b", "image.variations", {})],
