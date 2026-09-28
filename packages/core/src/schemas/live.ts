@@ -125,13 +125,18 @@ export const canvasRunBlockedSchema = z.object({
   message: z.string().nullable(),
 });
 export const canvasRunScopeResponseSchema = z.object({
-  /** "plan" ran (or would run); "needs_upstream" asks to run earlier nodes too; "busy" is already running. */
-  outcome: z.enum(["plan", "needs_upstream", "busy", "nothing"]),
+  /**
+   * "plan" ran (or would run); "needs_upstream" asks to run earlier nodes too; "busy" is already
+   * running; "locked" means everything asked for is locked, so nothing runs.
+   */
+  outcome: z.enum(["plan", "needs_upstream", "busy", "locked", "nothing"]),
   runId: ulidSchema.nullable(),
   /** Nodes the plan covers, upstream first. */
   planned: z.array(localIdSchema),
   /** Nodes left out because nothing changed. */
   upToDate: z.array(localIdSchema),
+  /** Nodes left out because they're locked: they keep their images and never run. */
+  locked: z.array(localIdSchema),
   blocked: z.array(canvasRunBlockedSchema),
   /** needs_upstream: the earlier nodes that would run too. */
   upstream: z.array(localIdSchema),

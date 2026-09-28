@@ -317,6 +317,8 @@ export interface NodeDisplay {
   blocker: NodeBlocker | null;
   /** ×k when a list fans out into this node. */
   fanOut: number;
+  /** Locked, on its own or by its frame: it keeps its images and never runs again. */
+  locked: boolean;
 }
 
 // The server's side of a run (§8.3), under the names the engine uses.

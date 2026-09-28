@@ -1,7 +1,10 @@
 import { type CompileOutcome, compileRun } from "@openfield/canvas/engine/compile";
+import { nodeTitle } from "@openfield/canvas/engine/describe";
 import { buildPreview } from "@openfield/canvas/engine/preview";
 import { blockerFromReason } from "@openfield/canvas/engine/runtime";
 import type { CompiledNode, EngineContext, NodeRuntime } from "@openfield/canvas/engine/types";
+import { lockedBy } from "@openfield/canvas/store/graph";
+import type { DocSlice } from "@openfield/canvas/store/ops";
 import {
   CANVAS_CONFIRM_JOBS,
   CANVAS_RUN_MAX_JOBS,
@@ -56,6 +59,17 @@ function defaultAnchor(request: RunRequest): Element | null {
   const pill =
     id && request.scope !== "all" ? document.querySelector(`[data-run-pill="${CSS.escape(id)}"]`) : null;
   return pill ?? document.querySelector("[data-run-all]");
+}
+
+/** Why a run whose nodes are all locked did nothing, naming the node when there's one. */
+function lockedMessage(doc: DocSlice, registry: NodeRegistry, nodeIds: readonly string[]): string {
+  const [id] = nodeIds;
+  const frame = id !== undefined ? doc.nodes[id] : undefined;
+  if (nodeIds.length !== 1 || !frame) return t("canvas.lock.ranNoneMany");
+  const name = nodeTitle(frame, registry);
+  return lockedBy(doc, id!) === id
+    ? t("canvas.lock.ranNone", { name })
+    : t("canvas.lock.ranNoneInFrame", { name });
 }
 
 export function createRunController(deps: RunControllerDeps): RunController {
@@ -160,6 +174,10 @@ export function createRunController(deps: RunControllerDeps): RunController {
       }
       if (outcome.kind === "cycle") {
         notifyError(t("canvas.run.loop"));
+        return;
+      }
+      if (outcome.kind === "locked") {
+        notify(lockedMessage(store.getState().doc, registry, outcome.nodeIds));
         return;
       }
       if (outcome.kind !== "plan") return;

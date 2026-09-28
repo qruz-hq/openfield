@@ -1252,6 +1252,7 @@
         "selectAll": "Select all",
         "group": "Group into frame",
         "ungroup": "Ungroup",
+        "lock": "Lock or unlock",
         "delete": "Delete",
         "clearSelection": "Clear selection",
         "save": "Save",
@@ -1297,6 +1298,7 @@
       },
       "frame": {
         "count": "{count, plural, one {# node} other {# nodes}}",
+        "countLocked": "{count, plural, one {# node} other {# nodes}}, locked",
         "name": "Frame name",
         "collapse": "Collapse frame",
         "expand": "Expand frame",
@@ -1450,6 +1452,8 @@
         "collapse": "Collapse",
         "expand": "Expand",
         "rename": "Rename",
+        "lock": "Lock",
+        "unlock": "Unlock",
         "delete": "Delete",
         "download": "Download",
         "downloadMany": "Download {count} images",
@@ -1469,6 +1473,7 @@
         "upToDate": "Up to date",
         "inputsChanged": "Inputs changed",
         "olderSettings": "Made with older settings",
+        "locked": "Locked",
         "runAgain": "Run again",
         "canceled": "Canceled. You may still be charged for work that already started.",
         "run": "Run",
@@ -1607,6 +1612,10 @@
       "noEdge": "There's no connection like that on this canvas.",
       "whichEdge": "Say which connection to remove: its id, or the nodes it joins.",
       "running": "{count, plural, one {A node this changes is running} other {# nodes this changes are running}}. Stop the run or wait for it to finish.",
+      "locked": "{node} is locked, so it can't be changed, moved or deleted. Only the person can unlock it. It can still be read and connected to.",
+      "lockedByFrame": "{node} is in {frame}, which is locked, so it can't be changed, moved or deleted. Only the person can unlock it. It can still be read and connected to.",
+      "lockedFrame": "{frame} is locked, so nothing new can go in it. Only the person can unlock it.",
+      "lockOnlyPerson": "Only the person can lock {node}.",
       "missingAsset": "There's no image {id} in your library.",
       "invalid": "That would leave the canvas broken. {reason}",
       "wontRun": "{node} couldn't run like that. {reason}",
@@ -1638,6 +1647,19 @@
       "versionSaved": "Saved a version before {name}'s changes.",
       "versionLabel": "Before {name}",
       "view": "View"
+    },
+    "lock": {
+      "note": "Locked. Its images stay as they are, and it won't run again.",
+      "unlock": "Unlock",
+      "stayed": "{name} is locked, so it stayed. Unlock it to delete it.",
+      "stayedInFrame": "{name} is in a locked frame, so it stayed. Unlock the frame to delete it.",
+      "stayedMany": "{count} locked nodes stayed. Unlock them to delete them.",
+      "noDrop": "{name} is locked, so nothing new can go in it.",
+      "noUngroup": "{name} is locked. Unlock it to ungroup it.",
+      "ranNone": "{name} is locked, so it didn't run. Unlock it to run it.",
+      "ranNoneInFrame": "{name} is in a locked frame, so it didn't run. Unlock the frame to run it.",
+      "ranNoneMany": "Everything here is locked, so nothing ran.",
+      "refusedRun": "{name} is locked, so it didn't run. The canvas may have changed in another tab."
     }
   },
   "assets": {

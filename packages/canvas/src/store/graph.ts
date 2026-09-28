@@ -137,7 +137,8 @@ export function lockedBy(doc: Pick<DocSlice, "nodes">, nodeId: string): string |
 }
 
 /** Locked, on its own or by a frame it's in: it keeps what it made and can't be deleted. */
-export const isLocked = (doc: Pick<DocSlice, "nodes">, nodeId: string): boolean => lockedBy(doc, nodeId) !== null;
+export const isLocked = (doc: Pick<DocSlice, "nodes">, nodeId: string): boolean =>
+  lockedBy(doc, nodeId) !== null;
 
 /** A node's position on the pane, adding up its frames' positions. */
 export function absolutePosition(doc: DocSlice, nodeId: string): Point {

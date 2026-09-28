@@ -2,6 +2,8 @@ import {
   compileRun,
   type EngineContext,
   fromDocument,
+  isLocked,
+  nodeTitle,
   planFingerprints,
   resolveFingerprints,
   specRegistry,
@@ -51,6 +53,7 @@ import {
 import {
   activeCanvasRuns,
   addToFolder,
+  type CanvasRow,
   type CanvasRunRow,
   canvasRunsSince,
   createFolder,
@@ -224,11 +227,11 @@ export class CanvasRunService {
     body: CanvasRunBody,
     opts: { agent?: string | null } = {},
   ): Promise<CanvasRunResponse> {
-    if (!getCanvas(this.deps.db, canvasId)) {
-      throw new ApiFailure(404, "not_found", "That canvas doesn't exist", { field: "id" });
-    }
+    const row = getCanvas(this.deps.db, canvasId);
+    if (!row) throw new ApiFailure(404, "not_found", "That canvas doesn't exist", { field: "id" });
     const deps = this.#checkOrder(body.plan);
     this.#checkNotRunning(canvasId, body.plan);
+    this.#checkNotLocked(row.graph, body.plan);
     const analysis = this.#analyse(body.plan, deps, await this.#askPrices(body.plan));
 
     const rows: CanvasRunNodeResult[] = body.plan.map((item) => {
@@ -319,6 +322,7 @@ export class CanvasRunService {
       runId: null,
       planned: [],
       upToDate: [],
+      locked: [],
       blocked: [],
       upstream: [],
       jobs: 0,
@@ -332,6 +336,7 @@ export class CanvasRunService {
       });
     }
     if (outcome.kind === "busy") return { ...none, outcome: "busy" };
+    if (outcome.kind === "locked") return { ...none, outcome: "locked", locked: outcome.nodeIds };
     if (outcome.kind === "needs_upstream")
       return { ...none, outcome: "needs_upstream", upstream: outcome.nodeIds };
 
@@ -342,7 +347,7 @@ export class CanvasRunService {
       message: blockerMessage(blocker, providers),
     }));
     const planned = outcome.items.map((c) => c.item.nodeId);
-    if (!planned.length) return { ...none, blocked, upToDate: outcome.upToDate };
+    if (!planned.length) return { ...none, blocked, upToDate: outcome.upToDate, locked: outcome.locked };
 
     const versionId =
       !body.dryRun && actor?.kind === "agent"
@@ -374,6 +379,7 @@ export class CanvasRunService {
       runId: response.runId,
       planned,
       upToDate: outcome.upToDate,
+      locked: outcome.locked,
       blocked,
       upstream: [],
       jobs: response.jobs,
@@ -408,6 +414,21 @@ export class CanvasRunService {
       seen.add(item.nodeId);
     });
     return deps;
+  }
+
+  /**
+   * A locked node never runs (§7.9). The editor leaves it out of its plans; this catches a tab that
+   * hasn't heard about the lock yet.
+   */
+  #checkNotLocked(graph: CanvasRow["graph"], plan: CanvasRunPlanItem[]): void {
+    const { slice } = fromDocument(readDocument(graph));
+    const at = plan.findIndex((item) => slice.nodes[item.nodeId] && isLocked(slice, item.nodeId));
+    if (at < 0) return;
+    const name = nodeTitle(slice.nodes[plan[at]!.nodeId]!, specRegistry);
+    throw new ApiFailure(409, "conflict", `${plan[at]!.nodeId} is locked`, {
+      field: `plan.${at}.nodeId`,
+      userMessage: t("canvas.lock.refusedRun", { name }),
+    });
   }
 
   /** A node already waiting or working in another run isn't sent again: it would be paid for twice. */

@@ -1,6 +1,6 @@
 import { canonicalJson, hashCanonical } from "@openfield/core";
 import type { NodeRegistry } from "../nodes/registry";
-import { incomingEdges, topoOrder } from "../store/graph";
+import { incomingEdges, isLocked, topoOrder } from "../store/graph";
 import type { DocSlice } from "../store/ops";
 import type { EngineContext, EngineNode, FingerprintInput } from "./types";
 
@@ -9,6 +9,9 @@ import type { EngineContext, EngineNode, FingerprintInput } from "./types";
 // node also gets a synchronous key built the same way from its upstream keys. Staleness can then
 // show within the frame: a key seen before maps straight to its digest, a new one reads as
 // "pending" (never equal to a saved result) until the digest lands.
+//
+// A locked node's images don't change, so its fingerprint is the one they were made with: nodes
+// after it stay up to date whatever happens above it, and unlocking brings its own back.
 
 export const PENDING_PREFIX = "pending:";
 export const isPendingFingerprint = (fp: string | undefined): boolean => !!fp?.startsWith(PENDING_PREFIX);
@@ -21,6 +24,8 @@ interface Entry {
   base: Omit<FingerprintInput, "upstream">;
   /** [port, upstream node ids in edge order] in the type's port order. */
   upstream: [string, string[]][];
+  /** A locked node's: the fingerprint its images were made with. */
+  fixed?: string;
 }
 
 export interface FingerprintPlan {
@@ -78,6 +83,21 @@ export function planFingerprints(doc: DocSlice, registry: NodeRegistry, ctx: Eng
     if (def?.annotation) continue;
     const node = engineNode(doc, id, registry, ctx);
 
+    const fixed = isLocked(doc, id) ? node.result?.fingerprint : null;
+    if (fixed) {
+      const local = canonicalJson({ locked: fixed });
+      const base = {
+        typeId: frame.type,
+        typeVersion: frame.typeVersion,
+        params: {},
+        modelKey: null,
+        manifestVersion: null,
+      };
+      entries.set(id, { id, local, key: syncHash(local), base, upstream: [], fixed });
+      out.push(id);
+      continue;
+    }
+
     let base: Entry["base"];
     let ports: string[];
     if (def?.engine) {
@@ -129,7 +149,7 @@ export function knownFingerprints(plan: FingerprintPlan, cache: FingerprintCache
   const out: Record<string, string> = {};
   for (const id of plan.order) {
     const entry = plan.entries.get(id)!;
-    out[id] = cache.get(entry.local) ?? `${PENDING_PREFIX}${entry.key}`;
+    out[id] = entry.fixed ?? cache.get(entry.local) ?? `${PENDING_PREFIX}${entry.key}`;
   }
   return out;
 }
@@ -142,7 +162,7 @@ export async function resolveFingerprints(
   const out: Record<string, string> = {};
   for (const id of plan.order) {
     const entry = plan.entries.get(id)!;
-    let digest = cache.get(entry.local);
+    let digest = entry.fixed ?? cache.get(entry.local);
     if (!digest) {
       const input: FingerprintInput = {
         ...entry.base,

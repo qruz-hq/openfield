@@ -3,6 +3,7 @@ import { roundToCents, sumEstimates } from "@openfield/canvas/engine/cost";
 import { evaluateGraph, isRunnable } from "@openfield/canvas/engine/evaluate";
 import { imageCount, imagesOf, joinPrompt, textOf } from "@openfield/canvas/engine/inputs";
 import type { EngineContext, NodeBlocker } from "@openfield/canvas/engine/types";
+import { isLocked } from "@openfield/canvas/store/graph";
 import type { DocSlice } from "@openfield/canvas/store/ops";
 import type { CostEstimate } from "@openfield/core";
 import type { NodeRegistry } from "../nodes/registry";
@@ -52,7 +53,7 @@ export interface NodeAnalysis {
 
 export interface GraphAnalysis {
   nodes: Readonly<Record<string, NodeAnalysis>>;
-  /** Runnable nodes on the canvas that can run. With none, Run all is off. */
+  /** Runnable nodes on the canvas that can run, locked ones aside. With none, Run all is off. */
   runnable: number;
   /** What Run all would cost: nodes that would run, not the blocked, up-to-date or running ones. */
   estimate: CostEstimate;
@@ -144,8 +145,10 @@ export function analyzeGraph(
   let pending = 0;
   let jobs = 0;
   for (const [id, node] of evaluation.nodes) {
-    if (!node.runs) continue;
-    runnable++;
+    // A locked node never runs, but its side sheet still shows what comes in.
+    const locked = !node.runs && isRunnable(doc, registry, id) && isLocked(doc, id);
+    if (!node.runs && !locked) continue;
+    if (node.runs) runnable++;
     const refPorts = (node.definition?.ports ?? []).filter(
       (port) => port.direction === "in" && port.binding?.to === "references",
     );

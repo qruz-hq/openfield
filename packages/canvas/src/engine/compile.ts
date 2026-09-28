@@ -1,6 +1,6 @@
 import type { CanvasRunScope, CostEstimate } from "@openfield/core";
 import type { NodeRegistry } from "../nodes/registry";
-import { ancestorsOf, descendantsOf, topoOrder } from "../store/graph";
+import { ancestorsOf, descendantsOf, isLocked, topoOrder } from "../store/graph";
 import type { DocSlice } from "../store/ops";
 import { sumEstimates } from "./cost";
 import { evaluateGraph, isRunnable, staleAncestors } from "./evaluate";
@@ -9,7 +9,8 @@ import type { CompiledNode, EngineContext, NodeBlocker } from "./types";
 // The DAG compiler (§7.7): picks the nodes a scope covers, adds what they need, and turns each
 // into a plan item in dependency order. Blocked nodes stay out of the plan and are reported, and so
 // is everything that depends on them. Nodes already queued or running stay out too, with what reads
-// from them: sending them again would pay for the same work twice.
+// from them: sending them again would pay for the same work twice. Locked nodes never run: a scope
+// leaves them out and the nodes after them read the images they keep.
 
 export interface CompileRequest {
   scope: CanvasRunScope;
@@ -26,12 +27,16 @@ export type CompileOutcome =
   | { kind: "busy"; upstream: boolean }
   /** A single-node run whose earlier nodes have to run first. Ask, then compile again. */
   | { kind: "needs_upstream"; nodeIds: string[] }
+  /** Everything the scope covers is locked, so nothing runs. */
+  | { kind: "locked"; nodeIds: string[] }
   | {
       kind: "plan";
       /** Plan items in dependency order, ready to post. */
       items: CompiledNode[];
       /** Items the server should skip because nothing changed. */
       upToDate: string[];
+      /** Nodes the scope covers that stay out because they're locked. */
+      locked: string[];
       blocked: Record<string, NodeBlocker>;
       /** Jobs for the items that will actually run, after fan-out. */
       jobs: number;
@@ -60,8 +65,17 @@ export function heldBack(doc: DocSlice, busy: ReadonlySet<string>): Set<string> 
   return held;
 }
 
-/** The runnable nodes a scope asks for, before anything upstream is added. */
+/** The runnable nodes a scope asks for, before anything upstream is added. Locked ones stay out. */
 export function scopeTargets(doc: DocSlice, registry: NodeRegistry, request: CompileRequest): string[] {
+  return scopeNodes(doc, registry, request).filter((id) => !isLocked(doc, id));
+}
+
+/** The runnable nodes a scope covers that are locked: they keep their images and don't run. */
+export function lockedInScope(doc: DocSlice, registry: NodeRegistry, request: CompileRequest): string[] {
+  return scopeNodes(doc, registry, request).filter((id) => isLocked(doc, id));
+}
+
+function scopeNodes(doc: DocSlice, registry: NodeRegistry, request: CompileRequest): string[] {
   const runnable = (id: string) => isRunnable(doc, registry, id);
   switch (request.scope) {
     case "node":
@@ -89,6 +103,8 @@ export function compileRun({
 }: CompileInput): CompileOutcome {
   const held = heldBack(doc, busy);
   const asked = scopeTargets(doc, registry, request);
+  const locked = lockedInScope(doc, registry, request);
+  if (!asked.length && locked.length) return { kind: "locked", nodeIds: locked };
   const targets = new Set(asked.filter((id) => !held.has(id)));
   if (asked.length && !targets.size) {
     return { kind: "busy", upstream: asked.every((id) => !busy.has(id)) };
@@ -149,5 +165,5 @@ export function compileRun({
       estimates.push(node.compiled.estimate);
     }
   }
-  return { kind: "plan", items, upToDate, blocked, jobs, estimate: sumEstimates(estimates) };
+  return { kind: "plan", items, upToDate, locked, blocked, jobs, estimate: sumEstimates(estimates) };
 }

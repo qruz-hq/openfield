@@ -16,6 +16,8 @@ export interface DisplayInput {
   fanOut: number;
   /** The live analysis: its settings match but the images coming in aren't the ones it used. */
   inputsChanged?: boolean;
+  /** Locked, on its own or by its frame: it keeps its images and never runs again. */
+  locked?: boolean;
 }
 
 /**
@@ -53,11 +55,15 @@ export function deriveDisplay({
   blocker,
   fanOut,
   inputsChanged = false,
+  locked = false,
 }: DisplayInput): NodeDisplay {
-  const base = { blocker: null, fanOut, chip: null } as const;
+  const base = { blocker: null, fanOut, chip: null, locked } as const;
+  // A run already under way when the node was locked still finishes.
   if (runtime && (runtime.state === "queued" || runtime.state === "running")) {
     return { ...base, state: runtime.state };
   }
+  // Nothing about a locked node is out of date or in the way: it keeps what it has.
+  if (locked) return { ...base, state: (result?.assetIds.length ?? 0) > 0 ? "done" : "idle" };
   if (blocker) return { ...base, state: "blocked", blocker };
 
   // A run stopped before it made anything leaves the saved result alone (resultOfRunNode), so the

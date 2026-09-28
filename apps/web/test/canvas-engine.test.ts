@@ -20,6 +20,7 @@ import type { EngineContext, NodeRuntime, RunNodeState, RunState } from "@openfi
 import { idleRuntime } from "@openfield/canvas/engine/types";
 import { createNodeRegistry, type NodeRegistry } from "@openfield/canvas/nodes/registry";
 import { DATA_SPECS, specRegistry } from "@openfield/canvas/nodes/specs";
+import { isLocked, lockedBy } from "@openfield/canvas/store/graph";
 import { type CanvasRunBody, HASH_RE, type ModelListItem, type ProviderSummary } from "@openfield/core";
 import {
   type CanvasEdge,
@@ -1222,6 +1223,137 @@ describe("reusing results (§0.11, §7.7)", () => {
     if (out.kind !== "plan") throw new Error(out.kind);
     expect(out.upToDate).toEqual([]);
     expect(out.jobs).toBe(4);
+  });
+});
+
+describe("locked nodes (§7.9)", () => {
+  /** Prompt → Generate → Variations, both run once, then Generate's prompt changed and it locked. */
+  async function lockedAfterAChange() {
+    let doc = chain();
+    const fingerprints = await fingerprintsOf(doc);
+    doc = apply(
+      doc,
+      { op: "setResult", id: "g", result: done(fingerprints.g!, 4) },
+      { op: "setResult", id: "v", result: done(fingerprints.v!, 16, 10, ids(4)) },
+      { op: "setParams", id: "g", patch: { prompt: "short exposure" } },
+      { op: "setLocked", id: "g", locked: true },
+    );
+    return { doc, fingerprints: await fingerprintsOf(doc) };
+  }
+
+  test("Run all leaves a locked node out and what reads it gets the images it keeps", async () => {
+    const { doc, fingerprints } = await lockedAfterAChange();
+    const out = compileRun({ doc, registry, ctx, fingerprints, request: { scope: "all", nodeIds: [] } });
+    if (out.kind !== "plan") throw new Error(out.kind);
+    expect(out.locked).toEqual(["g"]);
+    // Its fingerprint is the one its images were made with, so nothing after it looks changed.
+    expect(fingerprints.g).toBe(doc.results.g!.fingerprint!);
+    expect(out.items.map((i) => i.item.nodeId)).toEqual(["v"]);
+    expect(out.upToDate).toEqual(["v"]);
+    expect(out.items[0]!.item.inputs[0]!.values).toEqual(
+      ids(4).map((assetId) => ({ kind: "asset", assetId })),
+    );
+
+    // New words above it change nothing after it either.
+    const edited = apply(doc, { op: "setParams", id: "p", patch: { text: "Harbor at noon" } });
+    const again = compileRun({
+      doc: edited,
+      registry,
+      ctx,
+      fingerprints: await fingerprintsOf(edited),
+      request: { scope: "all", nodeIds: [] },
+    });
+    if (again.kind !== "plan") throw new Error(again.kind);
+    expect(again.upToDate).toEqual(["v"]);
+    expect(again.jobs).toBe(0);
+  });
+
+  test("a single node after a locked one never asks to run it first", async () => {
+    const { doc, fingerprints } = await lockedAfterAChange();
+    const out = compileRun({ doc, registry, ctx, fingerprints, request: { scope: "node", nodeIds: ["v"] } });
+    expect(out.kind).toBe("plan");
+    const from = compileRun({
+      doc,
+      registry,
+      ctx,
+      fingerprints,
+      request: { scope: "downstream", nodeIds: ["g"], bypassCache: true },
+    });
+    if (from.kind !== "plan") throw new Error(from.kind);
+    expect(from.items.map((i) => i.item.nodeId)).toEqual(["v"]);
+    expect(from.locked).toEqual(["g"]);
+  });
+
+  test("a scope that is only locked nodes does nothing and says which", async () => {
+    let { doc, fingerprints } = await lockedAfterAChange();
+    expect(
+      compileRun({ doc, registry, ctx, fingerprints, request: { scope: "node", nodeIds: ["g"] } }),
+    ).toEqual({ kind: "locked", nodeIds: ["g"] });
+    doc = apply(doc, { op: "setLocked", id: "v", locked: true });
+    expect(compileRun({ doc, registry, ctx, fingerprints, request: { scope: "all", nodeIds: [] } })).toEqual({
+      kind: "locked",
+      nodeIds: ["g", "v"],
+    });
+    const analysis = analyzeGraph(doc, registry, ctx, fingerprints);
+    expect(analysis.runnable).toBe(0);
+    expect(analysis.pending).toBe(0);
+    // Its side sheet still shows the words coming in.
+    expect(analysis.nodes.g).toMatchObject({
+      upstreamText: "Lighthouse at dusk",
+      blocker: null,
+      estimate: null,
+    });
+  });
+
+  test("a locked frame locks what's in it; a locked node with no images hands on nothing", async () => {
+    let doc = docOf(
+      [
+        { ...node("f", "frame"), params: { name: "Approved" } },
+        { ...node("g", "image.generate", { prompt: "a" }), parentId: "f" },
+        node("v", "image.variations", { count: 2 }),
+      ],
+      [edge("g", "images", "v", "image")],
+    );
+    doc = apply(doc, { op: "setLocked", id: "f", locked: true });
+    expect(lockedBy(doc, "g")).toBe("f");
+    expect(isLocked(doc, "v")).toBe(false);
+    const fingerprints = await fingerprintsOf(doc);
+    const out = compileRun({ doc, registry, ctx, fingerprints, request: { scope: "all", nodeIds: [] } });
+    if (out.kind !== "plan") throw new Error(out.kind);
+    expect(out.locked).toEqual(["g"]);
+    expect(out.items).toEqual([]);
+    expect(Object.keys(out.blocked)).toEqual(["v"]);
+    // Unlocking leaves no trace, so an unlocked document reads as it did before.
+    const unlocked = apply(doc, { op: "setLocked", id: "f", locked: false });
+    expect("locked" in unlocked.nodes.f!).toBe(false);
+  });
+
+  test("a locked node shows its images as they are, never out of date or blocked", async () => {
+    const { doc } = await lockedAfterAChange();
+    // Its own settings changed since its images were made.
+    const unlocked = await fingerprintsOf(apply(doc, { op: "setLocked", id: "g", locked: false }));
+    const base = {
+      result: doc.results.g!,
+      runtime: undefined,
+      fingerprint: unlocked.g,
+      blocker: null,
+      fanOut: 1,
+      locked: true,
+    };
+    expect(deriveDisplay({ ...base, locked: false })).toMatchObject({ state: "stale", locked: false });
+    expect(deriveDisplay(base)).toEqual({
+      state: "done",
+      chip: null,
+      blocker: null,
+      fanOut: 1,
+      locked: true,
+    });
+    expect(deriveDisplay({ ...base, inputsChanged: true, blocker: { kind: "no_prompt" } }).state).toBe(
+      "done",
+    );
+    expect(deriveDisplay({ ...base, result: null }).state).toBe("idle");
+    // A run already under way when it was locked still finishes.
+    expect(deriveDisplay({ ...base, runtime: { ...idleRuntime(), state: "running" } }).state).toBe("running");
   });
 });
 

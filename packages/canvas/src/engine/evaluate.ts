@@ -1,6 +1,6 @@
 import { CANVAS_RUN_MAX_JOBS, type CostEstimate } from "@openfield/core";
 import type { NodeRegistry, NodeSpec } from "../nodes/registry";
-import { ancestorsOf, incomingEdges, topoOrder } from "../store/graph";
+import { ancestorsOf, incomingEdges, isLocked, topoOrder } from "../store/graph";
 import type { DocSlice } from "../store/ops";
 import { engineNode, isPendingFingerprint } from "./fingerprint";
 import { STANDING_BLOCKERS } from "./inputs";
@@ -167,7 +167,8 @@ export function evaluateGraph(input: EvaluateInput): Evaluation {
     if (!def?.engine) continue;
     const engine = def.engine;
 
-    if (!def.runnable || !runs(id)) {
+    // A locked node never runs: it hands on the images it has, whatever its settings say now.
+    if (!def.runnable || !runs(id) || isLocked(doc, id)) {
       evaluation.outputs = engine.outputs(node, inputs, ctx, false);
       continue;
     }
@@ -247,7 +248,7 @@ export function isRunnable(doc: DocSlice, registry: NodeRegistry, id: string): b
 
 /**
  * Runnable nodes upstream of `ids` whose images don't match their settings or what they read (or
- * who have none): the ones a single-node run has to run first.
+ * who have none): the ones a single-node run has to run first. Locked nodes keep theirs.
  */
 export function staleAncestors(
   doc: DocSlice,
@@ -271,5 +272,7 @@ export function staleAncestors(
     const e = evaluation.nodes.get(id);
     return !!e && hasValidResult(e.node, fingerprints[id]) && !e.inputsChanged && e.present;
   };
-  return doc.order.filter((id) => ancestors.has(id) && isRunnable(doc, registry, id) && !current(id));
+  return doc.order.filter(
+    (id) => ancestors.has(id) && isRunnable(doc, registry, id) && !isLocked(doc, id) && !current(id),
+  );
 }
