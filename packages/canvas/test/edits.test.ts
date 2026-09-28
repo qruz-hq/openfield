@@ -278,6 +278,68 @@ describe("placeNode", () => {
   });
 });
 
+/** Every pair at least PLACE_MARGIN apart, by their real boxes. */
+const allApart = (doc: DocSlice, ids = doc.order) => {
+  const rects = ids.map((id) => nodeRect(doc, specRegistry, id, { ctx })!);
+  return rects.every((a, i) =>
+    rects.every(
+      (b, j) =>
+        i === j ||
+        a.x >= b.x + b.w + PLACE_MARGIN ||
+        b.x >= a.x + a.w + PLACE_MARGIN ||
+        a.y >= b.y + b.h + PLACE_MARGIN ||
+        b.y >= a.y + a.h + PLACE_MARGIN,
+    ),
+  );
+};
+
+const tall = { model: banana.key, size: { kind: "aspect", ratio: "3:4" } };
+const wide = { model: banana.key, size: { kind: "aspect", ratio: "16:9" } };
+
+describe("real boxes", () => {
+  test("an image card counts at its aspect ratio, then at its image's shape", () => {
+    const doc = docOf([
+      node("n_g", "image.generate", { params: tall, size: { w: 320, h: 320 } }),
+      node("n_v", "image.variations", { params: { ...tall, strategy: "same-prompt", count: 4 } }),
+      node("n_done", "image.generate", {
+        params: tall,
+        result: { state: "done", assetIds: ["a_wide"], fingerprint: null, ranAt: null } as never,
+      }),
+    ]);
+    // The saved square is what a canvas opened before the card measured itself still says.
+    expect(nodeRect(doc, specRegistry, "n_g")).toMatchObject({ w: 320, h: 320 });
+    expect(nodeRect(doc, specRegistry, "n_g", { ctx })).toMatchObject({ w: 320, h: 426.67 });
+    // Variations: its grid of four takes at 3:4.
+    expect(nodeRect(doc, specRegistry, "n_v", { ctx })).toMatchObject({ w: 320, h: 426 });
+    // Once it has an image, the image's shape, as the library knows it.
+    const images = { a_wide: { w: 1600, h: 900 } };
+    expect(nodeRect(doc, specRegistry, "n_done", { ctx, images })).toMatchObject({ w: 320, h: 180 });
+  });
+
+  test("a batch of image cards lands clear of each other at their real size", () => {
+    const out = compile(docOf([]), [
+      { op: "add_node", as: "p", type: "prompt", params: { text: "A lighthouse" } },
+      { op: "add_node", as: "a", type: "image.generate", params: tall },
+      { op: "add_node", as: "b", type: "image.generate", params: tall },
+      { op: "add_node", as: "c", type: "image.variations", params: tall },
+      { op: "add_node", as: "d", type: "image.generate", params: wide },
+      { op: "connect", source: "p", target: "a" },
+      { op: "connect", source: "p", target: "b" },
+      { op: "connect", source: "p", target: "c" },
+      { op: "connect", source: "p", target: "d" },
+    ]);
+    expect(allApart(out.doc)).toBe(true);
+    // Each is saved at the box it shows, so a tab has nothing to correct.
+    expect(out.doc.nodes[out.aliases.a!]!.size).toEqual({ w: 320, h: 426.67 });
+    expect(out.doc.nodes[out.aliases.d!]!.size).toEqual({ w: 320, h: 180 });
+    // All in a column beside the prompt, the tall ones' full height apart.
+    const a = nodeRect(out.doc, specRegistry, out.aliases.a!, { ctx })!;
+    const b = nodeRect(out.doc, specRegistry, out.aliases.b!, { ctx })!;
+    expect(b.x).toBe(a.x);
+    expect(b.y).toBeGreaterThanOrEqual(a.y + a.h + PLACE_MARGIN);
+  });
+});
+
 describe("wire ops", () => {
   test("round-trip every op through JSON, removals included", () => {
     const ops: CanvasOp[] = [

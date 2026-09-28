@@ -33,7 +33,7 @@ import {
   type SeedParam,
 } from "../params";
 import type { NodeSpec } from "../registry";
-import { CARD_WIDTH } from "./card-size";
+import { CARD_WIDTH, imageCardBox } from "./card-size";
 import { newNodeSize, resolveFor, type SizeParams, wireSettings } from "./settings";
 
 // Generate (design Y5jjx): the canvas's composer. A prompt from upstream plus its own text,
@@ -243,6 +243,7 @@ export const generateSpec: NodeSpec<GenerateParams> = {
   // box follows the image on show, which only the browser has measured (card-media.ts).
   size: { w: CARD_WIDTH, h: CARD_WIDTH },
   resizable: false,
+  imageBox: imageCardBox,
   annotation: false,
   ports: GENERATE_PORTS,
   defaults: (ctx) => ({

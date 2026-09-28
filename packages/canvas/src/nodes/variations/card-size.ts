@@ -104,3 +104,12 @@ export function variationsRestBox(
   const layout = variationsLayout({ ...input, media: { dims: media.dims, shown: {} } });
   return layout.exact ? { w: layout.w, h: layout.h } : null;
 }
+
+/** The card's box from the document and the library's image sizes, without a browser (imageBox). */
+export function variationsImageBox(
+  input: Omit<VariationsLayoutInput, "media">,
+  images: CardMediaView["dims"],
+): Size {
+  const { w, h } = variationsLayout({ ...input, media: { dims: images, shown: {} } });
+  return { w, h };
+}

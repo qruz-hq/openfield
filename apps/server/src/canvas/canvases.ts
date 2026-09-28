@@ -126,7 +126,12 @@ export interface CanvasServiceDeps {
   templatesDir?: string;
 }
 
-type Built = { ops: CanvasOp[]; doc: DocSlice; touched: string[]; aliases: Record<string, string> };
+type Built = {
+  ops: CanvasOp[];
+  doc: DocSlice;
+  touched: string[];
+  aliases: Record<string, string>;
+};
 
 export class CanvasService {
   readonly templates: CanvasTemplates;
@@ -435,9 +440,11 @@ export class CanvasService {
     opts: { graphVersion?: number } = {},
   ): CanvasEditsResponse {
     const ctx = this.deps.engineContext();
-    return this.#change(id, actor, opts, (slice, viewport) => {
+    return this.#change(id, actor, opts, (slice, viewport, before) => {
       try {
-        return compileEdits(slice, edits, { specs: specRegistry, ctx, viewport });
+        // Image cards count at their images' shape, as the library knows it.
+        const images = this.#assets(before).sizes;
+        return compileEdits(slice, edits, { specs: specRegistry, ctx, viewport, images });
       } catch (error) {
         if (!(error instanceof EditError)) throw error;
         throw new ApiFailure(400, "bad_request", error.message, {
@@ -485,7 +492,7 @@ export class CanvasService {
     id: string,
     actor: CanvasActor,
     opts: { graphVersion?: number },
-    build: (slice: DocSlice, viewport: CanvasViewport) => Built,
+    build: (slice: DocSlice, viewport: CanvasViewport, before: CanvasDocument) => Built,
   ): CanvasEditsResponse {
     const { db } = this.deps;
     const at = new Date().toISOString();
@@ -496,7 +503,7 @@ export class CanvasService {
       const before = readDocument(row.graph);
       const { slice, viewport, meta } = fromDocument(before);
       // The canvases.name column is the name of record; the document copy follows it.
-      const built = build({ ...slice, name: row.name }, viewport);
+      const built = build({ ...slice, name: row.name }, viewport, before);
       if (!built.ops.length) return { kind: "unchanged" as const, row, built };
       this.#checkNotRunning(id, built.ops);
       this.#checkLocks(slice, built.doc);

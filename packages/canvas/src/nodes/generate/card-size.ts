@@ -154,3 +154,13 @@ export function restBox(input: Omit<CardLayoutInput, "media">, media: CardMediaV
   if (!layout.exact) return null;
   return { w: Math.round(layout.w * 100) / 100, h: Math.round(layout.h * 100) / 100 };
 }
+
+/**
+ * The card's box from the document and the library's image sizes, without a browser: its first
+ * image's shape once that's known, else its saved box, else the chosen ratio. To the hundredth of a
+ * pixel, like the size the editor saves (restBox).
+ */
+export function imageCardBox(input: Omit<CardLayoutInput, "media">, images: CardMediaView["dims"]): Size {
+  const layout = cardLayout({ ...input, media: { dims: images, shown: {} } });
+  return { w: Math.round(layout.w * 100) / 100, h: Math.round(layout.h * 100) / 100 };
+}

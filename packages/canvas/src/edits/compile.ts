@@ -2,15 +2,16 @@ import { canonicalJson, type MessageKey, type MessageVars, t } from "@openfield/
 import { type CanvasEdge, type CanvasEdit, type CanvasViewport, localIdSchema } from "@openfield/core/canvas";
 import { type ConnectionEnds, checkConnection } from "../engine/connect";
 import { type EngineContext, isAnnotationHandle, type PortSpec, portFlow } from "../engine/types";
-import type { NodeRegistry, NodeSpec } from "../nodes/registry";
+import type { ImageSizes, NodeRegistry, NodeSpec } from "../nodes/registry";
 import { absolutePosition, containedIn, incomingEdges, newEdgeId, newNodeId } from "../store/graph";
 import { applyOps, type CanvasOp, CanvasOpError, type DocSlice, type Point } from "../store/ops";
-import { placeNode } from "./place";
+import { type BoxSource, placeNode } from "./place";
 
 // Edits (§7.11): what an agent or a script asks for, compiled into the editor's own document ops,
 // which the server applies and every open tab replays. Each edit is checked against the canvas as the
 // edits before it left it, with the editor's rules: ports and loops (checkConnection), node types
 // and their settings (the specs), frames. Any edit that doesn't fit stops the whole batch.
+// Nodes count at their real box (place.ts), so new ones go where they fit.
 
 export type EditErrorCode =
   | "no_node"
@@ -40,6 +41,8 @@ export interface CompileEditsOptions {
   ctx: EngineContext;
   /** The saved viewport: the first node of an empty canvas goes where the person last looked. */
   viewport?: CanvasViewport;
+  /** The library's image sizes, so an image card counts at the shape of its image. */
+  images?: ImageSizes;
   /** Tests pass their own. */
   newNodeId?: () => string;
   newEdgeId?: () => string;
@@ -69,6 +72,7 @@ export function compileEdits(
   const ops: CanvasOp[] = [];
   const touched: string[] = [];
   const aliases: Record<string, string> = {};
+  const source: BoxSource = { ctx, ...(opts.images && { images: opts.images }) };
 
   for (const [index, edit] of edits.entries()) {
     const fail = (code: EditErrorCode, key: MessageKey, values?: MessageVars): never => {
@@ -167,8 +171,9 @@ export function compileEdits(
         node.id = nextNodeId();
         if (!localIdSchema.safeParse(node.id).success) throw new Error(`Bad node id ${node.id}`);
         if (edit.params) node.params = mergeParams(def, node.params, edit.params);
-        // A box that follows its settings (Generate's image card) follows the ones given here.
-        if (def.box) node.size = { ...def.box({ frame: node, params: node.params, result: null, ctx }) };
+        // An image card is saved at the box it will show: its aspect ratio's, given here.
+        if (def.imageBox)
+          node.size = def.imageBox({ frame: node, params: node.params, result: null, ctx }, {});
         if (edit.size) {
           if (!def.resizable) fail("bad_edit", "canvas.edits.notResizable", { node: t(def.label) });
           node.size = clampSize(edit.size, def);
@@ -182,6 +187,7 @@ export function compileEdits(
             near: near?.id ?? null,
             side: near?.side ?? "right",
             parentId,
+            source,
             ...(opts.viewport && { viewport: opts.viewport }),
           });
         node.position = within(at, parentId);

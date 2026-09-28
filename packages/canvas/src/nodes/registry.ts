@@ -31,6 +31,9 @@ export interface NodeBoxInput {
   ctx: EngineContext;
 }
 
+/** Library images' pixel sizes by asset id, as far as they're known. */
+export type ImageSizes = Readonly<Record<string, { w: number; h: number }>>;
+
 /** A connection being dragged, as far as picking a port for it goes. */
 export interface PortMatch {
   handleType: "source" | "target";
@@ -68,6 +71,12 @@ export interface NodeSpec<P extends object = Record<string, unknown>> {
     /** The box to save for it, or null while that box isn't exactly known yet. */
     box(input: NodeBoxInput): Size | null;
   };
+  /**
+   * An image card's box (Generate, Variations) worked out from the document and the library's image
+   * sizes alone, where no browser measures it: the box agents place nodes by and fit frames around
+   * (edits/place.ts), with or without a tab open. The same box the editor gives it at rest.
+   */
+  imageBox?(input: NodeBoxInput, images: ImageSizes): Size;
   /** Annotation nodes (Note, Frame, Text, Shape) stay out of the run graph and have no data ports. */
   annotation: boolean;
   /** Every port the type can have, in rail order (inputs top to bottom, then outputs). */

@@ -33,6 +33,7 @@ import type {
 import { carriedFor, newNodeSize, resolveFor, type SizeParams, wireSettings } from "../generate/settings";
 import { readInt, readModel, readModels, readQuality, readResolution, readSize } from "../params";
 import type { NodeSpec } from "../registry";
+import { variationsImageBox } from "./card-size";
 
 // Variations (design zodbS, Models mode mdu6t, M4-21): several takes of one image at once.
 // New takes (same-prompt) repeats the same request; on a model that takes seeds the server picks a
@@ -333,6 +334,7 @@ export const variationsSpec: NodeSpec<VariationsParams> = {
   // An image card like Generate's: the editor gives it the box of its images (card-size.ts).
   size: { ...VARIATIONS_BOX },
   resizable: false,
+  imageBox: variationsImageBox,
   annotation: false,
   ports: VARIATIONS_PORTS,
   defaults: (ctx) => ({
