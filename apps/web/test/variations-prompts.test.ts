@@ -1,6 +1,13 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
-import { addRow, enterRow, promptRows, removeRow, setRow } from "../src/canvas/nodes/variations/prompt-rows";
+import {
+  addRow,
+  backspaceRow,
+  enterRow,
+  promptRows,
+  removeRow,
+  setRow,
+} from "../src/canvas/nodes/variations/prompt-rows";
 
 // Prompts mode in the Variations side sheet (design xrC4Q): one field per prompt, an empty one at
 // the end to type into, Enter for the next, Backspace in an empty one to remove it.
@@ -44,6 +51,12 @@ describe("the prompt list", () => {
     expect(removeRow(["a", "", "c"], 1)).toEqual({ prompts: ["a", "c"], focus: 0 });
     expect(removeRow(["a", "b"], 0)).toEqual({ prompts: ["b"], focus: 0 });
     expect(removeRow(["a"], 3)).toBeNull();
+  });
+
+  test("Backspace in an empty row removes it; in the empty row at the end it only goes back", () => {
+    expect(backspaceRow(["a", "", "c"], 1)).toEqual({ prompts: ["a", "c"], focus: 0 });
+    expect(backspaceRow(["a", "b"], 2)).toEqual({ prompts: ["a", "b"], focus: 1 });
+    expect(backspaceRow([], 0)).toBeNull();
   });
 
   test("Add a prompt focuses the empty row at the end", () => {

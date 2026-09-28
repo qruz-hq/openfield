@@ -31,7 +31,7 @@ import { useCancel } from "../shell/state-band";
 import { AssetImage } from "../shell/thumb";
 import { useNodeDisplay, useParsedParams, useRunNode, useSetParams } from "../shell/use-node";
 import { AddModelPicker } from "./add-model";
-import { addRow, enterRow, promptRows, removeRow, setRow } from "./prompt-rows";
+import { addRow, backspaceRow, enterRow, promptRows, removeRow, setRow } from "./prompt-rows";
 
 // Variations' side sheet (design rD6HX New takes, xrC4Q Prompts, YWYEQ Models): what it reads (the
 // incoming image and the words from a Prompt node), what it makes (New takes, Prompts or Models,
@@ -291,9 +291,11 @@ function PromptList({
     if (event.key === "Enter") {
       event.preventDefault();
       apply(enterRow(prompts, index));
-    } else if (event.key === "Backspace" && event.currentTarget.value === "" && index < prompts.length) {
+    } else if (event.key === "Backspace" && event.currentTarget.value === "") {
+      const change = backspaceRow(prompts, index);
+      if (!change) return;
       event.preventDefault();
-      apply(removeRow(prompts, index));
+      apply(change);
     }
   };
 

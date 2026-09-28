@@ -775,6 +775,169 @@ test("the generating swarm fills a card of any shape, and Variations' images too
   await page.getByRole("button", { name: "Stop", exact: true }).click();
 });
 
+/** A canvas built through the edits route, and its nodes' ids by alias. */
+async function canvasOf(request: APIRequestContext, name: string, edits: Record<string, unknown>[]) {
+  const token = await sessionToken(request);
+  const { id } = await api<CanvasDetail>(request, token, "POST", "/api/canvases", { name });
+  const { aliases } = await api<{ aliases: Record<string, string> }>(
+    request,
+    token,
+    "POST",
+    `/api/canvases/${id}/edits`,
+    { edits },
+  );
+  return { id, aliases, token };
+}
+
+const FLASH = "google:gemini-3.1-flash-image";
+
+test("a Variations card is its images, with Run on hover and everything else in its side sheet", async ({
+  page,
+  request,
+}) => {
+  const { id, aliases } = await canvasOf(request, "Variations card", [
+    { op: "add_node", as: "p", type: "prompt", position: { x: 0, y: 0 }, params: { text: "A lighthouse" } },
+    {
+      op: "add_node",
+      as: "v",
+      type: "image.variations",
+      position: { x: 400, y: 0 },
+      params: { model: FLASH, count: 2 },
+    },
+    { op: "connect", source: "p", target: "v" },
+  ]);
+  await page.goto(`/canvas/${id}`);
+  await runEverything(page, null);
+  const card = pane(page).locator(`.react-flow__node[data-id="${aliases.v}"]`);
+  await expectImages(card, 2);
+  // At rest: only the images. Nothing of the old footer, and the bars wait for hover.
+  await expect(card.locator("textarea")).toHaveCount(0);
+  await expect(card.getByText("New takes", { exact: true })).toHaveCount(0);
+  await expect(card.locator(".of-card-bottom")).toHaveCSS("opacity", "0");
+  await card.hover();
+  await expect(card.locator(".of-card-bottom")).toHaveCSS("opacity", "1");
+  await expect(card.getByText("2 new takes · Nano Banana 2")).toBeVisible();
+  await expect(card.getByRole("button", { name: /^Run / })).toBeVisible();
+
+  // The side sheet: New takes, then Prompts row by row.
+  await card.dblclick({ position: { x: 160, y: 40 } });
+  const sheet = page.getByRole("complementary", { name: "Variations" });
+  await expect(sheet.getByRole("group", { name: "Takes" })).toBeVisible();
+  await expect(sheet.getByRole("button", { name: /^Run 2 takes/ })).toBeVisible();
+  await sheet.getByRole("radio", { name: "Prompts" }).click();
+  const first = sheet.getByRole("textbox", { name: "Prompt 1" });
+  await first.fill("Golden hour");
+  await first.press("Enter");
+  const second = sheet.getByRole("textbox", { name: "Prompt 2" });
+  await expect(second).toBeFocused();
+  await second.fill("Night, a storm rolling in");
+  await second.press("Enter");
+  await expect(sheet.getByRole("textbox", { name: "Prompt 3" })).toBeFocused();
+  await expect(sheet.getByText("2 of 8")).toBeVisible();
+  await expect(sheet.getByRole("button", { name: /^Run 2 prompts/ })).toBeVisible();
+  // Backspace in the empty row takes the focus back; the × removes a prompt.
+  await page.keyboard.press("Backspace");
+  await expect(second).toBeFocused();
+  await sheet.getByRole("button", { name: "Remove prompt 1" }).click();
+  await expect(sheet.getByRole("textbox", { name: "Prompt 1" })).toHaveValue("Night, a storm rolling in");
+  await expect(sheet.getByText("1 of 8")).toBeVisible();
+  await sheet.getByRole("radio", { name: "Models" }).click();
+  await expect(sheet.locator(`[data-model-row="${FLASH}"]`)).toBeVisible();
+});
+
+test("words from a Prompt node light their link and that node when hovered on a card", async ({
+  page,
+  request,
+}) => {
+  const { id, aliases } = await canvasOf(request, "Linked text", [
+    { op: "add_node", as: "p", type: "prompt", position: { x: 0, y: 0 }, params: { text: "Soft sea mist" } },
+    {
+      op: "add_node",
+      as: "g",
+      type: "image.generate",
+      position: { x: 400, y: 0 },
+      params: { model: FLASH, prompt: "in watercolour" },
+    },
+    { op: "connect", source: "p", target: "g" },
+  ]);
+  await page.goto(`/canvas/${id}`);
+  const card = pane(page).locator(`.react-flow__node[data-id="${aliases.g}"]`);
+  const source = pane(page).locator(`.react-flow__node[data-id="${aliases.p}"]`);
+  const link = pane(page).locator("path.of-edge").first();
+  await card.hover();
+  const part = card.locator(".of-linked", { hasText: "Soft sea mist" });
+  await expect(part).toBeVisible();
+  await expect(card.locator(".of-card-prompt")).toContainText("in watercolour");
+  await expect(link).not.toHaveAttribute("data-linked", /.*/);
+  await part.hover();
+  await expect(link).toHaveAttribute("data-linked", "true");
+  await expect(source.locator("[data-linked-source]")).toHaveCount(1);
+  await page.mouse.move(5, 5);
+  await expect(link).not.toHaveAttribute("data-linked", /.*/);
+  await expect(source.locator("[data-linked-source]")).toHaveCount(0);
+});
+
+test("a Generate fed by a four-take Variations shows all four in its side sheet", async ({
+  page,
+  request,
+}) => {
+  const { id, aliases } = await canvasOf(request, "Four references", [
+    { op: "add_node", as: "p", type: "prompt", position: { x: 0, y: 0 }, params: { text: "A lighthouse" } },
+    {
+      op: "add_node",
+      as: "v",
+      type: "image.variations",
+      position: { x: 400, y: 0 },
+      params: { model: FLASH, count: 4 },
+    },
+    { op: "connect", source: "p", target: "v" },
+    {
+      op: "add_node",
+      as: "g",
+      type: "image.generate",
+      position: { x: 800, y: 0 },
+      params: { model: FLASH, prompt: "in watercolour" },
+    },
+    { op: "connect", source: "v", target: "g" },
+  ]);
+  await page.goto(`/canvas/${id}`);
+  const card = pane(page).locator(`.react-flow__node[data-id="${aliases.g}"]`);
+  await card.dblclick({ position: { x: 160, y: 40 } });
+  const sheet = page.getByRole("complementary", { name: "Generate" });
+  // Before the takes exist: four empty tiles for the one link.
+  await expect(sheet.locator("[data-reference-thumb]")).toHaveCount(4);
+  await page.keyboard.press("Escape");
+  await runEverything(page, /^Run 2 nodes · 5 images$/);
+  await card.dblclick({ position: { x: 160, y: 40 } });
+  await expect(sheet.locator("[data-reference-link]")).toHaveCount(1);
+  await expect(sheet.locator("[data-reference-thumb] img")).toHaveCount(4);
+});
+
+test("the spend pill shows what this canvas has made, and today beside it", async ({ page, request }) => {
+  const { id } = await canvasOf(request, "Spend pill", [
+    { op: "add_node", as: "p", type: "prompt", position: { x: 0, y: 0 }, params: { text: "A lighthouse" } },
+    {
+      op: "add_node",
+      as: "g",
+      type: "image.generate",
+      position: { x: 400, y: 0 },
+      params: { model: FLASH, batch: 2 },
+    },
+    { op: "connect", source: "p", target: "g" },
+  ]);
+  await page.goto(`/canvas/${id}`);
+  const pill = page.locator("[data-canvas-spend]");
+  await expect(pill).toHaveText(/This canvas\s*\$0\.00/);
+  await runEverything(page, null);
+  await pill.hover();
+  const details = page.getByRole("tooltip");
+  // Fake runs cost nothing, but their images count.
+  await expect(details.getByText("2 images").first()).toBeVisible();
+  await expect(details.getByText("Today, everywhere")).toBeVisible();
+  await details.getByRole("link", { name: "See spending" }).click();
+  await expect(page).toHaveURL(/\/settings\/spending$/);
+});
+
 test("Version history on an index card opens the canvas with its history", async ({ page, request }) => {
   const token = await sessionToken(request);
   const name = `History ${Date.now()}`;

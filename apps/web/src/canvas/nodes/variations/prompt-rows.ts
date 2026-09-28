@@ -58,6 +58,15 @@ export function removeRow(prompts: readonly string[], index: number): RowChange 
   return { prompts: next, focus: Math.max(0, index - 1) };
 }
 
+/**
+ * Backspace in an empty row: it goes, and the focus with it to the row before. The empty row at the
+ * end isn't a prompt yet, so there it only moves the focus back.
+ */
+export function backspaceRow(prompts: readonly string[], index: number): RowChange | null {
+  if (index >= prompts.length) return index > 0 ? { prompts: [...prompts], focus: index - 1 } : null;
+  return removeRow(prompts, index);
+}
+
 /** "Add a prompt": focus the empty row at the end, adding one when the last row has words. */
 export function addRow(prompts: readonly string[], max = LIST_MAX): RowChange | null {
   const last = prompts[prompts.length - 1];
