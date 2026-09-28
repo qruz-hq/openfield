@@ -47,31 +47,23 @@ export function LinkedText({ part, className }: { part: TextLink; className?: st
 }
 
 /**
- * A prompt as it's sent: each Prompt node's words in link order, then the node's own. `separator`
- * is what shows between them: a line break where the text keeps its lines (the side sheet), a space
- * where it runs on and is cut short (a card).
+ * A prompt as it's sent: each Prompt node's words in link order, then the node's own, each on its
+ * own line as the model gets them (PROMPT_JOINER). The text around it keeps line breaks
+ * (white-space: pre-line or pre-wrap).
  */
-export function LinkedPrompt({
-  parts,
-  own,
-  separator,
-}: {
-  parts: readonly TextLink[];
-  own: string;
-  separator: "\n" | " ";
-}) {
+export function LinkedPrompt({ parts, own }: { parts: readonly TextLink[]; own: string }) {
   const ownText = own.trim();
   return (
     <>
       {parts.map((part, i) => (
         <Fragment key={part.edgeId}>
-          {i > 0 ? separator : null}
+          {i > 0 ? "\n" : null}
           <LinkedText part={part} />
         </Fragment>
       ))}
       {ownText ? (
         <>
-          {parts.length ? separator : null}
+          {parts.length ? "\n" : null}
           {ownText}
         </>
       ) : null}

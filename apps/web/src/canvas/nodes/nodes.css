@@ -266,6 +266,8 @@
   line-height: 1.4;
   color: var(--of-text-primary);
   overflow-wrap: anywhere;
+  /* A Prompt node's words and the node's own each start a line, as the model gets them (H6ZURc). */
+  white-space: pre-line;
 }
 
 /*

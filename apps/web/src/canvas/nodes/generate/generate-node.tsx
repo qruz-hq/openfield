@@ -210,7 +210,7 @@ function GenerateCard({ id, name, selected, display, layout, prompt, params, par
           <ReferenceStrip images={analysis?.referenceImages ?? []} />
           <p className="of-card-prompt" data-placeholder={(noPrompt && view.phase === "empty") || undefined}>
             {prompt ? (
-              <LinkedPrompt parts={analysis?.upstreamParts ?? []} own={params.prompt} separator=" " />
+              <LinkedPrompt parts={analysis?.upstreamParts ?? []} own={params.prompt} />
             ) : view.phase === "empty" && noPrompt ? (
               t("canvas.nodes.card.noPrompt")
             ) : (

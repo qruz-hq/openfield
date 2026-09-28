@@ -240,7 +240,7 @@ function Reads({ nodeId }: { nodeId: string }) {
       {parts.length ? (
         <>
           <p className="w-full text-small leading-[1.5] break-words whitespace-pre-wrap text-text-primary">
-            <LinkedPrompt parts={parts} own="" separator={"\n"} />
+            <LinkedPrompt parts={parts} own="" />
           </p>
           <MiniChip
             icon={Link}

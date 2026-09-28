@@ -184,7 +184,7 @@ function VariationsCard({ id, name, selected, display, frame, params, images }: 
           <p className="of-card-summary">{summaryOf(params, ctx)}</p>
           <p className="of-card-prompt" data-placeholder={(nothingIn && view.phase === "empty") || undefined}>
             {parts.length ? (
-              <LinkedPrompt parts={parts} own="" separator=" " />
+              <LinkedPrompt parts={parts} own="" />
             ) : view.phase === "empty" && nothingIn ? (
               t("canvas.nodes.card.noPrompt")
             ) : (
