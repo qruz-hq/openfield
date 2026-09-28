@@ -18,7 +18,7 @@ import { type ModelKey, t } from "@openfield/core";
 import { estimateRun } from "@openfield/providers/manifest";
 import { Button, MiniChip, ProviderLogo, Segmented, SegmentedItem, Stepper } from "@openfield/ui";
 import { Link, Plus, Square, X } from "lucide-react";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { tightCost } from "../../../lib/cost";
 import { logoFor } from "../../../lib/provider";
 import { useCanvasEngineContext, useNodeAnalysis } from "../../engine/engine-store";
@@ -26,7 +26,7 @@ import { useCanvas, useCanvasStoreApi, useReadOnly } from "../../store/context";
 import { sizeControls, useModelSwitch } from "../generate/controls";
 import { nodeRegistry } from "../registry";
 import { InspectorRun, ModelField, SizeField } from "../shell/inspector-parts";
-import { LinkedPrompt } from "../shell/linked-text";
+import { type LinkEnds, LinkedPrompt, useLinkHover } from "../shell/linked-text";
 import { useCancel } from "../shell/state-band";
 import { AssetImage } from "../shell/thumb";
 import { useNodeDisplay, useParsedParams, useRunNode, useSetParams } from "../shell/use-node";
@@ -211,8 +211,8 @@ function Reads({ nodeId }: { nodeId: string }) {
     );
   return (
     <div className="flex w-full flex-col gap-10 rounded-14 bg-surface p-12">
-      {images.length ? (
-        <div className="flex w-full items-center gap-8">
+      {links[0] && images.length ? (
+        <LinkedRow link={links[0]}>
           <span className="block size-32 shrink-0 overflow-hidden rounded-8 outline-1 -outline-offset-1 outline-border">
             {images[0] ? (
               <AssetImage assetId={images[0]} height={32} className="size-full" />
@@ -235,7 +235,7 @@ function Reads({ nodeId }: { nodeId: string }) {
               )}
             </span>
           </div>
-        </div>
+        </LinkedRow>
       ) : null}
       {parts.length ? (
         <>
@@ -250,6 +250,16 @@ function Reads({ nodeId }: { nodeId: string }) {
           />
         </>
       ) : null}
+    </div>
+  );
+}
+
+/** The image a Variations node reads: one block, lit with its link and source on hover. */
+function LinkedRow({ link, children }: { link: LinkEnds; children: ReactNode }) {
+  const hover = useLinkHover(link);
+  return (
+    <div {...hover} className="of-linked of-linked-block flex items-center gap-8">
+      {children}
     </div>
   );
 }

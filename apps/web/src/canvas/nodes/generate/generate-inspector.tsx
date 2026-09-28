@@ -15,6 +15,7 @@ import { notifyError } from "../../../lib/notify";
 import { useCanvasEngineContext, useNodeAnalysis } from "../../engine/engine-store";
 import { useCanvasStoreApi, useNodeFrame, useReadOnly } from "../../store/context";
 import { InspectorRun, ModelField, SizeField } from "../shell/inspector-parts";
+import { LinkedPrompt } from "../shell/linked-text";
 import { useNodeDisplay, useParsedParams, useRunNode, useSetParams } from "../shell/use-node";
 import { sizeControls, useModelSwitch } from "./controls";
 import { ReferenceOrder } from "./reference-order";
@@ -124,7 +125,7 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
         {/* The whole prompt coming in, then this node's own words after it. */}
         {upstream ? (
           <p className="w-full text-small leading-[1.5] break-words whitespace-pre-wrap text-text-primary">
-            {upstream}
+            <LinkedPrompt parts={analysis?.upstreamParts ?? []} own="" />
           </p>
         ) : null}
         <textarea

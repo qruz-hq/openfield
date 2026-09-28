@@ -276,11 +276,7 @@
  * text never moves. Lines that wrap each get the whole box.
  */
 .of-linked {
-  margin: 0 -4px;
-  padding: 1px 4px;
   border-radius: 4px;
-  box-decoration-break: clone;
-  -webkit-box-decoration-break: clone;
   transition:
     background-color 120ms ease-out,
     box-shadow 120ms ease-out;
@@ -289,6 +285,20 @@
 .of-linked:hover {
   background: var(--of-accent-soft);
   box-shadow: inset 0 0 0 1px var(--of-accent-line);
+}
+
+/* A Prompt node's words: one block round the whole part, however many lines it wraps to. */
+.of-linked-words {
+  display: block;
+  margin: 0 -4px;
+  padding: 1px 4px;
+}
+
+/* A link's reference images, or what a Variations node reads: the outline sits 3 px round them. */
+.of-linked-block {
+  margin: -3px;
+  padding: 3px;
+  border-radius: 11px;
 }
 
 /* What a Variations card makes, over its words (design q5kM8): 12/500 $text-secondary, one line. */
