@@ -98,6 +98,11 @@ export const canvasNodeSchema = z.object({
   /** Fields currently driven by a connected preset. */
   presetLocks: z.array(z.string()).default([]),
   result: canvasNodeResultSchema.nullable().default(null),
+  /**
+   * Keeps what the node made: it never runs again and can't be deleted, though it still moves. A
+   * locked frame locks everything in it. Absent when unlocked, so older documents read unchanged.
+   */
+  locked: z.boolean().optional(),
 });
 
 export const canvasEdgeSchema = z.object({

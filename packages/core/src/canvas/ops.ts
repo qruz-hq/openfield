@@ -33,6 +33,7 @@ export const canvasWireOpSchema = z.discriminatedUnion("op", [
   }),
   z.object({ op: z.literal("setTitle"), id: localIdSchema, title: z.string().max(200).nullable() }),
   z.object({ op: z.literal("setCollapsed"), id: localIdSchema, collapsed: z.boolean() }),
+  z.object({ op: z.literal("setLocked"), id: localIdSchema, locked: z.boolean() }),
   z.object({ op: z.literal("setPresetLocks"), id: localIdSchema, locks: z.array(z.string()) }),
   z.object({
     op: z.literal("setParams"),

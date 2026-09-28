@@ -4098,6 +4098,7 @@ Estimates come from the manifest's pricing snapshot (§6, §0.13), always carry 
 - **Duplicate** `⌘D` (offset +24/+24) and `⌥`-drag duplicate-drag.
 - **Nudge**: arrows 1px, `⇧`+arrows 10px. **Snapping**: 8px grid; alignment guides appear, and the node lines up, when an edge or centre is within 4px of a neighbour's edge or centre. Hold `⌘` (`Ctrl` elsewhere) while dragging to bypass both: `⌥` is taken by duplicate-drag.
 - **Delete** `⌫`/`Delete` removes selected nodes and edges; deleting a node deletes its incident edges; deleting a Frame offers *Delete frame only* vs *Delete frame and contents*. A node with a run in flight is not deletable (7.7).
+- **Lock** (`⇧⌘L`, the node menu) keeps what a node made. A locked node never runs again: Run all, Run from here and a selection run leave it out and keep its images, even when its inputs change, and the nodes after it keep using them (a locked node with no images hands on nothing). It can't be deleted, but it still moves, and renaming, resizing and collapsing stay free; its settings are read-only and its side sheet says why. Delete (key, menu, cut) leaves locked nodes where they are and says so, with an Unlock action. Locking a frame locks everything in it: those nodes move within the frame but can't leave it, nothing new drops in, and the frame moves with its contents. A lock is stored on the node as `locked: true` (absent when unlocked) and is one undo step, even for a selection. Agents can read and connect to a locked node but can't change, move, run, delete, lock or unlock it, or restore a version that would change it (docs/agents.md).
 
 **Keyboard shortcuts.** §2.6 publishes the one global shortcut table; the list below adds only this surface's own bindings. `R` is **Shape**, matching the observed canvas toolbar (§0.9).
 
@@ -4112,6 +4113,7 @@ Estimates come from the manifest's pricing snapshot (§6, §0.13), always carry 
 | `⌘A` | Select all | `⌘+` / `⌘-` | Zoom in / out |
 | `⌘G` / `⇧⌘G` | Group into frame / Ungroup | `⌘S` | Save |
 | `⌫` | Delete selection | `⇧⌘S` | Save named version |
+| `⇧⌘L` | Lock / Unlock | | |
 
 A `?` overlay lists these alongside the global table; every toolbar tooltip shows its own shortcut.
 

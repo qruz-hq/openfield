@@ -122,6 +122,23 @@ export function containedIn(doc: DocSlice, frameId: string): string[] {
   return out;
 }
 
+/**
+ * The node that locks this one: itself when it's locked, else the nearest locked frame around it,
+ * else null. A locked frame locks everything in it (§7.9).
+ */
+export function lockedBy(doc: Pick<DocSlice, "nodes">, nodeId: string): string | null {
+  for (let at: string | null = nodeId, guard = 0; at !== null && guard < 10_000; guard++) {
+    const frame: DocSlice["nodes"][string] | undefined = doc.nodes[at];
+    if (!frame) return null;
+    if (frame.locked) return at;
+    at = frame.parentId;
+  }
+  return null;
+}
+
+/** Locked, on its own or by a frame it's in: it keeps what it made and can't be deleted. */
+export const isLocked = (doc: Pick<DocSlice, "nodes">, nodeId: string): boolean => lockedBy(doc, nodeId) !== null;
+
 /** A node's position on the pane, adding up its frames' positions. */
 export function absolutePosition(doc: DocSlice, nodeId: string): Point {
   let x = 0;

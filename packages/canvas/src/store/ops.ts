@@ -1,6 +1,6 @@
 import type { CanvasEdge, CanvasNode, CanvasNodeResult } from "@openfield/core/canvas";
 
-// Every change to a canvas document is one of these ops, applied by one reducer (§7.8, §7.11).
+// Every change to a canvas document is one of these ops, applied by one reducer (§7.9, §7.11).
 // The closed set is what undo, autosave, paste, a future multiplayer layer and graph patches all
 // share. applyOps is pure: it returns a new document and the ops that undo it.
 
@@ -35,6 +35,8 @@ export type CanvasOp =
   | { op: "reparent"; id: string; parentId: string | null; position: Point }
   | { op: "setTitle"; id: string; title: string | null }
   | { op: "setCollapsed"; id: string; collapsed: boolean }
+  /** A lock keeps what the node made (§7.9); unlocking leaves no trace in the document. */
+  | { op: "setLocked"; id: string; locked: boolean }
   | { op: "setPresetLocks"; id: string; locks: string[] }
   /** Shallow merge. A key set to undefined is removed. */
   | { op: "setParams"; id: string; patch: Readonly<Record<string, unknown>> }
@@ -203,6 +205,13 @@ export function applyOps(base: DocSlice, ops: readonly CanvasOp[]): { doc: DocSl
         const frame = node(op, op.id);
         setFrame(op.id, { ...frame, collapsed: op.collapsed });
         groups.push([{ op: "setCollapsed", id: op.id, collapsed: frame.collapsed }]);
+        break;
+      }
+      case "setLocked": {
+        const frame = node(op, op.id);
+        const { locked: was = false, ...rest } = frame;
+        setFrame(op.id, op.locked ? { ...rest, locked: true } : rest);
+        groups.push([{ op: "setLocked", id: op.id, locked: was }]);
         break;
       }
       case "setPresetLocks": {
