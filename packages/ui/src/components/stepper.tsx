@@ -15,6 +15,8 @@ export interface StepperProps extends Omit<ComponentProps<"fieldset">, "children
   decrementLabel: string;
   incrementLabel: string;
   disabled?: boolean;
+  /** Can't be changed, but looks as it is. */
+  readOnly?: boolean;
 }
 
 /** Stepper / M: 38px box, minus, a 44px mono value, plus. */
@@ -28,16 +30,19 @@ export function Stepper({
   decrementLabel,
   incrementLabel,
   disabled = false,
+  readOnly = false,
   className,
   ...props
 }: StepperProps) {
+  // Read only, each button keeps the look it would have: dimmed only at its end of the range.
+  const kept = readOnly && !disabled ? "disabled:text-text-secondary" : undefined;
   const field = useFieldControl({
     "aria-describedby": props["aria-describedby"],
     "aria-labelledby": props["aria-labelledby"],
   });
   return (
     <fieldset
-      disabled={disabled}
+      disabled={disabled || readOnly}
       {...props}
       aria-labelledby={props["aria-label"] ? undefined : field["aria-labelledby"]}
       aria-describedby={field["aria-describedby"]}
@@ -50,7 +55,8 @@ export function Stepper({
       <IconButton
         icon={Minus}
         label={decrementLabel}
-        disabled={disabled || value <= min}
+        disabled={disabled || readOnly || value <= min}
+        className={value > min ? kept : undefined}
         onClick={() => onValueChange(Math.max(min, value - step))}
       />
       <output
@@ -62,7 +68,8 @@ export function Stepper({
       <IconButton
         icon={Plus}
         label={incrementLabel}
-        disabled={disabled || value >= max}
+        disabled={disabled || readOnly || value >= max}
+        className={value < max ? kept : undefined}
         onClick={() => onValueChange(Math.min(max, value + step))}
       />
     </fieldset>

@@ -13,6 +13,8 @@ export interface SelectProps extends ComponentProps<typeof RadixSelect.Root> {
   className?: string;
   "aria-label"?: string;
   "aria-describedby"?: string;
+  /** Can't be changed, but looks as it is: the value is still the thing to read. */
+  readOnly?: boolean;
 }
 
 /**
@@ -27,17 +29,20 @@ export function Select({
   children,
   "aria-label": ariaLabel,
   "aria-describedby": describedBy,
+  readOnly = false,
+  disabled,
   ...props
 }: SelectProps) {
   const field = useFieldControl({ id, "aria-describedby": describedBy });
   return (
-    <RadixSelect.Root {...props}>
+    <RadixSelect.Root {...props} disabled={disabled || readOnly}>
       <RadixSelect.Trigger
         id={field.id}
         aria-label={ariaLabel}
         aria-describedby={field["aria-describedby"]}
         className={cn(
           "group flex h-38 w-full min-w-0 cursor-pointer items-center justify-between gap-8 rounded-10 bg-surface px-12 inset-ring inset-ring-border text-small text-text-primary transition-shadow data-[state=open]:inset-ring-accent-line data-placeholder:text-text-tertiary disabled:cursor-default disabled:opacity-40",
+          readOnly && !disabled && "disabled:opacity-100",
           className,
         )}
       >
