@@ -4,6 +4,7 @@
 // entry, "@openfield/canvas/engine/compile" and so on.
 
 export * from "./edits/compile";
+export * from "./edits/frames";
 export * from "./edits/locks";
 export * from "./edits/place";
 export * from "./edits/wire";

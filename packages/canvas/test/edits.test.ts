@@ -7,7 +7,8 @@ import {
   canvasWireOpSchema,
 } from "@openfield/core/canvas";
 import { compileEdits, EditError } from "../src/edits/compile";
-import { nodeRect, PLACE_MARGIN, placeNode } from "../src/edits/place";
+import { lockProblem } from "../src/edits/locks";
+import { FRAME_INSET, nodeRect, PLACE_MARGIN, placeNode, type Rect } from "../src/edits/place";
 import { fromWireOps, toWireOps } from "../src/edits/wire";
 import { specRegistry } from "../src/nodes/specs";
 import { absolutePosition } from "../src/store/graph";
@@ -293,6 +294,22 @@ const allApart = (doc: DocSlice, ids = doc.order) => {
   );
 };
 
+/** Every node in the frame inside its insets. */
+const holds = (doc: DocSlice, frameId: string) => {
+  const frame = nodeRect(doc, specRegistry, frameId, { ctx })!;
+  return doc.order
+    .filter((id) => doc.nodes[id]!.parentId === frameId)
+    .every((id) => {
+      const r = nodeRect(doc, specRegistry, id, { ctx })!;
+      return (
+        r.x >= frame.x + FRAME_INSET.x &&
+        r.y >= frame.y + FRAME_INSET.top &&
+        r.x + r.w <= frame.x + frame.w - FRAME_INSET.x &&
+        r.y + r.h <= frame.y + frame.h - FRAME_INSET.x
+      );
+    });
+};
+
 const tall = { model: banana.key, size: { kind: "aspect", ratio: "3:4" } };
 const wide = { model: banana.key, size: { kind: "aspect", ratio: "16:9" } };
 
@@ -337,6 +354,82 @@ describe("real boxes", () => {
     const b = nodeRect(out.doc, specRegistry, out.aliases.b!, { ctx })!;
     expect(b.x).toBe(a.x);
     expect(b.y).toBeGreaterThanOrEqual(a.y + a.h + PLACE_MARGIN);
+  });
+});
+
+describe("frames grow to hold what's in them", () => {
+  const framed = (extra: Partial<Parameters<typeof node>[2]> = {}) =>
+    docOf([
+      node("n_f", "frame", { position: { x: 100, y: 100 }, size: { w: 640, h: 420 } }),
+      node("n_a", "note", { parentId: "n_f", position: { x: 24, y: 48 }, size: { w: 240, h: 240 } }),
+      node("n_b", "note", {
+        parentId: "n_f",
+        position: { x: 300, y: 48 },
+        size: { w: 240, h: 240 },
+        ...extra,
+      }),
+    ]);
+
+  test("a node added to a full frame goes in, and the frame grows around it", () => {
+    const base = docOf([
+      node("n_f", "frame", { position: { x: 96, y: 96 }, size: { w: 400, h: 336 } }),
+      node("n_in", "note", { parentId: "n_f", position: { x: 24, y: 48 }, size: { w: 240, h: 240 } }),
+    ]);
+    const out = compile(base, [
+      { op: "add_node", as: "a", type: "note", parentId: "n_f" },
+      { op: "add_node", as: "b", type: "image.generate", params: tall, parentId: "n_f" },
+    ]);
+    expect(holds(out.doc, "n_f")).toBe(true);
+    expect(
+      allApart(
+        out.doc,
+        out.doc.order.filter((id) => id !== "n_f"),
+      ),
+    ).toBe(true);
+    // It grew where it was, down: one under the other, never wider, never moved.
+    expect(absolutePosition(out.doc, out.aliases.a!)).toEqual({ x: 120, y: 408 });
+    expect(absolutePosition(out.doc, out.aliases.b!)).toEqual({ x: 120, y: 672 });
+    expect(nodeRect(out.doc, specRegistry, "n_f")).toEqual({ x: 96, y: 96, w: 400, h: 1027 });
+    expect(out.touched).toContain("n_f");
+  });
+
+  test("a node moved left of and above its frame: the frame reaches out, nothing else moves", () => {
+    const base = framed();
+    const b = absolutePosition(base, "n_b");
+    const out = compile(base, [{ op: "move_node", id: "n_a", position: { x: 0, y: 20 } }]);
+    expect(absolutePosition(out.doc, "n_a")).toEqual({ x: 0, y: 20 });
+    expect(absolutePosition(out.doc, "n_b")).toEqual(b);
+    expect(nodeRect(out.doc, specRegistry, "n_f")).toEqual({ x: -24, y: -28, w: 764, h: 548 } satisfies Rect);
+    expect(holds(out.doc, "n_f")).toBe(true);
+    // As ops a tab replays: the frame's box, and what's in it shifted back.
+    expect(out.ops.at(-1)).toEqual({
+      op: "resizeNode",
+      id: "n_f",
+      size: { w: 764, h: 548 },
+      position: { x: -24, y: -28 },
+    });
+  });
+
+  test("frames never shrink, the one around a grown frame grows too, and locked nodes stay put", () => {
+    const base = docOf([
+      node("n_out", "frame", { position: { x: 0, y: 0 }, size: { w: 900, h: 700 } }),
+      node("n_f", "frame", { parentId: "n_out", position: { x: 100, y: 100 }, size: { w: 640, h: 420 } }),
+      node("n_a", "note", { parentId: "n_f", position: { x: 24, y: 48 }, size: { w: 240, h: 240 } }),
+      node("n_l", "note", {
+        parentId: "n_f",
+        position: { x: 300, y: 48 },
+        size: { w: 240, h: 240 },
+        locked: true,
+      }),
+    ]);
+    const small = compile(base, [{ op: "move_node", id: "n_a", position: { x: 130, y: 150 } }]);
+    expect(nodeRect(small.doc, specRegistry, "n_f")).toMatchObject({ w: 640, h: 420 });
+
+    const out = compile(base, [{ op: "move_node", id: "n_a", position: { x: -200, y: 150 } }]);
+    expect(holds(out.doc, "n_f")).toBe(true);
+    expect(holds(out.doc, "n_out")).toBe(true);
+    expect(absolutePosition(out.doc, "n_l")).toEqual(absolutePosition(base, "n_l"));
+    expect(lockProblem(base, out.doc, specRegistry)).toBeNull();
   });
 });
 

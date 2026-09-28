@@ -5,13 +5,15 @@ import { type EngineContext, isAnnotationHandle, type PortSpec, portFlow } from 
 import type { ImageSizes, NodeRegistry, NodeSpec } from "../nodes/registry";
 import { absolutePosition, containedIn, incomingEdges, newEdgeId, newNodeId } from "../store/graph";
 import { applyOps, type CanvasOp, CanvasOpError, type DocSlice, type Point } from "../store/ops";
-import { type BoxSource, placeNode } from "./place";
+import { fitFrames } from "./frames";
+import { type BoxSource, framesAround, placeNode } from "./place";
 
 // Edits (§7.11): what an agent or a script asks for, compiled into the editor's own document ops,
 // which the server applies and every open tab replays. Each edit is checked against the canvas as the
 // edits before it left it, with the editor's rules: ports and loops (checkConnection), node types
 // and their settings (the specs), frames. Any edit that doesn't fit stops the whole batch.
-// Nodes count at their real box (place.ts), so new ones go where they fit.
+// Nodes count at their real box (place.ts), so new ones go where they fit, and every frame the
+// edits reached grows to hold what's in it (frames.ts).
 
 export type EditErrorCode =
   | "no_node"
@@ -73,6 +75,8 @@ export function compileEdits(
   const touched: string[] = [];
   const aliases: Record<string, string> = {};
   const source: BoxSource = { ctx, ...(opts.images && { images: opts.images }) };
+  /** Nodes whose place or box the edits changed: the frames around them may need to grow. */
+  const shaped = new Set<string>();
 
   for (const [index, edit] of edits.entries()) {
     const fail = (code: EditErrorCode, key: MessageKey, values?: MessageVars): never => {
@@ -194,6 +198,7 @@ export function compileEdits(
         emit([{ op: "addNode", node }]);
         if (edit.as !== undefined) aliases[edit.as] = node.id;
         touch(node.id);
+        shaped.add(node.id);
         break;
       }
 
@@ -221,6 +226,7 @@ export function compileEdits(
         }
         emit(next);
         touch(id);
+        if (edit.params || edit.size) shaped.add(id);
         break;
       }
 
@@ -237,6 +243,7 @@ export function compileEdits(
           emit([{ op: "moveNode", id, position: within(at, frame.parentId) }]);
         }
         touch(id);
+        shaped.add(id);
         break;
       }
 
@@ -254,6 +261,7 @@ export function compileEdits(
               parentId,
               position: within(absolutePosition(doc, child), parentId),
             });
+            shaped.add(child);
           }
         }
         // Deepest first, so every frame is empty by the time it goes.
@@ -390,6 +398,18 @@ export function compileEdits(
         break;
     }
   }
+
+  // Every frame around a node that moved, changed shape or arrived grows to hold what's in it.
+  const reached = new Set<string>();
+  for (const id of shaped) {
+    if (!doc.nodes[id]) continue;
+    if (doc.nodes[id]!.type === "frame") reached.add(id);
+    for (const frameId of framesAround(doc, doc.nodes[id]!.parentId)) reached.add(frameId);
+  }
+  const fitted = fitFrames(doc, specs, reached, source);
+  doc = fitted.doc;
+  ops.push(...fitted.ops);
+  for (const id of fitted.grown) if (!touched.includes(id)) touched.push(id);
 
   return { ops, doc, touched: touched.filter((id) => doc.nodes[id]), aliases };
 }

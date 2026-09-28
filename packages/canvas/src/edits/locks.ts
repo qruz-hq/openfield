@@ -1,7 +1,7 @@
 import { canonicalJson, t } from "@openfield/core";
 import { nodeTitle } from "../engine/describe";
 import type { NodeRegistry } from "../nodes/registry";
-import { isLocked, lockedBy } from "../store/graph";
+import { absolutePosition, isLocked, lockedBy } from "../store/graph";
 import type { DocSlice } from "../store/ops";
 
 // Locked nodes (§7.9) stay exactly as they are when a change comes from outside the editor, an
@@ -17,19 +17,32 @@ export interface LockProblem {
 
 /** The first locked node the change from `before` to `after` would touch, or null when it's fine. */
 export function lockProblem(before: DocSlice, after: DocSlice, registry: NodeRegistry): LockProblem | null {
-  const content = (doc: DocSlice, nodeId: string) =>
-    doc.nodes[nodeId]
-      ? canonicalJson({
-          frame: doc.nodes[nodeId],
-          params: doc.params[nodeId] ?? null,
-          result: doc.results[nodeId] ?? null,
-        })
-      : null;
+  // Its place counts apart: moving with its frame, or staying put while the frame around it grows
+  // out to the left or up (edits/frames.ts), leaves it where it was.
+  const content = (doc: DocSlice, nodeId: string) => {
+    const frame = doc.nodes[nodeId];
+    if (!frame) return null;
+    const { position: _p, ...rest } = frame;
+    return canonicalJson({
+      frame: rest,
+      params: doc.params[nodeId] ?? null,
+      result: doc.results[nodeId] ?? null,
+    });
+  };
+  const stays = (nodeId: string) => {
+    const a = before.nodes[nodeId]!.position;
+    const b = after.nodes[nodeId]!.position;
+    if (a.x === b.x && a.y === b.y) return true;
+    const was = absolutePosition(before, nodeId);
+    const now = absolutePosition(after, nodeId);
+    return was.x === now.x && was.y === now.y;
+  };
   const title = (doc: DocSlice, nodeId: string) => nodeTitle(doc.nodes[nodeId]!, registry);
 
   for (const nodeId of before.order) {
     const by = lockedBy(before, nodeId);
-    if (by === null || content(before, nodeId) === content(after, nodeId)) continue;
+    if (by === null) continue;
+    if (content(before, nodeId) === content(after, nodeId) && stays(nodeId)) continue;
     const node = title(before, nodeId);
     return {
       nodeId,
