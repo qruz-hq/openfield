@@ -136,6 +136,9 @@ export const canvasRunInputSchema = z.object({
   values: z.array(canvasRunInputValueSchema).max(CANVAS_RUN_MAX_JOBS),
 });
 /** One job set's settings before fan-out: a GenerateRequest minus what the server fills in. */
+/** A call's caption (a Variations prompt line) is cut to this in the plan; the prompt itself isn't. */
+export const CANVAS_CALL_LABEL_MAX = 200;
+
 export const canvasRunCallSchema = generateRequestSchema
   .pick({
     model: true,
@@ -153,7 +156,7 @@ export const canvasRunCallSchema = generateRequestSchema
   .extend({
     op: z.enum(["generate", "variation", "edit", "inpaint"]),
     /** Caption for this call's images, e.g. the prompt line. */
-    label: z.string().max(200).optional(),
+    label: z.string().max(CANVAS_CALL_LABEL_MAX).optional(),
   });
 export const canvasRunPlanItemSchema = z.object({
   nodeId: localIdSchema,

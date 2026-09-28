@@ -48,14 +48,18 @@ export const maskInputSchema = z.object({
 const edgePx = z.int().min(0).max(8192);
 
 // Kept free of object-level refinements so other packages can pick, omit and extend it.
+/** The longest prompt a run sends, words from Prompt nodes included. */
+export const GENERATE_PROMPT_MAX = 32_000;
+export const NEGATIVE_PROMPT_MAX = 4_000;
+
 export const generateRequestSchema = z.object({
   /** Client ULID, one per job set. A repeat returns the existing job set. */
   idempotencyKey: ulidSchema,
   model: modelKeySchema,
   op: opSchema,
 
-  prompt: z.string().max(32_000),
-  negativePrompt: z.string().max(4_000).optional(),
+  prompt: z.string().max(GENERATE_PROMPT_MAX),
+  negativePrompt: z.string().max(NEGATIVE_PROMPT_MAX).optional(),
   enhancePrompt: z.boolean().optional(),
 
   size: sizeSpecSchema,

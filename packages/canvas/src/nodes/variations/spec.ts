@@ -1,5 +1,6 @@
 import {
   BATCH_MAX,
+  CANVAS_CALL_LABEL_MAX,
   type CostEstimate,
   type ModelKey,
   type ModelListItem,
@@ -100,6 +101,13 @@ export const promptLines = (params: VariationsParams): string[] =>
     .filter(Boolean)
     .slice(0, LIST_MAX);
 
+/**
+ * A prompt line as its images' caption. Captions are short in a run plan, so a long line is cut
+ * there; the line itself goes to the model whole.
+ */
+export const captionOf = (line: string): string =>
+  line.length <= CANVAS_CALL_LABEL_MAX ? line : `${line.slice(0, CANVAS_CALL_LABEL_MAX - 1).trimEnd()}…`;
+
 /** The models that count: no repeats, at most eight. */
 export const modelList = (params: VariationsParams): ModelKey[] =>
   [...new Set(params.models)].slice(0, LIST_MAX);
@@ -156,7 +164,12 @@ function planCalls(node: EngineNode<VariationsParams>, inputs: ResolvedInputs, c
       calls: promptLines(p).map((line) => ({
         model,
         resolved,
-        call: { ...settings(model, resolved), prompt: joinPrompt([typed, line]), batch: 1, label: line },
+        call: {
+          ...settings(model, resolved),
+          prompt: joinPrompt([typed, line]),
+          batch: 1,
+          label: captionOf(line),
+        },
       })),
     };
   }
