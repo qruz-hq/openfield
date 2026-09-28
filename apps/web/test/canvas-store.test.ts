@@ -5,7 +5,8 @@ import { createNodeRegistry, railOffsets } from "@openfield/canvas/nodes/registr
 import type { CanvasDetail } from "@openfield/core";
 import { type CanvasDocument, type CanvasNode, canvasDocumentSchema } from "@openfield/core/canvas";
 import { Type } from "lucide-react";
-import { defineNode } from "../src/canvas/nodes/registry";
+import { lockedToKeep, stayedMessage, toggleLockOps, unlockOps } from "../src/canvas/editor/locks";
+import { defineNode, nodeRegistry } from "../src/canvas/nodes/registry";
 import {
   applyOps,
   type CanvasOp,
@@ -14,6 +15,8 @@ import {
   extractFragment,
   fromDocument,
   incomingEdges,
+  isLocked,
+  lockedBy,
   type PendingConnection,
   topoOrder,
   wouldCreateCycle,
@@ -261,6 +264,100 @@ describe("canvas store", () => {
       viewRevision: sent.viewRevision,
     });
     expect(store.getState().persist.status).toBe("saved");
+  });
+});
+
+describe("locked nodes (§7.9)", () => {
+  /** A frame f with a prompt p in it, a generate g beside it, and a prompt q on its own. */
+  const framed = () =>
+    documentWith([
+      node("f", { type: "frame", position: { x: 100, y: 50 }, size: { w: 640, h: 420 } }),
+      node("p", { parentId: "f", position: { x: 10, y: 20 } }),
+      node("g", { type: "image.generate", position: { x: 900, y: 0 } }),
+      node("q", { position: { x: 0, y: 600 } }),
+    ]);
+
+  test("locking a selection is one undo step, and unlocking leaves no trace", () => {
+    const store = createCanvasStore(detailOf(framed()));
+    const { actions } = store.getState();
+    const before = store.getState().doc;
+    actions.apply(toggleLockOps(before, ["g", "q"]), { label: "lock" });
+    expect(isLocked(store.getState().doc, "g")).toBe(true);
+    expect(isLocked(store.getState().doc, "q")).toBe(true);
+    expect(store.getState().history.past).toHaveLength(1);
+    // Everything picked is locked, so the same key unlocks it.
+    actions.apply(toggleLockOps(store.getState().doc, ["g", "q"]), { label: "lock" });
+    expect(store.getState().doc.nodes.g).toEqual(before.nodes.g);
+    actions.undo();
+    actions.undo();
+    expect(store.getState().doc).toEqual(before);
+    // The saved document says it only while it's locked.
+    actions.apply(toggleLockOps(store.getState().doc, ["g"]), { label: "lock" });
+    const saved = store.getState().actions.snapshot().document;
+    expect(canvasDocumentSchema.parse(saved).nodes.find((n) => n.id === "g")?.locked).toBe(true);
+    expect("locked" in saved.nodes.find((n) => n.id === "q")!).toBe(false);
+  });
+
+  test("a locked frame locks what's in it; unlocking a node in it unlocks the frame", () => {
+    const { slice } = fromDocument(framed());
+    const locked = applyOps(slice, toggleLockOps(slice, ["f", "p"])).doc;
+    // Picked with its frame, the node is locked by the frame alone.
+    expect(locked.nodes.p!.locked).toBeUndefined();
+    expect(lockedBy(locked, "p")).toBe("f");
+    expect(unlockOps(locked, ["p"])).toEqual([{ op: "setLocked", id: "f", locked: false }]);
+  });
+
+  test("delete leaves locked nodes where they are and says which stayed", () => {
+    const doc = documentWith([
+      node("f", { type: "frame", position: { x: 100, y: 50 } }),
+      node("p", { parentId: "f", position: { x: 10, y: 20 }, locked: true }),
+      node("n", { parentId: "f", position: { x: 300, y: 20 } }),
+      node("g", { type: "image.generate", locked: true }),
+      node("q", { position: { x: 0, y: 600 } }),
+    ]);
+    const store = createCanvasStore(detailOf(doc));
+    const { slice } = fromDocument(doc);
+    expect(lockedToKeep(slice, ["f", "g", "q"], "with-contents")).toEqual(["p", "g"]);
+    expect(stayedMessage(slice, nodeRegistry, ["g"])).toBe(
+      "Generate is locked, so it stayed. Unlock it to delete it.",
+    );
+    expect(stayedMessage(slice, nodeRegistry, ["p", "g"])).toBe(
+      "2 locked nodes stayed. Unlock them to delete them.",
+    );
+    store.getState().actions.deleteNodes(["f", "g", "q"]);
+    const after = store.getState().doc;
+    expect(after.order.sort()).toEqual(["g", "p"]);
+    // Its frame went, so it's on the pane where it was on screen.
+    expect(after.nodes.p).toMatchObject({ parentId: null, position: { x: 110, y: 70 } });
+  });
+
+  test("nothing in a locked frame is deleted, and a node in one says its frame is locked", () => {
+    const { slice } = fromDocument(framed());
+    const doc = applyOps(slice, [{ op: "setLocked", id: "f", locked: true }]).doc;
+    expect(lockedToKeep(doc, ["p"], "with-contents")).toEqual(["p"]);
+    expect(lockedToKeep(doc, ["f"], "with-contents")).toEqual(["f"]);
+    expect(stayedMessage(doc, nodeRegistry, ["p"])).toBe(
+      "Prompt is in a locked frame, so it stayed. Unlock the frame to delete it.",
+    );
+    const store = createCanvasStore(detailOf(framed()));
+    store.getState().actions.apply([{ op: "setLocked", id: "f", locked: true }]);
+    store.getState().actions.deleteNodes(["f", "p"]);
+    expect(store.getState().doc.order).toEqual(["f", "p", "g", "q"]);
+  });
+
+  test("copies are never locked, and a copy of a node in a locked frame lands outside it", () => {
+    const store = createCanvasStore(detailOf(framed()));
+    const { actions } = store.getState();
+    actions.apply([
+      { op: "setLocked", id: "f", locked: true },
+      { op: "setLocked", id: "g", locked: true },
+    ]);
+    const [copyOfP, copyOfG] = actions.duplicateNodes(["p", "g"]);
+    const doc = store.getState().doc;
+    expect(doc.nodes[copyOfP!]).toMatchObject({ parentId: null, position: { x: 134, y: 94 } });
+    expect(isLocked(doc, copyOfP!)).toBe(false);
+    expect(isLocked(doc, copyOfG!)).toBe(false);
+    expect(extractFragment(doc, ["g"]).nodes[0]!.locked).toBeUndefined();
   });
 });
 

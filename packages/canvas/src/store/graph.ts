@@ -192,6 +192,7 @@ export function isCanvasFragment(value: unknown): value is CanvasFragment {
  * stripped. A node copied without its frame gets its pane position and no parent, unless
  * `keepParents` (duplicate in place) keeps it in that frame. Duplicating also keeps each node's
  * images (`keepResults`) and the data links coming into it from nodes left behind (`keepInputs`).
+ * A copy is never locked: the lock stays with what the person locked.
  */
 export function extractFragment(
   doc: DocSlice,
@@ -207,7 +208,7 @@ export function extractFragment(
   const nodes: CanvasNode[] = [];
   for (const id of parentsFirst(doc)) {
     if (!picked.has(id)) continue;
-    const frame = doc.nodes[id]!;
+    const { locked: _locked, ...frame } = doc.nodes[id]!;
     const keepParent = frame.parentId !== null && (opts.keepParents || picked.has(frame.parentId));
     nodes.push({
       ...frame,

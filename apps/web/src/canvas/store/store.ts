@@ -1,9 +1,11 @@
 import { idleRuntime, type NodeRuntime } from "@openfield/canvas/engine/types";
 import { fromDocument, toDocument } from "@openfield/canvas/store/document";
 import {
+  absolutePosition,
   type CanvasFragment,
   containedIn,
   extractFragment,
+  isLocked,
   remapFragment,
 } from "@openfield/canvas/store/graph";
 import {
@@ -155,13 +157,14 @@ export function createCanvasStore(detail: CanvasDetail, options: CanvasStoreOpti
       const { doc } = get();
       const doomed = new Set<string>();
       const ops: CanvasOp[] = [];
+      // Locked nodes stay (§7.9); the editor says which ones.
       for (const id of ids) {
         const frame = doc.nodes[id];
-        if (!frame) continue;
+        if (!frame || isLocked(doc, id)) continue;
         doomed.add(id);
         const inside = containedIn(doc, id);
         if (mode === "with-contents") {
-          for (const inner of inside) doomed.add(inner);
+          for (const inner of inside) if (!isLocked(doc, inner)) doomed.add(inner);
         } else {
           // Hand direct children to this frame's own frame, keeping them where they are on screen.
           for (const child of inside.filter((c) => doc.nodes[c]?.parentId === id)) {
@@ -175,6 +178,17 @@ export function createCanvasStore(detail: CanvasDetail, options: CanvasStoreOpti
             });
           }
         }
+      }
+      // A locked node whose frame goes moves to the nearest frame that stays, where it is on screen.
+      const moved = new Set(ops.flatMap((op) => (op.op === "reparent" ? [op.id] : [])));
+      for (const id of doc.order) {
+        const parent = doc.nodes[id]!.parentId;
+        if (doomed.has(id) || moved.has(id) || parent === null || !doomed.has(parent)) continue;
+        let to: string | null = parent;
+        while (to !== null && doomed.has(to)) to = doc.nodes[to]?.parentId ?? null;
+        const at = absolutePosition(doc, id);
+        const origin = to === null ? { x: 0, y: 0 } : absolutePosition(doc, to);
+        ops.push({ op: "reparent", id, parentId: to, position: { x: at.x - origin.x, y: at.y - origin.y } });
       }
       // Deepest first, so every frame is empty by the time it goes.
       const depth = (id: string) => {
@@ -265,11 +279,25 @@ export function createCanvasStore(detail: CanvasDetail, options: CanvasStoreOpti
         duplicateNodes(ids, offset = DUPLICATE_OFFSET) {
           // A duplicate keeps its frame, its images and the links coming into it, so it reads from
           // the same inputs and shows what the original made. Links out of it stay with the original.
-          const fragment = extractFragment(get().doc, ids, {
+          const { doc } = get();
+          const fragment = extractFragment(doc, ids, {
             keepParents: true,
             keepResults: true,
             keepInputs: true,
           });
+          // Nothing new goes into a locked frame (§7.9): a copy of a node in one lands in the nearest
+          // frame around it that isn't locked, at the same place on screen.
+          const copied = new Set(fragment.nodes.map((n) => n.id));
+          for (const node of fragment.nodes) {
+            if (node.parentId === null || copied.has(node.parentId) || !isLocked(doc, node.parentId))
+              continue;
+            let to: string | null = node.parentId;
+            while (to !== null && isLocked(doc, to)) to = doc.nodes[to]?.parentId ?? null;
+            const at = absolutePosition(doc, node.id);
+            const origin = to === null ? { x: 0, y: 0 } : absolutePosition(doc, to);
+            node.parentId = to;
+            node.position = { x: at.x - origin.x, y: at.y - origin.y };
+          }
           return insertFragment(fragment, { offset }, true, true);
         },
 
