@@ -617,6 +617,99 @@ test("links into a generating card pulse, and a stop says Canceled on the card",
   }
 });
 
+/** A canvas built through the edits route, opened. Returns the node ids by alias. */
+async function buildCanvas(page: Page, request: APIRequestContext, name: string, edits: unknown[]) {
+  const token = await sessionToken(request);
+  const { id } = await api<CanvasDetail>(request, token, "POST", "/api/canvases", { name });
+  const { aliases } = await api<{ aliases: Record<string, string> }>(
+    request,
+    token,
+    "POST",
+    `/api/canvases/${id}/edits`,
+    { edits },
+  );
+  await page.goto(`/canvas/${id}`);
+  return { id, aliases, home: await libraryRoot(request, token) };
+}
+
+test("a Generate card fed by Variations gets every one of its images", async ({ page, request }) => {
+  const model = "google:gemini-3.1-flash-image";
+  const { id, aliases, home } = await buildCanvas(page, request, "Every take", [
+    {
+      op: "add_node",
+      as: "words",
+      type: "prompt",
+      position: { x: 0, y: 0 },
+      params: { text: "a lighthouse" },
+    },
+    {
+      op: "add_node",
+      as: "takes",
+      type: "image.variations",
+      position: { x: 400, y: 0 },
+      params: { model, count: 4 },
+    },
+    { op: "connect", source: "words", target: "takes" },
+    {
+      op: "add_node",
+      as: "card",
+      type: "image.generate",
+      position: { x: 800, y: 0 },
+      params: { model, prompt: "in watercolour" },
+    },
+    { op: "connect", source: "takes", target: "card" },
+  ]);
+  await runEverything(page, /^Run 2 nodes · 5 images$/);
+  const references = () =>
+    queryDb<{ n: number }>(
+      home,
+      "select json_array_length(json_extract(request_json, '$.references')) as n from job_sets where canvas_id = ? and canvas_node_id = ? order by created_at",
+      id,
+      aliases.card!,
+    ).map((row) => row.n);
+  expect(references()).toEqual([4]);
+
+  // Run again on the card alone: Variations is left out, and its four images still go in.
+  const card = pane(page).locator(`.react-flow__node[data-id="${aliases.card}"]`);
+  await card.hover();
+  await card.getByRole("button", { name: /^Run / }).click({ modifiers: ["Alt"] });
+  await expect.poll(references, { timeout: 30_000 }).toEqual([4, 4]);
+});
+
+test("Variations on a model with seeds is up to date after a run, and ⌥ makes new takes", async ({
+  page,
+  request,
+}) => {
+  const token = await sessionToken(request);
+  await api(request, token, "PUT", "/api/settings/keys/higgsfield", {
+    apiKey: "hf-e2e-id:hf-e2e-secret-0000",
+  });
+  const { id, aliases, home } = await buildCanvas(page, request, "Seeded takes", [
+    { op: "add_node", as: "words", type: "prompt", position: { x: 0, y: 0 }, params: { text: "a portrait" } },
+    {
+      op: "add_node",
+      as: "takes",
+      type: "image.variations",
+      position: { x: 400, y: 0 },
+      params: { model: "higgsfield:soul", count: 2 },
+    },
+    { op: "connect", source: "words", target: "takes" },
+  ]);
+  await runEverything(page, null);
+  expect(countJobs(home, id)).toBe(2);
+
+  // Nothing changed: Run all keeps the takes it has.
+  await runAll(page).click();
+  const takes = pane(page).locator(`.react-flow__node[data-id="${aliases.takes}"]`);
+  await expect(takes.getByText("Up to date")).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(countJobs(home, id)).toBe(2);
+
+  // ⌥ on its own Run: new takes.
+  await takes.getByRole("button", { name: /^Run / }).click({ modifiers: ["Alt"] });
+  await expect.poll(() => countJobs(home, id), { timeout: 30_000 }).toBe(4);
+});
+
 test("the generating swarm fills a card of any shape, and Variations' images too", async ({
   page,
   request,

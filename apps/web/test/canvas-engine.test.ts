@@ -160,6 +160,47 @@ describe("compiler", () => {
     expect(out.jobs).toBe(4 + 4 * 4);
   });
 
+  test("a Generate card reads every image a Variations node hands on, still to come or made", async () => {
+    let doc = docOf(
+      [
+        node("p", "prompt", { text: "Harbor" }),
+        node("v", "image.variations", { count: 4 }),
+        node("g", "image.generate", { prompt: "in watercolour" }),
+      ],
+      [edge("p", "text", "v", "prompt"), edge("v", "images", "g", "input_images")],
+    );
+    const fingerprints = await fingerprintsOf(doc);
+    const generateOf = (request: Parameters<typeof compileRun>[0]["request"]) => {
+      const out = compileRun({ doc, registry, ctx, fingerprints, request });
+      if (out.kind !== "plan") throw new Error(out.kind);
+      return out.items.find((i) => i.item.nodeId === "g")!.item;
+    };
+    const referenceInput = (values: unknown[]): unknown => [
+      { port: "input_images", to: "references", role: "subject", arity: "multi", values },
+    ];
+
+    // Still to come: one pointer to the node, which the server swaps for all four of its images.
+    expect(generateOf({ scope: "all", nodeIds: [] }).inputs as unknown).toEqual(
+      referenceInput([{ kind: "node", nodeId: "v", port: "images" }]),
+    );
+    let analysis = analyzeGraph(doc, registry, ctx, fingerprints).nodes.g!;
+    expect(analysis.references).toBe(4);
+    expect(analysis.referenceImages).toEqual([null, null, null, null]);
+
+    // Made: all four go in, whether Variations is left out of the run or reused in it.
+    doc = apply(doc, { op: "setResult", id: "v", result: done(fingerprints.v!, 4, 0, []) });
+    expect(generateOf({ scope: "node", nodeIds: ["g"] }).inputs as unknown).toEqual(
+      referenceInput(ids(4).map((assetId) => ({ kind: "asset", assetId }))),
+    );
+    const all = compileRun({ doc, registry, ctx, fingerprints, request: { scope: "all", nodeIds: [] } });
+    if (all.kind !== "plan") throw new Error(all.kind);
+    expect(all.upToDate).toEqual(["v"]);
+    expect(all.items.find((i) => i.item.nodeId === "v")!.item.cached?.assetIds).toEqual(ids(4));
+    analysis = analyzeGraph(doc, registry, ctx, fingerprints).nodes.g!;
+    expect(analysis.references).toBe(4);
+    expect(analysis.referenceImages).toEqual(ids(4));
+  });
+
   test("refuses a graph with a loop", async () => {
     const doc = docOf(
       [node("a", "image.generate", { prompt: "a" }), node("b", "image.variations", {})],
