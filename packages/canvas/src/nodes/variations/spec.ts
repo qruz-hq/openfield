@@ -205,13 +205,13 @@ function fingerprintParams(node: EngineNode<VariationsParams>, ctx: EngineContex
       : p.strategy === "prompt-list"
         ? { prompts: promptLines(p), settings: settingsOf(first) }
         : { count: p.count, settings: settingsOf(first) };
-  const seeds = keys.some((key) => ctx.model(key)?.capabilities.seed.supported);
   return {
     params: { strategy: p.strategy, ...strategy },
     model: first,
     manifestVersion: ctx.model(first)?.manifestVersion ?? null,
-    // Where models take seeds, every run picks new ones, so there's nothing to reuse.
-    cacheable: !seeds,
+    // Up to date while nothing it reads or sends changes, on models with seeds too: the server picks
+    // new seeds only when it runs, so Run all keeps the takes it has. ⌥ on its Run makes new ones.
+    cacheable: true,
   };
 }
 

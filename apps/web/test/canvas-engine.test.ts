@@ -1028,6 +1028,47 @@ describe("reusing results (§0.11, §7.7)", () => {
     expect(out.items.map((i) => i.item.bypassCache)).toEqual([true, true]);
   });
 
+  test("Variations on a model with seeds is reused when nothing changed; ⌥ makes new takes", async () => {
+    const seeded: ModelListItem = {
+      ...banana,
+      key: "google:seeded",
+      modelId: "seeded",
+      capabilities: { ...banana.capabilities, seed: { supported: true, echoed: true } },
+    };
+    const seededCtx: EngineContext = {
+      ...ctx,
+      models: [seeded],
+      model: (key) => (key === seeded.key ? seeded : undefined),
+    };
+    let doc = docOf(
+      [
+        node("p", "prompt", { text: "Harbor" }),
+        node("v", "image.variations", { model: seeded.key, count: 2 }),
+      ],
+      [edge("p", "text", "v", "prompt")],
+    );
+    const fingerprints = await resolveFingerprints(planFingerprints(doc, registry, seededCtx), new Map());
+    doc = apply(doc, { op: "setResult", id: "v", result: done(fingerprints.v!, 2, 0, []) });
+    const compile = (request: Parameters<typeof compileRun>[0]["request"]) => {
+      const out = compileRun({ doc, registry, ctx: seededCtx, fingerprints, request });
+      if (out.kind !== "plan") throw new Error(out.kind);
+      return out;
+    };
+
+    // Run all again: the takes it has are reused, and the server is told it may skip it.
+    const again = compile({ scope: "all", nodeIds: [] });
+    expect(again.upToDate).toEqual(["v"]);
+    expect(again.jobs).toBe(0);
+    expect(again.items[0]!.item.cached).toEqual({ fingerprint: fingerprints.v!, assetIds: ids(2) });
+    expect(analyzeGraph(doc, registry, seededCtx, fingerprints).nodes.v).toMatchObject({ upToDate: true });
+
+    // ⌥ on its own Run: new takes.
+    const fresh = compile({ scope: "node", nodeIds: ["v"], bypassCache: true });
+    expect(fresh.upToDate).toEqual([]);
+    expect(fresh.jobs).toBe(2);
+    expect(fresh.items[0]!.item.bypassCache).toBe(true);
+  });
+
   test("a single node whose earlier node ran again asks to run that one first", async () => {
     let doc = docOf(
       [
