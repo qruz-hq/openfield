@@ -124,12 +124,17 @@ export function placeNode(doc: DocSlice, specs: NodeRegistry, request: PlaceRequ
   const free = (at: Point) => !obstacles.some((o) => overlaps({ ...at, ...size }, o));
   const at = (x: number, y: number): Point => ({ x: snap(x), y: snap(y) });
 
-  // Down a column, then the next column over, from a starting point.
+  // Down a column, then the next column over, from a starting point. A spot that's taken moves
+  // down to just under whatever took it, so a column packs as tight as the nodes in it are tall.
   const scan = (start: Point, stepX: number): Point | null => {
     for (let col = 0; col < TRIES; col++) {
+      let candidate = at(start.x + col * stepX, start.y);
       for (let row = 0; row < TRIES; row++) {
-        const candidate = at(start.x + col * stepX, start.y + row * (size.h + PLACE_MARGIN * 2));
-        if (free(candidate)) return candidate;
+        const box = { ...candidate, ...size };
+        const hits = obstacles.filter((o) => overlaps(box, o));
+        if (!hits.length) return candidate;
+        const under = Math.max(...hits.map((o) => o.y + o.h)) + PLACE_MARGIN * 2;
+        candidate = { x: candidate.x, y: Math.ceil(under / GRID) * GRID };
       }
     }
     return null;
