@@ -26,6 +26,7 @@ export type ShortcutId =
   | "selectAll"
   | "group"
   | "ungroup"
+  | "lock"
   | "delete"
   | "escape"
   | "save"
@@ -103,6 +104,7 @@ export const SHORTCUTS: readonly Shortcut[] = [
   { id: "selectAll", chords: [{ key: "a", mod: true }] },
   { id: "group", chords: [{ key: "g", mod: true }] },
   { id: "ungroup", chords: [{ key: "g", mod: true, shift: true }] },
+  { id: "lock", chords: [{ key: "l", mod: true, shift: true }] },
   { id: "delete", chords: [{ key: "backspace" }, { key: "delete" }] },
   { id: "escape", chords: [{ key: "escape" }], inText: true },
   { id: "save", chords: [{ key: "s", mod: true }], inText: true },
@@ -220,6 +222,7 @@ export function shortcutSheet(mac = isMac()): SheetGroup[][] {
           { label: "canvas.editor.shortcuts.selectAll", keys: `${cmd}A` },
           { label: "canvas.editor.shortcuts.group", keys: `${cmd}G` },
           { label: "canvas.editor.shortcuts.ungroup", keys: `${shift}${cmd}G` },
+          { label: "canvas.editor.shortcuts.lock", keys: `${shift}${cmd}L` },
           { label: "canvas.editor.shortcuts.delete", keys: "⌫" },
           { label: "canvas.editor.shortcuts.nodeMenu", keys: `${shift}F10` },
           { label: "canvas.editor.shortcuts.nodeSettings", keys: mac ? `${alt} ${enter}` : `${alt}${enter}` },
@@ -250,6 +253,7 @@ export function toolKey(id: ShortcutId, mac = isMac()): string | undefined {
     "zoom.selection": mac ? "⇧2" : "Shift+2",
     duplicate: `${cmd}D`,
     group: `${cmd}G`,
+    lock: mac ? "⇧⌘L" : "Shift+Ctrl+L",
     delete: "⌫",
   };
   return map[id];

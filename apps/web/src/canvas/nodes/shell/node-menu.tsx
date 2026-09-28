@@ -5,6 +5,8 @@ import {
   Copy,
   Download,
   FastForward,
+  Lock,
+  LockOpen,
   Maximize2,
   Minimize2,
   PencilLine,
@@ -19,13 +21,15 @@ import { useNavigate } from "react-router";
 import { errorMessage } from "../../../api/raw";
 import { notify, notifyError } from "../../../lib/notify";
 import { toolKey } from "../../editor/shortcuts";
-import { useCanvasActions, useCanvasShallow, useCanvasStoreApi } from "../../store/context";
+import { useCanvasActions, useCanvasShallow, useCanvasStoreApi, useLocked } from "../../store/context";
 import { downloadAssets } from "./download";
+import { useLockActions } from "./use-lock";
 
 // Canvas / Node / Menu (design L8nXKV): right-click on a node, or ⇧F10 and the menu key on a
 // focused one. 240 wide, 4 padding, the run items only on nodes that run. The menu opens at the
 // pointer; its trigger is a point portaled to the page, since the node itself sits inside the
 // pane's zoom transform. Holding ⌥ on a run item makes new images even when nothing changed (§7.7).
+// Locked (design NoE6t), Lock reads Unlock, and Run, Run from here and Delete wait for it at 40%.
 
 export interface NodeMenuProps {
   id: string;
@@ -41,7 +45,9 @@ export interface NodeMenuProps {
   align?: "start" | "end";
 }
 
-/** Images the node has to save: what it made, else the ones it holds (Upload, Assets). */
+/** A locked node's Run, Run from here and Delete: at 40% in their own colors, not greyed. */
+const WAITS = "data-disabled:opacity-40 data-disabled:text-text-primary";
+
 /** The error a failed node shows, for Copy error. */
 function useNodeError(id: string): { code: string; reason?: string } | null {
   return useCanvasShallow((s) => {
@@ -52,6 +58,7 @@ function useNodeError(id: string): { code: string; reason?: string } | null {
   });
 }
 
+/** Images the node has to save: what it made, else the ones it holds (Upload, Assets). */
 function useDownloadable(id: string): string[] {
   return useCanvasShallow((s) => {
     const made = s.doc.results[id]?.assetIds ?? [];
@@ -75,6 +82,8 @@ export function NodeMenu({
   const actions = useCanvasActions();
   const images = useDownloadable(id);
   const error = useNodeError(id);
+  const locked = useLocked(id);
+  const lock = useLockActions(id);
   const navigate = useNavigate();
   // Items are picked on pointer up or a key; either says whether ⌥ was held.
   const alt = useRef(false);
@@ -119,10 +128,21 @@ export function NodeMenu({
       >
         {runnable ? (
           <>
-            <MenuItem icon={Play} shortcut={toolKey("run.node")} onSelect={() => void run("node")}>
+            <MenuItem
+              icon={Play}
+              shortcut={toolKey("run.node")}
+              disabled={locked}
+              className={WAITS}
+              onSelect={() => void run("node")}
+            >
               {t("canvas.nodes.menu.run")}
             </MenuItem>
-            <MenuItem icon={FastForward} onSelect={() => void run("downstream")}>
+            <MenuItem
+              icon={FastForward}
+              disabled={locked}
+              className={WAITS}
+              onSelect={() => void run("downstream")}
+            >
               {t("canvas.nodes.menu.runFromHere")}
             </MenuItem>
           </>
@@ -161,8 +181,17 @@ export function NodeMenu({
         <MenuItem icon={PencilLine} onSelect={() => actions.setUi({ renamingNodeId: id })}>
           {t("canvas.nodes.menu.rename")}
         </MenuItem>
+        <MenuItem icon={locked ? LockOpen : Lock} shortcut={toolKey("lock")} onSelect={lock.toggle}>
+          {locked ? t("canvas.nodes.menu.unlock") : t("canvas.nodes.menu.lock")}
+        </MenuItem>
         <MenuSeparator />
-        <MenuItem icon={Trash2} danger onSelect={remove}>
+        <MenuItem
+          icon={Trash2}
+          danger
+          disabled={locked}
+          className="data-disabled:text-danger data-disabled:opacity-40"
+          onSelect={remove}
+        >
           {t("canvas.nodes.menu.delete")}
         </MenuItem>
       </MenuContent>

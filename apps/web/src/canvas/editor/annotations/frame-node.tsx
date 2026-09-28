@@ -1,10 +1,10 @@
 import { FRAME_MIN, frameSpec } from "@openfield/canvas/nodes/annotations";
 import { t } from "@openfield/core";
 import { cn } from "@openfield/ui";
-import { ChevronDown, ChevronRight, Frame } from "lucide-react";
+import { ChevronDown, ChevronRight, Frame, Lock } from "lucide-react";
 import { type KeyboardEvent, memo, useEffect, useRef, useState } from "react";
 import { defineNode, type NodeComponentProps } from "../../nodes/registry";
-import { useCanvas, useCanvasActions, useNodeFrame, useReadOnly, useUi } from "../../store";
+import { useCanvas, useCanvasActions, useLocked, useNodeFrame, useReadOnly, useUi } from "../../store";
 import { AnnotationHandles } from "../annotation-handles";
 import { CanvasNodeResizer } from "../node-resizer";
 import { useEditingText } from "./editable-text";
@@ -12,7 +12,8 @@ import { useEditingText } from "./editable-text";
 // Frame (design sV9Pa): a titled area that groups nodes. 640×420, a 1 px $border-strong line at
 // radius 16 over an $elevated tint at half strength. The title pill hangs 32 above the top-left:
 // collapse chevron, name, node count. Nodes inside are React Flow children (parentId), so moving
-// the frame moves them; collapsing folds it to a strip and hides them.
+// the frame moves them; collapsing folds it to a strip and hides them. Locked (design LFv5M), a
+// lock follows the chevron and the count says so; what's in it stays inside (flow/adapter.ts).
 
 const FrameNode = memo(function FrameNode({ id, selected }: NodeComponentProps) {
   const frame = useNodeFrame(id);
@@ -23,9 +24,10 @@ const FrameNode = memo(function FrameNode({ id, selected }: NodeComponentProps) 
   });
   const actions = useCanvasActions();
   const readOnly = useReadOnly();
+  const locked = useLocked(id);
   const collapsed = frame?.collapsed ?? false;
   const title = frame?.title ?? t("canvas.editor.annotations.frame");
-  const { editing, start } = useEditingText(id);
+  const { editing, start } = useEditingText(id, { words: false });
 
   const toggle = () => {
     actions.apply([{ op: "setCollapsed", id, collapsed: !collapsed }], { label: "collapse" });
@@ -51,6 +53,9 @@ const FrameNode = memo(function FrameNode({ id, selected }: NodeComponentProps) 
         >
           {collapsed ? <ChevronRight size={12} aria-hidden /> : <ChevronDown size={12} aria-hidden />}
         </button>
+        {locked ? (
+          <Lock size={12} aria-hidden data-frame-lock className="shrink-0 text-text-tertiary" />
+        ) : null}
         {editing ? (
           <TitleInput id={id} initial={frame?.title ?? ""} placeholder={title} />
         ) : (
@@ -60,7 +65,7 @@ const FrameNode = memo(function FrameNode({ id, selected }: NodeComponentProps) 
           </span>
         )}
         <span className="shrink-0 text-caption text-text-tertiary">
-          {t("canvas.editor.frame.count", { count })}
+          {t(locked ? "canvas.editor.frame.countLocked" : "canvas.editor.frame.count", { count })}
         </span>
       </div>
       {collapsed ? null : <CanvasNodeResizer selected={selected} minSize={FRAME_MIN} />}

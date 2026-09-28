@@ -3,7 +3,7 @@ import { t } from "@openfield/core";
 import type { CanvasEdge } from "@openfield/core/canvas";
 import type { Edge, Node } from "@xyflow/react";
 import type { NodeDefinition } from "../../nodes/registry";
-import { type DocSlice, type NodeFrame, parentsFirst, type Size } from "../../store";
+import { type DocSlice, isLocked, type NodeFrame, parentsFirst, type Size } from "../../store";
 import type { CanvasTool, SelectionState } from "../../store/types";
 
 // The store's document, as React Flow's nodes and edges. Our store stays the source of truth: React
@@ -106,6 +106,8 @@ interface NodeEntry {
   hidden: boolean;
   interactive: boolean;
   hit: boolean;
+  /** In a locked frame: it moves within the frame but can't leave it (§7.9). */
+  confined: boolean;
   measured: Measured | undefined;
   node: FlowNode;
 }
@@ -129,6 +131,7 @@ export function createNodeCache() {
         hidden: insideCollapsed(doc, id),
         interactive,
         hit: findHit === id,
+        confined: frame.parentId !== null && isLocked(doc, frame.parentId),
         measured: measured.get(id),
       };
       const old = cache.get(id);
@@ -142,6 +145,7 @@ export function createNodeCache() {
         old.hidden === entry.hidden &&
         old.interactive === entry.interactive &&
         old.hit === entry.hit &&
+        old.confined === entry.confined &&
         old.measured?.width === entry.measured?.width &&
         old.measured?.height === entry.measured?.height;
       const node = same ? old.node : toFlowNode(entry);
@@ -168,6 +172,7 @@ function toFlowNode(e: Omit<NodeEntry, "node">): FlowNode {
     type: def ? def.type : UNKNOWN_NODE_TYPE,
     position: frame.position,
     ...(frame.parentId !== null && { parentId: frame.parentId }),
+    ...(e.confined && { extent: "parent" as const }),
     data: EMPTY_DATA,
     ...size,
     ...(measured && { measured: { width: measured.width, height: measured.height } }),

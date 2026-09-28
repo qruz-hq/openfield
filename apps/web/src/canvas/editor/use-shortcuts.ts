@@ -153,6 +153,7 @@ export function useShortcuts(commands: EditorCommands) {
         selectAll: () => commands.selectAll(),
         group: () => commands.group(),
         ungroup: () => commands.ungroup(),
+        lock: () => (hasSelection ? commands.toggleLock() : false),
         delete: () => (hasSelection ? commands.deleteSelection() : false),
         save: () => void session.autosave.flush(),
         saveVersion: () => (ui.readOnly ? false : session.ui.setState({ saveVersionOpen: true })),

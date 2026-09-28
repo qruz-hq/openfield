@@ -4,10 +4,12 @@ import {
   planGroupConnect,
   skippedMessage,
 } from "@openfield/canvas/engine/connect";
+import { nodeTitle } from "@openfield/canvas/engine/describe";
 import type { CanvasRunScope } from "@openfield/core";
 import { t } from "@openfield/core";
 import type { CanvasEdge } from "@openfield/core/canvas";
 import { type Connection, type ReactFlowInstance, useReactFlow } from "@xyflow/react";
+import { Lock } from "lucide-react";
 import { useMemo } from "react";
 import { notify } from "../../lib/notify";
 import { useEngineStore } from "../engine/engine-store";
@@ -21,6 +23,8 @@ import {
   containedIn,
   extractFragment,
   type FrameDeleteMode,
+  isLocked,
+  lockedBy,
   newEdgeId,
   type Point,
   type Size,
@@ -42,6 +46,7 @@ import {
   topLevelSelection,
   ungroupOps,
 } from "./geometry";
+import { lockedToKeep, stayedMessage, toggleLockOps, unlockOps } from "./locks";
 import { type EditorSession, useSession } from "./session";
 
 // What the chrome and the keyboard do to the canvas. Every command reads the store when it runs
@@ -103,6 +108,12 @@ export function createCommands(
     return inside ? rf.screenToFlowPosition(pointer) : null;
   };
 
+  /** Locks or unlocks as one undo step, and saves at once so a run right after sees it. */
+  const applyLocks = (ops: CanvasOp[]) => {
+    if (!ops.length || !report(actions().apply(ops, { label: "lock" }))) return;
+    void session.autosave.flush();
+  };
+
   const performDelete = async (
     nodeIds: readonly string[],
     edgeIds: readonly string[],
@@ -112,6 +123,9 @@ export function createCommands(
     const doomed = new Set(nodeIds);
     if (mode === "with-contents")
       for (const id of nodeIds) for (const inner of containedIn(doc, id)) doomed.add(inner);
+    for (const id of doomed) if (isLocked(doc, id)) doomed.delete(id);
+    // Locked nodes stay where they are (§7.9, design u47ehv), and the toast frees them.
+    const kept = lockedToKeep(doc, nodeIds, mode);
     if (doomed.size > SNAPSHOT_DELETE_ABOVE) {
       // Snapshot first, so a big delete can be undone even after a reload.
       await session.snapshot("before_delete").catch(() => {});
@@ -119,6 +133,21 @@ export function createCommands(
     if (nodeIds.length && !report(actions().deleteNodes(nodeIds, mode))) return;
     const left = edgeIds.filter((id) => store.getState().doc.edges[id]);
     if (left.length) report(actions().deleteEdges(left));
+    if (kept.length) {
+      notify(stayedMessage(doc, nodeRegistry, kept), {
+        icon: Lock,
+        action: {
+          label: t("canvas.lock.unlock"),
+          onClick: () => applyLocks(unlockOps(store.getState().doc, kept)),
+        },
+      });
+    }
+  };
+
+  /** Says a locked frame takes nothing new, naming it. */
+  const refuseDrop = (frameId: string) => {
+    const frame = store.getState().doc.nodes[frameId];
+    if (frame) toast(t("canvas.lock.noDrop", { name: nodeTitle(frame, nodeRegistry) }));
   };
 
   const commands = {
@@ -208,6 +237,7 @@ export function createCommands(
         ? { x: Math.round(at.x - size.w / 2), y: Math.round(at.y - size.h / 2) }
         : { x: Math.round(at.x), y: Math.round(at.y - 12) };
       const parentId = tool === FRAME_TYPE ? null : frameAtPoint(state.doc, "", at, sizeOf);
+      if (parentId !== null && isLocked(state.doc, parentId)) return refuseDrop(parentId);
       const origin = parentId
         ? (rf.getInternalNode(parentId)?.internals.positionAbsolute ?? { x: 0, y: 0 })
         : { x: 0, y: 0 };
@@ -268,13 +298,24 @@ export function createCommands(
       actions().openAddMenu({ flowPosition: flow, screenPosition: screen, pending: null });
     },
 
-    /** After a drag: nodes dropped on a frame join it; dragged out of one, they leave it. */
+    /**
+     * After a drag: nodes dropped on a frame join it; dragged out of one, they leave it. A locked
+     * frame keeps what's in it and takes nothing new (§7.9).
+     */
     dropIntoFrames(ids: readonly string[], gesture: string | null) {
       const { doc } = store.getState();
+      let refused: string | null = null;
       const ops = topLevelSelection(doc, ids).flatMap((id) => {
+        const by = lockedBy(doc, id);
+        if (by !== null && by !== id) return [];
         const op = dropOp(doc, id, sizeOf);
+        if (op?.op === "reparent" && op.parentId !== null && isLocked(doc, op.parentId)) {
+          refused = op.parentId;
+          return [];
+        }
         return op ? [op] : [];
       });
+      if (refused) refuseDrop(refused);
       if (!ops.length) return;
       report(
         actions().apply(ops, {
@@ -290,9 +331,12 @@ export function createCommands(
       if (ui.readOnly) return;
       const nodeIds = [...selection.nodeIds];
       if (!nodeIds.length && !selection.edgeIds.length) return;
+      // A locked frame stays with what's in it, so there's nothing to ask.
       const framesWithNodes = nodeIds.filter(
         (id) =>
-          doc.nodes[id]?.type === FRAME_TYPE && childrenOf(doc, id).some((child) => !nodeIds.includes(child)),
+          doc.nodes[id]?.type === FRAME_TYPE &&
+          !isLocked(doc, id) &&
+          childrenOf(doc, id).some((child) => !nodeIds.includes(child)),
       );
       if (framesWithNodes.length) {
         session.ui.setState({ frameDelete: nodeIds });
@@ -351,6 +395,10 @@ export function createCommands(
     group() {
       const state = store.getState();
       if (state.ui.readOnly) return;
+      const lockedParent = topLevelSelection(state.doc, state.selection.nodeIds)
+        .map((id) => state.doc.nodes[id]?.parentId ?? null)
+        .find((parent) => parent !== null && isLocked(state.doc, parent));
+      if (lockedParent) return refuseDrop(lockedParent);
       const plan = groupIntoFrameOps(
         state.doc,
         state.selection.nodeIds,
@@ -367,7 +415,13 @@ export function createCommands(
     ungroup() {
       const state = store.getState();
       if (state.ui.readOnly) return;
-      const frames = state.selection.nodeIds.filter((id) => state.doc.nodes[id]?.type === FRAME_TYPE);
+      const picked = state.selection.nodeIds.filter((id) => state.doc.nodes[id]?.type === FRAME_TYPE);
+      // A locked frame keeps what's in it.
+      const locked = picked.find((id) => isLocked(state.doc, id));
+      if (locked) {
+        toast(t("canvas.lock.noUngroup", { name: nodeTitle(state.doc.nodes[locked]!, nodeRegistry) }));
+      }
+      const frames = picked.filter((id) => !isLocked(state.doc, id));
       if (!frames.length) return;
       const children = frames.flatMap((id) => childrenOf(state.doc, id));
       report(
@@ -395,6 +449,20 @@ export function createCommands(
         return { op: "moveNode", id, position: { x: p.x + dx, y: p.y + dy } };
       });
       report(actions().apply(ops, { label: "move", coalesce: "nudge" }));
+    },
+
+    /** ⇧⌘L: lock what's picked, or unlock it when it's all locked (§7.9). */
+    toggleLock(ids: readonly string[] = store.getState().selection.nodeIds) {
+      const state = store.getState();
+      if (state.ui.readOnly) return false;
+      const ops = toggleLockOps(state.doc, ids);
+      if (!ops.length) return false;
+      applyLocks(ops);
+    },
+
+    unlock(ids: readonly string[]) {
+      if (store.getState().ui.readOnly) return;
+      applyLocks(unlockOps(store.getState().doc, ids));
     },
 
     undo() {

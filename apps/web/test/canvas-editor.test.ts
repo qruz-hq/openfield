@@ -353,6 +353,13 @@ describe("shortcuts", () => {
     expect(matchShortcut(key("n"), true)).toBe("tool.note");
     expect(matchShortcut(key("f", { meta: true }), true)).toBe("find");
     expect(matchShortcut(key("?", { shift: true }), true)).toBe("help");
+    expect(matchShortcut(key("L", { meta: true, shift: true }), true)).toBe("lock");
+    expect(matchShortcut(key("L", { ctrl: true, shift: true }), false)).toBe("lock");
+    expect(toolKey("lock", true)).toBe("⇧⌘L");
+    expect(shortcutSheet(true).flat().flatMap((g) => g.rows)).toContainEqual({
+      label: "canvas.editor.shortcuts.lock",
+      keys: "⇧⌘L",
+    });
   });
 
   test("while typing, only the keys that make sense in a text field fire", () => {
