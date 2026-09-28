@@ -261,6 +261,8 @@ async function openWith(
   await api(request, token, "PATCH", `/api/canvases/${made.id}`, { graph, graphVersion: made.graphVersion });
   await page.goto(`/canvas/${made.id}`);
   await expect(pane(page).locator(".react-flow__node")).toHaveCount(nodes.length);
+  // Links draw once their nodes are measured, a moment after the nodes: wait for them too.
+  await expect(pane(page).locator(".react-flow__edge-interaction")).toHaveCount(edges.length);
 }
 
 const centreOf = async (locator: Locator) => {
@@ -847,12 +849,18 @@ test("a Variations card is its images, with Run on hover and everything else in 
   await expect(sheet.locator(`[data-model-row="${FLASH}"]`)).toBeVisible();
 });
 
-test("words from a Prompt node light their link and that node when hovered on a card", async ({
+test("words from a Prompt node light their link and that node, on the card and in its side sheet", async ({
   page,
   request,
 }) => {
   const { id, aliases } = await canvasOf(request, "Linked text", [
-    { op: "add_node", as: "p", type: "prompt", position: { x: 0, y: 0 }, params: { text: "Soft sea mist" } },
+    {
+      op: "add_node",
+      as: "p",
+      type: "prompt",
+      position: { x: 0, y: 0 },
+      params: { text: "Soft sea mist over a quiet harbour at dawn, long exposure, muted teal and amber" },
+    },
     {
       op: "add_node",
       as: "g",
@@ -863,6 +871,8 @@ test("words from a Prompt node light their link and that node when hovered on a 
     { op: "connect", source: "p", target: "g" },
   ]);
   await page.goto(`/canvas/${id}`);
+  // The outline goes round the whole part as one block, not round each line it wraps to.
+  const oneBlock = (part: Locator) => part.evaluate((el) => el.getClientRects().length);
   const card = pane(page).locator(`.react-flow__node[data-id="${aliases.g}"]`);
   const source = pane(page).locator(`.react-flow__node[data-id="${aliases.p}"]`);
   const link = pane(page).locator("path.of-edge").first();
@@ -874,9 +884,21 @@ test("words from a Prompt node light their link and that node when hovered on a 
   await part.hover();
   await expect(link).toHaveAttribute("data-linked", "true");
   await expect(source.locator("[data-linked-source]")).toHaveCount(1);
+  expect(await oneBlock(part)).toBe(1);
   await page.mouse.move(5, 5);
   await expect(link).not.toHaveAttribute("data-linked", /.*/);
   await expect(source.locator("[data-linked-source]")).toHaveCount(0);
+
+  // The side sheet shows the same words, lit the same way.
+  await card.dblclick({ position: { x: 160, y: 40 } });
+  const sheet = page.getByRole("complementary", { name: "Generate" });
+  const inSheet = sheet.locator(".of-linked", { hasText: "Soft sea mist" });
+  await inSheet.hover();
+  await expect(link).toHaveAttribute("data-linked", "true");
+  await expect(source.locator("[data-linked-source]")).toHaveCount(1);
+  expect(await oneBlock(inSheet)).toBe(1);
+  await page.mouse.move(5, 5);
+  await expect(link).not.toHaveAttribute("data-linked", /.*/);
 });
 
 test("a Generate fed by a four-take Variations shows all four in its side sheet", async ({
@@ -913,6 +935,18 @@ test("a Generate fed by a four-take Variations shows all four in its side sheet"
   await card.dblclick({ position: { x: 160, y: 40 } });
   await expect(sheet.locator("[data-reference-link]")).toHaveCount(1);
   await expect(sheet.locator("[data-reference-thumb] img")).toHaveCount(4);
+
+  // Hovering the link's images in the sheet lights that link and the Variations node.
+  const group = sheet.locator("[data-reference-link]");
+  const edgeId = await group.getAttribute("data-reference-link");
+  await group.hover();
+  await expect(pane(page).locator(`.react-flow__edge[data-id="${edgeId}"] path.of-edge`)).toHaveAttribute(
+    "data-linked",
+    "true",
+  );
+  await expect(
+    pane(page).locator(`.react-flow__node[data-id="${aliases.v}"] [data-linked-source]`),
+  ).toHaveCount(1);
 });
 
 test("the spend pill shows what this canvas has made, and today beside it", async ({ page, request }) => {
@@ -936,7 +970,12 @@ test("the spend pill shows what this canvas has made, and today beside it", asyn
   // Fake runs cost nothing, but their images count.
   await expect(details.getByText("2 images").first()).toBeVisible();
   await expect(details.getByText("Today, everywhere")).toBeVisible();
-  await details.getByRole("link", { name: "See spending" }).click();
+  // Moved there by hand, across the gap under the pill, the details stay open to click.
+  const see = details.getByRole("link", { name: "See spending" });
+  const to = await centreOf(see);
+  await page.mouse.move(to.x, to.y, { steps: 12 });
+  await expect(see).toBeVisible();
+  await page.mouse.click(to.x, to.y);
   await expect(page).toHaveURL(/\/settings\/spending$/);
 });
 
