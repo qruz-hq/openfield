@@ -3,7 +3,8 @@ import type { CanvasNodeState } from "@openfield/core";
 // What each state of the Generate card shows (design A0Fi5O, "Hover by state"). Pure, so every row
 // of the table is tested. At rest the card is its image, label and ports, with a pill only when the
 // state needs attention; on hover, focus or as the only node selected the top bar (pill, menu) and
-// the bottom bar (prompt and its action) show over it.
+// the bottom bar (prompt and its action) show over it. A locked card (design zbJ7h) is its images
+// with a Locked pill on hover and nothing to run.
 
 export type CardPhase =
   | "empty"
@@ -14,7 +15,8 @@ export type CardPhase =
   | "changed"
   | "failed"
   | "blocked"
-  | "canceled";
+  | "canceled"
+  | "locked";
 
 /** How the image sits in the card: as is, at 50% (a run over it), at 60% (out of date), or none. */
 export type CardMedia = "image" | "dimmed" | "faded" | "placeholder";
@@ -55,9 +57,18 @@ export interface CardStateInput {
   partial: boolean;
   /** The browser can draw the voxel swarm (WebGL); without it the card keeps its glyph. */
   voxels?: boolean;
+  /** Locked: it keeps its images and never runs (§7.9). A run already under way still shows. */
+  locked?: boolean;
 }
 
-export function cardView({ state, images, atCompany, partial, voxels = false }: CardStateInput): CardView {
+export function cardView({
+  state,
+  images,
+  atCompany,
+  partial,
+  voxels = false,
+  locked = false,
+}: CardStateInput): CardView {
   const base: CardView = {
     phase: "empty",
     pillAtRest: true,
@@ -72,6 +83,11 @@ export function cardView({ state, images, atCompany, partial, voxels = false }: 
     stripes: false,
     longPill: false,
   };
+  if (locked && state !== "queued" && state !== "running") {
+    return images
+      ? { ...base, phase: "locked", pillAtRest: false, media: "image", emptyGlyph: false, action: null }
+      : { ...emptyView(base), phase: "locked", noPill: false, action: null, bottomAtRest: false };
+  }
   switch (state) {
     case "queued":
     case "running": {

@@ -3,7 +3,7 @@ import type { CanvasOp } from "@openfield/canvas/store/ops";
 import { t } from "@openfield/core";
 import { type DragEvent, type KeyboardEvent, useMemo, useState } from "react";
 import { useNodeAnalysis } from "../../engine/engine-store";
-import { useCanvas, useCanvasStoreApi, useReadOnly } from "../../store/context";
+import { useCanvas, useCanvasStoreApi, useLocked, useReadOnly } from "../../store/context";
 import { nodeRegistry } from "../registry";
 import { useLinkHover } from "../shell/linked-text";
 import { AssetImage } from "../shell/thumb";
@@ -31,6 +31,7 @@ interface Item {
 export function ReferenceOrder({ nodeId }: { nodeId: string }) {
   const store = useCanvasStoreApi();
   const readOnly = useReadOnly();
+  const locked = useLocked(nodeId);
   const [over, setOver] = useState<string | null>(null);
   const links = useNodeAnalysis(nodeId)?.imageLinks ?? NO_LINKS;
   const nodes = useCanvas((s) => s.doc.nodes);
@@ -50,7 +51,8 @@ export function ReferenceOrder({ nodeId }: { nodeId: string }) {
     [links, nodes],
   );
   if (!items.length) return null;
-  const orderable = items.length > 1 && !readOnly;
+  // A locked node's links keep their order: it's one of its settings.
+  const orderable = items.length > 1 && !readOnly && !locked;
 
   const move = (edgeId: string, to: number) => {
     const ids = items.map((i) => i.edgeId).filter((id) => id !== edgeId);

@@ -11,6 +11,7 @@ import {
   Info,
   KeyRound,
   Loader,
+  Lock,
   type LucideIcon,
   Pencil,
   Play,
@@ -110,7 +111,14 @@ export function ImageCard({
   // The voxel swarm needs WebGL, set up the first time a card runs or waits.
   const live = display.state === "running" || display.state === "queued";
   const voxels = useMemo(() => live && voxelsSupported(), [live]);
-  const view = cardView({ state: display.state, images: hasImages, atCompany: !!wait, partial, voxels });
+  const view = cardView({
+    state: display.state,
+    images: hasImages,
+    atCompany: !!wait,
+    partial,
+    voxels,
+    locked: display.locked,
+  });
   const scrim = hasScrim(view);
   // Over an image the bars and what's on them are dark in both themes (nodes.css).
   const paint = scrim ? "dark" : undefined;
@@ -239,6 +247,8 @@ function StatusPill({ id, view, display }: { id: string; view: CardView; display
           : { icon: Info, label: t("canvas.nodes.card.cantRun") };
       case "canceled":
         return { icon: CircleStop, label: t("canvas.nodes.card.canceled") };
+      case "locked":
+        return { icon: Lock, label: t("canvas.nodes.state.locked") };
       default:
         return { icon: Check, label: t("canvas.nodes.state.upToDate") };
     }

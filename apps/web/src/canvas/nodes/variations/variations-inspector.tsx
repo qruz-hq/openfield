@@ -16,16 +16,16 @@ import {
 import { incomingEdges } from "@openfield/canvas/store/graph";
 import { type ModelKey, t } from "@openfield/core";
 import { estimateRun } from "@openfield/providers/manifest";
-import { Button, MiniChip, ProviderLogo, Segmented, SegmentedItem, Stepper } from "@openfield/ui";
+import { Button, cn, MiniChip, ProviderLogo, Segmented, SegmentedItem, Stepper } from "@openfield/ui";
 import { Link, Plus, Square, X } from "lucide-react";
 import { type KeyboardEvent, type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { tightCost } from "../../../lib/cost";
 import { logoFor } from "../../../lib/provider";
 import { useCanvasEngineContext, useNodeAnalysis } from "../../engine/engine-store";
-import { useCanvas, useCanvasStoreApi, useReadOnly } from "../../store/context";
+import { useCanvas, useCanvasStoreApi, useLocked, useReadOnly } from "../../store/context";
 import { sizeControls, useModelSwitch } from "../generate/controls";
 import { nodeRegistry } from "../registry";
-import { InspectorRun, ModelField, SizeField } from "../shell/inspector-parts";
+import { InspectorRun, LOCKED_DIM, ModelField, SizeField } from "../shell/inspector-parts";
 import { type LinkEnds, LinkedPrompt, useLinkHover } from "../shell/linked-text";
 import { useCancel } from "../shell/state-band";
 import { AssetImage } from "../shell/thumb";
@@ -36,7 +36,8 @@ import { addRow, backspaceRow, enterRow, promptRows, removeRow, setRow } from ".
 // Variations' side sheet (design rD6HX New takes, xrC4Q Prompts, YWYEQ Models): what it reads (the
 // incoming image and the words from a Prompt node), what it makes (New takes, Prompts or Models,
 // each with its own list or count), the size every run shares, then Run. Everything the card used
-// to carry under its images lives here now; the card is its images.
+// to carry under its images lives here now; the card is its images. Locked, each part is read-only
+// at 45% and Run waits at 35%, as on Generate's (design L79Zt).
 
 const STRATEGIES: { value: VariationStrategy; label: "newTakes" | "promptList" | "modelList" }[] = [
   { value: "same-prompt", label: "newTakes" },
@@ -54,6 +55,8 @@ export function VariationsInspector({ nodeId }: { nodeId: string }) {
   const run = useRunNode(nodeId);
   const cancel = useCancel(nodeId);
   const readOnly = useReadOnly();
+  const locked = useLocked(nodeId);
+  const dim = locked ? LOCKED_DIM : undefined;
   const byModel = params.strategy === "model-list";
   const models = modelList(params);
   // Models mode shows the first model's size options; the others clamp to theirs.
@@ -82,14 +85,15 @@ export function VariationsInspector({ nodeId }: { nodeId: string }) {
 
   return (
     <>
-      <Reads nodeId={nodeId} />
+      <Reads nodeId={nodeId} className={dim} />
       {/* Make (design oi7Dd): what the node varies. */}
-      <div className="flex w-full flex-col gap-8 px-2 pt-4">
+      <div className={cn("flex w-full flex-col gap-8 px-2 pt-4", dim)}>
         <span className="text-caption text-text-tertiary">{t("canvas.nodes.variations.make")}</span>
         <Segmented
           value={params.strategy}
           onValueChange={pickStrategy}
           disabled={readOnly}
+          readOnly={locked}
           aria-label={t("canvas.nodes.variations.strategy")}
         >
           {STRATEGIES.map((s) => (
@@ -104,6 +108,7 @@ export function VariationsInspector({ nodeId }: { nodeId: string }) {
           models={modelsFitting(ctx.models, { references }, key)}
           selected={model}
           disabled={readOnly}
+          locked={locked}
           onSelect={(next) => {
             if (next.key !== model?.key) switchModel(model, next, params);
           }}
@@ -111,7 +116,7 @@ export function VariationsInspector({ nodeId }: { nodeId: string }) {
       )}
       {params.strategy === "same-prompt" ? (
         // Takes (design X6GHv): the count and what a take is.
-        <div className="flex w-full items-center justify-between gap-12 px-2">
+        <div className={cn("flex w-full items-center justify-between gap-12 px-2", dim)}>
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <span className="text-small font-medium text-text-primary">
               {t("canvas.nodes.variations.takes")}
@@ -123,6 +128,7 @@ export function VariationsInspector({ nodeId }: { nodeId: string }) {
             min={TAKES_MIN}
             max={TAKES_MAX}
             disabled={readOnly}
+            readOnly={locked}
             onValueChange={(count) => setParams({ count }, "count")}
             decrementLabel={t("canvas.nodes.variations.fewer")}
             incrementLabel={t("canvas.nodes.variations.more")}
@@ -132,26 +138,29 @@ export function VariationsInspector({ nodeId }: { nodeId: string }) {
       ) : params.strategy === "prompt-list" ? (
         <PromptList
           prompts={params.prompts}
-          readOnly={readOnly}
+          readOnly={readOnly || locked}
+          className={dim}
           onChange={(prompts) => setParams({ prompts }, "prompts")}
         />
       ) : (
         <ModelList
           ctx={ctx}
           params={params}
-          readOnly={readOnly}
+          readOnly={readOnly || locked}
+          className={dim}
           references={references}
           onChange={(next) => setParams({ models: next })}
         />
       )}
       {controls.length ? (
         // Size row (design MUCJI): resolution or quality, then aspect ratio, sharing the width.
-        <div className="flex w-full gap-8">
+        <div className={cn("flex w-full gap-8", dim)}>
           {controls.map((control) => (
             <SizeField
               key={control.id}
               control={control}
               disabled={readOnly}
+              locked={locked}
               onPick={(value) => setParams(control.patch(value))}
             />
           ))}
@@ -175,6 +184,7 @@ export function VariationsInspector({ nodeId }: { nodeId: string }) {
           estimate={analysis?.estimate ?? null}
           models={byModel ? models.map((k) => ctx.model(k)) : [model]}
           disabled={readOnly}
+          locked={locked}
           onRun={(anchor, bypassCache) => void run("node", { anchor, bypassCache })}
         />
       )}
@@ -186,7 +196,7 @@ export function VariationsInspector({ nodeId }: { nodeId: string }) {
  * Reads (design uODfj): the image coming in and where from, then the words from a Prompt node with
  * the chip that goes to it. Each Prompt node's part lights its link on hover, like on the card.
  */
-function Reads({ nodeId }: { nodeId: string }) {
+function Reads({ nodeId, className }: { nodeId: string; className?: string | undefined }) {
   const analysis = useNodeAnalysis(nodeId);
   const nodes = useCanvas((s) => s.doc.nodes);
   const store = useCanvasStoreApi();
@@ -205,12 +215,12 @@ function Reads({ nodeId }: { nodeId: string }) {
 
   if (!images.length && !parts.length)
     return (
-      <p className="w-full px-2 text-caption text-text-tertiary">
+      <p className={cn("w-full px-2 text-caption text-text-tertiary", className)}>
         {t("canvas.nodes.variations.readsNothing")}
       </p>
     );
   return (
-    <div className="flex w-full flex-col gap-10 rounded-14 bg-surface p-12">
+    <div className={cn("flex w-full flex-col gap-10 rounded-14 bg-surface p-12", className)}>
       {links[0] && images.length ? (
         <LinkedRow link={links[0]}>
           <span className="block size-32 shrink-0 overflow-hidden rounded-8 outline-1 -outline-offset-1 outline-border">
@@ -268,10 +278,12 @@ function LinkedRow({ link, children }: { link: LinkEnds; children: ReactNode }) 
 function PromptList({
   prompts,
   readOnly,
+  className,
   onChange,
 }: {
   prompts: readonly string[];
   readOnly: boolean;
+  className?: string | undefined;
   onChange: (prompts: string[]) => void;
 }) {
   const fields = useRef<(HTMLInputElement | null)[]>([]);
@@ -310,7 +322,7 @@ function PromptList({
   };
 
   return (
-    <div className="flex w-full flex-col gap-6 px-2">
+    <div className={cn("flex w-full flex-col gap-6 px-2", className)}>
       <div className="flex w-full items-center justify-between">
         <span className="text-caption text-text-tertiary">{t("canvas.nodes.variations.promptList")}</span>
         <span className="text-mono-12 text-text-tertiary">
@@ -369,18 +381,20 @@ function ModelList({
   ctx,
   params,
   readOnly,
+  className,
   references,
   onChange,
 }: {
   ctx: EngineContext;
   params: VariationsParams;
   readOnly: boolean;
+  className?: string | undefined;
   references: number;
   onChange: (models: ModelKey[]) => void;
 }) {
   const models = modelList(params);
   return (
-    <div className="flex w-full flex-col gap-6 px-2">
+    <div className={cn("flex w-full flex-col gap-6 px-2", className)}>
       <div className="flex w-full items-center justify-between">
         <span className="text-caption text-text-tertiary">{t("canvas.nodes.variations.modelList")}</span>
         <span className="text-mono-12 text-text-tertiary">

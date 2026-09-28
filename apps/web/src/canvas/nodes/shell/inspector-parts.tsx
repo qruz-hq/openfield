@@ -1,6 +1,6 @@
 import type { CostEstimate } from "@openfield/core";
 import { type ModelListItem, t } from "@openfield/core";
-import { Button, ProviderLogo, Select, SelectItem, Tooltip } from "@openfield/ui";
+import { Button, cn, ProviderLogo, Select, SelectItem, Tooltip } from "@openfield/ui";
 import { Play } from "lucide-react";
 import type { ReactNode } from "react";
 import { defaultPrice, type SpeedPrice, speedPrice, tightCost } from "../../../lib/cost";
@@ -12,9 +12,20 @@ import { useNodeSpeed } from "./speed";
 // Pieces of the node settings drawer (design AWQzm): a labelled field (Form / Field / Select with
 // the 12/tertiary label and 4×2 padding), the model field, size fields and the Run button.
 
-export function InspectorField({ label, children }: { label: string; children: ReactNode }) {
+/** A locked node's settings (design L79Zt): each block at 45%, its controls as they are. */
+export const LOCKED_DIM = "opacity-45";
+
+export function InspectorField({
+  label,
+  className,
+  children,
+}: {
+  label: string;
+  className?: string | undefined;
+  children: ReactNode;
+}) {
   return (
-    <div className="flex w-full min-w-0 flex-col gap-8 px-2 py-4">
+    <div className={cn("flex w-full min-w-0 flex-col gap-8 px-2 py-4", className)}>
       <span className="text-caption text-text-tertiary">{label}</span>
       {children}
     </div>
@@ -25,21 +36,25 @@ export function ModelField({
   models,
   selected,
   disabled,
+  locked = false,
   onSelect,
 }: {
   models: readonly ModelListItem[];
   selected: ModelListItem | undefined;
   disabled?: boolean;
+  /** Read only at 45%, for a locked node. */
+  locked?: boolean;
   onSelect: (model: ModelListItem) => void;
 }) {
   const ctx = useCanvasEngineContext();
   const options = models.filter((m) => m.ready || m.key === selected?.key);
   const logo = logoFor(selected?.providerId);
   return (
-    <InspectorField label={t("canvas.nodes.inspector.model")}>
+    <InspectorField label={t("canvas.nodes.inspector.model")} className={locked ? LOCKED_DIM : undefined}>
       <Select
         value={selected?.key ?? ""}
         disabled={disabled}
+        readOnly={locked}
         aria-label={t("canvas.nodes.inspector.model")}
         placeholder={t("composer.chips.model.empty")}
         leading={logo ? <ProviderLogo provider={logo} /> : undefined}
@@ -82,15 +97,24 @@ export function ModelField({
 export function SizeField({
   control,
   disabled,
+  locked = false,
   onPick,
 }: {
   control: SizeControl;
   disabled?: boolean;
+  /** Read only, for a locked node (its row is dimmed). */
+  locked?: boolean;
   onPick: (value: string) => void;
 }) {
   return (
     <InspectorField label={control.label}>
-      <Select value={control.value} disabled={disabled} aria-label={control.label} onValueChange={onPick}>
+      <Select
+        value={control.value}
+        disabled={disabled}
+        readOnly={locked}
+        aria-label={control.label}
+        onValueChange={onPick}
+      >
         {control.options.map((option) => (
           <SelectItem
             key={option.value}
@@ -118,6 +142,7 @@ export function InspectorRun({
   estimate,
   models = [],
   disabled,
+  locked = false,
   onRun,
 }: {
   /** "Run 4 takes": what it runs, where that helps. Plain "Run" otherwise. */
@@ -126,6 +151,8 @@ export function InspectorRun({
   /** The models it runs, for the speed note. */
   models?: readonly (ModelListItem | undefined)[];
   disabled: boolean;
+  /** Waits for Unlock: off, and at 35% in its own colors rather than greyed (design L79Zt). */
+  locked?: boolean;
   onRun: (anchor: Element, bypass: boolean) => void;
 }) {
   const speed = useNodeSpeed(models);
@@ -135,8 +162,11 @@ export function InspectorRun({
       size="m"
       icon={Play}
       price={estimate ? tightCost(estimate) : undefined}
-      disabled={disabled}
-      className="w-full"
+      disabled={disabled || locked}
+      className={cn(
+        "w-full",
+        locked && "opacity-35 disabled:bg-accent disabled:text-accent-fg disabled:inset-ring-0",
+      )}
       onClick={(event) => onRun(event.currentTarget, event.altKey)}
     >
       {label ?? t("canvas.nodes.inspector.run")}

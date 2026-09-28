@@ -1297,12 +1297,9 @@ describe("locked nodes (§7.9)", () => {
     const analysis = analyzeGraph(doc, registry, ctx, fingerprints);
     expect(analysis.runnable).toBe(0);
     expect(analysis.pending).toBe(0);
-    // Its side sheet still shows the words coming in.
-    expect(analysis.nodes.g).toMatchObject({
-      upstreamText: "Lighthouse at dusk",
-      blocker: null,
-      estimate: null,
-    });
+    // Its side sheet still shows the words coming in, and what a run would cost once unlocked.
+    expect(analysis.nodes.g).toMatchObject({ upstreamText: "Lighthouse at dusk", blocker: null, jobs: 0 });
+    expect(analysis.nodes.g!.estimate?.max).toBeGreaterThan(0);
   });
 
   test("a locked frame locks what's in it; a locked node with no images hands on nothing", async () => {

@@ -13,8 +13,8 @@ import { UPLOAD_ACCEPT, uploadImages } from "../../../api/hooks/uploads";
 import { errorMessage } from "../../../api/raw";
 import { notifyError } from "../../../lib/notify";
 import { useCanvasEngineContext, useNodeAnalysis } from "../../engine/engine-store";
-import { useCanvasStoreApi, useNodeFrame, useReadOnly } from "../../store/context";
-import { InspectorRun, ModelField, SizeField } from "../shell/inspector-parts";
+import { useCanvasStoreApi, useLocked, useNodeFrame, useReadOnly } from "../../store/context";
+import { InspectorRun, LOCKED_DIM, ModelField, SizeField } from "../shell/inspector-parts";
 import { LinkedPrompt } from "../shell/linked-text";
 import { useNodeDisplay, useParsedParams, useRunNode, useSetParams } from "../shell/use-node";
 import { sizeControls, useModelSwitch } from "./controls";
@@ -24,7 +24,8 @@ import { SeedField } from "./seed-field";
 // Generate's settings (design AWQzm): the prompt card (add a reference, the whole prompt coming in
 // from a Prompt node, the node's own words), the model and its speed note, the size fields
 // (resolution or quality, and aspect ratio), how many images, the Advanced row (the seed, and
-// later each model's extras), then Run. Everything the card doesn't show is set here.
+// later each model's extras), then Run. Everything the card doesn't show is set here. While the
+// node is locked (design L79Zt) each of those is read-only at 45%, and Run waits at 35%.
 
 /** Where a reference added from here goes: to the left of the node, like the design's graphs. */
 const REFERENCE_GAP = 80;
@@ -40,6 +41,8 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
   const run = useRunNode(nodeId);
   const store = useCanvasStoreApi();
   const readOnly = useReadOnly();
+  const locked = useLocked(nodeId);
+  const dim = locked ? LOCKED_DIM : undefined;
   const files = useRef<HTMLInputElement>(null);
   const key = modelKeyOf(params.model, ctx);
   const model = ctx.model(key);
@@ -98,7 +101,7 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
   if (!frame) return null;
   return (
     <>
-      <div className="flex w-full flex-col gap-12 rounded-14 bg-surface p-12">
+      <div className={cn("flex w-full flex-col gap-12 rounded-14 bg-surface p-12", dim)}>
         <input
           ref={files}
           type="file"
@@ -118,7 +121,11 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
             size={32}
             icon={Plus}
             label={t("canvas.nodes.generate.addReference")}
-            disabled={readOnly || !model?.capabilities.references.supported}
+            disabled={readOnly || locked || !model?.capabilities.references.supported}
+            // Locked, the + keeps its look inside the dimmed card.
+            className={
+              locked && model?.capabilities.references.supported ? "disabled:text-inherit" : undefined
+            }
             onClick={() => files.current?.click()}
           />
         </div>
@@ -130,7 +137,7 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
         ) : null}
         <textarea
           value={params.prompt}
-          readOnly={readOnly}
+          readOnly={readOnly || locked}
           rows={2}
           placeholder={t("canvas.nodes.generate.promptPlaceholder")}
           aria-label={t("canvas.nodes.generate.promptField")}
@@ -151,6 +158,7 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
         models={modelsFitting(ctx.models, { references: analysis?.references ?? 0 }, key)}
         selected={model}
         disabled={readOnly}
+        locked={locked}
         onSelect={(next) => {
           if (next.key !== model?.key) switchModel(model, next, params);
         }}
@@ -158,24 +166,26 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
       <SpeedNote model={model} />
       {controls.length ? (
         // Size row (HuDXy): resolution or quality, then aspect ratio, sharing the width.
-        <div className="flex w-full gap-8">
+        <div className={cn("flex w-full gap-8", dim)}>
           {controls.map((control) => (
             <SizeField
               key={control.id}
               control={control}
               disabled={readOnly}
+              locked={locked}
               onPick={(value) => setParams(control.patch(value))}
             />
           ))}
         </div>
       ) : null}
-      <div className="flex w-full items-center justify-between px-2">
+      <div className={cn("flex w-full items-center justify-between px-2", dim)}>
         <span className="text-small font-medium text-text-primary">{t("canvas.nodes.inspector.images")}</span>
         <Stepper
           value={model ? clampBatch(model.capabilities, params.batch) : params.batch}
           min={1}
           max={model?.capabilities.batch.max ?? 4}
           disabled={readOnly}
+          readOnly={locked}
           onValueChange={(batch) => setParams({ batch }, "batch")}
           decrementLabel={t("canvas.nodes.inspector.fewer")}
           incrementLabel={t("canvas.nodes.inspector.more")}
@@ -183,11 +193,11 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
         />
       </div>
       <Divider />
-      <Advanced changed={params.seed.mode === "fixed" ? 1 : 0}>
+      <Advanced changed={params.seed.mode === "fixed" ? 1 : 0} className={dim}>
         <SeedField
           model={model}
           seed={params.seed}
-          disabled={readOnly}
+          disabled={readOnly || locked}
           onChange={(seed) => setParams({ seed }, "seed")}
         />
       </Advanced>
@@ -195,6 +205,7 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
         estimate={analysis?.estimate ?? null}
         models={[model]}
         disabled={readOnly || busy}
+        locked={locked}
         onRun={(anchor, bypassCache) => void run("node", { anchor, bypassCache })}
       />
     </>
@@ -236,7 +247,15 @@ function SpeedNote({ model }: { model: ModelListItem | undefined }) {
 }
 
 /** Advanced (design iWF7C): a 32-tall row that opens what's inside, with how many differ from the default. */
-function Advanced({ changed, children }: { changed: number; children: ReactNode }) {
+function Advanced({
+  changed,
+  className,
+  children,
+}: {
+  changed: number;
+  className?: string | undefined;
+  children: ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const panel = useId();
   return (
@@ -246,7 +265,7 @@ function Advanced({ changed, children }: { changed: number; children: ReactNode 
         aria-expanded={open}
         aria-controls={panel}
         onClick={() => setOpen((was) => !was)}
-        className="flex h-32 w-full cursor-pointer items-center gap-8 px-2 text-left"
+        className={cn("flex h-32 w-full cursor-pointer items-center gap-8 px-2 text-left", className)}
       >
         <SlidersHorizontal size={14} aria-hidden className="shrink-0 text-text-secondary" />
         <span className="min-w-0 flex-1 text-small font-medium text-text-primary">
@@ -264,7 +283,7 @@ function Advanced({ changed, children }: { changed: number; children: ReactNode 
         />
       </button>
       {open ? (
-        <div id={panel} className="flex w-full flex-col gap-12">
+        <div id={panel} className={cn("flex w-full flex-col gap-12", className)}>
           {children}
         </div>
       ) : null}

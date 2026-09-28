@@ -1,11 +1,13 @@
 import { t } from "@openfield/core";
 import { Tooltip } from "@openfield/ui";
+import { Lock } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { useCanvasActions, useReadOnly, useUi } from "../../store/context";
+import { useCanvasActions, useLocked, useReadOnly, useUi } from "../../store/context";
 
 // Canvas / Node / Label (design JXox3): 22 above the frame, 12/500 in $text-secondary, with the
-// accent dot when the node's inputs changed. Double-click (or Rename in the node menu) edits it
-// in place; an empty name goes back to the type's own.
+// accent dot when the node's inputs changed, and a 12 px lock before the name while it's locked
+// (design noHjj). Double-click (or Rename in the node menu) edits it in place; an empty name goes
+// back to the type's own.
 
 export interface NodeLabelProps {
   id: string;
@@ -19,6 +21,7 @@ export interface NodeLabelProps {
 export function NodeLabel({ id, title, fallback, changed, fanOut }: NodeLabelProps) {
   const renaming = useUi((ui) => ui.renamingNodeId === id);
   const readOnly = useReadOnly();
+  const locked = useLocked(id);
   const actions = useCanvasActions();
   const shown = title?.trim() || fallback;
 
@@ -29,6 +32,15 @@ export function NodeLabel({ id, title, fallback, changed, fanOut }: NodeLabelPro
           role="img"
           aria-label={t("canvas.nodes.label.changed")}
           className="size-6 shrink-0 rounded-full bg-accent"
+        />
+      ) : null}
+      {locked ? (
+        <Lock
+          size={12}
+          role="img"
+          aria-label={t("canvas.nodes.state.locked")}
+          data-label-lock
+          className="shrink-0 text-text-tertiary"
         />
       ) : null}
       {renaming && !readOnly ? (

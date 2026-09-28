@@ -8,6 +8,7 @@ import type { RunRequest } from "../../engine/run-request";
 import {
   useCanvasActions,
   useCanvasStoreApi,
+  useLocked,
   useNodeFingerprint,
   useNodeFrame,
   useNodeParams,
@@ -30,6 +31,7 @@ export function useNodeDisplay(id: string): NodeDisplay {
   const runtime = useNodeRuntime(id);
   const fingerprint = useNodeFingerprint(id);
   const analysis = useNodeAnalysis(id);
+  const locked = useLocked(id);
   return useMemo(
     () =>
       deriveDisplay({
@@ -39,8 +41,9 @@ export function useNodeDisplay(id: string): NodeDisplay {
         blocker: visibleBlocker(analysis?.blocker ?? null, runtime),
         fanOut: analysis?.fanOut ?? 1,
         inputsChanged: analysis?.inputsChanged ?? false,
+        locked,
       }),
-    [result, runtime, fingerprint, analysis],
+    [result, runtime, fingerprint, analysis, locked],
   );
 }
 

@@ -168,8 +168,18 @@ export function evaluateGraph(input: EvaluateInput): Evaluation {
     const engine = def.engine;
 
     // A locked node never runs: it hands on the images it has, whatever its settings say now.
-    if (!def.runnable || !runs(id) || isLocked(doc, id)) {
+    const locked = isLocked(doc, id);
+    if (!def.runnable || !runs(id) || locked) {
       evaluation.outputs = engine.outputs(node, inputs, ctx, false);
+      // Its side sheet still prices a run, on the Run that waits for Unlock.
+      if (locked && def.runnable && runs(id)) {
+        try {
+          const priced = engine.compile?.(node, inputs, ctx, fingerprint ?? "");
+          if (priced?.ok) evaluation.estimate = priced.node.estimate;
+        } catch {
+          // Nothing to price until its settings would run.
+        }
+      }
       continue;
     }
 
