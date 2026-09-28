@@ -1,6 +1,6 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
-import { compileRun } from "@openfield/canvas/engine/compile";
+import { compileRun, heldBack } from "@openfield/canvas/engine/compile";
 import {
   bodyDropPort,
   checkConnection,
@@ -1282,6 +1282,96 @@ describe("locked nodes (§7.9)", () => {
     if (from.kind !== "plan") throw new Error(from.kind);
     expect(from.items.map((i) => i.item.nodeId)).toEqual(["v"]);
     expect(from.locked).toEqual(["g"]);
+  });
+
+  /** Prompt → Generate → Variations → Generate, all run once, then the first Generate's prompt changed and Variations locked. */
+  async function lockedBelowAChange() {
+    let doc = docOf(
+      [
+        node("p", "prompt", { text: "Lighthouse at dusk" }),
+        node("g", "image.generate", { model: "google:banana", prompt: "long exposure", batch: 4 }),
+        node("v", "image.variations", { strategy: "same-prompt", count: 2 }),
+        node("h", "image.generate", { model: "google:banana", prompt: "hero crop" }),
+      ],
+      [
+        edge("p", "text", "g", "prompt"),
+        edge("g", "images", "v", "image"),
+        edge("v", "images", "h", "input_images"),
+      ],
+    );
+    const fingerprints = await fingerprintsOf(doc);
+    doc = apply(
+      doc,
+      { op: "setResult", id: "g", result: done(fingerprints.g!, 4) },
+      { op: "setResult", id: "v", result: done(fingerprints.v!, 8, 10, ids(4)) },
+      { op: "setResult", id: "h", result: done(fingerprints.h!, 1, 40, ids(8, 10)) },
+      { op: "setParams", id: "g", patch: { prompt: "short exposure" } },
+      { op: "setLocked", id: "v", locked: true },
+    );
+    return { doc, fingerprints: await fingerprintsOf(doc) };
+  }
+
+  test("what's above a locked node never runs for the nodes after it", async () => {
+    const { doc, fingerprints } = await lockedBelowAChange();
+    // Run on its own: no "run the earlier nodes too", nothing to pay for.
+    const one = compileRun({ doc, registry, ctx, fingerprints, request: { scope: "node", nodeIds: ["h"] } });
+    if (one.kind !== "plan") throw new Error(one.kind);
+    expect(one.items.map((i) => i.item.nodeId)).toEqual(["h"]);
+    expect(one.upToDate).toEqual(["h"]);
+    const selected = compileRun({
+      doc,
+      registry,
+      ctx,
+      fingerprints,
+      request: { scope: "selection", nodeIds: ["h"], bypassCache: true },
+    });
+    if (selected.kind !== "plan") throw new Error(selected.kind);
+    expect(selected.items.map((i) => i.item.nodeId)).toEqual(["h"]);
+    expect(selected.items[0]!.item.inputs[0]!.values).toEqual(
+      ids(8, 10).map((assetId) => ({ kind: "asset", assetId })),
+    );
+    // Run from here above the lock stops at it: nothing after it can change.
+    const from = compileRun({
+      doc,
+      registry,
+      ctx,
+      fingerprints,
+      request: { scope: "downstream", nodeIds: ["g"], bypassCache: true },
+    });
+    if (from.kind !== "plan") throw new Error(from.kind);
+    expect(from.items.map((i) => i.item.nodeId)).toEqual(["g"]);
+    expect(from.locked).toEqual(["v"]);
+    // A node after the lock that also reads from above it still follows that link.
+    const both = apply(doc, { op: "addEdge", edge: edge("g", "images", "h", "input_images") });
+    const fromBoth = compileRun({
+      doc: both,
+      registry,
+      ctx,
+      fingerprints: await fingerprintsOf(both),
+      request: { scope: "downstream", nodeIds: ["g"] },
+    });
+    if (fromBoth.kind !== "plan") throw new Error(fromBoth.kind);
+    expect(fromBoth.items.map((i) => i.item.nodeId)).toEqual(["g", "h"]);
+  });
+
+  test("a run going above a locked node doesn't hold back the nodes after it", async () => {
+    const { doc, fingerprints } = await lockedBelowAChange();
+    const busy = new Set(["g"]);
+    const out = compileRun({
+      doc,
+      registry,
+      ctx,
+      fingerprints,
+      busy,
+      request: { scope: "node", nodeIds: ["h"] },
+    });
+    if (out.kind !== "plan") throw new Error(out.kind);
+    expect(out.items.map((i) => i.item.nodeId)).toEqual(["h"]);
+    const analysis = analyzeGraph(doc, registry, ctx, fingerprints, undefined, busy);
+    expect(analysis.nodes.v?.held).toBe(false);
+    expect(analysis.nodes.h?.held).toBe(false);
+    // A locked node's own run, still finishing, holds back what reads it.
+    expect(heldBack(doc, new Set(["v"]))).toEqual(new Set(["v", "h"]));
   });
 
   test("a scope that is only locked nodes does nothing and says which", async () => {
