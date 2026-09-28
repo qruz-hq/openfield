@@ -320,6 +320,39 @@ describe("compiler", () => {
     ]);
   });
 
+  test("each link into references lists every image it hands on, as the card's strip sends them", async () => {
+    let doc = docOf(
+      [
+        node("p", "prompt", { text: "Lighthouse at dusk" }),
+        node("v", "image.variations", { strategy: "same-prompt", count: 4, model: "google:banana" }),
+        node("up", "image.upload", { assetIds: [ULID(90), ULID(91)] }),
+        node("g", "image.generate", { model: "google:banana", prompt: "in watercolour", batch: 1 }),
+      ],
+      [
+        edge("p", "text", "v", "prompt"),
+        edge("v", "images", "g", "input_images"),
+        edge("up", "images", "g", "input_images"),
+      ],
+    );
+    const fingerprints = await fingerprintsOf(doc);
+    const before = analyzeGraph(doc, registry, ctx, fingerprints).nodes.g!;
+    // Before the Variations node runs, its four takes are still to come: four empty tiles, one link.
+    expect(before.imageLinks.map((l) => [l.nodeId, l.images])).toEqual([
+      ["v", [null, null, null, null]],
+      ["up", [ULID(90), ULID(91)]],
+    ]);
+    doc = apply(doc, { op: "setResult", id: "v", result: done(fingerprints.v!, 4, 10) });
+    const after = analyzeGraph(doc, registry, ctx, fingerprints).nodes.g!;
+    expect(after.imageLinks.map((l) => l.images)).toEqual([ids(4, 10), [ULID(90), ULID(91)]]);
+    // The strip and the side sheet read the same lists: every image of every link, in order.
+    expect(after.referenceImages).toEqual(after.imageLinks.flatMap((l) => l.images));
+    expect(after.references).toBe(6);
+    // The words coming in are split by the link they come by, so the card can say where from.
+    expect(analyzeGraph(doc, registry, ctx, fingerprints).nodes.v!.upstreamParts).toEqual([
+      { edgeId: doc.edgeOrder[0]!, nodeId: "p", text: "Lighthouse at dusk" },
+    ]);
+  });
+
   test("an earlier node with current images is read, not run", async () => {
     let doc = chain();
     const fingerprints = await fingerprintsOf(doc);

@@ -1,45 +1,48 @@
 import { nodeTitle } from "@openfield/canvas/engine/describe";
-import { incomingEdges } from "@openfield/canvas/store/graph";
 import type { CanvasOp } from "@openfield/canvas/store/ops";
 import { t } from "@openfield/core";
 import { type DragEvent, type KeyboardEvent, useMemo, useState } from "react";
+import { useNodeAnalysis } from "../../engine/engine-store";
 import { useCanvas, useCanvasStoreApi, useReadOnly } from "../../store/context";
 import { nodeRegistry } from "../registry";
 import { AssetImage } from "../shell/thumb";
 
 // A Generate's reference images (§7.6, design iy0ZN): what's connected to "Reference images", in
-// the order the model gets them, as thumbnails before the + in the inspector's prompt card, each
-// named in its tooltip. With two or more, drag one, or ⌥←/→ on it, to move it; the connections'
-// order changes as one undo step.
+// the order the model gets them, as thumbnails before the + in the inspector's prompt card. Each
+// link shows every image it hands on (a Variations node's four takes, an Upload's photos), from
+// the same lists the card's strip is built from (engine/links.ts), and is named in its tooltip.
+// With two or more links, drag any image of one, or ⌥←/→ on it, to move that link and all its
+// images; the connections' order changes as one undo step.
 
 const DRAG_TYPE = "application/x-openfield-reference";
+const NO_LINKS: readonly never[] = [];
 
 interface Item {
   edgeId: string;
   name: string;
-  /** The first image it hands on, for its thumbnail. */
-  assetId: string | null;
+  /** Every image it hands on: an asset id, or null for one still to come. */
+  images: readonly (string | null)[];
 }
 
 export function ReferenceOrder({ nodeId }: { nodeId: string }) {
   const store = useCanvasStoreApi();
   const readOnly = useReadOnly();
   const [over, setOver] = useState<string | null>(null);
-  // The document slices it reads keep their identity until they change, so this recomputes then.
-  const doc = useCanvas((s) => s.doc);
+  const links = useNodeAnalysis(nodeId)?.imageLinks ?? NO_LINKS;
+  const nodes = useCanvas((s) => s.doc.nodes);
   const items = useMemo(
     () =>
-      incomingEdges(doc, nodeId, "input_images").map((edge): Item => {
-        const source = doc.nodes[edge.source];
-        const own = doc.params[edge.source]?.assetIds;
-        const first = Array.isArray(own) && typeof own[0] === "string" ? own[0] : null;
-        return {
-          edgeId: edge.id,
-          name: source ? nodeTitle(source, nodeRegistry) : edge.source,
-          assetId: first ?? doc.results[edge.source]?.assetIds[0] ?? null,
-        };
-      }),
-    [doc, nodeId],
+      links
+        .filter((link) => link.port === "input_images")
+        .map((link): Item => {
+          const source = nodes[link.nodeId];
+          return {
+            edgeId: link.edgeId,
+            name: source ? nodeTitle(source, nodeRegistry) : link.nodeId,
+            images: link.images,
+          };
+        }),
+    [links, nodes],
   );
   if (!items.length) return null;
   const orderable = items.length > 1 && !readOnly;
@@ -55,10 +58,12 @@ export function ReferenceOrder({ nodeId }: { nodeId: string }) {
 
   const hint = t("canvas.nodes.generate.referencesHint");
   return (
-    // Its items sit in the prompt card's row, before the + (design iy0ZN).
+    // Its items sit in the prompt card's row, before the + (design iy0ZN). A link with several
+    // images keeps them together and wraps with the row, so everything that goes in shows.
     <ol className="contents" aria-label={t("canvas.nodes.generate.references")}>
       {items.map((item, index) => (
         <li
+          data-reference-link={item.edgeId}
           key={item.edgeId}
           draggable={orderable}
           onDragStart={(event: DragEvent) => {
@@ -77,14 +82,19 @@ export function ReferenceOrder({ nodeId }: { nodeId: string }) {
             const dragged = event.dataTransfer.getData(DRAG_TYPE);
             if (dragged) move(dragged, index);
           }}
-          className={over === item.edgeId ? "rounded-8 outline-2 outline-accent" : "rounded-8"}
+          className={
+            over === item.edgeId
+              ? "flex max-w-full flex-wrap gap-6 rounded-8 outline-2 outline-accent"
+              : "flex max-w-full flex-wrap gap-6 rounded-8"
+          }
         >
-          {/* A button so the keyboard can reach it: ⌥←/→ moves it. */}
+          {/* One button per link so the keyboard reaches each once: ⌥←/→ moves the link. */}
           <button
             type="button"
             disabled={!orderable}
             aria-label={t("canvas.nodes.generate.referenceItem", {
               name: item.name,
+              images: item.images.length,
               index: index + 1,
               count: items.length,
             })}
@@ -94,13 +104,22 @@ export function ReferenceOrder({ nodeId }: { nodeId: string }) {
               event.preventDefault();
               move(item.edgeId, index + (event.key === "ArrowLeft" ? -1 : 1));
             }}
-            className="block size-32 overflow-hidden rounded-8 outline-1 -outline-offset-1 outline-border enabled:cursor-grab focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-accent disabled:opacity-100"
+            className="flex max-w-full flex-wrap gap-6 rounded-8 enabled:cursor-grab focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:opacity-100"
           >
-            {item.assetId ? (
-              <AssetImage assetId={item.assetId} height={32} className="size-full" />
-            ) : (
-              <span className="block size-full bg-elevated-2" />
-            )}
+            {(item.images.length ? item.images : [null]).map((assetId, i) => (
+              <span
+                // biome-ignore lint/suspicious/noArrayIndexKey: positions are the model's order; the same image can come twice.
+                key={i}
+                data-reference-thumb
+                className="block size-32 shrink-0 overflow-hidden rounded-8 outline-1 -outline-offset-1 outline-border"
+              >
+                {assetId ? (
+                  <AssetImage assetId={assetId} height={32} className="size-full" />
+                ) : (
+                  <span className="block size-full bg-elevated-2" />
+                )}
+              </span>
+            ))}
           </button>
         </li>
       ))}

@@ -1377,8 +1377,8 @@
         "fromPrompt": "From the Prompt node",
         "addReference": "Add a reference image",
         "references": "Reference images",
-        "referencesHint": "The model gets them in this order. Drag one to move it.",
-        "referenceItem": "{name}, {index} of {count}"
+        "referencesHint": "The model gets them in this order. Drag an image to move everything from its node.",
+        "referenceItem": "{name}, {images, plural, one {# image} other {# images}}, {index} of {count}"
       },
       "variations": {
         "label": "Variations",

@@ -6,6 +6,7 @@ import type { EngineContext, NodeBlocker } from "@openfield/canvas/engine/types"
 import type { DocSlice } from "@openfield/canvas/store/ops";
 import type { CostEstimate } from "@openfield/core";
 import type { NodeRegistry } from "../nodes/registry";
+import { type ImageLink, imageLinks, sentImages, type TextLink, textLinks } from "./links";
 
 // The live read of the graph, redone after every change: what would stop each node, how many
 // times it fans out and what a run of it costs. Nodes draw their bands, ×k badges and run pill
@@ -30,6 +31,8 @@ export interface NodeAnalysis {
   held: boolean;
   /** The words coming in on its prompt input, joined ("From the Prompt node"). */
   upstreamText: string;
+  /** The same words link by link, so a card can show which Prompt node each part comes from. */
+  upstreamParts: readonly TextLink[];
   /**
    * Reference images each request carries: every image on a multi input, one from a single input
    * (a list there fans out). A model for this node has to take at least this many.
@@ -40,6 +43,11 @@ export interface NodeAnalysis {
    * come from a node upstream. For the card's strip and the inspector (design uwVfe).
    */
   referenceImages: readonly (string | null)[];
+  /**
+   * Every link into a reference input and the images it hands on, grouped by link: the side sheet
+   * lists them (and reorders by link) from the same lists the strip is built from.
+   */
+  imageLinks: readonly ImageLink[];
 }
 
 export interface GraphAnalysis {
@@ -71,8 +79,10 @@ const LOOP_ANALYSIS: NodeAnalysis = {
   inputsChanged: false,
   held: false,
   upstreamText: "",
+  upstreamParts: [],
   references: 0,
   referenceImages: [],
+  imageLinks: [],
 };
 
 const sameEstimate = (a: CostEstimate | null, b: CostEstimate | null) =>
@@ -82,8 +92,24 @@ const sameEstimate = (a: CostEstimate | null, b: CostEstimate | null) =>
 const sameList = (a: readonly (string | null)[], b: readonly (string | null)[]) =>
   a.length === b.length && a.every((v, i) => v === b[i]);
 
+const sameParts = (a: readonly TextLink[], b: readonly TextLink[]) =>
+  a.length === b.length &&
+  a.every((p, i) => p.edgeId === b[i]!.edgeId && p.nodeId === b[i]!.nodeId && p.text === b[i]!.text);
+
+const sameLinks = (a: readonly ImageLink[], b: readonly ImageLink[]) =>
+  a.length === b.length &&
+  a.every(
+    (l, i) =>
+      l.edgeId === b[i]!.edgeId &&
+      l.nodeId === b[i]!.nodeId &&
+      l.port === b[i]!.port &&
+      sameList(l.images, b[i]!.images),
+  );
+
 const sameNode = (a: NodeAnalysis, b: NodeAnalysis) =>
   a.upstreamText === b.upstreamText &&
+  sameParts(a.upstreamParts, b.upstreamParts) &&
+  sameLinks(a.imageLinks, b.imageLinks) &&
   a.references === b.references &&
   sameList(a.referenceImages, b.referenceImages) &&
   a.fanOut === b.fanOut &&
@@ -120,6 +146,10 @@ export function analyzeGraph(
   for (const [id, node] of evaluation.nodes) {
     if (!node.runs) continue;
     runnable++;
+    const refPorts = (node.definition?.ports ?? []).filter(
+      (port) => port.direction === "in" && port.binding?.to === "references",
+    );
+    const links = refPorts.flatMap((port) => imageLinks(doc, evaluation.nodes, id, port.id));
     const next: NodeAnalysis = {
       blocker: node.blocker,
       fanOut: node.compiled?.fanOut ?? 1,
@@ -129,23 +159,18 @@ export function analyzeGraph(
       inputsChanged: node.inputsChanged,
       held: held.has(id),
       upstreamText: joinPrompt(textOf(node.inputs, "prompt")),
-      references: (node.definition?.ports ?? []).reduce((sum, port) => {
-        if (port.direction !== "in" || port.binding?.to !== "references") return sum;
+      upstreamParts: textLinks(doc, evaluation.nodes, id, "prompt"),
+      references: refPorts.reduce((sum, port) => {
         const count = imageCount(imagesOf(node.inputs, port.id));
         return sum + (port.arity === "multi" ? count : Math.min(count, 1));
       }, 0),
-      referenceImages: (node.definition?.ports ?? []).flatMap((port) => {
-        if (port.direction !== "in" || port.binding?.to !== "references") return [];
-        const images = imagesOf(node.inputs, port.id).flatMap((v) => {
-          if (v.kind === "asset") return [v.assetId];
-          // A node upstream hands on its images as still to come, even when it's up to date: show
-          // the ones it has now, and empty tiles only where it has none yet.
-          const now = doc.results[v.nodeId]?.assetIds ?? [];
-          const count = Math.max(0, v.expected);
-          return Array.from({ length: count }, (_, i) => now[i] ?? null);
-        });
-        return port.arity === "multi" ? images : images.slice(0, 1);
-      }),
+      referenceImages: refPorts.flatMap((port) =>
+        sentImages(
+          links.filter((l) => l.port === port.id),
+          port.arity,
+        ),
+      ),
+      imageLinks: links,
     };
     const before = previous.nodes[id];
     nodes[id] = before && sameNode(before, next) ? before : next;
