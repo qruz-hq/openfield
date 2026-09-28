@@ -148,6 +148,55 @@ describe("canvases", () => {
     expect(stale.isError).toBe(true);
   });
 
+  test("an edit past a node's limits is refused and says which; a long prompt line still runs", async () => {
+    const { server: s, client: c } = await ready();
+    const { canvasId, p } = await promptToGenerate(c);
+    const before = getCanvas(s.services.db, canvasId)!.graphVersion;
+    const nine = Array.from({ length: 9 }, (_, i) => `Take ${i + 1}`);
+    const tooMany = await call(c, "edit_canvas", {
+      canvas: canvasId,
+      edits: [
+        { op: "add_node", type: "image.variations", params: { strategy: "prompt-list", prompts: nine } },
+      ],
+    });
+    expect(tooMany.isError).toBe(true);
+    expect(tooMany.text).toContain("at most 8 prompts");
+    const tooLong = await call(c, "edit_canvas", {
+      canvas: canvasId,
+      edits: [{ op: "add_node", type: "prompt", params: { text: "x".repeat(4001) } }],
+    });
+    expect(tooLong.isError).toBe(true);
+    expect(tooLong.text).toMatch(/at most 4,?000 characters/);
+    expect(getCanvas(s.services.db, canvasId)!.graphVersion).toBe(before);
+
+    // A prompt line longer than a run's captions (the error an agent's canvas once hit) is fine:
+    // the edit lands, and the run plan carries the line whole.
+    const line = `A perfume bottle on wet black stone, ${"soft rim light from the left, ".repeat(9)}`.trim();
+    expect(line.length).toBeGreaterThan(200);
+    const made = await call(c, "edit_canvas", {
+      canvas: canvasId,
+      edits: [
+        {
+          op: "add_node",
+          as: "v",
+          type: "image.variations",
+          params: { strategy: "prompt-list", prompts: [line, "Morning light"] },
+        },
+        { op: "connect", source: p, target: "v" },
+      ],
+    });
+    expect(made.isError).toBe(false);
+    const dry = await call(c, "run_canvas", { canvas: canvasId, scope: "all", dryRun: true });
+    expect(dry.isError).toBe(false);
+
+    // The limits are there to read before writing.
+    const types = j(await call(c, "list_node_types")).types as Json[];
+    expect(types.find((t) => t.type === "image.variations")?.limits).toMatchObject({
+      prompts: { maxItems: 8, maxChars: 4000 },
+      count: { min: 2, max: 8 },
+    });
+  });
+
   test("the thin tools add, connect, change, move and remove nodes", async () => {
     const { client: c } = await ready();
     const { canvasId, g } = await promptToGenerate(c);
