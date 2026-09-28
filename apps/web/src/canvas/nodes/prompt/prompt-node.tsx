@@ -2,7 +2,7 @@ import { EMPTY_ENGINE_CONTEXT } from "@openfield/canvas/engine/context-base";
 import { PROMPT_MAX, type PromptParams, promptSpec } from "@openfield/canvas/nodes/prompt/spec";
 import { t } from "@openfield/core";
 import { memo, useEffect, useRef } from "react";
-import { useReadOnly } from "../../store/context";
+import { useLocked, useReadOnly } from "../../store/context";
 import { takeOpenPicker } from "../picker-intent";
 import type { NodeComponentProps } from "../registry";
 import { leaveField } from "../shell/focus";
@@ -17,6 +17,8 @@ export const PromptNode = memo(function PromptNode(props: NodeComponentProps) {
   const params = useParsedParams<PromptParams>(props.id, promptSpec, basics?.ctx ?? EMPTY_ENGINE_CONTEXT);
   const setParams = useSetParams(props.id);
   const readOnly = useReadOnly();
+  // A locked Prompt node keeps its words (§7.9).
+  const locked = useLocked(props.id);
   const field = useRef<HTMLTextAreaElement>(null);
   // Just added from a menu: ready to type into.
   useEffect(() => {
@@ -45,7 +47,7 @@ export const PromptNode = memo(function PromptNode(props: NodeComponentProps) {
           ref={field}
           value={text}
           maxLength={PROMPT_MAX}
-          readOnly={readOnly}
+          readOnly={readOnly || locked}
           placeholder={t("canvas.nodes.prompt.placeholder")}
           aria-label={t("canvas.nodes.prompt.field")}
           spellCheck

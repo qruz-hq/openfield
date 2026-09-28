@@ -7,7 +7,7 @@ import { type DragEvent, memo, useEffect, useRef, useState } from "react";
 import { UPLOAD_ACCEPT, uploadImages } from "../../../api/hooks/uploads";
 import { errorMessage } from "../../../api/raw";
 import { notifyError } from "../../../lib/notify";
-import { useCanvasStoreApi, useReadOnly } from "../../store/context";
+import { useCanvasStoreApi, useLocked, useReadOnly } from "../../store/context";
 import { takeOpenPicker } from "../picker-intent";
 import type { NodeComponentProps } from "../registry";
 import { NodeShell } from "../shell/node-shell";
@@ -27,7 +27,9 @@ export const UploadNode = memo(function UploadNode(props: NodeComponentProps) {
   const basics = useNodeBasics(id);
   const params = useParsedParams<ImageListParams>(id, uploadSpec, basics?.ctx ?? EMPTY_ENGINE_CONTEXT);
   const store = useCanvasStoreApi();
-  const readOnly = useReadOnly();
+  // Its images are its settings: a locked Upload node keeps them as they are (§7.9).
+  const locked = useLocked(id);
+  const readOnly = useReadOnly() || locked;
   const input = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(0);
   const [dragging, setDragging] = useState(false);

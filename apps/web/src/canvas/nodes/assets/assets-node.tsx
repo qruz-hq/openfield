@@ -5,7 +5,7 @@ import { t } from "@openfield/core";
 import { Button } from "@openfield/ui";
 import { Images } from "lucide-react";
 import { memo, useEffect, useState } from "react";
-import { useCanvasActions, useReadOnly } from "../../store/context";
+import { useCanvasActions, useLocked, useReadOnly } from "../../store/context";
 import { takeOpenPicker } from "../picker-intent";
 import type { NodeComponentProps } from "../registry";
 import { NodeShell } from "../shell/node-shell";
@@ -22,7 +22,9 @@ export const AssetsNode = memo(function AssetsNode(props: NodeComponentProps) {
   const basics = useNodeBasics(id);
   const params = useParsedParams<ImageListParams>(id, assetsSpec, basics?.ctx ?? EMPTY_ENGINE_CONTEXT);
   const actions = useCanvasActions();
-  const readOnly = useReadOnly();
+  // Its images are its settings: a locked Assets node keeps them as they are (§7.9).
+  const locked = useLocked(id);
+  const readOnly = useReadOnly() || locked;
   const [picking, setPicking] = useState(false);
 
   useEffect(() => {
@@ -46,7 +48,7 @@ export const AssetsNode = memo(function AssetsNode(props: NodeComponentProps) {
       frameClassName={ids.length ? undefined : "p-8"}
     >
       <LibraryPicker
-        open={picking}
+        open={picking && !readOnly}
         initial={ids}
         onOpenChange={setPicking}
         onPick={(assetIds) =>

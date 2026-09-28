@@ -1,18 +1,24 @@
 import { cn } from "@openfield/ui";
 import { type KeyboardEvent, useEffect, useRef } from "react";
-import { useCanvasActions, useCanvasStoreApi, useReadOnly, useUi } from "../../store";
+import { useCanvasActions, useCanvasStoreApi, useLocked, useReadOnly, useUi } from "../../store";
 
 // In-place text for annotation nodes. Double-click (or placing a new one) starts editing; Escape
 // or clicking away ends it. Each keystroke is a param change that coalesces into one undo entry.
 
-export function useEditingText(id: string) {
+/**
+ * `words`: the text is what the node says (a note's, a shape's), which a lock keeps as it is
+ * (§7.9). A frame's title is its name, and names stay free.
+ */
+export function useEditingText(id: string, { words = true }: { words?: boolean } = {}) {
   const editing = useUi((ui) => ui.renamingNodeId === id);
   const readOnly = useReadOnly();
+  const locked = useLocked(id);
   const actions = useCanvasActions();
+  const off = readOnly || (words && locked);
   return {
-    editing: editing && !readOnly,
+    editing: editing && !off,
     start: () => {
-      if (!readOnly) actions.setUi({ renamingNodeId: id });
+      if (!off) actions.setUi({ renamingNodeId: id });
     },
   };
 }
