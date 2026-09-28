@@ -3,6 +3,7 @@ import {
   type DocSlice,
   evaluateGraph,
   fromDocument,
+  lockedBy,
   nodeTitle,
   planFingerprints,
   resolveFingerprints,
@@ -115,6 +116,10 @@ export interface NodeView {
   position: { x: number; y: number };
   parentId?: string;
   params: Record<string, unknown>;
+  /** Locked by the person: it keeps its images, never runs, and only connections to it can change. */
+  locked?: true;
+  /** Locked because the frame it's in is: that frame's id. */
+  lockedBy?: string;
   /** Nodes that make images. */
   state?: NodeState;
   /** Why it can't run now, in the words on the node. */
@@ -162,6 +167,7 @@ export async function describeCanvas(
   const nodes = doc.nodes.map((node): NodeView => {
     const spec = specRegistry.get(node.type);
     const ev = evaluation.nodes.get(node.id);
+    const by = lockedBy(slice, node.id);
     const view: NodeView = {
       id: node.id,
       type: node.type,
@@ -169,6 +175,8 @@ export async function describeCanvas(
       position: node.position,
       ...(node.parentId && { parentId: node.parentId }),
       params: pick(node.params, SHOWN_PARAMS[node.type]),
+      ...(by !== null && { locked: true as const }),
+      ...(by !== null && by !== node.id && { lockedBy: by }),
     };
     if (!spec?.runnable) return view;
     // Done, as the node shows it: made with its current settings from what it reads now.

@@ -1,7 +1,9 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  applyOps,
   fromDocument,
   LIST_MAX,
+  lockProblem,
   NODE_LIMITS,
   PROMPT_MAX,
   specRegistry,
@@ -371,7 +373,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "Go back to a version",
       description:
-        "Puts a canvas back the way a saved version had it. What's there now is saved as a version first, so nothing is lost. Open tabs show the change as it happens.",
+        "Puts a canvas back the way a saved version had it. What's there now is saved as a version first, so nothing is lost. Open tabs show the change as it happens. Refused when it would change, move or remove a locked node.",
       inputSchema: {
         canvas: z.string().describe(canvasField),
         versionId: z.string().describe("From list_versions."),
@@ -387,6 +389,13 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
       const canvas = resolveCanvas(ctx, ref);
       const version = ctx.svc.canvases.version(canvas.id, versionId);
       const actor = actorOf(ctx);
+      const row = ctx.svc.canvases.get(canvas.id);
+      const { slice } = fromDocument(readDocument(row.graph));
+      const ops = restoreOps(slice, version.graph);
+      // A restore that would change a locked node is refused before any version is saved.
+      const locked = lockProblem(slice, applyOps(slice, ops).doc, specRegistry);
+      if (locked)
+        throw new Refusal(`${locked.message} Restoring that version would change it, so nothing changed.`);
       // This session's first change saves "Before <agent>" on its own; a later one saves what's
       // there now, like the editor's own restore does.
       if (ctx.svc.canvases.saveAgentVersion(canvas.id, actor) === null) {
@@ -394,11 +403,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
           label: t("canvas.agents.versionLabel", { name: ctx.session.client }),
         });
       }
-      const row = ctx.svc.canvases.get(canvas.id);
-      const { slice } = fromDocument(readDocument(row.graph));
-      const result = ctx.svc.canvases.applyOps(canvas.id, restoreOps(slice, version.graph), actor, {
-        graphVersion: row.graphVersion,
-      });
+      const result = ctx.svc.canvases.applyOps(canvas.id, ops, actor, { graphVersion: row.graphVersion });
       const { view } = await describeCanvas(ctx, canvas.id);
       return reply({
         restored: versionId,
@@ -440,6 +445,8 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
       return reply({
         types,
         note: 'Connect an output to an input that takes the same kind ("text" to "text", "image" to "image").',
+        locked:
+          "Any node can be locked by the person (locked: true in get_canvas), and a locked frame locks everything in it. A locked node keeps its images and never runs again; the nodes after it use those images. You can read a locked node and connect to it, but not change, move, run, delete, lock or unlock it. Only the person can unlock it.",
       });
     }),
   );

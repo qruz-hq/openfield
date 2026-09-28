@@ -79,6 +79,7 @@ Agents build and run canvases with you. Say "add a variation of the selected nod
 - **Nothing is lost.** Before an app's first change to a canvas, Openfield saves the canvas as a version, "Before Claude Code", so you can go back from **Version history**.
 - **"The canvas I have open."** Agents can use `active` for the canvas in the Openfield tab you used last, and see which nodes you've selected there.
 - **Same rules as the editor.** Connections follow the port rules you see when dragging, nodes the agent doesn't place are put next to what they connect to, and runs skip nodes that are already up to date, for free.
+- **Locked nodes stay yours.** Lock a node (or a frame, which locks everything in it) with **⇧⌘L** or its menu, and it keeps its images: no run, yours or an agent's, makes new ones, and the nodes after it use the ones it has. Agents can read a locked node and connect to it, but can't change, move, run, delete, lock or unlock it, and can't restore a version that would change it. Only you can unlock it.
 
 A canvas is built from nodes: **Prompt** hands text on, **Generate** and **Variations** make images, **Upload** and **Assets** hand on images from the library, and **Note**, **Frame**, **Text** and **Shape** are for layout. Each node has input and output ports; a connection goes from an output to an input of the same kind, written `"node.port"`:
 

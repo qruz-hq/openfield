@@ -536,6 +536,44 @@ describe("running a canvas", () => {
     expect(jobSetsOfRun(server.services.db, first.runId!)).toHaveLength(1);
   });
 
+  test("a plan naming a node locked in the saved canvas is refused before anything is sent", async () => {
+    const gate = gatedFetch();
+    server = await startTestServer({ fetch: gate.fetch });
+    await saveKey(server);
+    const canvas = await newCanvas(server);
+    const locked = {
+      id: "n_gen",
+      type: "image.generate",
+      typeVersion: 1,
+      position: { x: 0, y: 0 },
+      parentId: null,
+      collapsed: false,
+      title: "Key visual",
+      params: { prompt: "A lighthouse at dusk" },
+      presetLocks: [],
+      result: null,
+      locked: true,
+    };
+    const saved = await server.json(`/api/canvases/${canvas.id}`, {
+      method: "PATCH",
+      body: { graphVersion: canvas.graphVersion, graph: { ...canvas.graph, nodes: [locked] } },
+    });
+    expect(saved.status).toBe(200);
+    const { generate } = chain();
+    const refused = await server.json(`/api/canvases/${canvas.id}/run`, {
+      method: "POST",
+      body: { scope: "all", nodeIds: [], plan: [generate] },
+    });
+    expect(refused.status).toBe(409);
+    expect(errorEnvelopeSchema.parse(refused.body).error).toMatchObject({
+      code: "conflict",
+      field: "plan.0.nodeId",
+      userMessage: "Key visual is locked, so it didn't run. The canvas may have changed in another tab.",
+    });
+    gate.release();
+    expect(gate.state.calls).toBe(0);
+  });
+
   test("an image that isn't in the library blocks the node and says why", async () => {
     server = await startTestServer();
     await saveKey(server);

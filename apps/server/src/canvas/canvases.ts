@@ -11,6 +11,7 @@ import {
   fromDocument,
   limitProblem,
   lockedTargets,
+  lockProblem,
   nodeTitle,
   specRegistry,
   toDocument,
@@ -471,6 +472,7 @@ export class CanvasService {
       const built = build({ ...slice, name: row.name }, viewport);
       if (!built.ops.length) return { kind: "unchanged" as const, row, built };
       this.#checkNotRunning(id, built.ops);
+      this.#checkLocks(slice, built.doc);
       const name = built.doc.name.trim() || row.name;
       const next = stamp(toDocument(built.doc, meta, viewport, at), {
         id,
@@ -548,6 +550,16 @@ export class CanvasService {
     // Named, so it's kept like a version the person saved themselves (§7.8).
     const version = this.#snapshot(id, before, "named", label, at);
     return version.id;
+  }
+
+  /** Locked nodes stay as they are when an agent or a script changes the canvas (lockProblem). */
+  #checkLocks(before: DocSlice, after: DocSlice): void {
+    const problem = lockProblem(before, after, specRegistry);
+    if (!problem) return;
+    throw new ApiFailure(409, "conflict", `${problem.nodeId} is locked`, {
+      field: `nodes.${problem.nodeId}`,
+      userMessage: problem.message,
+    });
   }
 
   /**

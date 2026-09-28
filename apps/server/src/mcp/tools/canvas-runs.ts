@@ -30,7 +30,7 @@ export function canvasRunTools(server: McpServer, ctx: ToolContext): void {
       title: "Run a canvas",
       description:
         "Runs a canvas's image nodes, as the Run buttons do: all of them, one node, a node and everything after it, or a set of nodes. " +
-        "Nodes whose settings and inputs haven't changed are skipped for free. Open tabs show the run live. " +
+        "Nodes whose settings and inputs haven't changed are skipped for free, and locked nodes never run: they keep their images, and the nodes after them use those. Open tabs show the run live. " +
         "Costs money: check with dryRun first. Waits for the images (see wait), then answers with each node's images.",
       inputSchema: {
         canvas: z.string().describe(canvasField),
@@ -193,6 +193,7 @@ function planSummary(plan: CanvasRunScopeResponse) {
     images: plan.jobs,
     runs: plan.planned,
     ...(plan.upToDate.length > 0 && { upToDate: plan.upToDate }),
+    ...(plan.locked.length > 0 && { locked: plan.locked }),
     ...(plan.blocked.length > 0 && {
       blocked: plan.blocked.map((b) => ({ nodeId: b.nodeId, why: b.message })),
     }),
@@ -202,6 +203,13 @@ function planSummary(plan: CanvasRunScopeResponse) {
 /** A plan that runs nothing, said plainly; null when there's something to run. */
 function explainNothing(plan: CanvasRunScopeResponse): CallToolResult | null {
   if (plan.outcome === "busy") return refuse("Those nodes are already running. Call get_run to follow them.");
+  if (plan.outcome === "locked") {
+    const which =
+      plan.locked.length === 1 ? `${plan.locked[0]} is locked` : `${plan.locked.join(", ")} are locked`;
+    return refuse(
+      `${which}, so nothing ran. A locked node keeps its images and never runs again. Only the person can unlock it. You can still read it and connect to it.`,
+    );
+  }
   if (plan.outcome === "needs_upstream") {
     return refuse(
       `Earlier nodes this one reads from need to run first: ${plan.upstream.join(", ")}. Call again with includeUpstream: true to run them too.`,
@@ -214,7 +222,10 @@ function explainNothing(plan: CanvasRunScopeResponse): CallToolResult | null {
     return reply({
       ran: false,
       upToDate: plan.upToDate,
-      note: "Everything asked for is up to date, so nothing ran and nothing was charged. Pass rerun: true to make new images anyway.",
+      ...(plan.locked.length > 0 && { locked: plan.locked }),
+      note: plan.locked.length
+        ? "Everything asked for is up to date or locked, so nothing ran and nothing was charged. Pass rerun: true to make new images for the nodes that aren't locked."
+        : "Everything asked for is up to date, so nothing ran and nothing was charged. Pass rerun: true to make new images anyway.",
     });
   }
   return refuse("There's nothing to run: no image nodes in what was asked for.");
@@ -235,6 +246,7 @@ async function answerRun(
       ...(opts.plan && {
         price: priceOf(opts.plan.estimate),
         ...(opts.plan.upToDate.length > 0 && { skippedUpToDate: opts.plan.upToDate }),
+        ...(opts.plan.locked.length > 0 && { skippedLocked: opts.plan.locked }),
         ...(opts.plan.blocked.length > 0 && {
           blocked: opts.plan.blocked.map((b) => ({ nodeId: b.nodeId, why: b.message })),
         }),

@@ -362,6 +362,123 @@ describe("running canvases", () => {
   });
 });
 
+describe("locked nodes (§7.9)", () => {
+  /** What the person does from the editor: locks these nodes and saves. */
+  function lockAsPerson(s: TestServer, canvasId: string, ...nodeIds: string[]) {
+    const detail = s.services.canvases.get(canvasId);
+    const nodes = detail.graph.nodes.map((n) => (nodeIds.includes(n.id) ? { ...n, locked: true } : n));
+    const saved = s.services.canvases.save(canvasId, {
+      graphVersion: detail.graphVersion,
+      graph: { ...detail.graph, nodes },
+    });
+    expect(saved.ok).toBe(true);
+  }
+
+  const LOCKED = "Only the person can unlock it. It can still be read and connected to.";
+
+  test("an agent reads and connects to a locked node, and can't change, move, delete or run it", async () => {
+    const { server: s, client: c } = await ready();
+    const { canvasId, p, g } = await promptToGenerate(c);
+    expect((await call(c, "run_canvas", { canvas: canvasId })).isError).toBe(false);
+    lockAsPerson(s, canvasId, g);
+    const version = getCanvas(s.services.db, canvasId)!.graphVersion;
+
+    const read = j(await call(c, "get_canvas", { canvas: canvasId }));
+    expect(read.nodes.find((n: Json) => n.id === g)).toMatchObject({ locked: true, state: "done" });
+    expect(read.nodes.find((n: Json) => n.id === p).locked).toBeUndefined();
+    const resource = await c.readResource({ uri: `openfield://canvas/${canvasId}` });
+    const attached = JSON.parse((resource.contents[0] as { text: string }).text) as Json;
+    expect(attached.nodes.find((n: Json) => n.id === g)).toMatchObject({ locked: true });
+
+    for (const [tool, args] of [
+      ["update_node", { id: g, params: { batch: 2 } }],
+      ["update_node", { id: g, title: "Hero" }],
+      ["move_node", { id: g, position: { x: 400, y: 0 } }],
+      ["delete_nodes", { ids: [g] }],
+    ] as const) {
+      const refused = await call(c, tool, { canvas: canvasId, ...args });
+      expect(refused.isError).toBe(true);
+      expect(refused.text).toContain(
+        `Generate is locked, so it can't be changed, moved or deleted. ${LOCKED}`,
+      );
+    }
+    expect(getCanvas(s.services.db, canvasId)!.graphVersion).toBe(version);
+
+    // Connections into and out of it are fine.
+    const added = j(
+      await call(c, "add_nodes", {
+        canvas: canvasId,
+        nodes: [{ as: "v", type: "image.variations", near: g, params: { count: 2 } }],
+        connections: [{ from: `${g}.images`, to: "v.image" }],
+      }),
+    );
+    const v = added.created.v as string;
+    const cut = await call(c, "edit_canvas", {
+      canvas: canvasId,
+      edits: [{ op: "disconnect", source: p, target: g }],
+    });
+    expect(cut.isError).toBe(false);
+    expect(
+      (await call(c, "connect", { canvas: canvasId, from: `${p}.text`, to: `${g}.prompt` })).isError,
+    ).toBe(false);
+
+    // It never runs, alone or in Run all; what reads it uses the images it keeps.
+    const alone = await call(c, "run_canvas", { canvas: canvasId, scope: "node", nodeIds: [g] });
+    expect(alone.isError).toBe(true);
+    expect(alone.text).toStartWith(`${g} is locked, so nothing ran.`);
+    const all = j(await call(c, "run_canvas", { canvas: canvasId, dryRun: true }));
+    expect(all).toMatchObject({ runs: [v], locked: [g], images: 2 });
+  });
+
+  test("a locked frame keeps what's in it, and nothing new goes in", async () => {
+    const { server: s, client: c } = await ready();
+    const made = j(await call(c, "create_canvas", { name: "Approved" }));
+    const built = j(
+      await call(c, "edit_canvas", {
+        canvas: made.canvasId,
+        edits: [
+          { op: "add_node", as: "f", type: "frame", title: "Approved looks", position: { x: 0, y: 0 } },
+          { op: "add_node", as: "n", type: "note", parentId: "f", params: { text: "Keep" } },
+        ],
+      }),
+    );
+    const { f, n } = built.created as { f: string; n: string };
+    lockAsPerson(s, made.canvasId, f);
+    const read = j(await call(c, "get_canvas", { canvas: made.canvasId }));
+    expect(read.nodes.find((x: Json) => x.id === n)).toMatchObject({ locked: true, lockedBy: f });
+
+    const changed = await call(c, "update_node", { canvas: made.canvasId, id: n, params: { text: "Drop" } });
+    expect(changed.text).toContain(`Note is in Approved looks, which is locked, so it can't be changed`);
+    const dropped = await call(c, "edit_canvas", {
+      canvas: made.canvasId,
+      edits: [{ op: "add_node", type: "note", parentId: f }],
+    });
+    expect(dropped.isError).toBe(true);
+    expect(dropped.text).toContain("Approved looks is locked, so nothing new can go in it.");
+  });
+
+  test("a restore that would change a locked node is refused before any version is saved", async () => {
+    const { server: s, client: c } = await ready();
+    const { canvasId, g } = await promptToGenerate(c);
+    const before = j(await call(c, "save_version", { canvas: canvasId, label: "Before the run" }));
+    expect((await call(c, "run_canvas", { canvas: canvasId })).isError).toBe(false);
+    lockAsPerson(s, canvasId, g);
+    const versions = j(await call(c, "list_versions", { canvas: canvasId })).versions as Json[];
+
+    const refused = await call(c, "restore_version", { canvas: canvasId, versionId: before.versionId });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain("Generate is locked");
+    expect(refused.text).toContain("Restoring that version would change it, so nothing changed.");
+    expect((j(await call(c, "list_versions", { canvas: canvasId })).versions as Json[]).length).toBe(
+      versions.length,
+    );
+    expect(j(await call(c, "get_canvas", { canvas: canvasId })).nodes[1]).toMatchObject({
+      id: g,
+      state: "done",
+    });
+  });
+});
+
 describe("the person's tab", () => {
   test('"active" is the canvas open in the tab used last, with its selection', async () => {
     const { server: s, client: c } = await ready();

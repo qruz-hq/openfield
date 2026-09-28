@@ -12,5 +12,6 @@ export const INSTRUCTIONS =
 - Canvases are graphs of nodes the person builds and reruns. "Prompt" nodes hand text on; "Generate" and "Variations" nodes make images; "Upload" and "Assets" nodes hand on library images. Connect an output port to an input port of the same kind ("p.text" to "g.prompt"). list_node_types has every type, port and setting.
 - To build or change a canvas, read it with get_canvas, then send one edit_canvas batch (add_node with ` as ` names, then connect). The person sees each change live if the canvas is open, and a version is saved before your first change. "active" means the canvas open in their Openfield tab; get_active_canvas says which, and which nodes are selected.
 - run_canvas runs it like the Run buttons: nodes already up to date are skipped for free. Price it with dryRun first. show opens a canvas or image in the person's tab.
+- Nodes with locked: true keep their images and never run; the nodes after them use those images. You can read and connect to a locked node, but only the person can change, move, delete or unlock it.
 - Folders are labels: an image can be in several. Deleting moves images to the Trash, where they can be restored.
 - Only the person can change Openfield's settings and keys, in the app.`;
