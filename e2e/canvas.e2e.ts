@@ -334,6 +334,44 @@ test("a link's × removes it, on hover and while it's selected", async ({ page, 
   await expect(links).toHaveCount(0);
 });
 
+test("⇧-click on a Prompt's words picks the node instead of typing into it", async ({ page, request }) => {
+  await openWith(page, request, [
+    { id: "p", type: "prompt", x: 200, y: 200, params: { text: "A red fox" } },
+    { id: "q", type: "prompt", x: 200, y: 460, params: { text: "Soft morning light" } },
+    { id: "g", type: "image.generate", x: 760, y: 200 },
+  ]);
+  const node = (id: string) => pane(page).locator(`.react-flow__node[data-id="${id}"]`);
+  const words = node("p").locator("textarea");
+  const selected = pane(page).locator(".react-flow__node.selected");
+
+  await node("g").click({ position: { x: 160, y: 40 } });
+  await expect(selected).toHaveCount(1);
+  await words.click({ modifiers: ["Shift"] });
+  await expect(node("p")).toHaveClass(/selected/);
+  await expect(selected).toHaveCount(2);
+  await expect(words).not.toBeFocused();
+  await expect(words).toHaveValue("A red fox");
+  // Again: it leaves the selection.
+  await words.click({ modifiers: ["Shift"] });
+  await expect(node("p")).not.toHaveClass(/selected/);
+  await expect(selected).toHaveCount(1);
+
+  // A plain click still goes into the words, and ⇧-click there then selects text as usual.
+  await words.click();
+  await expect(words).toBeFocused();
+  await words.click({ modifiers: ["Shift"] });
+  await expect(words).toBeFocused();
+
+  // Typing in one Prompt, ⇧-click on another's words adds that node; the typing stops there.
+  await words.pressSequentially(" at dusk");
+  const other = node("q").locator("textarea");
+  await other.click({ modifiers: ["Shift"] });
+  await expect(node("p")).toHaveClass(/selected/);
+  await expect(node("q")).toHaveClass(/selected/);
+  await expect(other).not.toBeFocused();
+  await expect(words).not.toBeFocused();
+});
+
 test("with several nodes selected, a link dragged from one of their ports connects them all", async ({
   page,
   request,

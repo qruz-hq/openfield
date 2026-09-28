@@ -79,6 +79,9 @@ const freeKey = (e: { metaKey: boolean; ctrlKey: boolean }) => (isMac() ? e.meta
 
 const portType = (nodeType: string, handle: string) => nodeRegistry.port(nodeType, handle)?.type;
 
+/** A node's own text field: a Prompt's words, a note, a title being renamed. */
+const EDITABLE = "textarea, input, select, [contenteditable='true'], [contenteditable='']";
+
 let gestures = 0;
 
 export interface CanvasFlowProps {
@@ -487,6 +490,33 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
   );
 
   const flow = useStoreApi<FlowNode, FlowEdge>();
+
+  /**
+   * ⇧ or ⌘ (Ctrl) and a click on a node adds it to the selection or takes it out, whatever has the
+   * focus. React Flow only hears those keys when no text field has focus, so after typing in a
+   * Prompt they went unheard and the click replaced the selection: the click's own keys decide
+   * instead, for as long as the click lasts. The field that was being typed in lets go, and a field
+   * clicked into doesn't take the focus or a caret. Typing in that same field, ⇧-click still
+   * selects its text.
+   */
+  const onMouseDownCapture = useCallback(
+    (event: ReactMouseEvent) => {
+      if (!event.shiftKey && !freeKey(event)) return;
+      const target = event.target as Element;
+      if (!target.closest?.(".react-flow__node")) return;
+      const active = document.activeElement;
+      const field = target.closest(EDITABLE);
+      if (field && field === active) return;
+      if (active instanceof HTMLElement && active.matches(EDITABLE)) active.blur();
+      if (field) event.preventDefault();
+      const before = flow.getState().multiSelectionActive;
+      flow.setState({ multiSelectionActive: true });
+      // After the click that follows, which is when React Flow reads it.
+      const restore = () => setTimeout(() => flow.setState({ multiSelectionActive: before }), 0);
+      window.addEventListener("pointerup", restore, { once: true, capture: true });
+    },
+    [flow],
+  );
   const onPointerMove = useCallback(
     (event: ReactPointerEvent) => {
       session.ui.setState({ pointer: { x: event.clientX, y: event.clientY } });
@@ -552,6 +582,7 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
         onMoveEnd={onMoveEnd}
         onPointerMove={onPointerMove}
         onPointerLeave={onPointerLeave}
+        onMouseDownCapture={onMouseDownCapture}
         connectionLineComponent={ConnectionLine}
         connectionRadius={40}
         defaultViewport={initialViewport}
