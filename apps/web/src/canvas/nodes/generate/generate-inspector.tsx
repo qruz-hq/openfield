@@ -139,7 +139,8 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
           value={params.prompt}
           readOnly={readOnly || locked}
           rows={2}
-          placeholder={t("canvas.nodes.generate.promptPlaceholder")}
+          // Locked, nothing can be added, so nothing asks for it.
+          placeholder={locked ? undefined : t("canvas.nodes.generate.promptPlaceholder")}
           aria-label={t("canvas.nodes.generate.promptField")}
           onChange={(event) => setParams({ prompt: event.target.value }, "prompt")}
           onKeyDown={(event) => event.stopPropagation()}

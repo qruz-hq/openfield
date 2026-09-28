@@ -158,6 +158,28 @@ describe("flow adapter", () => {
     expect(third[1]).toBe(second[1]!);
   });
 
+  test("a node in a locked frame is kept in it, from where it is, and can still move", () => {
+    const s = slice([
+      node("f", { type: "frame", size: { w: 400, h: 300 }, locked: true }),
+      node("in", { parentId: "f", position: { x: 20, y: 30 } }),
+      // Sticking out on the right: locking mustn't pull it in.
+      node("out", { parentId: "f", position: { x: 300, y: 30 }, size: { w: 240, h: 100 } }),
+      node("free", { position: { x: 900, y: 0 } }),
+    ]);
+    const [frame, inside, outside, free] = createNodeCache()(inputs(s));
+    expect(frame!.extent).toBeUndefined();
+    expect(inside!.extent).toEqual([
+      [0, 0],
+      [400, 300],
+    ]);
+    expect(outside!.extent).toEqual([
+      [0, 0],
+      [540, 300],
+    ]);
+    expect(inside!.draggable).toBe(true);
+    expect(free!.extent).toBeUndefined();
+  });
+
   test("the pan tool and a previewed version make nodes inert", () => {
     const s = slice([node("a")]);
     const [pan] = createNodeCache()(inputs(s, { tool: "pan" }));
@@ -356,7 +378,11 @@ describe("shortcuts", () => {
     expect(matchShortcut(key("L", { meta: true, shift: true }), true)).toBe("lock");
     expect(matchShortcut(key("L", { ctrl: true, shift: true }), false)).toBe("lock");
     expect(toolKey("lock", true)).toBe("⇧⌘L");
-    expect(shortcutSheet(true).flat().flatMap((g) => g.rows)).toContainEqual({
+    expect(
+      shortcutSheet(true)
+        .flat()
+        .flatMap((g) => g.rows),
+    ).toContainEqual({
       label: "canvas.editor.shortcuts.lock",
       keys: "⇧⌘L",
     });

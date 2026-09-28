@@ -48,7 +48,7 @@ export const PromptNode = memo(function PromptNode(props: NodeComponentProps) {
           value={text}
           maxLength={PROMPT_MAX}
           readOnly={readOnly || locked}
-          placeholder={t("canvas.nodes.prompt.placeholder")}
+          placeholder={locked ? undefined : t("canvas.nodes.prompt.placeholder")}
           aria-label={t("canvas.nodes.prompt.field")}
           spellCheck
           onChange={(event) => setParams({ text: event.target.value }, "text")}

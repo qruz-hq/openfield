@@ -1,7 +1,7 @@
 import type { EngineContext, PortType } from "@openfield/canvas/engine/types";
 import { t } from "@openfield/core";
 import type { CanvasEdge } from "@openfield/core/canvas";
-import type { Edge, Node } from "@xyflow/react";
+import type { CoordinateExtent, Edge, Node } from "@xyflow/react";
 import type { NodeDefinition } from "../../nodes/registry";
 import { type DocSlice, isLocked, type NodeFrame, parentsFirst, type Size } from "../../store";
 import type { CanvasTool, SelectionState } from "../../store/types";
@@ -98,6 +98,20 @@ export function boxesFor(
     });
 }
 
+/**
+ * Where a node in a locked frame can move: the frame's box, and its own box where it already
+ * sticks out, so locking never shifts it and it only ever moves further in.
+ */
+export function lockedExtent(position: { x: number; y: number }, frame: Size, own: Size): CoordinateExtent {
+  return [
+    [Math.min(0, position.x), Math.min(0, position.y)],
+    [Math.max(frame.w, position.x + own.w), Math.max(frame.h, position.y + own.h)],
+  ];
+}
+
+const sameExtent = (a: CoordinateExtent | undefined, b: CoordinateExtent | undefined) =>
+  a === b || (!!a && !!b && a.flat().every((v, i) => v === b.flat()[i]));
+
 interface NodeEntry {
   frame: NodeFrame;
   def: NodeDefinition | undefined;
@@ -106,8 +120,8 @@ interface NodeEntry {
   hidden: boolean;
   interactive: boolean;
   hit: boolean;
-  /** In a locked frame: it moves within the frame but can't leave it (§7.9). */
-  confined: boolean;
+  /** In a locked frame: where it can move, in the frame's own coordinates (§7.9). */
+  confined: CoordinateExtent | undefined;
   measured: Measured | undefined;
   node: FlowNode;
 }
@@ -131,9 +145,19 @@ export function createNodeCache() {
         hidden: insideCollapsed(doc, id),
         interactive,
         hit: findHit === id,
-        confined: frame.parentId !== null && isLocked(doc, frame.parentId),
+        confined: undefined as CoordinateExtent | undefined,
         measured: measured.get(id),
       };
+      if (frame.parentId !== null && isLocked(doc, frame.parentId)) {
+        const parent = doc.nodes[frame.parentId]!;
+        const outer = flowSize(parent, inputs.definition(parent.type));
+        const own = flowSize(frame, def, entry.box);
+        entry.confined = lockedExtent(
+          frame.position,
+          { w: outer.width ?? 0, h: outer.height ?? 0 },
+          { w: own.width ?? entry.measured?.width ?? 0, h: own.height ?? entry.measured?.height ?? 0 },
+        );
+      }
       const old = cache.get(id);
       const same =
         old &&
@@ -145,7 +169,7 @@ export function createNodeCache() {
         old.hidden === entry.hidden &&
         old.interactive === entry.interactive &&
         old.hit === entry.hit &&
-        old.confined === entry.confined &&
+        sameExtent(old.confined, entry.confined) &&
         old.measured?.width === entry.measured?.width &&
         old.measured?.height === entry.measured?.height;
       const node = same ? old.node : toFlowNode(entry);
@@ -172,7 +196,7 @@ function toFlowNode(e: Omit<NodeEntry, "node">): FlowNode {
     type: def ? def.type : UNKNOWN_NODE_TYPE,
     position: frame.position,
     ...(frame.parentId !== null && { parentId: frame.parentId }),
-    ...(e.confined && { extent: "parent" as const }),
+    ...(e.confined && { extent: e.confined }),
     data: EMPTY_DATA,
     ...size,
     ...(measured && { measured: { width: measured.width, height: measured.height } }),
