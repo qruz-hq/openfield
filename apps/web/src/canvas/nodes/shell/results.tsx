@@ -14,6 +14,8 @@ export interface ResultGridProps {
   height: number;
   /** Inputs changed: images dim to 60% (§7.5 stale). */
   dim?: boolean;
+  /** An image card's own dimming (under a run, out of date), in place of `dim`. */
+  opacity?: number;
   className?: string;
 }
 
@@ -31,7 +33,7 @@ function Cell({ assetId, label, height }: { assetId: string; label: string | nul
   );
 }
 
-export function ResultGrid({ assetIds, labelOf, height, dim = false, className }: ResultGridProps) {
+export function ResultGrid({ assetIds, labelOf, height, dim = false, opacity, className }: ResultGridProps) {
   const label = (i: number) => labelOf?.(i) ?? null;
   const n = assetIds.length;
   const body =
@@ -59,7 +61,10 @@ export function ResultGrid({ assetIds, labelOf, height, dim = false, className }
       </div>
     );
   return (
-    <div className={cn("relative flex size-full transition-opacity", dim && "opacity-60", className)}>
+    <div
+      className={cn("relative flex size-full transition-opacity", dim && "opacity-60", className)}
+      style={opacity !== undefined && opacity < 1 ? { opacity } : undefined}
+    >
       {body}
       {n > 4 ? (
         <span className="absolute top-8 right-8 rounded-6 bg-overlay px-6 py-2 text-mono-11 font-medium text-overlay-fg backdrop-blur-chip">

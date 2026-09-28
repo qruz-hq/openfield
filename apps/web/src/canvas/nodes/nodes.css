@@ -289,6 +289,17 @@
   box-shadow: inset 0 0 0 1px var(--of-accent-line);
 }
 
+/* What a Variations card makes, over its words (design q5kM8): 12/500 $text-secondary, one line. */
+.of-card-summary {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--of-text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 .of-card-prompt[data-placeholder] {
   color: var(--of-text-tertiary);
 }

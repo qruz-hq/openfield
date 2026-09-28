@@ -11,6 +11,7 @@ import { GenerateNode } from "./generate/generate-node";
 import { PromptNode } from "./prompt/prompt-node";
 import { defineNode, type NodeDefinition } from "./registry";
 import { UploadNode } from "./upload/upload-node";
+import { variationsBoxOf, variationsRest } from "./variations/box";
 import { VariationsInspector } from "./variations/variations-inspector";
 import { VariationsNode } from "./variations/variations-node";
 
@@ -35,6 +36,8 @@ export const DATA_NODES: readonly NodeDefinition[] = [
   defineNode({
     ...variationsSpec,
     icon: LayoutGrid,
+    box: variationsBoxOf,
+    rest: variationsRest,
     Component: VariationsNode,
     Inspector: VariationsInspector,
   }),

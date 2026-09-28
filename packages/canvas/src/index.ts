@@ -28,6 +28,7 @@ export * from "./nodes/prompt/spec";
 export * from "./nodes/registry";
 export * from "./nodes/specs";
 export * from "./nodes/upload/spec";
+export * from "./nodes/variations/card-size";
 export * from "./nodes/variations/spec";
 export * from "./store/document";
 export * from "./store/graph";

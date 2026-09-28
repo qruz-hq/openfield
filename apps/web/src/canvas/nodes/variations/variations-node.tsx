@@ -1,81 +1,53 @@
 import { EMPTY_ENGINE_CONTEXT } from "@openfield/canvas/engine/context-base";
 import { modelName } from "@openfield/canvas/engine/describe";
-import { modelKeyOf, modelsFitting } from "@openfield/canvas/engine/inputs";
-import type { EngineContext } from "@openfield/canvas/engine/types";
-import { carriedFor } from "@openfield/canvas/nodes/generate/settings";
+import { modelKeyOf } from "@openfield/canvas/engine/inputs";
+import type { EngineContext, NodeDisplay } from "@openfield/canvas/engine/types";
+import { CARD_SHORT_BELOW } from "@openfield/canvas/nodes/generate/card-size";
+import { takesOf, variationsLayout } from "@openfield/canvas/nodes/variations/card-size";
 import {
-  LIST_MAX,
   modelList,
   promptLines,
-  TAKES_MAX,
-  TAKES_MIN,
   VARIATIONS_PORTS,
-  type VariationStrategy,
   type VariationsParams,
   variationsSpec,
 } from "@openfield/canvas/nodes/variations/spec";
-import { type ModelKey, t } from "@openfield/core";
-import { estimateRun } from "@openfield/providers/manifest";
-import { BrandMark, ModelCaption, ProviderLogo, Segmented, SegmentedItem, StepperChip } from "@openfield/ui";
-import { X } from "lucide-react";
+import { t } from "@openfield/core";
+import { BrandMark, ModelCaption } from "@openfield/ui";
 import { memo, useMemo } from "react";
-import { tightCost } from "../../../lib/cost";
+import { useStore } from "zustand";
 import { logoFor } from "../../../lib/provider";
 import { useNodeAnalysis } from "../../engine/engine-store";
-import { useNodeResult, useReadOnly } from "../../store/context";
-import { voxelsSupported } from "../generate/voxel/renderer";
-import { VoxelField } from "../generate/voxel/voxel-field";
+import { useNodeParams, useNodeResult } from "../../store/context";
+import { cardMedia } from "../generate/card-media";
+import type { CardView } from "../generate/card-state";
 import type { NodeComponentProps } from "../registry";
 import { CollapsedStatus } from "../shell/collapsed-card";
-import { useCompanyWait } from "../shell/company-wait";
+import { type CompanyWait, useCompanyWait } from "../shell/company-wait";
+import { ImageCard } from "../shell/image-card";
+import { LinkedPrompt } from "../shell/linked-text";
 import { NodeShell } from "../shell/node-shell";
 import { ResultGrid, sourceLabel } from "../shell/results";
-import { RunPill } from "../shell/run-pill";
-import { StateBand } from "../shell/state-band";
-import { useNodeBasics, useNodeDisplay, useParsedParams, useSetParams } from "../shell/use-node";
-import { AddModelPicker } from "./add-model";
+import { useNodeBasics, useNodeDisplay, useParsedParams } from "../shell/use-node";
 
-// Canvas / Node / Variations (design zodbS; Models mode mdu6t): results over the strategy switch
-// (New takes · Prompts · Models) and that strategy's own control, then the run pill. An incoming
-// image list runs the whole set once per image, labelled "Image 1…k" (M4-17).
+// Canvas / Node / Variations (design njYDO, hover T1RODM): like Generate, the card is its images,
+// every take in the results grid, each labelled by its prompt line (Prompts) or model (Models) and,
+// for an incoming image list, by the image it came from. At rest: the images, the label and the
+// ports; on hover or selected, the image card's bars: the state and menu on top, what it makes, the
+// words it runs and Run with its price at the bottom. What it makes and how (New takes, Prompts,
+// Models, the size) lives in its side sheet (variations-inspector.tsx).
 
-const RESULTS_HEIGHT = 250;
-const MODEL_IMAGE_HEIGHT = 280;
+const NO_IMAGES: readonly string[] = [];
 
-const STRATEGIES: { value: VariationStrategy; label: "newTakes" | "promptList" | "modelList" }[] = [
-  { value: "same-prompt", label: "newTakes" },
-  { value: "prompt-list", label: "promptList" },
-  { value: "model-list", label: "modelList" },
-];
-
-function ModelTag({
-  ctx,
-  modelKey,
-  onRemove,
-}: {
-  ctx: EngineContext;
-  modelKey: ModelKey;
-  onRemove?: () => void;
-}) {
-  const model = ctx.model(modelKey);
-  const logo = logoFor(model?.providerId);
-  const name = modelName(ctx, modelKey);
-  return (
-    <span className="inline-flex shrink-0 items-center gap-6 rounded-8 bg-elevated-2 px-9 py-5 inset-ring inset-ring-border">
-      {logo ? <ProviderLogo provider={logo} /> : null}
-      <span className="text-caption text-text-primary">{name}</span>
-      {onRemove ? (
-        <button
-          type="button"
-          aria-label={t("canvas.nodes.variations.removeModel", { model: name })}
-          onClick={onRemove}
-          className="nodrag -m-3 inline-flex cursor-pointer rounded-4 p-3 text-text-tertiary hover:text-text-secondary"
-        >
-          <X size={14} aria-hidden />
-        </button>
-      ) : null}
-    </span>
-  );
+/** "4 new takes · Nano Banana 2", "3 prompts · Nano Banana 2", "3 models" (design q5kM8). */
+export function summaryOf(params: VariationsParams, ctx: EngineContext): string {
+  if (params.strategy === "model-list")
+    return t("canvas.nodes.variations.summary.models", { count: modelList(params).length });
+  const what =
+    params.strategy === "prompt-list"
+      ? t("canvas.nodes.variations.summary.prompts", { count: promptLines(params).length })
+      : t("canvas.nodes.variations.summary.takes", { count: params.count });
+  const key = modelKeyOf(params.model, ctx);
+  return key ? `${what} · ${modelName(ctx, key)}` : what;
 }
 
 export const VariationsNode = memo(function VariationsNode(props: NodeComponentProps) {
@@ -83,158 +55,27 @@ export const VariationsNode = memo(function VariationsNode(props: NodeComponentP
   const basics = useNodeBasics(id);
   const ctx = basics?.ctx ?? EMPTY_ENGINE_CONTEXT;
   const params = useParsedParams<VariationsParams>(id, variationsSpec, ctx);
-  const setParams = useSetParams(id);
   const result = useNodeResult(id);
-  const analysis = useNodeAnalysis(id);
   const display = useNodeDisplay(id);
-  const readOnly = useReadOnly();
   const key = modelKeyOf(params.model, ctx);
   const model = ctx.model(key);
-  const models = useMemo(() => modelList(params), [params]);
-  // The Generate card's voxel swarm over each image area while it runs (design wKzQJ): the swarm
-  // while generating, idle while it waits, here or at the company. WebGL is set up on the first run.
-  const live = display.state === "running" || display.state === "queued";
-  const voxels = useMemo(() => live && voxelsSupported(), [live]);
-  const wait = useCompanyWait(id);
-  const swarm = voxels ? (display.state === "running" && !wait ? "active" : "idle") : null;
 
   if (!basics) return null;
   const { frame } = basics;
+  const byModel = params.strategy === "model-list";
+  const images = result?.assetIds ?? NO_IMAGES;
   const name = frame.title?.trim() || t(variationsSpec.label);
-  const strategy = params.strategy;
-  const byModel = strategy === "model-list";
-  const images = result?.assetIds ?? [];
-  const outputs = result?.outputs ?? [];
-  const stale = display.state === "stale";
-  const lines = promptLines(params);
-
-  // Captions: by fanned-out image when a list came in, else by prompt line in Prompts mode.
-  const labelOf = (index: number): string | null => {
-    const output = outputs[index];
-    if (!output) return null;
-    if (display.fanOut > 1 && output.source !== undefined) return sourceLabel(output.source);
-    if (strategy === "prompt-list" && output.call !== undefined) return lines[output.call] ?? null;
-    return null;
-  };
-
-  const pickStrategy = (value: string) => {
-    const next = value as VariationStrategy;
-    if (next === strategy) return;
-    // Models mode starts from the model the node already uses.
-    const patch: Record<string, unknown> = { strategy: next };
-    if (next === "model-list" && !models.length && key) patch.models = [key];
-    setParams(patch);
-  };
-
-  const band = (
-    <div className="absolute inset-x-0 bottom-0 flex flex-col justify-end">
-      <StateBand id={id} display={display} model={key} name={name} />
-    </div>
-  );
-  // Over no images yet the swarm takes the mark's place, as it takes the Generate card's glyph.
-  const empty = (
-    <div className="absolute inset-0 flex items-center justify-center bg-surface">
-      {swarm ? null : <BrandMark size={24} className="opacity-30" />}
-    </div>
-  );
-  // Puffs come in from the node's input ports, whose rail sits on the node's middle. Only the
-  // area on the node's left edge takes them; Models mode's other columns don't touch that edge.
-  const field = (withPorts: boolean, backing: boolean) =>
-    swarm ? (
-      <VoxelField
-        nodeId={id}
-        mode={swarm}
-        backing={backing}
-        rail={withPorts && props.height ? { ports: VARIATIONS_PORTS, middle: props.height / 2 } : null}
-      />
-    ) : null;
-
-  const results = byModel ? (
-    <div className="relative flex w-full gap-2">
-      {(models.length ? models : [key ?? ""]).map((modelKey, column) => {
-        const own = images.filter((_, i) => outputs[i]?.model === modelKey);
-        const m = ctx.model(modelKey);
-        const logo = logoFor(m?.providerId);
-        // At its company's speed, with "· Standard" when it lacks that speed (§0.3).
-        const run = m ? ctx.runSpeed?.(m) : undefined;
-        const cost = m
-          ? tightCost(estimateRun(m, carriedFor(m, params), "", run?.speed, {}, ctx.askPrice))
-          : undefined;
-        const price = cost && run?.fellBack ? `${cost} ${t("speed.suffix", { speed: run.name })}` : cost;
-        return (
-          <div key={modelKey} className="flex min-w-0 flex-1 flex-col">
-            <div className="relative w-full overflow-hidden" style={{ height: MODEL_IMAGE_HEIGHT }}>
-              {own.length ? (
-                <ResultGrid
-                  assetIds={own}
-                  height={MODEL_IMAGE_HEIGHT}
-                  dim={stale || !!swarm}
-                  className="absolute inset-0"
-                />
-              ) : (
-                empty
-              )}
-              {field(column === 0, own.length > 0)}
-            </div>
-            <div className="flex w-full px-12 py-10">
-              {logo ? (
-                <ModelCaption
-                  provider={logo}
-                  name={modelName(ctx, modelKey)}
-                  cost={price}
-                  className="min-w-0"
-                />
-              ) : (
-                <span className="truncate text-micro font-medium text-text-primary">
-                  {modelName(ctx, modelKey)}
-                </span>
-              )}
-            </div>
-          </div>
-        );
-      })}
-      {band}
-    </div>
-  ) : (
-    <div className="relative w-full overflow-hidden" style={{ height: RESULTS_HEIGHT }}>
-      {images.length ? (
-        <ResultGrid
-          assetIds={images}
-          labelOf={labelOf}
-          height={RESULTS_HEIGHT}
-          dim={stale || !!swarm}
-          className="absolute inset-0"
-        />
-      ) : (
-        empty
-      )}
-      {field(true, images.length > 0)}
-      {band}
-    </div>
-  );
-
-  const pill = (
-    <RunPill
-      id={id}
-      name={name}
-      estimate={analysis?.estimate ?? null}
-      blocker={display.blocker}
-      upToDate={analysis?.upToDate ?? false}
-      seedless={!model?.capabilities.seed.supported}
-      models={byModel ? models.map((k) => ctx.model(k)) : [model]}
-    />
-  );
 
   return (
     <NodeShell
       {...props}
+      variant="card"
       spec={variationsSpec}
       title={frame.title}
       collapsed={frame.collapsed}
-      changed={stale}
+      changed={display.state === "stale"}
       fanOut={display.fanOut}
       inspectable
-      contentSized
       collapsedMeta={
         model && logoFor(model.providerId) ? (
           <ModelCaption
@@ -247,86 +88,138 @@ export const VariationsNode = memo(function VariationsNode(props: NodeComponentP
       }
       collapsedStatus={<CollapsedStatus display={display} />}
       thumbs={images}
-      frameClassName={byModel ? "w-634 min-h-[430px]" : "w-320 min-h-360"}
     >
-      {results}
-      <div className="flex shrink-0 flex-col gap-10 p-12">
-        <Segmented
-          value={strategy}
-          onValueChange={pickStrategy}
-          disabled={readOnly}
-          aria-label={t("canvas.nodes.variations.strategy")}
-          className="nodrag"
-        >
-          {STRATEGIES.map((s) => (
-            <SegmentedItem key={s.value} value={s.value}>
-              {t(`canvas.nodes.variations.${s.label}`)}
-            </SegmentedItem>
-          ))}
-        </Segmented>
-        {strategy === "same-prompt" ? (
-          <div className="flex w-full items-center justify-between">
-            <StepperChip
-              value={params.count}
-              min={TAKES_MIN}
-              max={TAKES_MAX}
-              disabled={readOnly}
-              onValueChange={(count) => setParams({ count }, "count")}
-              label={t("canvas.nodes.variations.takes")}
-              decrementLabel={t("canvas.nodes.variations.fewer")}
-              incrementLabel={t("canvas.nodes.variations.more")}
-              className="nodrag"
-            />
-            {pill}
-          </div>
-        ) : strategy === "prompt-list" ? (
-          <>
-            <div className="flex h-96 flex-col rounded-14 bg-surface p-12">
-              <textarea
-                value={params.prompts.join("\n")}
-                readOnly={readOnly}
-                placeholder={t("canvas.nodes.variations.promptsPlaceholder")}
-                aria-label={t("canvas.nodes.variations.promptsField")}
-                onChange={(event) => setParams({ prompts: event.target.value.split("\n") }, "prompts")}
-                onKeyDown={(event) => event.stopPropagation()}
-                className="nodrag nowheel min-h-0 w-full flex-1 resize-none bg-transparent text-small leading-[1.5] text-text-primary outline-none placeholder:text-text-tertiary"
-              />
-            </div>
-            <div className="flex w-full items-center justify-between">
-              <span className="text-caption text-text-tertiary">
-                {t("canvas.nodes.variations.promptsCount", { count: lines.length })}
-              </span>
-              {pill}
-            </div>
-          </>
-        ) : (
-          <div className="flex w-full flex-col gap-10">
-            {models.length ? (
-              <div className="flex w-full flex-wrap items-center gap-6">
-                {models.map((modelKey) => (
-                  <ModelTag
-                    key={modelKey}
-                    ctx={ctx}
-                    modelKey={modelKey}
-                    onRemove={
-                      readOnly ? undefined : () => setParams({ models: models.filter((m) => m !== modelKey) })
-                    }
-                  />
-                ))}
-              </div>
-            ) : null}
-            <div className="flex w-full items-center justify-between">
-              <AddModelPicker
-                models={modelsFitting(ctx.models, { references: analysis?.references ?? 0 })}
-                exclude={models}
-                disabled={readOnly || models.length >= LIST_MAX}
-                onAdd={(m) => setParams({ models: [...models, m.key] })}
-              />
-              {pill}
-            </div>
-          </div>
-        )}
-      </div>
+      <VariationsCard
+        id={id}
+        name={name}
+        selected={props.selected}
+        display={display}
+        frame={frame}
+        params={params}
+        images={images}
+      />
     </NodeShell>
   );
 });
+
+interface VariationsCardProps {
+  id: string;
+  name: string;
+  selected: boolean;
+  display: NodeDisplay;
+  frame: { id: string; size?: { w: number; h: number } };
+  params: VariationsParams;
+  images: readonly string[];
+}
+
+/** The image card (nodes/shell/image-card.tsx) with Variations' grid, summary, words and mark. */
+function VariationsCard({ id, name, selected, display, frame, params, images }: VariationsCardProps) {
+  const basics = useNodeBasics(id);
+  const ctx = basics?.ctx ?? EMPTY_ENGINE_CONTEXT;
+  const analysis = useNodeAnalysis(id);
+  const result = useNodeResult(id);
+  const wait = useCompanyWait(id);
+  const rawParams = useNodeParams(id);
+  const first = images[0];
+  const dims = useStore(cardMedia, (s) => (first ? s.dims[first] : undefined));
+  // The box follows the first image's shape, the chosen ratio before there's one (card-size.ts).
+  const box = useMemo(
+    () =>
+      variationsLayout({
+        frame,
+        params: rawParams ?? {},
+        result: { assetIds: images },
+        ctx,
+        media: { dims: first && dims ? { [first]: dims } : {}, shown: {} },
+      }),
+    [frame, rawParams, images, ctx, first, dims],
+  );
+  const outputs = result?.outputs ?? [];
+  const lines = promptLines(params);
+  const byModel = params.strategy === "model-list";
+  const key = modelKeyOf(params.model, ctx);
+  const models = byModel ? modelList(params).map((k) => ctx.model(k)) : [ctx.model(key)];
+  const parts = analysis?.upstreamParts ?? [];
+  // It runs from a prompt coming in or an incoming image; Prompts mode also from its own lines.
+  const nothingIn =
+    !parts.length &&
+    (analysis?.references ?? 0) === 0 &&
+    (params.strategy !== "prompt-list" || !lines.length);
+  const nothingToMake = takesOf(params) === 0;
+
+  // Captions: by fanned-out image when a list came in, else by prompt line (Prompts) or model (Models).
+  const labelOf = (index: number): string | null => {
+    const output = outputs[index];
+    if (!output) return null;
+    if (display.fanOut > 1 && output.source !== undefined) return sourceLabel(output.source);
+    if (params.strategy === "prompt-list" && output.call !== undefined) return lines[output.call] ?? null;
+    if (byModel && output.model) return modelName(ctx, output.model);
+    return null;
+  };
+
+  return (
+    <ImageCard
+      id={id}
+      name={name}
+      selected={selected}
+      display={display}
+      hasImages={images.length > 0}
+      box={box}
+      short={box.h < CARD_SHORT_BELOW}
+      rail={{ ports: VARIATIONS_PORTS, middle: box.h / 2 }}
+      media={(opacity, view) =>
+        images.length && view.media !== "placeholder" ? (
+          <ResultGrid
+            assetIds={images}
+            labelOf={labelOf}
+            height={box.h}
+            opacity={opacity}
+            className="absolute inset-0"
+          />
+        ) : null
+      }
+      empty={(view) => <EmptyMark view={view} wait={wait} />}
+      text={(view) => (
+        <div className="flex w-full flex-col gap-4">
+          <p className="of-card-summary">{summaryOf(params, ctx)}</p>
+          <p className="of-card-prompt" data-placeholder={(nothingIn && view.phase === "empty") || undefined}>
+            {parts.length ? (
+              <LinkedPrompt parts={parts} own="" separator=" " />
+            ) : view.phase === "empty" && nothingIn ? (
+              t("canvas.nodes.card.noPrompt")
+            ) : (
+              ""
+            )}
+          </p>
+        </div>
+      )}
+      run={{
+        estimate: analysis?.estimate ?? null,
+        blocker: display.blocker,
+        upToDate: analysis?.upToDate ?? false,
+        seedless: !models.some((m) => m?.capabilities.seed.supported),
+        models,
+        muted: nothingIn || nothingToMake,
+      }}
+      model={byModel ? (modelList(params)[0] ?? null) : key}
+    />
+  );
+}
+
+/** An empty card: the mark (the swarm takes its place while it runs), or the company's wait in words. */
+function EmptyMark({ view, wait }: { view: CardView; wait: CompanyWait | null }) {
+  const note =
+    view.phase === "atCompany"
+      ? wait?.speed !== "batch"
+        ? t("speed.tile.fewMinutes")
+        : wait.stopping || wait.state === "submitting"
+          ? null
+          : t("speed.tile.fewHours")
+      : null;
+  return (
+    <div className="flex flex-col items-center gap-8">
+      {view.voxels ? null : <BrandMark size={24} className="opacity-30" />}
+      {note ? <span className="text-caption text-text-tertiary">{note}</span> : null}
+    </div>
+  );
+}

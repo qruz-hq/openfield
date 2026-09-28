@@ -114,11 +114,14 @@ export function SizeField({
  * lacks that speed (§0.3).
  */
 export function InspectorRun({
+  label,
   estimate,
   models = [],
   disabled,
   onRun,
 }: {
+  /** "Run 4 takes": what it runs, where that helps. Plain "Run" otherwise. */
+  label?: string;
   estimate: CostEstimate | null;
   /** The models it runs, for the speed note. */
   models?: readonly (ModelListItem | undefined)[];
@@ -136,7 +139,7 @@ export function InspectorRun({
       className="w-full"
       onClick={(event) => onRun(event.currentTarget, event.altKey)}
     >
-      {t("canvas.nodes.inspector.run")}
+      {label ?? t("canvas.nodes.inspector.run")}
     </Button>
   );
   if (!speed) return button;

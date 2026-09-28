@@ -1,6 +1,5 @@
 import { checkConnection, planGroupConnect, skippedMessage } from "@openfield/canvas/engine/connect";
 import type { MenuGroup } from "@openfield/canvas/nodes/registry";
-import { VARIATIONS_BOX } from "@openfield/canvas/nodes/variations/spec";
 import { newEdgeId } from "@openfield/canvas/store/graph";
 import { applyOps, type CanvasOp, type Size } from "@openfield/canvas/store/ops";
 import { t } from "@openfield/core";
@@ -33,8 +32,7 @@ const GROUP_LABEL: Record<MenuGroup | "connects" | "other", () => string> = {
 };
 
 /** The box a node gets before React Flow measures it, for placing its ports on the drop point. */
-const boxOf = (def: NodeDefinition): Size =>
-  def.size ?? (def.type === "image.variations" ? VARIATIONS_BOX : { w: 0, h: 0 });
+const boxOf = (def: NodeDefinition): Size => def.size ?? { w: 0, h: 0 };
 
 /**
  * How well a node type matches what was typed, lower is better, null for no match: its name

@@ -59,7 +59,7 @@ export function AddModelPicker({
       }}
     >
       <PopoverTrigger asChild>
-        <Button variant="secondary" size="s" icon={Plus} disabled={disabled} className="nodrag">
+        <Button variant="ghost" size="s" icon={Plus} disabled={disabled} className="self-start">
           {t("canvas.nodes.variations.addModel")}
         </Button>
       </PopoverTrigger>

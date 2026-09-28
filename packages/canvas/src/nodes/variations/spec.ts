@@ -53,8 +53,8 @@ export interface VariationsParams extends SizeParams {
   prompts: string[];
 }
 
-/** The box before React Flow has measured it, for placing a new node's ports (design zodbS). */
-export const VARIATIONS_BOX = { w: 320, h: 360 } as const;
+/** A new card's box: four square takes (design njYDO). Its box then follows its images (card-size.ts). */
+export const VARIATIONS_BOX = { w: 320, h: 320 } as const;
 
 export const TAKES_MIN = 2;
 export const TAKES_MAX = 8;
@@ -317,8 +317,8 @@ export const variationsSpec: NodeSpec<VariationsParams> = {
   keywords: ["takes", "compare", "models", "prompts", "several"],
   category: "generate",
   menu: { group: "image", order: 2 },
-  // Sized by its content: 320×360 (design zodbS), 634 wide in Models mode (mdu6t).
-  size: null,
+  // An image card like Generate's: the editor gives it the box of its images (card-size.ts).
+  size: { ...VARIATIONS_BOX },
   resizable: false,
   annotation: false,
   ports: VARIATIONS_PORTS,
