@@ -79,10 +79,24 @@ export function compileEdits(
   const touched: string[] = [];
   const aliases: Record<string, string> = {};
   const source: BoxSource = { ctx, ...(opts.images && { images: opts.images }) };
-  /** Nodes whose place or box the edits changed: the frames around them may need to grow. */
+  /** Nodes whose place or box an edit changed: the frames around them may need to grow. */
   const shaped = new Set<string>();
   /** Positions given by hand, to move clear of other nodes once every edit is in. */
   const placed: string[] = [];
+  /** Every frame around these (and each of them that is a frame) grows to hold what's in it. */
+  const grow = (ids: Iterable<string>) => {
+    const reached = new Set<string>();
+    for (const id of ids) {
+      if (!doc.nodes[id]) continue;
+      if (doc.nodes[id]!.type === "frame") reached.add(id);
+      for (const frameId of framesAround(doc, doc.nodes[id]!.parentId)) reached.add(frameId);
+    }
+    if (!reached.size) return;
+    const fitted = fitFrames(doc, specs, reached, source);
+    doc = fitted.doc;
+    ops.push(...fitted.ops);
+    for (const id of fitted.grown) if (!touched.includes(id)) touched.push(id);
+  };
 
   for (const [index, edit] of edits.entries()) {
     const fail = (code: EditErrorCode, key: MessageKey, values?: MessageVars): never => {
@@ -405,6 +419,9 @@ export function compileEdits(
         emit([{ op: "setName", name: edit.name.trim() }]);
         break;
     }
+    // Frames grow as the batch goes, so what the next edits place sees them at their new size.
+    grow(shaped);
+    shaped.clear();
   }
 
   const notes: string[] = [];
@@ -423,19 +440,8 @@ export function compileEdits(
     doc = applyOps(doc, [op]).doc;
     ops.push(op);
     notes.push(nudge.note);
+    grow([id]);
   }
-
-  // Every frame around a node that moved, changed shape or arrived grows to hold what's in it.
-  const reached = new Set<string>();
-  for (const id of shaped) {
-    if (!doc.nodes[id]) continue;
-    if (doc.nodes[id]!.type === "frame") reached.add(id);
-    for (const frameId of framesAround(doc, doc.nodes[id]!.parentId)) reached.add(frameId);
-  }
-  const fitted = fitFrames(doc, specs, reached, source);
-  doc = fitted.doc;
-  ops.push(...fitted.ops);
-  for (const id of fitted.grown) if (!touched.includes(id)) touched.push(id);
 
   return { ops, doc, touched: touched.filter((id) => doc.nodes[id]), aliases, notes };
 }
