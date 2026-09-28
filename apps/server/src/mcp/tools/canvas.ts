@@ -1,6 +1,14 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { fromDocument, specRegistry } from "@openfield/canvas";
-import { ASPECT_RATIOS, CANVAS_EDGE_KINDS, t } from "@openfield/core";
+import {
+  fromDocument,
+  LIST_MAX,
+  NODE_LIMITS,
+  PROMPT_MAX,
+  specRegistry,
+  TAKES_MAX,
+  TAKES_MIN,
+} from "@openfield/canvas";
+import { ASPECT_RATIOS, BATCH_MAX, CANVAS_EDGE_KINDS, GENERATE_PROMPT_MAX, t } from "@openfield/core";
 import { type CanvasEdit, canvasEditSchema } from "@openfield/core/canvas";
 import { z } from "zod";
 import { readDocument } from "../../canvas/documents";
@@ -26,26 +34,26 @@ const MAX_PREVIEWS = 8;
 
 /** What each node type's settings mean, for list_node_types. Types not listed have none worth setting. */
 const SETTINGS: Partial<Record<string, Record<string, string>>> = {
-  prompt: { text: "The words it hands on to what it's connected to." },
+  prompt: { text: `The words it hands on to what it's connected to. At most ${PROMPT_MAX} characters.` },
   "image.upload": { assetIds: "Library image ids. Bring a file or web image in with import_image first." },
   "image.asset": { assetIds: "Library image ids, from search_assets." },
   "image.generate": {
     model:
       'A model key from list_models, such as "google:gemini-3-pro-image". Leave out for the default model.',
-    prompt: "Its own prompt. A connected Prompt node's text comes first, then this.",
+    prompt: `Its own prompt. A connected Prompt node's text comes first, then this; together at most ${GENERATE_PROMPT_MAX} characters.`,
     aspect: 'Shorthand for size: an aspect ratio such as "1:1", "3:4" or "16:9".',
     size: '{"kind":"aspect","ratio":"16:9"}, {"kind":"pixels","width":1024,"height":1536} or {"kind":"auto"}.',
     resolution: 'A resolution tier the model lists, such as "1K" or "2K".',
     quality: "A quality id the model lists in list_models.",
-    batch: "How many images, 1 to 4. Each is billed.",
+    batch: `How many images, 1 to ${BATCH_MAX}. Each is billed.`,
     seed: '{"mode":"random"} or {"mode":"fixed","value":42}, for models that take seeds.',
   },
   "image.variations": {
     strategy:
       '"same-prompt" (count new takes), "prompt-list" (one image per line of prompts) or "model-list" (one per model).',
-    count: "New takes: how many, 2 to 8.",
-    prompts: "prompt-list: the lines.",
-    models: "model-list: model keys, one image each.",
+    count: `New takes: how many, ${TAKES_MIN} to ${TAKES_MAX}.`,
+    prompts: `prompt-list: the lines, at most ${LIST_MAX}, each at most ${PROMPT_MAX} characters.`,
+    models: `model-list: model keys, one image each, at most ${LIST_MAX}.`,
     model: "same-prompt and prompt-list: the model. Leave out for the default.",
     aspect: "Shorthand for size, as on Generate.",
   },
@@ -406,7 +414,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "Node types",
       description:
-        "Every kind of node a canvas can have: what it does, its input and output ports (for connect), its settings and their defaults.",
+        "Every kind of node a canvas can have: what it does, its input and output ports (for connect), its settings, their defaults and their limits.",
       inputSchema: {},
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
@@ -427,6 +435,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
         outputs: specRegistry.ports(spec.type, "out").map((p) => ({ port: p.id, gives: p.type })),
         settings: SETTINGS[spec.type] ?? {},
         defaults: spec.defaults(engine),
+        ...(spec.type in NODE_LIMITS && { limits: NODE_LIMITS[spec.type as keyof typeof NODE_LIMITS] }),
       }));
       return reply({
         types,
@@ -442,7 +451,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
       description:
         "Applies a batch of edits in one go: all of them, or none if one is refused (the answer says which). Each edit is one of: " +
         'add_node {as?, type, params?, title?, position?, parentId?, near?}, update_node {id, params?, title?, collapsed?, size?}, move_node {id, position?, parentId?}, remove_nodes {ids}, connect {source, sourceHandle?, target, targetHandle?}, disconnect {edgeId | source/target}, rename_canvas {name}; or the short form {connect: "p.text", to: "g.prompt"}. ' +
-        "`as` names a new node so later edits in the batch can use it. Leave position out and the node is placed next to what it connects to. The person sees each change in open tabs as it lands.",
+        "`as` names a new node so later edits in the batch can use it. Leave position out and the node is placed next to what it connects to. Settings have limits (list_node_types gives them, and titles are at most 200 characters); a batch that goes past one is refused and says which, so nothing is cut short or left unable to run. The person sees each change in open tabs as it lands.",
       inputSchema: {
         canvas: z.string().describe(canvasField),
         edits: z

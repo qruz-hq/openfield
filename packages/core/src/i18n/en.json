@@ -1608,7 +1608,27 @@
       "whichEdge": "Say which connection to remove: its id, or the nodes it joins.",
       "running": "{count, plural, one {A node this changes is running} other {# nodes this changes are running}}. Stop the run or wait for it to finish.",
       "missingAsset": "There's no image {id} in your library.",
-      "invalid": "That would leave the canvas broken. {reason}"
+      "invalid": "That would leave the canvas broken. {reason}",
+      "wontRun": "{node} couldn't run like that. {reason}",
+      "planGeneric": "Something in its settings is past what a run can send.",
+      "planTooLong": "Its {field} would be longer than the {max} characters a run can send.",
+      "planTooMany": "It would send more {field} than the {max} a run can take.",
+      "planFields": {
+        "prompt": "prompt, with the words coming in from Prompt nodes,",
+        "negativePrompt": "words to leave out",
+        "label": "caption",
+        "calls": "requests",
+        "values": "images",
+        "inputs": "inputs"
+      },
+      "limits": {
+        "promptText": "A Prompt node holds at most {max} characters. This text has {count}.",
+        "generatePrompt": "A Generate prompt can be at most {max} characters. This one has {count}.",
+        "takes": "New takes makes {min} to {max} images. This asks for {count}.",
+        "prompts": "Variations takes at most {max} prompts. This has {count}.",
+        "promptLine": "Each Variations prompt can be at most {max} characters. Prompt {index} has {count}.",
+        "models": "Variations takes at most {max} models. This has {count}."
+      }
     },
     "agents": {
       "editing": "{name} is editing",

@@ -1,8 +1,10 @@
 import {
   ASPECT_RATIOS,
   BATCH_MAX,
+  GENERATE_PROMPT_MAX,
   type GenerateRequest,
   type ModelKey,
+  NEGATIVE_PROMPT_MAX,
   newId,
   RESOLUTION_TIERS,
   type SizeSpec,
@@ -15,7 +17,11 @@ import { IMAGE_REF_HINT, resolveImage } from "./refs";
 // The runner's own checks (normalize) still decide what each model can do.
 
 export const imageRequestFields = {
-  prompt: z.string().min(1).max(32_000).describe("What to make, or for an edit, what to change."),
+  prompt: z
+    .string()
+    .min(1)
+    .max(GENERATE_PROMPT_MAX)
+    .describe("What to make, or for an edit, what to change."),
   model: z
     .string()
     .optional()
@@ -41,7 +47,11 @@ export const imageRequestFields = {
     .optional()
     .describe(`How many images, 1 to ${BATCH_MAX}. Each one is billed. Default: the person's default.`),
   seed: z.int().min(0).max(2_147_483_647).optional().describe("A seed, for models that take one."),
-  negativePrompt: z.string().max(4_000).optional().describe("What to leave out, for models that take it."),
+  negativePrompt: z
+    .string()
+    .max(NEGATIVE_PROMPT_MAX)
+    .optional()
+    .describe("What to leave out, for models that take it."),
   references: z
     .array(z.string())
     .max(16)

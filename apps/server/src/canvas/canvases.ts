@@ -4,11 +4,14 @@ import {
   type CanvasOp,
   CanvasOpError,
   compileEdits,
+  compileRun,
   type DocSlice,
   EditError,
   type EngineContext,
   fromDocument,
+  limitProblem,
   lockedTargets,
+  nodeTitle,
   specRegistry,
   toDocument,
   toWireOps,
@@ -32,7 +35,9 @@ import {
   type CanvasVersion,
   type CanvasVersionCreateBody,
   type CanvasVersionDetail,
+  canvasRunPlanItemSchema,
   DEFAULT_CURRENCY,
+  type MessageKey,
   newId,
   t,
 } from "@openfield/core";
@@ -474,6 +479,8 @@ export class CanvasService {
         createdAt: row.createdAt,
       });
       this.#checkDocument(next, built.touched);
+      this.#checkLimits(built.doc, built.touched);
+      this.#checkRunnable(built.doc, built.touched);
       const versionId = this.#agentVersion(id, actor, before, at);
       const saved = saveCanvas(tx, id, row.graphVersion, {
         graph: next,
@@ -541,6 +548,53 @@ export class CanvasService {
     // Named, so it's kept like a version the person saved themselves (§7.8).
     const version = this.#snapshot(id, before, "named", label, at);
     return version.id;
+  }
+
+  /**
+   * Every touched node's settings within the limits the editor keeps to (NODE_LIMITS): the words
+   * of a Prompt node, how many prompts or models Variations takes. Past one, the edit is refused and
+   * says which, instead of being cut short without a word.
+   */
+  #checkLimits(slice: DocSlice, touched: readonly string[]): void {
+    for (const id of touched) {
+      const node = slice.nodes[id];
+      if (!node) continue;
+      const problem = limitProblem(node.type, slice.params[id] ?? {});
+      if (problem) {
+        throw new ApiFailure(400, "bad_request", problem, { field: `nodes.${id}`, userMessage: problem });
+      }
+    }
+  }
+
+  /**
+   * What the edits touched has to be something a run can send. A run plan has limits of its own (a
+   * caption's length, how many requests, a prompt's length with the words coming in), so the touched
+   * nodes are compiled as a run would compile them and each plan item is checked against those.
+   */
+  #checkRunnable(slice: DocSlice, touched: readonly string[]): void {
+    const nodeIds = touched.filter((id) => slice.nodes[id]);
+    if (!nodeIds.length) return;
+    // Fingerprints only decide what's up to date; every touched node is compiled here.
+    const fingerprints = Object.fromEntries(slice.order.map((id) => [id, PLACEHOLDER_FINGERPRINT]));
+    const outcome = compileRun({
+      doc: slice,
+      registry: specRegistry,
+      ctx: this.deps.engineContext(),
+      fingerprints,
+      request: { scope: "selection", nodeIds, bypassCache: true },
+    });
+    if (outcome.kind !== "plan") return;
+    for (const { item } of outcome.items) {
+      const parsed = canvasRunPlanItemSchema.safeParse(item);
+      if (parsed.success) continue;
+      const frame = slice.nodes[item.nodeId];
+      const node = frame ? nodeTitle(frame, specRegistry) : item.nodeId;
+      const reason = planIssue(parsed.error.issues[0]);
+      throw new ApiFailure(400, "bad_request", `${node}: ${reason}`, {
+        field: `nodes.${item.nodeId}`,
+        userMessage: t("canvas.edits.wontRun", { node, reason }),
+      });
+    }
   }
 
   /** A node with a run in flight can't be deleted or taken out of its frame (§7.7). */
@@ -719,4 +773,33 @@ function touchedBy(ops: readonly CanvasOp[], doc: DocSlice): string[] {
     if (id && doc.nodes[id] && !ids.includes(id)) ids.push(id);
   }
   return ids;
+}
+
+/** Stands in for a node's fingerprint when a plan is compiled only to check it. */
+const PLACEHOLDER_FINGERPRINT = `sha256:${"0".repeat(64)}`;
+
+/** What a run plan calls the fields it limits, in the words of the node they come from. */
+const PLAN_FIELDS: Readonly<Record<string, MessageKey>> = {
+  prompt: "canvas.edits.planFields.prompt",
+  negativePrompt: "canvas.edits.planFields.negativePrompt",
+  label: "canvas.edits.planFields.label",
+  calls: "canvas.edits.planFields.calls",
+  values: "canvas.edits.planFields.values",
+  inputs: "canvas.edits.planFields.inputs",
+};
+
+/** A run plan's limit, said about the node that went past it. */
+function planIssue(
+  issue:
+    | { code: string; path: PropertyKey[]; message: string; maximum?: unknown; origin?: unknown }
+    | undefined,
+): string {
+  if (!issue) return t("canvas.edits.planGeneric");
+  const key = [...issue.path].reverse().find((k): k is string => typeof k === "string");
+  const known = key ? PLAN_FIELDS[key] : undefined;
+  if (issue.code !== "too_big" || typeof issue.maximum !== "number" || !key) return issue.message;
+  const field = known ? t(known) : key;
+  return issue.origin === "array"
+    ? t("canvas.edits.planTooMany", { field, max: issue.maximum })
+    : t("canvas.edits.planTooLong", { field, max: issue.maximum });
 }
