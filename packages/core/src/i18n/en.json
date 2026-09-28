@@ -1646,7 +1646,28 @@
       "stopFollowing": "Stop following",
       "versionSaved": "Saved a version before {name}'s changes.",
       "versionLabel": "Before {name}",
-      "view": "View"
+      "view": "View",
+      "since": {
+        "lead": "Since your last read: {changes}.",
+        "nodes": "{count} nodes",
+        "pair": "{a} and {b}",
+        "added": "{nodes} added",
+        "removed": "{nodes} removed",
+        "renamed": "{nodes} renamed",
+        "settings": "new settings on {nodes}",
+        "moved": "{nodes} moved",
+        "resized": "{nodes} resized",
+        "images": "new images on {nodes}",
+        "locked": "{nodes} locked",
+        "unlocked": "{nodes} unlocked",
+        "linked": "{count, plural, one {a connection added} other {# connections added}}",
+        "unlinked": "{count, plural, one {a connection removed} other {# connections removed}}",
+        "canvasRenamed": "the canvas renamed to {name}",
+        "view": "the view moved"
+      },
+      "stale": "The canvas changed since your last read, so nothing was applied.",
+      "staleNext": "Read it again with get_canvas, or leave out onlyIfUnchanged to apply the edits to the canvas as it is now.",
+      "staleUnknown": "onlyIfUnchanged needs the version you read: pass its graphVersion, or read the canvas with get_canvas first."
     },
     "lock": {
       "note": "Locked. Its images stay as they are, and it won't run again.",

@@ -6,6 +6,7 @@ import type {
   ServerRequest,
 } from "@modelcontextprotocol/sdk/types.js";
 import { errorCopy, t } from "@openfield/core";
+import type { CanvasDocument } from "@openfield/core/canvas";
 import { InvalidCursorError } from "@openfield/db";
 import { isProviderError } from "@openfield/providers/server";
 import type { Services } from "../context";
@@ -22,9 +23,17 @@ export interface AgentSession {
   readonly canAsk?: boolean;
 }
 
+/** A canvas as this connection last read or left it: what "since your last read" is measured from. */
+export interface SeenCanvas {
+  graphVersion: number;
+  doc: CanvasDocument;
+}
+
 export interface ToolContext {
   svc: Services;
   session: AgentSession;
+  /** By canvas id. */
+  seen: Map<string, SeenCanvas>;
 }
 
 export type Extra = RequestHandlerExtra<ServerRequest, ServerNotification>;

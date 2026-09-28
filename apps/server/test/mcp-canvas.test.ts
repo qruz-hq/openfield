@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { type CallToolResult, CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { canvasRunStateSchema, canvasUpdatedSchema } from "@openfield/core";
+import { type CanvasDocument, type CanvasNode, canvasDocumentSchema } from "@openfield/core/canvas";
 import { getCanvas, jobSetsOfRun } from "@openfield/db";
 import { gatedFetch, saveKey, startTestServer, type TestServer } from "./helpers";
 import { call, connectAgent, turnOnAgents } from "./mcp-helpers";
@@ -140,12 +141,62 @@ describe("canvases", () => {
     });
     expect(labelled.text).toStartWith("connections[0]: ");
 
+    // Only when asked: onlyIfUnchanged leaves a canvas that changed since alone.
     const stale = await call(c, "edit_canvas", {
       canvas: canvasId,
       graphVersion: 1,
+      onlyIfUnchanged: true,
       edits: [{ op: "rename_canvas", name: "Other" }],
     });
     expect(stale.isError).toBe(true);
+    expect(stale.text).toStartWith("The canvas changed since your last read, so nothing was applied.");
+    expect(getCanvas(s.services.db, canvasId)!.name).toBe("Mugs");
+  });
+
+  test("an edit made after the tab moved the view and resized a card applies, and says what changed", async () => {
+    const { server: s, client: c } = await ready();
+    const { canvasId, p, g } = await promptToGenerate(c);
+    const read = j(await call(c, "get_canvas", { canvas: canvasId }));
+
+    // The person's tab: Follow pans the view, the card takes its image's shape, then they rename a node.
+    const tabSave = async (change: (graph: CanvasDocument) => CanvasDocument) => {
+      const row = getCanvas(s.services.db, canvasId)!;
+      const graph = change(canvasDocumentSchema.parse(row.graph));
+      const res = await s.json<{ graphVersion: number }>(`/api/canvases/${canvasId}`, {
+        method: "PATCH",
+        body: { graph, graphVersion: row.graphVersion },
+      });
+      expect(res.status).toBe(200);
+      return res.body.graphVersion;
+    };
+    const node = (graph: CanvasDocument, id: string, patch: Partial<CanvasNode>) => ({
+      ...graph,
+      nodes: graph.nodes.map((n) => (n.id === id ? { ...n, ...patch } : n)),
+    });
+    expect(await tabSave((graph) => ({ ...graph, viewport: { x: -300, y: 120, zoom: 0.75 } }))).toBe(
+      read.graphVersion,
+    );
+    expect(await tabSave((graph) => node(graph, g, { size: { w: 270, h: 480 } }))).toBe(read.graphVersion);
+    expect(await tabSave((graph) => node(graph, p, { title: "Key visual" }))).toBe(read.graphVersion + 1);
+
+    // The agent still has the version it read. Its edit lands on the canvas as it is now.
+    const edited = await call(c, "edit_canvas", {
+      canvas: canvasId,
+      graphVersion: read.graphVersion,
+      edits: [{ op: "update_node", id: g, params: { batch: 2 } }],
+    });
+    expect(edited.isError).toBe(false);
+    expect(j(edited).since).toBe(
+      "Since your last read: Key visual renamed, Generate resized, the view moved.",
+    );
+    const saved = canvasDocumentSchema.parse(getCanvas(s.services.db, canvasId)!.graph);
+    expect(saved.nodes.find((n) => n.id === p)!.title).toBe("Key visual");
+    expect(saved.nodes.find((n) => n.id === g)!.params.batch).toBe(2);
+    expect(saved.viewport).toEqual({ x: -300, y: 120, zoom: 0.75 });
+
+    // Nothing new since that answer, so the next one has nothing to say about it.
+    const next = j(await call(c, "update_node", { canvas: canvasId, id: g, title: "Hero" }));
+    expect(next.since).toBeUndefined();
   });
 
   test("an edit past a node's limits is refused and says which; a long prompt line still runs", async () => {
@@ -585,7 +636,7 @@ describe("the daily limit under pressure", () => {
   test("with the limit reached, a model whose price is unknown is refused too", async () => {
     const { server: s, client: c } = await ready();
     const { checkSpend } = await import("../src/mcp/guard");
-    const ctx = { svc: s.services, session: { id: "s", client: "Claude Code" } };
+    const ctx = { svc: s.services, session: { id: "s", client: "Claude Code" }, seen: new Map() };
     const unknown = {
       currency: "USD",
       min: 0,

@@ -105,6 +105,10 @@ import { BUNDLED_TEMPLATES_DIR, CanvasTemplates } from "./templates";
 // concurrency, version history, templates and card previews. Runs live in ./runs.
 
 const NAME_MAX = 200;
+/** Recent versions of a canvas kept in memory, so an agent can hear what changed since the one it read. */
+const VERSIONS_REMEMBERED = 32;
+/** Canvases whose recent versions are kept, the least recently changed going first. */
+const CANVASES_REMEMBERED = 64;
 
 export interface CanvasServiceDeps {
   db: Db;
@@ -128,6 +132,8 @@ export class CanvasService {
   readonly templates: CanvasTemplates;
   /** Agent sessions that saved a version before their first change, per canvas. */
   readonly #agentSaved = new Set<string>();
+  /** Each canvas's recent documents by graphVersion, as each version was first saved. */
+  readonly #recent = new Map<string, Map<number, CanvasDocument>>();
 
   constructor(private readonly deps: CanvasServiceDeps) {
     this.templates = new CanvasTemplates(
@@ -191,8 +197,17 @@ export class CanvasService {
       createdAt: at,
       updatedAt: at,
     });
+    this.#remember(id, row.graphVersion, doc);
     this.#writeThrough(doc);
     return toCanvasDetail(row, doc);
+  }
+
+  /**
+   * The document as it was when it reached `graphVersion`, while that version is recent enough to
+   * be remembered, else null.
+   */
+  documentAt(id: string, graphVersion: number): CanvasDocument | null {
+    return this.#recent.get(id)?.get(graphVersion) ?? null;
   }
 
   /**
@@ -267,6 +282,7 @@ export class CanvasService {
         this.#snapshot(id, next, "auto", null, at);
         pruneVersions(tx, id);
       }
+      this.#remember(id, saved.row.graphVersion, next);
       return { kind: "saved" as const, row: saved.row, doc: next };
     });
     if (result.kind === "missing") throw this.#missing();
@@ -398,6 +414,7 @@ export class CanvasService {
         at,
       });
       if (!saved.ok) throw new ApiFailure(409, "conflict", "The canvas changed while restoring");
+      this.#remember(id, saved.row.graphVersion, doc);
       return { row: saved.row, doc };
     });
     this.#writeThrough(result.doc);
@@ -502,6 +519,7 @@ export class CanvasService {
         at,
       });
       if (!saved.ok) throw this.#stale(saved.current ?? row);
+      this.#remember(id, saved.row.graphVersion, next);
       if (name !== row.name) this.#renameFolder(row, name);
       if (this.#autoSnapshotDue(id, at)) {
         this.#snapshot(id, next, "auto", null, at);
@@ -764,6 +782,21 @@ export class CanvasService {
       coverAssetId: pickCover(this.deps.db, doc),
       createdAt: at,
     });
+  }
+
+  #remember(id: string, graphVersion: number, doc: CanvasDocument): void {
+    const versions = this.#recent.get(id) ?? new Map<number, CanvasDocument>();
+    this.#recent.delete(id);
+    this.#recent.set(id, versions);
+    if (!versions.has(graphVersion)) versions.set(graphVersion, doc);
+    for (const old of versions.keys()) {
+      if (versions.size <= VERSIONS_REMEMBERED) break;
+      versions.delete(old);
+    }
+    for (const old of this.#recent.keys()) {
+      if (this.#recent.size <= CANVASES_REMEMBERED) break;
+      this.#recent.delete(old);
+    }
   }
 
   /** "Also save canvases as files" (§7.8). A failed copy is logged; the save itself stands. */

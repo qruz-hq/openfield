@@ -35,7 +35,7 @@ export function createMcpServer(svc: Services, session: AgentSession): McpServer
     { name: "openfield", title: "Openfield", version: svc.version },
     { instructions: INSTRUCTIONS },
   );
-  const ctx: ToolContext = { svc, session };
+  const ctx: ToolContext = { svc, session, seen: new Map() };
   withPermissions(server, ctx);
   for (const group of TOOL_GROUPS) group(server, ctx);
   registerResources(server, ctx);

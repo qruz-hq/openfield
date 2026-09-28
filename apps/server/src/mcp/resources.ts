@@ -2,7 +2,7 @@ import { type McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/serv
 import { ErrorCode, McpError } from "@modelcontextprotocol/sdk/types.js";
 import type { AgentAction } from "@openfield/core";
 import { getAsset, getCanvas, libraryPage } from "@openfield/db";
-import { canvasUrl, describeCanvas } from "./canvas";
+import { canvasUrl, describeCanvas, saw } from "./canvas";
 import { imageInfo, PREVIEW_EDGE, preview } from "./images";
 import type { Extra, ToolContext } from "./kit";
 import { askPerson, decide } from "./permissions";
@@ -75,7 +75,8 @@ export function registerResources(server: McpServer, ctx: ToolContext): void {
       if (!getCanvas(ctx.svc.db, String(id))) {
         throw new McpError(ErrorCode.InvalidParams, `There's no canvas with the id ${String(id)}.`);
       }
-      const { view } = await describeCanvas(ctx, String(id));
+      const { view, doc } = await describeCanvas(ctx, String(id));
+      saw(ctx, view.canvasId, view.graphVersion, doc);
       return {
         contents: [
           {

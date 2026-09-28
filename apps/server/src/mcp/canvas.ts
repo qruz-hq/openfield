@@ -93,6 +93,21 @@ export function reading(ctx: ToolContext, canvasId: string, nodeIds: string[] = 
   });
 }
 
+/** This connection has now seen the canvas as it is: its next edit says what changed since. */
+export function saw(ctx: ToolContext, canvasId: string, graphVersion: number, doc: CanvasDocument): void {
+  ctx.seen.set(canvasId, { graphVersion, doc });
+}
+
+/**
+ * The canvas as the agent last had it: the version it names when that's the one this connection
+ * saw, or one the server still remembers; with no version, what this connection saw last.
+ */
+export function lastSeen(ctx: ToolContext, canvasId: string, graphVersion?: number): CanvasDocument | null {
+  const seen = ctx.seen.get(canvasId);
+  if (graphVersion === undefined || seen?.graphVersion === graphVersion) return seen?.doc ?? null;
+  return ctx.svc.canvases.documentAt(canvasId, graphVersion);
+}
+
 // What's on a canvas
 
 /** The settings worth showing per node type; everything else stays out to keep answers small. */

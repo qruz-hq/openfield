@@ -12,6 +12,7 @@ import {
 } from "@openfield/canvas";
 import { ASPECT_RATIOS, BATCH_MAX, CANVAS_EDGE_KINDS, GENERATE_PROMPT_MAX, t } from "@openfield/core";
 import { type CanvasEdit, canvasEditSchema } from "@openfield/core/canvas";
+import { getCanvas } from "@openfield/db";
 import { z } from "zod";
 import { readDocument } from "../../canvas/documents";
 import { serverEngineContext } from "../../canvas/engine-context";
@@ -22,11 +23,14 @@ import {
   canvasPreviews,
   canvasUrl,
   describeCanvas,
+  lastSeen,
   reading,
   resolveCanvas,
   restoreOps,
+  saw,
 } from "../canvas";
 import { guarded, Refusal, reply, type ToolContext } from "../kit";
+import { changesSince } from "../since";
 
 // Building canvases: find, make, read, change, and go back to an earlier version. Every change goes
 // through the canvas service as the agent, so open tabs show it as it happens, with the agent's name
@@ -122,36 +126,58 @@ function tidy(edit: CanvasEdit): CanvasEdit {
 }
 
 /**
- * Applies edits as the agent and answers with what changed. A refused edit says which one, in the
- * words `label` gives it ("edit 3", "nodes[1]").
+ * Applies edits as the agent to the canvas as it is now, and answers with what changed, and what
+ * had changed since the agent last read it. With onlyIfUnchanged, a canvas that changed since is
+ * left alone. A refused edit says which one, in the words `label` gives it ("edit 3", "nodes[1]").
  */
 async function applyEdits(
   ctx: ToolContext,
   canvasRef: string,
   edits: CanvasEdit[],
-  opts: { graphVersion?: number | undefined; label?: (index: number) => string } = {},
+  opts: {
+    graphVersion?: number | undefined;
+    onlyIfUnchanged?: boolean | undefined;
+    label?: (index: number) => string;
+  } = {},
 ) {
   const canvas = resolveCanvas(ctx, canvasRef);
   const label = opts.label ?? ((i: number) => `edit ${i}`);
+  const row = getCanvas(ctx.svc.db, canvas.id);
+  const before = lastSeen(ctx, canvas.id, opts.graphVersion);
+  const since = row && before ? changesSince(before, readDocument(row.graph)) : null;
+  let expected: number | undefined;
+  if (opts.onlyIfUnchanged) {
+    expected = opts.graphVersion ?? ctx.seen.get(canvas.id)?.graphVersion;
+    if (expected === undefined) throw new Refusal(t("canvas.agents.staleUnknown"));
+    if (row && row.graphVersion !== expected) {
+      throw new Refusal(
+        [t("canvas.agents.stale"), since, t("canvas.agents.staleNext")].filter(Boolean).join(" "),
+      );
+    }
+  }
   let result: ReturnType<typeof ctx.svc.canvases.edit>;
   try {
     result = ctx.svc.canvases.edit(canvas.id, edits.map(tidy), actorOf(ctx), {
-      ...(opts.graphVersion !== undefined && { graphVersion: opts.graphVersion }),
+      ...(expected !== undefined && { graphVersion: expected }),
     });
   } catch (error) {
     const index = error instanceof ApiFailure ? /^edits\.(\d+)$/.exec(error.field ?? "")?.[1] : undefined;
     if (index !== undefined && error instanceof ApiFailure) {
       throw new Refusal(
-        `${label(Number(index))}: ${error.userMessage ?? error.message} Nothing was changed.`,
+        [`${label(Number(index))}: ${error.userMessage ?? error.message} Nothing was changed.`, since]
+          .filter(Boolean)
+          .join(" "),
       );
     }
     throw error;
   }
-  const { view } = await describeCanvas(ctx, canvas.id);
+  const { view, doc } = await describeCanvas(ctx, canvas.id);
+  saw(ctx, canvas.id, view.graphVersion, doc);
   const touched = new Set(result.touched);
   return reply({
     canvasId: canvas.id,
     graphVersion: result.graphVersion,
+    ...(since && { since }),
     ...(Object.keys(result.aliases).length > 0 && { created: result.aliases }),
     ...(result.versionId && {
       versionSaved: `Saved the canvas as a version first ("${t("canvas.agents.versionLabel", { name: ctx.session.client })}"), so the person can go back.`,
@@ -166,7 +192,14 @@ const graphVersionField = z
   .min(1)
   .optional()
   .describe(
-    "The graphVersion you last read. If the canvas changed since, nothing is applied and you're told to read it again.",
+    "The graphVersion you read, for onlyIfUnchanged and for what changed since. Leave out to use the one you last read here.",
+  );
+
+const onlyIfUnchangedField = z
+  .boolean()
+  .optional()
+  .describe(
+    "true: apply nothing if the canvas changed since your last read. Default false: the edits apply to the canvas as it is now, as long as every node they name is still there, and the answer says what changed since your last read.",
   );
 
 const addNodeFields = canvasEditSchema.options[0].omit({ op: true }).shape;
@@ -232,7 +265,8 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
     guarded(ctx, "create_canvas", async ({ name, templateId, show }) => {
       const detail = ctx.svc.canvases.create({ ...(name && { name }), ...(templateId && { templateId }) });
       const tabId = show ? ctx.svc.presence.navigate({ kind: "canvas", id: detail.id }) : null;
-      const { view } = await describeCanvas(ctx, detail.id);
+      const { view, doc } = await describeCanvas(ctx, detail.id);
+      saw(ctx, detail.id, view.graphVersion, doc);
       return reply({ ...view, ...(show && { shown: tabId !== null }) });
     }),
   );
@@ -242,7 +276,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "Read a canvas",
       description:
-        'What\'s on a canvas: every node with its id, type, title, position and main settings; whether each image node is done, out of date, failed or needs something; the images it made; and the connections as "node.port" pairs. Use its graphVersion with edit_canvas to be sure nothing changed in between.',
+        'What\'s on a canvas: every node with its id, type, title, position and main settings; whether each image node is done, out of date, failed or needs something; the images it made; and the connections as "node.port" pairs. Your edits apply to the canvas as it is when they arrive, and their answer says what changed since you read it.',
       inputSchema: {
         canvas: z.string().describe(canvasField),
         previews: z
@@ -254,7 +288,8 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
     },
     guarded(ctx, "get_canvas", async ({ canvas: ref, previews }) => {
       const canvas = resolveCanvas(ctx, ref);
-      const { view } = await describeCanvas(ctx, canvas.id);
+      const { view, doc } = await describeCanvas(ctx, canvas.id);
+      saw(ctx, canvas.id, view.graphVersion, doc);
       reading(ctx, canvas.id);
       return reply(view, previews ? await canvasPreviews(ctx, view, MAX_PREVIEWS) : []);
     }),
@@ -303,7 +338,8 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
     guarded(ctx, "duplicate_canvas", async ({ canvas: ref, name }) => {
       const copy = ctx.svc.canvases.duplicate(resolveCanvas(ctx, ref).id);
       if (name) ctx.svc.canvases.edit(copy.id, [{ op: "rename_canvas", name }], actorOf(ctx));
-      const { view } = await describeCanvas(ctx, copy.id);
+      const { view, doc } = await describeCanvas(ctx, copy.id);
+      saw(ctx, copy.id, view.graphVersion, doc);
       return reply(view);
     }),
   );
@@ -404,7 +440,8 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
         });
       }
       const result = ctx.svc.canvases.applyOps(canvas.id, ops, actor, { graphVersion: row.graphVersion });
-      const { view } = await describeCanvas(ctx, canvas.id);
+      const { view, doc } = await describeCanvas(ctx, canvas.id);
+      saw(ctx, canvas.id, view.graphVersion, doc);
       return reply({
         restored: versionId,
         label: version.label,
@@ -465,6 +502,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
           .array(z.union([canvasEditSchema, connectShorthand]))
           .min(1)
           .max(500),
+        onlyIfUnchanged: onlyIfUnchangedField,
         graphVersion: graphVersionField,
       },
       annotations: {
@@ -474,7 +512,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
         openWorldHint: false,
       },
     },
-    guarded(ctx, "edit_canvas", ({ canvas, edits, graphVersion }) =>
+    guarded(ctx, "edit_canvas", ({ canvas, edits, graphVersion, onlyIfUnchanged }) =>
       applyEdits(
         ctx,
         canvas,
@@ -483,7 +521,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
             ? connectEdit(e.connect, e.to, e.kind)
             : (e as CanvasEdit),
         ),
-        { graphVersion },
+        { graphVersion, onlyIfUnchanged },
       ),
     ),
   );
