@@ -409,9 +409,14 @@ function DetailContent({
       if (!item.jobSetId) return;
       recreateJobSet.mutateAsync(item.jobSetId).then(
         (set) =>
-          notify(t("assets.toast.recreating", { count: set.jobs.length }), {
-            action: { label: t("actions.show"), onClick: toWorkspace },
-          }),
+          notify(
+            t(isVideo ? "assets.toast.recreatingVideo" : "assets.toast.recreating", {
+              count: set.jobs.length,
+            }),
+            {
+              action: { label: t("actions.show"), onClick: toWorkspace },
+            },
+          ),
         (error: unknown) => notifyError(errorMessage(error)),
       );
     },
@@ -502,6 +507,7 @@ function DetailContent({
   return (
     <Shell
       contentRef={content}
+      isVideo={isVideo}
       onKeyDown={onKeyDown}
       // Esc leaves the expanded image first, then the view (§4.5).
       onEscape={() => {
@@ -533,7 +539,7 @@ function DetailContent({
             variant="overlay"
             size={38}
             icon={ChevronLeft}
-            label={t("assets.detail.previous")}
+            label={isVideo ? t("assets.detail.previousVideo") : t("assets.detail.previous")}
             onClick={previous}
             className="absolute top-1/2 left-16 -translate-y-1/2"
           />
@@ -543,7 +549,7 @@ function DetailContent({
             variant="overlay"
             size={38}
             icon={ChevronRight}
-            label={t("assets.detail.next")}
+            label={isVideo ? t("assets.detail.nextVideo") : t("assets.detail.next")}
             onClick={next}
             className="absolute top-1/2 right-16 -translate-y-1/2"
           />
@@ -624,12 +630,15 @@ function DetailContent({
  */
 function Shell({
   contentRef,
+  isVideo = false,
   onKeyDown,
   onEscape,
   returnFocusTo,
   children,
 }: {
   contentRef: RefObject<HTMLDivElement | null>;
+  /** Unknown while the item is still loading; the generic title covers that. */
+  isVideo?: boolean;
   onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void;
   /** True when Esc was used up inside (leaving the expanded image). */
   onEscape: () => boolean;
@@ -640,7 +649,9 @@ function Shell({
   return (
     <ModalContent
       ref={contentRef}
-      title={<span className="sr-only">{t("assets.detail.label")}</span>}
+      title={
+        <span className="sr-only">{isVideo ? t("assets.detail.labelVideo") : t("assets.detail.label")}</span>
+      }
       headerClassName="pointer-events-none absolute"
       aria-describedby={undefined}
       onKeyDown={onKeyDown}

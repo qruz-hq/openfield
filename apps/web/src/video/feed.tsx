@@ -85,7 +85,7 @@ export function VideoFeed({
   }, [hasMore, loadingMore, loadMoreFailed, onLoadMore, scrollRoot]);
 
   return (
-    <section aria-label={t("feed.label")} className="w-full pb-240">
+    <section aria-label={t("feed.labelVideo")} className="w-full pb-240">
       <div ref={container} className="flex w-full flex-col gap-2">
         {rows.map((row) => (
           <ul key={row.tiles[0]!.item.key} className="flex w-full gap-2" style={{ height: row.height }}>

@@ -249,6 +249,7 @@
       "done": "{count, plural, one {Deleted # image.} other {Deleted # images.}}"
     },
     "label": "Your images",
+    "labelVideo": "Your videos",
     "favoritesEmpty": {
       "title": "No favorites yet",
       "body": "Images you mark as favorites show up here."
@@ -343,6 +344,7 @@
         "resetAll": "Reset all"
       },
       "toolbar": "Image settings",
+      "toolbarVideo": "Video settings",
       "value": "{label}: {value}"
     },
     "aside": {
@@ -360,10 +362,12 @@
       "queued": "{count} queued",
       "noModel": "Pick a model first.",
       "emptyPrompt": "Describe the image first.",
+      "emptyPromptVideo": "Describe the video, or add a start frame.",
       "tooManyReferences": "Remove some references first.",
       "invalidSetting": "Fix the highlighted setting first."
     },
     "label": "Make an image",
+    "labelVideo": "Make a video",
     "reused": "Loaded the prompt and model."
   },
   "cost": {
@@ -1883,6 +1887,7 @@
       "deletedForGood": "{count, plural, one {Deleted # image for good.} other {Deleted # images for good.}}",
       "trashEmptied": "Emptied the trash.",
       "recreating": "{count, plural, one {Recreating # image.} other {Recreating # images.}}",
+      "recreatingVideo": "{count, plural, one {Recreating # video.} other {Recreating # videos.}}",
       "preparingDownload": "{count, plural, one {Getting # image ready.} other {Getting # images ready.}}"
     },
     "emptyStates": {
@@ -1918,8 +1923,11 @@
     },
     "detail": {
       "label": "Image details",
+      "labelVideo": "Video details",
       "previous": "Previous image",
+      "previousVideo": "Previous video",
       "next": "Next image",
+      "nextVideo": "Next video",
       "close": "Close",
       "inTrash": "{when, select, today {In the trash since today} yesterday {In the trash since yesterday} other {In the trash since {date}}}",
       "prompt": "Prompt",

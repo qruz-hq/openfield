@@ -192,7 +192,7 @@ export function VideoComposer({ firstRun = false }: { firstRun?: boolean }) {
   return (
     <div className="fixed bottom-16 left-1/2 z-40 flex min-h-146 w-[min(1120px,calc(100vw-160px))] -translate-x-1/2 rounded-26 bg-surface p-2">
       <form
-        aria-label={t("composer.label")}
+        aria-label={t("composer.labelVideo")}
         onSubmit={(event) => {
           event.preventDefault();
           submit();
@@ -218,7 +218,7 @@ export function VideoComposer({ firstRun = false }: { firstRun?: boolean }) {
           </div>
           <div
             role="toolbar"
-            aria-label={t("composer.chips.toolbar")}
+            aria-label={t("composer.chips.toolbarVideo")}
             onKeyDown={onToolbarKey}
             className="-m-4 flex items-center gap-8 overflow-x-auto p-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >

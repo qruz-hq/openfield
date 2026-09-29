@@ -121,7 +121,7 @@ export function videoGenerateState(input: {
   if (endWithoutStart)
     return { kind: "blocked", reason: t("video.chips.endFrame.needsStart"), estimate: cost };
   if (!prompt.trim() && !resolved?.video.startFrame) {
-    return { kind: "blocked", reason: t("composer.generate.emptyPrompt"), estimate: cost };
+    return { kind: "blocked", reason: t("composer.generate.emptyPromptVideo"), estimate: cost };
   }
   return { kind: "ready", estimate: cost };
 }
