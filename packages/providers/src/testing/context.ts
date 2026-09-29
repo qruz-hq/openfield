@@ -1,4 +1,5 @@
 import { type CredentialValues, newId, type SettingValue, type SpeedId, sha256Hex } from "@openfield/core";
+import { probeMp4 } from "../mp4";
 import { redact } from "../redact";
 import type { AssetSink, CallContext, FetchLike, RedactingLogger, StoredAsset, WrittenAsset } from "../types";
 import { probeImage } from "./png";
@@ -35,8 +36,20 @@ export function createRecordingLogger(secrets: () => readonly string[]): Recordi
   };
 }
 
+type Kept = StoredAsset & { sha256: string; written: boolean; durationMs?: number; hasAudio?: boolean };
+
+/** What the bytes are, like the real ingest path: a PNG, JPEG or WebP, or an MP4 or QuickTime video. */
+function probe(
+  bytes: Uint8Array,
+): { mimeType: string; width: number; height: number; durationMs?: number; hasAudio?: boolean } | null {
+  const image = probeImage(bytes);
+  if (image) return image;
+  const video = probeMp4(bytes);
+  return video && { mimeType: video.mime, ...video };
+}
+
 export class MemoryAssetSink implements AssetSink {
-  readonly assets = new Map<string, StoredAsset & { sha256: string; written: boolean }>();
+  readonly assets = new Map<string, Kept>();
 
   /** Adds an asset to read back, like an upload. Returns its id. */
   async add(bytes: Uint8Array, mimeType?: string): Promise<string> {
@@ -55,17 +68,21 @@ export class MemoryAssetSink implements AssetSink {
   }
 
   /** Assets an adapter wrote, in order. */
-  get written(): (StoredAsset & { sha256: string })[] {
+  get written(): Kept[] {
     return [...this.assets.values()].filter((a) => a.written);
   }
 
   async write(stream: ReadableStream<Uint8Array>, meta: { mimeType: string }): Promise<WrittenAsset> {
     const bytes = new Uint8Array(await new Response(stream).arrayBuffer());
     // Like the real ingest path: trust the bytes, not the declared type.
-    const probed = probeImage(bytes);
+    const probed = probe(bytes);
     const assetId = newId();
     const sha256 = await sha256Hex(bytes);
-    this.assets.set(assetId, {
+    const video =
+      probed?.durationMs !== undefined
+        ? { durationMs: probed.durationMs, hasAudio: probed.hasAudio ?? false }
+        : undefined;
+    const kept: Kept = {
       assetId,
       mimeType: probed?.mimeType ?? meta.mimeType,
       width: probed?.width ?? 0,
@@ -73,20 +90,23 @@ export class MemoryAssetSink implements AssetSink {
       bytes,
       sha256,
       written: true,
-    });
+      ...(video && { durationMs: video.durationMs, hasAudio: video.hasAudio }),
+    };
+    this.assets.set(assetId, kept);
     return {
       assetId,
-      width: probed?.width ?? 0,
-      height: probed?.height ?? 0,
+      width: kept.width,
+      height: kept.height,
       bytes: bytes.byteLength,
       sha256,
+      ...(video && { durationMs: video.durationMs, hasAudio: video.hasAudio }),
     };
   }
 
   async read(assetId: string): Promise<StoredAsset> {
     const asset = this.assets.get(assetId);
     if (!asset) throw new Error(`No asset ${assetId}`);
-    const { sha256: _, written: __, ...stored } = asset;
+    const { sha256: _, written: __, durationMs: ___, hasAudio: ____, ...stored } = asset;
     return stored;
   }
 }

@@ -18,7 +18,7 @@ export function registerResources(server: McpServer, ctx: ToolContext): void {
     "asset",
     new ResourceTemplate("openfield://asset/{id}", {
       list: async () => {
-        const page = libraryPage(ctx.svc.db, { limit: RECENT });
+        const page = libraryPage(ctx.svc.db, { limit: RECENT, modality: "image" });
         return {
           resources: page.items.map((item) => ({
             uri: `openfield://asset/${item.id}`,

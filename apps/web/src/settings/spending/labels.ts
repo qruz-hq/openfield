@@ -17,7 +17,8 @@ export interface SeriesLabel {
 
 export function useSeriesLabels(): (series: SeriesView) => SeriesLabel {
   const providers = useProviders();
-  const models = useQuery(modelsQuery);
+  // Spending covers every run, images and videos both.
+  const models = useQuery(modelsQuery("all"));
 
   // Quality ids are each model's own ("high", "medium"). Their names come from the models.
   const qualityNames = useMemo(() => {

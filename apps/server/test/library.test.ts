@@ -48,8 +48,9 @@ async function countOf(folderId: string) {
   return (await folders()).find((f) => f.id === folderId)?.count;
 }
 
-async function summary() {
-  return librarySummaryResponseSchema.parse((await server!.json("/api/library/summary")).body);
+async function summary(modality?: "image" | "video") {
+  const path = modality ? `/api/library/summary?modality=${modality}` : "/api/library/summary";
+  return librarySummaryResponseSchema.parse((await server!.json(path)).body);
 }
 
 describe("listings", () => {
@@ -136,6 +137,33 @@ describe("listings", () => {
       { providerId: "google", count: 2 },
       { providerId: "openai", count: 1 },
     ]);
+  });
+
+  test("the summary's counts and filter choices follow the modality asked for", async () => {
+    server = await startTestServer();
+    const [img] = await seedImages(server, 2);
+    const video = await seedImage(server, {
+      at: 9,
+      provider: "byteplus",
+      model: "dreamina-seedance-2-0-fast-260128",
+      modality: "video",
+    });
+    await bulk(server, "favourite", [img!.id, video.id]);
+
+    // Left out, both modalities count together, same as before this filter existed.
+    expect((await summary()).counts).toEqual({ all: 3, favourites: 2, trash: 0 });
+
+    const images = await summary("image");
+    expect(images.counts).toEqual({ all: 2, favourites: 1, trash: 0 });
+    expect(images.models).toEqual([{ providerId: "google", modelId: "gemini-3.1-flash-image", count: 2 }]);
+    expect(images.providers).toEqual([{ providerId: "google", count: 2 }]);
+
+    const videos = await summary("video");
+    expect(videos.counts).toEqual({ all: 1, favourites: 1, trash: 0 });
+    expect(videos.models).toEqual([
+      { providerId: "byteplus", modelId: "dreamina-seedance-2-0-fast-260128", count: 1 },
+    ]);
+    expect(videos.providers).toEqual([{ providerId: "byteplus", count: 1 }]);
   });
 });
 

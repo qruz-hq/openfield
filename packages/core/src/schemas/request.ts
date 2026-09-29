@@ -14,6 +14,7 @@ import {
   resolutionTierSchema,
   speedIdSchema,
   ulidSchema,
+  videoResolutionSchema,
 } from "./common";
 import { backgroundSchema } from "./manifest";
 import { providerSettingValuesSchema } from "./provider-settings";
@@ -46,6 +47,25 @@ export const maskInputSchema = z.object({
 });
 
 const edgePx = z.int().min(0).max(8192);
+
+/**
+ * A video run's own settings (§0.3), on a video model only. Anything left out takes the model's
+ * default; normalize() fills every field the model has, so the frozen request says exactly what
+ * was sent. The aspect ratio rides on `size`, as for images ("auto" is the company's own choice).
+ */
+export const videoRequestSchema = z.object({
+  /** Whole seconds, one of the model's durations. */
+  seconds: z.int().min(1).max(60).optional(),
+  resolution: videoResolutionSchema.optional(),
+  /** Sound made with the picture, where the model can. */
+  audio: z.boolean().optional(),
+  /** Keep the camera still, where the model can. */
+  cameraFixed: z.boolean().optional(),
+  /** The image the video starts on. */
+  startFrame: z.object({ assetId: ulidSchema }).optional(),
+  /** The image it ends on. Needs a start frame. */
+  endFrame: z.object({ assetId: ulidSchema }).optional(),
+});
 
 // Kept free of object-level refinements so other packages can pick, omit and extend it.
 /** The longest prompt a run sends, words from Prompt nodes included. */
@@ -87,6 +107,8 @@ export const generateRequestSchema = z.object({
   referenceSetId: entityIdSchema.optional(),
   paletteId: entityIdSchema.optional(),
   moderation: z.string().min(1).max(64).optional(),
+  /** Video models only. */
+  video: videoRequestSchema.optional(),
 
   source: jobSourceSchema,
   canvas: z.object({ canvasId: ulidSchema, nodeId: z.string().min(1).max(64) }).optional(),
@@ -173,6 +195,7 @@ export function adapterOpFor(op: Op, opts: { hasMask: boolean; canInpaint: boole
 }
 
 export type SizeSpec = z.infer<typeof sizeSpecSchema>;
+export type VideoRequest = z.infer<typeof videoRequestSchema>;
 export type ReferenceInput = z.infer<typeof referenceInputSchema>;
 export type MaskInput = z.infer<typeof maskInputSchema>;
 export type GenerateRequest = z.infer<typeof generateRequestSchema>;

@@ -84,9 +84,10 @@ export function LibraryPicker({ open, initial, onOpenChange, onPick }: LibraryPi
     return () => clearTimeout(timer);
   }, [search]);
 
-  const summary = useLibrarySummary();
+  // The Assets node only ever holds images (§0.16): videos aren't offered here, in its counts either.
+  const summary = useLibrarySummary("image");
   const tree = useLibraryTree();
-  const library = useLibrary(placeQuery(place, query), { enabled: open });
+  const library = useLibrary({ ...placeQuery(place, query), modality: "image" }, { enabled: open });
   const items = libraryItems(library.data as AssetPages | undefined);
   const pickedAssets = useAssetsByIds(open ? picked : []);
 

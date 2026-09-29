@@ -15,7 +15,8 @@ export { buildEngineContext, EMPTY_ENGINE_CONTEXT, speedOf } from "@openfield/ca
 
 /** The context, and whether models and settings have arrived (fingerprints wait for both). */
 export function useEngineContextState(): { ctx: EngineContext; ready: boolean } {
-  const models = useModels();
+  // Both kinds of model, so a canvas can hold Generate and Video nodes side by side (§0.16).
+  const models = useModels("all");
   const settings = useSettings();
   const providers = useProviders().data;
   const speeds = useAllProviderSettings();

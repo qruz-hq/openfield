@@ -7,6 +7,7 @@ import {
   jobSetStateSchema,
   jobSourceSchema,
   jobStateSchema,
+  modalitySchema,
   modelKeySchema,
   opSchema,
   providerIdSchema,
@@ -117,6 +118,8 @@ export const jobSetSchema = z.object({
   status: jobSetStateSchema,
   op: opSchema,
   model: modelKeySchema,
+  /** What the run makes, from its model: the Image and Video pages each show their own. */
+  modality: modalitySchema.default("image"),
   batchSize: z.int().min(1),
   /** As sent, after enhance and presets. */
   prompt: z.string(),
@@ -147,9 +150,10 @@ export const jobSetWithJobsSchema = z.object({
 /** 202 from POST /api/generate, /api/edit and /api/job-sets/:id/recreate. */
 export const jobSetAcceptedSchema = jobSetWithJobsSchema;
 
-/** GET /api/job-sets */
+/** GET /api/job-sets. `modality` defaults to image, so the Image page never sees video runs. */
 export const jobSetsListQuerySchema = z.object({
   status: z.enum(["active", "all"]).default("active"),
+  modality: z.enum(["image", "video", "audio", "all"]).default("image"),
   cursor: cursorSchema.optional(),
   limit: queryLimitSchema.optional(),
 });

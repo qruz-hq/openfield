@@ -304,6 +304,7 @@ const jobSet = {
   status: "pending",
   op: "generate",
   model: "google:gemini-3-pro-image",
+  modality: "image",
   batchSize: 1,
   prompt: "a teapot",
   promptOriginal: null,

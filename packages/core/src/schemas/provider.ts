@@ -14,9 +14,10 @@ import { modelManifestSchema } from "./manifest";
 
 // Provider data (§6.2). Behaviour (Provider, CallContext, ImageModel) lives in packages/providers.
 
+/** A host, or "*.parent.example" for any one label under a parent the company owns. */
 const hostSchema = z
   .string()
-  .regex(/^[a-z0-9.-]+(:\d+)?$/i)
+  .regex(/^(\*\.)?[a-z0-9.-]+(:\d+)?$/i)
   .max(253);
 
 export const providerMetaSchema = z.strictObject({
@@ -28,11 +29,30 @@ export const providerMetaSchema = z.strictObject({
   consoleUrl: z.url(),
   /** Every API host this adapter may contact. */
   networkHosts: z.array(hostSchema),
-  /** Every host an image may be downloaded from. Empty means bytes arrive inline. */
+  /**
+   * Every host an image may be downloaded from. Empty means bytes arrive inline. "*.parent" allows
+   * exactly one label under a parent the company owns, for storage that names a bucket per region.
+   */
   assetHosts: z.array(hostSchema),
   /** false keeps it behind Settings > Experimental. */
   stable: z.boolean(),
 });
+
+/**
+ * Whether `host` is one the patterns name: exactly, or for "*.parent.example" as a single label
+ * under it (never the parent itself, and never two labels deep). Case doesn't matter.
+ */
+export function hostAllowed(host: string, patterns: readonly string[]): boolean {
+  const h = host.toLowerCase();
+  return patterns.some((raw) => {
+    const pattern = raw.toLowerCase();
+    if (!pattern.startsWith("*.")) return h === pattern;
+    const parent = pattern.slice(1);
+    if (!h.endsWith(parent)) return false;
+    const label = h.slice(0, -parent.length);
+    return /^[a-z0-9-]+$/.test(label);
+  });
+}
 
 export const credentialFieldSchema = z.strictObject({
   name: z.string().regex(/^[a-zA-Z][a-zA-Z0-9]*$/),
@@ -142,10 +162,13 @@ export const keyTestResponseSchema = z.object({
 export const providerParamSchema = z.object({ providerId: providerIdSchema });
 export const modelParamSchema = z.object({ providerId: providerIdSchema, modelId: modelIdSchema });
 
-/** GET /api/models query. */
+/**
+ * GET /api/models query. `modality` defaults to image, so image pickers never offer a video model;
+ * "all" lists every model.
+ */
 export const modelsListQuerySchema = z.object({
   provider: providerIdSchema.optional(),
-  modality: z.enum(["image", "video", "audio"]).optional(),
+  modality: z.enum(["image", "video", "audio", "all"]).optional(),
   refresh: z.enum(["0", "1"]).optional(),
 });
 

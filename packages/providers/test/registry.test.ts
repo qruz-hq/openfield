@@ -24,8 +24,8 @@ describe("registry", () => {
     expect(registry.providers().map((p) => p.meta.id)).toEqual(builtinProviders.map((p) => p.meta.id));
   });
 
-  test("builtinProviders ships Google, OpenAI, then Higgsfield", () => {
-    expect(builtinProviders.map((p) => p.meta.id)).toEqual(["google", "openai", "higgsfield"]);
+  test("builtinProviders ships Google, OpenAI, Higgsfield, then BytePlus", () => {
+    expect(builtinProviders.map((p) => p.meta.id)).toEqual(["google", "openai", "higgsfield", "byteplus"]);
   });
 
   test("refresh adds recognised models and lists the rest as not supported", async () => {

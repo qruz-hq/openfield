@@ -20,7 +20,7 @@ import type { NodeFrame, Point, Size } from "../store/ops";
 export type NodeCategory = "reference" | "generate" | "edit" | "utility" | "annotation";
 
 /** Add-node menu groups, in menu order (§7.4, design CnYWZ). */
-export const MENU_GROUPS = ["references", "image", "utilities"] as const;
+export const MENU_GROUPS = ["references", "image", "video", "utilities"] as const;
 export type MenuGroup = (typeof MENU_GROUPS)[number];
 
 /** What a node's box can follow: its saved frame, its params and what it made. */

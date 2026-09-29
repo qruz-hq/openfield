@@ -90,7 +90,7 @@ import {
 // recreate, add to folder and Use as reference, over a scrim, with the model caption. No cost in
 // the caption yet - a plain asset the feed lists doesn't carry what its run was billed.
 
-interface TileBox {
+export interface TileBox {
   style: CSSProperties;
 }
 
@@ -123,7 +123,6 @@ export function AssetTile({
   const openDetail = useOpenDetail();
   const lastViewed = useIsLastViewed(asset.id);
   const addReference = useAddReference();
-  const [filing, setFiling] = useState(false);
   const label = t("feed.tile.label", {
     prompt: asset.prompt.trim() ? truncate(asset.prompt, 80) : t("feed.tile.noPrompt"),
     model: model ?? asset.modelId ?? "",
@@ -188,49 +187,7 @@ export function AssetTile({
        * the button above for the plain "open" click); only its own buttons do.
        */}
       <div className="pointer-events-none absolute inset-0 bg-scrim opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-        <div className="pointer-events-auto absolute top-10 right-10 flex flex-col gap-4">
-          <IconButton
-            variant="overlay"
-            size={38}
-            icon={Heart}
-            label={asset.isFavourite ? t("feed.tile.actions.unfavorite") : t("feed.tile.actions.favorite")}
-            aria-pressed={asset.isFavourite}
-            // Filled accent when on, the same look every favourite toggle in the app uses.
-            className={cn(asset.isFavourite && "text-accent [&>svg]:fill-current")}
-            onClick={() => actions.favourite([asset.id], !asset.isFavourite)}
-          />
-          <IconButton
-            variant="overlay"
-            size={38}
-            icon={Download}
-            label={t("feed.tile.actions.download")}
-            onClick={() => void actions.download([asset])}
-          />
-          {/* An uploaded image never ran, so it has nothing to recreate. */}
-          {asset.jobSetId ? (
-            <IconButton
-              variant="overlay"
-              size={38}
-              icon={RefreshCw}
-              label={t("feed.tile.actions.recreate")}
-              onClick={() => actions.recreate(asset)}
-            />
-          ) : null}
-          <AddToFolderPopover
-            ids={[asset.id]}
-            open={filing}
-            onOpenChange={setFiling}
-            side="left"
-            align="start"
-          >
-            <IconButton
-              variant="overlay"
-              size={38}
-              icon={FolderPlus}
-              label={t("feed.tile.actions.addToFolder")}
-            />
-          </AddToFolderPopover>
-        </div>
+        <TileActions asset={asset} actions={actions} />
         <div className="pointer-events-none absolute inset-x-10 bottom-20 flex flex-col items-start gap-16">
           {modelLabel ? (
             logo ? (
@@ -251,6 +208,54 @@ export function AssetTile({
         </div>
       </div>
     </li>
+  );
+}
+
+/**
+ * Feed / Tile / Hover / Actions column (design sZjeU): favourite, download, recreate and Add to
+ * folder, top right. Shared by the image and video tiles - same buttons, same copy, same spot -
+ * so each modality's own extras (Use as reference, the sound toggle) are the only thing that differs.
+ */
+export function TileActions({ asset, actions }: { asset: AssetListItem; actions: LibraryActions }) {
+  const [filing, setFiling] = useState(false);
+  return (
+    <div className="pointer-events-auto absolute top-10 right-10 flex flex-col gap-4">
+      <IconButton
+        variant="overlay"
+        size={38}
+        icon={Heart}
+        label={asset.isFavourite ? t("feed.tile.actions.unfavorite") : t("feed.tile.actions.favorite")}
+        aria-pressed={asset.isFavourite}
+        // Filled accent when on, the same look every favourite toggle in the app uses.
+        className={cn(asset.isFavourite && "text-accent [&>svg]:fill-current")}
+        onClick={() => actions.favourite([asset.id], !asset.isFavourite)}
+      />
+      <IconButton
+        variant="overlay"
+        size={38}
+        icon={Download}
+        label={t("feed.tile.actions.download")}
+        onClick={() => void actions.download([asset])}
+      />
+      {/* An uploaded image never ran, so it has nothing to recreate. */}
+      {asset.jobSetId ? (
+        <IconButton
+          variant="overlay"
+          size={38}
+          icon={RefreshCw}
+          label={t("feed.tile.actions.recreate")}
+          onClick={() => actions.recreate(asset)}
+        />
+      ) : null}
+      <AddToFolderPopover ids={[asset.id]} open={filing} onOpenChange={setFiling} side="left" align="start">
+        <IconButton
+          variant="overlay"
+          size={38}
+          icon={FolderPlus}
+          label={t("feed.tile.actions.addToFolder")}
+        />
+      </AddToFolderPopover>
+    </div>
   );
 }
 
@@ -348,7 +353,7 @@ function waitLabel(ms: number): string {
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
-interface JobTileProps extends TileBox {
+export interface JobTileProps extends TileBox {
   jobSet: JobSet;
   job: Job;
   /** Every job in the run. */
@@ -456,7 +461,9 @@ function WorkingTile({
  * progress bar, because there's no progress to show. A Batch run's images stop together, so its
  * Cancel asks first, and the tiles say they're stopping until the company has (§2.4).
  */
-function WaitingTile({
+/** Exported so the Video feed can reuse it too: BytePlus has no Batch or Flex speed today, but a
+ * future video company might. */
+export function WaitingTile({
   jobSet,
   job,
   jobs,

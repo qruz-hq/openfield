@@ -14,7 +14,8 @@ import { ProviderCard } from "./provider-card";
 export function ApiKeysPane() {
   const providers = useProviders();
   const keys = useKeys();
-  const models = useModels();
+  // Every model a card's speed and price rows can name, images and video both.
+  const models = useModels("all");
   const showEarly = useSettings().data?.showExperimental ?? false;
   const location = useLocation();
   const navigate = useNavigate();

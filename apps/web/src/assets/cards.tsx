@@ -20,13 +20,16 @@ import {
   FolderMinus,
   FolderX,
   Heart,
+  Pause,
   PencilLine,
+  Play,
   RefreshCw,
   RotateCcw,
   Trash2,
 } from "lucide-react";
 import { type MouseEvent, memo, type PointerEvent, useCallback, useState } from "react";
 import { useAuthedImage } from "../api/hooks/images";
+import { useAuthedVideo } from "../api/hooks/videos";
 import { detailTarget } from "../detail/use-detail";
 import { logoFor } from "../lib/provider";
 import type { LibraryActions } from "./actions";
@@ -34,6 +37,20 @@ import { type DragPayload, useDragSource, useDropState, useIsDragged } from "./d
 import { openFolderMenu, useFolderMenuOpen } from "./folder-menu";
 import { thumbPath } from "./media";
 import { subtreeOf } from "./sidebar";
+
+const clock = (seconds: number) =>
+  `${Math.floor(seconds / 60)}:${String(Math.floor(seconds) % 60).padStart(2, "0")}`;
+
+/** Pill / Tile / Duration (design F1pmM0), reused on the library's own video cards. */
+function DurationPill({ seconds, playing }: { seconds: number; playing: boolean }) {
+  const Icon = playing ? Pause : Play;
+  return (
+    <span className="pointer-events-none absolute right-10 bottom-10 inline-flex h-22 items-center gap-4 rounded-full bg-overlay px-8 inset-ring inset-ring-overlay-line backdrop-blur-chip">
+      <Icon size={10} aria-hidden className="shrink-0 fill-current text-overlay-fg" />
+      <span className="text-mono-11 text-overlay-fg">{clock(seconds)}</span>
+    </span>
+  );
+}
 
 // The grid's pieces (design rnsTH, dVwPY, ULgBc, N2Bods, AjRdL family, FEaIC, hJ9bs): image cards,
 // folder cards, date headers and the Folders section title.
@@ -83,6 +100,9 @@ export const ImageCard = memo(function ImageCard({
   dragPayload,
 }: ImageCardProps) {
   const image = useAuthedImage(thumbPath(item, rung));
+  const [hovered, setHovered] = useState(false);
+  const isVideo = item.modality === "video";
+  const clip = useAuthedVideo(isVideo && hovered ? item.fileUrl : null);
   const dragged = useIsDragged(item.id);
   const dragStart = useDragSource(
     useCallback(() => (trash ? null : dragPayload(item)), [trash, dragPayload, item]),
@@ -113,7 +133,13 @@ export const ImageCard = memo(function ImageCard({
       onClick={(event) => onActivate(item, { toggle: event.metaKey || event.ctrlKey, range: event.shiftKey })}
       onFocus={(event) => {
         if (event.target === event.currentTarget) onFocusCard(item.id);
+        if (isVideo) setHovered(true);
       }}
+      onBlur={(event) => {
+        if (isVideo && !event.currentTarget.contains(event.relatedTarget)) setHovered(false);
+      }}
+      onMouseEnter={() => isVideo && setHovered(true)}
+      onMouseLeave={() => isVideo && setHovered(false)}
       onPointerDown={dragStart}
       className={cn(
         "group relative shrink-0 cursor-pointer select-none overflow-hidden rounded-12 outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent",
@@ -126,8 +152,21 @@ export const ImageCard = memo(function ImageCard({
         {image.status === "ready" ? (
           <img src={image.src} alt="" draggable={false} decoding="async" className="size-full object-cover" />
         ) : null}
+        {isVideo && hovered && clip.status === "ready" ? (
+          <video
+            src={clip.src}
+            autoPlay
+            loop
+            muted
+            playsInline
+            className="absolute inset-0 size-full object-cover"
+          />
+        ) : null}
         <div aria-hidden className={cn("absolute inset-0 bg-scrim", chrome)} />
       </div>
+      {isVideo && item.durationMs ? (
+        <DurationPill seconds={item.durationMs / 1000} playing={hovered && clip.status === "ready"} />
+      ) : null}
       {/* A 1px edge above the image, so pale images stay bounded. */}
       {selected ? null : (
         <div

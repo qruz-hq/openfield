@@ -3,6 +3,8 @@ import { rawFetch, toApiError } from "../api/raw";
 import { focusPrompt } from "../image/composer/focus";
 import { useComposer } from "../image/composer/store";
 import { notify } from "../lib/notify";
+import { focusPrompt as focusVideoPrompt } from "../video/composer/focus";
+import { useVideoComposer } from "../video/composer/store";
 import { downloadName, type FrozenSettings } from "./format";
 
 // The detail view's footer actions that don't go through a cache hook: the file itself, the
@@ -52,14 +54,17 @@ export async function copyImage(asset: Pick<AssetListItem, "fileUrl">): Promise<
   await navigator.clipboard.write([new ClipboardItem({ "image/png": png })]);
 }
 
-/** Focus the prompt once the composer is on screen: after a route change it mounts a frame or two later. */
-export function focusPromptSoon(frames = 10) {
+/** Focus a composer's prompt once it's on screen: after a route change it mounts a frame or two later. */
+function focusSoon(focus: () => void, frames = 10) {
   requestAnimationFrame(() => {
     const before = document.activeElement;
-    focusPrompt();
-    if (document.activeElement === before && frames > 0) focusPromptSoon(frames - 1);
+    focus();
+    if (document.activeElement === before && frames > 0) focusSoon(focus, frames - 1);
   });
 }
+
+export const focusPromptSoon = (frames = 10) => focusSoon(focusPrompt, frames);
+export const focusVideoPromptSoon = (frames = 10) => focusSoon(focusVideoPrompt, frames);
 
 /**
  * Reuse (§0.1, §4.4): the prompt, model and settings into the composer, without running. Values the
@@ -86,6 +91,33 @@ export function reuseSettings(settings: FrozenSettings & { prompt: string }) {
     notify(t("assets.detail.reused"), {
       duration: 8000,
       action: { label: t("actions.undo"), onClick: () => useComposer.setState(snapshot) },
+    });
+  }
+}
+
+/** Reuse for a video run: its prompt, model, aspect, resolution, length and sound, no frames. */
+export function reuseVideoSettings(settings: FrozenSettings & { prompt: string }) {
+  const before = useVideoComposer.getState();
+  const snapshot = {
+    prompt: before.prompt,
+    model: before.model,
+    aspect: before.aspect,
+    resolution: before.resolution,
+    seconds: before.seconds,
+    sound: before.sound,
+  };
+  useVideoComposer.setState({
+    prompt: settings.prompt,
+    ...(settings.model ? { model: settings.model } : {}),
+    aspect: settings.aspect,
+    resolution: settings.video?.resolution,
+    seconds: settings.video?.seconds,
+    sound: settings.video?.audio,
+  });
+  if (snapshot.prompt.trim() && snapshot.prompt !== settings.prompt) {
+    notify(t("assets.detail.reused"), {
+      duration: 8000,
+      action: { label: t("actions.undo"), onClick: () => useVideoComposer.setState(snapshot) },
     });
   }
 }

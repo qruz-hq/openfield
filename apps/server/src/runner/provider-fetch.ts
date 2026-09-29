@@ -1,4 +1,4 @@
-import { type SettingValue, type SpeedId, t } from "@openfield/core";
+import { hostAllowed, type SettingValue, type SpeedId, t } from "@openfield/core";
 import {
   type AssetSink,
   type CallContext,
@@ -12,16 +12,15 @@ import type { Logger } from "../log/logger";
 import type { CredentialService } from "../services/credentials";
 
 // The only way an adapter reaches the network (§6.2, §6.11): https only, hosts from the adapter's
-// own networkHosts and assetHosts, no redirects to another host, and a redacted log line per call.
+// own networkHosts and assetHosts ("*.parent" is one label under a parent the company owns), no
+// redirects to another host, and a redacted log line per call.
 
 const MAX_REDIRECTS = 3;
 /** Bun's own option: only the call's signal ends it, so its 5-minute idle timer can't cut Flex short. */
 const NO_IDLE_TIMEOUT = { timeout: false } as RequestInit;
 
 export function providerFetch(base: FetchLike, provider: Provider, log: RedactingLogger): FetchLike {
-  const allowed = new Set(
-    [...provider.meta.networkHosts, ...provider.meta.assetHosts].map((h) => h.toLowerCase()),
-  );
+  const allowed = [...provider.meta.networkHosts, ...provider.meta.assetHosts];
 
   const refuse = (url: URL, why: string) => {
     log.warn(why, { host: url.host });
@@ -32,7 +31,7 @@ export function providerFetch(base: FetchLike, provider: Provider, log: Redactin
   };
   const check = (url: URL) => {
     if (url.protocol !== "https:") throw refuse(url, "Refused a request that wasn't https");
-    if (!allowed.has(url.host.toLowerCase()))
+    if (!hostAllowed(url.host, allowed))
       throw refuse(url, "Refused a request to a host the adapter didn't declare");
   };
 

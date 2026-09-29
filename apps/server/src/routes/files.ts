@@ -8,10 +8,12 @@ import { previewFile } from "../canvas/files";
 import { absolutePath } from "../config/home";
 import type { Env } from "../context";
 import { attachment, downloadName } from "../files/names";
-import { Thumbs } from "../files/thumbs";
+import { stillMime, Thumbs, thumbSourceOf } from "../files/thumbs";
 import { notFound, onInvalid } from "../http/errors";
 
-// Binary under /files (§8.5.3). Plain HTTP; the browser fetches with the session header.
+// Binary under /files (§8.5.3). Plain HTTP; the browser fetches with the session header. A video
+// is served whole or by byte ranges from /files/asset, like a full-size image; its thumbnails come
+// from its poster frame, so /files/thumb answers with an image for images and videos alike.
 
 const IMMUTABLE = "public, max-age=31536000, immutable";
 
@@ -53,14 +55,30 @@ export const filesRoutes = new Hono<Env>()
       const { db, thumbs } = c.var.svc;
       const query = c.req.valid("query");
       const asset = getAsset(db, c.req.valid("param").id, { includeDeleted: query.trash });
-      if (!asset) return notFound(c, "That image");
-      const thumb = await thumbs.get(asset, Thumbs.sizeFor(query));
+      const source = asset && thumbSourceOf(asset);
+      if (!asset || !source) return notFound(c, "That image");
+      const thumb = await thumbs.get(source, Thumbs.sizeFor(query));
       if (!existsSync(thumb.file)) return notFound(c, "That image");
       if (thumb.kind === "original") {
         // Not immutable, so real thumbnails take over once sharp loads (§8.5.2).
-        return sendFile(c, thumb.file, { type: asset.mime, cache: "no-cache" });
+        const type = asset.posterPath ? stillMime(asset.posterPath) : asset.mime;
+        return sendFile(c, thumb.file, { type, cache: "no-cache" });
       }
       return sendFile(c, thumb.file, { type: "image/webp", etag: thumb.etag, cache: IMMUTABLE });
+    },
+  )
+  // A video's poster frame at full size, for the player before it plays. Written once, with the
+  // video, so it's as immutable as the video itself.
+  .get(
+    "/poster/:id",
+    zValidator("param", idParamSchema, onInvalid),
+    zValidator("query", assetQuerySchema.pick({ trash: true }), onInvalid),
+    async (c) => {
+      const { db, paths } = c.var.svc;
+      const asset = getAsset(db, c.req.valid("param").id, { includeDeleted: c.req.valid("query").trash });
+      const file = asset?.posterPath && absolutePath(paths, asset.posterPath);
+      if (!asset || !file || !existsSync(file)) return notFound(c, "That poster");
+      return sendFile(c, file, { type: stillMime(file), etag: `"${asset.sha256}-poster"`, cache: IMMUTABLE });
     },
   )
   // An index card's preview (M4-15), in the theme asked for: an internal file, never an asset.

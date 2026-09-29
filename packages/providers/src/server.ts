@@ -1,8 +1,19 @@
 // @openfield/providers/server: the server entry (§0.16 rule 3). Adapters, the registry,
 // normalize() and the error helpers. Only apps/server imports this; the browser never does.
 
+export { createByteplusProvider } from "./byteplus";
 export { createGoogleProvider } from "./google";
 export * from "./manifest";
+export {
+  childBoxes,
+  looksLikeVideo,
+  type Mp4Box,
+  type ProbedVideo,
+  probeMoov,
+  probeMp4,
+  readBoxHeader,
+  videoMimeOfBrand,
+} from "./mp4";
 export {
   appendAvoid,
   type NormalizeOptions,

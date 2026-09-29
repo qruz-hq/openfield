@@ -586,6 +586,9 @@ export class CanvasRunService {
       inputImageSizes,
       ...(call.resolution && { resolution: call.resolution }),
       ...(call.quality && { quality: call.quality }),
+      ...(call.video && { video: call.video }),
+      // A video's "auto" could be any shape; an image's keeps pricing at the model's default.
+      ...(call.video && size.kind === "auto" && { size: { aspect: "auto" as const } }),
       ...(size.kind === "aspect" && { size: { aspect: size.ratio } }),
       ...(size.kind === "pixels" && { size: { width: size.width, height: size.height } }),
     });
@@ -763,8 +766,11 @@ export class CanvasRunService {
         .map((b) => ({ assetId: b.assetId, role: b.input.role ?? "subject" }));
       const base = bound.find((b) => b.input.to === "base");
       const mask = bound.find((b) => b.input.to === "mask");
+      // A video's frames join its settings: each launch gets its own pair.
+      const startFrame = bound.find((b) => b.input.to === "start_frame");
+      const endFrame = bound.find((b) => b.input.to === "end_frame");
       item.calls.forEach((call, callIndex) => {
-        const { label: _label, seed, ...settings } = call;
+        const { label: _label, seed, video, ...settings } = call;
         const request: GenerateRequest = {
           ...settings,
           idempotencyKey: newId(),
@@ -772,6 +778,13 @@ export class CanvasRunService {
           ...(references.length && { references }),
           ...(base && { base: { assetId: base.assetId, role: base.input.role ?? "base" } }),
           ...(mask && { mask: { assetId: mask.assetId } }),
+          ...((video || startFrame) && {
+            video: {
+              ...video,
+              ...(startFrame && { startFrame: { assetId: startFrame.assetId } }),
+              ...(endFrame && { endFrame: { assetId: endFrame.assetId } }),
+            },
+          }),
           source: "canvas",
           canvas: { canvasId: run.canvasId, nodeId: item.nodeId },
         };

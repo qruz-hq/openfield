@@ -33,6 +33,7 @@ export * from "./nodes/specs";
 export * from "./nodes/upload/spec";
 export * from "./nodes/variations/card-size";
 export * from "./nodes/variations/spec";
+export * from "./nodes/video/spec";
 export * from "./store/document";
 export * from "./store/graph";
 export * from "./store/ops";

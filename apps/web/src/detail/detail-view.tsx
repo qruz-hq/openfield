@@ -46,7 +46,14 @@ import { ApiError, errorMessage } from "../api/raw";
 import { tightCost } from "../lib/cost";
 import { notify, notifyError } from "../lib/notify";
 import { asksForPrice } from "../lib/remote-price";
-import { copyImage, downloadOriginal, focusPromptSoon, reuseSettings } from "./actions";
+import {
+  copyImage,
+  downloadOriginal,
+  focusPromptSoon,
+  focusVideoPromptSoon,
+  reuseSettings,
+  reuseVideoSettings,
+} from "./actions";
 import { type DetailActions, DetailPanel, type RunSpeedInfo } from "./detail-panel";
 import {
   BACKDROP_RUNG,
@@ -68,6 +75,7 @@ import {
   stepPrevious,
 } from "./stepping";
 import { closeDetailView, findDetailTarget, registerDetailCloser, useDetail } from "./use-detail";
+import { VideoMedia, type VideoMediaHandle } from "./video-media";
 
 // The detail view (§4.0, design x7y6U): the image large on its blurred copy, the Info panel on the
 // right, and Previous and Next through the list it was opened from. It's a modal dialog over the
@@ -143,13 +151,14 @@ function DetailContent({
   const content = useRef<HTMLDivElement>(null);
   const mediaBox = useRef<HTMLDivElement>(null);
   const media = useRef<MediaHandle>(null);
+  const videoMedia = useRef<VideoMediaHandle>(null);
   const [expanded, setExpanded] = useState(false);
   const [zoomed, setZoomed] = useState(false);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [pending, setPending] = useState<PendingStep | null>(null);
 
   const detail = useAssetDetail(id);
-  const models = useQuery({ ...modelsQuery, select: (data) => data.models });
+  const models = useQuery({ ...modelsQuery("all"), select: (data) => data.models });
   const settings = useSettings();
   const setFavourite = useSetFavourite();
   const trashAssets = useTrashAssets();
@@ -295,6 +304,7 @@ function DetailContent({
     );
   }
 
+  const isVideo = item.modality === "video";
   const data: AssetDetailResponse | undefined = detail.data?.asset.id === id ? detail.data : undefined;
   const frozen: FrozenSettings = frozenSettings(data?.asset.params ?? data?.params);
   const jobSet = data?.jobSet ?? null;
@@ -326,6 +336,7 @@ function DetailContent({
     if (frozen.quality) request.quality = frozen.quality;
     if (frozen.size) request.size = frozen.size;
     if (frozen.prompt !== undefined) request.prompt = frozen.prompt;
+    if (frozen.video) request.video = frozen.video;
     // A model its company prices per request replays at the price its run was sent at, as the
     // server prices the replay.
     recreatePrice = asksForPrice(model)
@@ -340,11 +351,25 @@ function DetailContent({
       : tightCost(estimate(model, request));
   }
   const recreateInexact = !model?.capabilities.seed.supported || data?.asset.seed === null;
+  // The Details panel's Cost row: a video's own row (§0.16). An image's panel doesn't have one yet.
+  const knownCost = jobSet?.costActualUsd ?? jobSet?.costEstimateUsd ?? null;
+  const detailCost =
+    !isVideo || knownCost === null
+      ? undefined
+      : tightCost({
+          currency: "usd",
+          min: knownCost,
+          max: knownCost,
+          confidence: jobSet?.costActualUsd !== null ? "exact" : "estimated",
+          basis: "",
+          pricedAt: "",
+        });
 
   // Through the registered closer: Recreate's Show can be clicked after this view has moved on.
-  const toImagePage = () => {
+  const workspacePath = isVideo ? "/video" : "/image";
+  const toWorkspace = () => {
     closeDetailView();
-    if (!window.location.pathname.startsWith("/image")) navigate("/image");
+    if (!window.location.pathname.startsWith(workspacePath)) navigate(workspacePath);
   };
 
   const leave = () => go(afterLeaving(nav, id));
@@ -384,23 +409,33 @@ function DetailContent({
       if (!item.jobSetId) return;
       recreateJobSet.mutateAsync(item.jobSetId).then(
         (set) =>
-          notify(t("assets.toast.recreating", { count: set.jobs.length }), {
-            action: { label: t("actions.show"), onClick: toImagePage },
-          }),
+          notify(
+            t(isVideo ? "assets.toast.recreatingVideo" : "assets.toast.recreating", {
+              count: set.jobs.length,
+            }),
+            {
+              action: { label: t("actions.show"), onClick: toWorkspace },
+            },
+          ),
         (error: unknown) => notifyError(errorMessage(error)),
       );
     },
     onReuse: () => {
       if (!canReplay) return;
-      reuseSettings({ ...frozen, prompt });
-      toImagePage();
-      focusPromptSoon();
+      if (isVideo) reuseVideoSettings({ ...frozen, prompt });
+      else reuseSettings({ ...frozen, prompt });
+      toWorkspace();
+      if (isVideo) focusVideoPromptSoon();
+      else focusPromptSoon();
     },
-    onCopyImage: () =>
-      void copyImage(item).then(
-        () => notify(t("toast.copied"), { tone: "success" }),
-        () => notifyError(t("assets.detail.copyFailed")),
-      ),
+    // Videos can't go on the clipboard the way an image can; the button stays off for them.
+    onCopyImage: isVideo
+      ? undefined
+      : () =>
+          void copyImage(item).then(
+            () => notify(t("toast.copied"), { tone: "success" }),
+            () => notifyError(t("assets.detail.copyFailed")),
+          ),
     onDownload: () => void downloadOriginal(item).catch((error: unknown) => notifyError(errorMessage(error))),
     onFavourite: () => setFavourite.mutate({ ids: [id], on: !favourite }),
     onDelete: () => setConfirm("delete"),
@@ -456,6 +491,10 @@ function DetailContent({
       case "0":
         media.current?.fit();
         break;
+      case " ":
+        if (isVideo) videoMedia.current?.togglePlay();
+        else handled = false;
+        break;
       default:
         handled = false;
     }
@@ -468,6 +507,7 @@ function DetailContent({
   return (
     <Shell
       contentRef={content}
+      isVideo={isVideo}
       onKeyDown={onKeyDown}
       // Esc leaves the expanded image first, then the view (§4.5).
       onEscape={() => {
@@ -481,21 +521,25 @@ function DetailContent({
       {/* The media area: the window left of the panel, or all of it when expanded. */}
       <div className="absolute inset-y-0 left-0" style={{ right: expanded ? 0 : PANEL_GUTTER }}>
         <div ref={mediaBox} className="absolute inset-0">
-          <Media
-            key={item.id}
-            ref={media}
-            item={item}
-            expanded={expanded}
-            label={title}
-            onZoomedChange={setZoomed}
-          />
+          {isVideo ? (
+            <VideoMedia key={item.id} ref={videoMedia} item={item} expanded={expanded} label={title} />
+          ) : (
+            <Media
+              key={item.id}
+              ref={media}
+              item={item}
+              expanded={expanded}
+              label={title}
+              onZoomedChange={setZoomed}
+            />
+          )}
         </div>
         {!expanded && nav.previous ? (
           <IconButton
             variant="overlay"
             size={38}
             icon={ChevronLeft}
-            label={t("assets.detail.previous")}
+            label={isVideo ? t("assets.detail.previousVideo") : t("assets.detail.previous")}
             onClick={previous}
             className="absolute top-1/2 left-16 -translate-y-1/2"
           />
@@ -505,20 +549,22 @@ function DetailContent({
             variant="overlay"
             size={38}
             icon={ChevronRight}
-            label={t("assets.detail.next")}
+            label={isVideo ? t("assets.detail.nextVideo") : t("assets.detail.next")}
             onClick={next}
             className="absolute top-1/2 right-16 -translate-y-1/2"
           />
         ) : null}
-        {/* Detail / Media chrome (design Rsrfa): Zoom and Expand image. */}
+        {/* Detail / Media chrome (design Rsrfa): Zoom (images only) and Expand. */}
         <div className="absolute right-38 bottom-20 flex items-center gap-6">
-          <IconButton
-            variant="overlay"
-            size={32}
-            icon={zoomed ? ZoomOut : ZoomIn}
-            label={zoomed ? t("assets.detail.zoomReset") : t("assets.detail.zoomIn")}
-            onClick={() => media.current?.toggle()}
-          />
+          {isVideo ? null : (
+            <IconButton
+              variant="overlay"
+              size={32}
+              icon={zoomed ? ZoomOut : ZoomIn}
+              label={zoomed ? t("assets.detail.zoomReset") : t("assets.detail.zoomIn")}
+              onClick={() => media.current?.toggle()}
+            />
+          )}
           <IconButton
             variant="overlay"
             size={32}
@@ -538,6 +584,8 @@ function DetailContent({
         folders={data?.folders}
         speed={speed}
         models={allModels}
+        video={frozen.video}
+        cost={detailCost}
         trashed={trashed}
         loadFailed={detail.isError && !data}
         onRetry={() => void detail.refetch()}
@@ -582,12 +630,15 @@ function DetailContent({
  */
 function Shell({
   contentRef,
+  isVideo = false,
   onKeyDown,
   onEscape,
   returnFocusTo,
   children,
 }: {
   contentRef: RefObject<HTMLDivElement | null>;
+  /** Unknown while the item is still loading; the generic title covers that. */
+  isVideo?: boolean;
   onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void;
   /** True when Esc was used up inside (leaving the expanded image). */
   onEscape: () => boolean;
@@ -598,7 +649,9 @@ function Shell({
   return (
     <ModalContent
       ref={contentRef}
-      title={<span className="sr-only">{t("assets.detail.label")}</span>}
+      title={
+        <span className="sr-only">{isVideo ? t("assets.detail.labelVideo") : t("assets.detail.label")}</span>
+      }
       headerClassName="pointer-events-none absolute"
       aria-describedby={undefined}
       onKeyDown={onKeyDown}

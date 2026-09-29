@@ -3,6 +3,7 @@
     "name": "Openfield",
     "nav": {
       "image": "Image",
+      "video": "Video",
       "assets": "Assets",
       "canvas": "Canvas",
       "settings": "Settings",
@@ -62,6 +63,14 @@
     "startCreating": "Start creating",
     "bodyOne": "Add a key from {company}. It takes a minute."
   },
+  "firstRunVideo": {
+    "title": "Let's make your first video",
+    "steps": {
+      "addKey": "Add a key",
+      "describe": "Describe a video",
+      "generate": "Generate"
+    }
+  },
   "getKey": {
     "title": "Get a key",
     "intro": "You only need one key. Either company works.",
@@ -77,6 +86,13 @@
       "go": "Go to Google AI Studio",
       "step1": "Sign in with your Google account.",
       "step2": "Create a new key.",
+      "step3": "Copy it and paste it in Settings under API keys."
+    },
+    "byteplus": {
+      "for": "For Seedance video models",
+      "go": "Go to BytePlus",
+      "step1": "Sign in to BytePlus and open ModelArk.",
+      "step2": "Create a new API key.",
       "step3": "Copy it and paste it in Settings under API keys."
     },
     "cost": "Keys cost nothing to create. You pay for the images you make.",
@@ -95,6 +111,15 @@
       },
       "browseStyles": "Browse styles",
       "tryThis": "Try this"
+    },
+    "readyVideo": {
+      "title": "Your first video",
+      "body": "Try one of these, or write your own.",
+      "examples": {
+        "kite": "A kite climbs over a green hill, the wind picking up",
+        "train": "A train pulls away from a rain-lit platform at night",
+        "waves": "Waves roll over dark sand, slow and steady, at dusk"
+      }
     },
     "library": {
       "title": "Your images will show up here",
@@ -226,6 +251,7 @@
       "done": "{count, plural, one {Deleted # image.} other {Deleted # images.}}"
     },
     "label": "Your images",
+    "labelVideo": "Your videos",
     "favoritesEmpty": {
       "title": "No favorites yet",
       "body": "Images you mark as favorites show up here."
@@ -320,6 +346,7 @@
         "resetAll": "Reset all"
       },
       "toolbar": "Image settings",
+      "toolbarVideo": "Video settings",
       "value": "{label}: {value}"
     },
     "aside": {
@@ -337,10 +364,12 @@
       "queued": "{count} queued",
       "noModel": "Pick a model first.",
       "emptyPrompt": "Describe the image first.",
+      "emptyPromptVideo": "Describe the video, or add a start frame.",
       "tooManyReferences": "Remove some references first.",
       "invalidSetting": "Fix the highlighted setting first."
     },
     "label": "Make an image",
+    "labelVideo": "Make a video",
     "reused": "Loaded the prompt and model."
   },
   "cost": {
@@ -355,7 +384,10 @@
     "free": "Free",
     "credits": "{credits, plural, one {# credit} other {# credits}}",
     "withCount": "{cost} · {count, plural, one {# image} other {# images}}",
-    "pricesAsOf": "Prices as of {date}. They may have changed since."
+    "pricesAsOf": "Prices as of {date}. They may have changed since.",
+    "video": "{seconds}s at {size}",
+    "videoAnyShape": "{seconds}s at {resolution}, in the shape the model picks",
+    "videoTokens": "{tokens} tokens at {rate} per million"
   },
   "settings": {
     "title": "Settings",
@@ -376,6 +408,8 @@
       "title": "API keys",
       "intro": "Add a key to start making images. Your keys stay on this computer.",
       "tagline": "Makes and edits images",
+      "taglineVideo": "Makes videos",
+      "byteplusNote": "Seedance 2.0 and 2.5 need turning on in the BytePlus console first (add a balance over $30, or a resource pack).",
       "status": {
         "connected": "Connected",
         "notConnected": "Not connected",
@@ -1007,7 +1041,13 @@
     "batchGone": "{company} can't find this run anymore.",
     "batchUnchecked": "Openfield couldn't reach {company} to check on this run.",
     "resumeGone": "{company} no longer has this image.",
-    "resumeUnchecked": "Openfield couldn't reach {company} to check on this image."
+    "resumeUnchecked": "Openfield couldn't reach {company} to check on this image.",
+    "modelNotActivated": "Turn on {model} in {company} first, then try again.",
+    "spendLimit": "You reached the spending limit you set for {model} in {company}.",
+    "usageQuota": "This key used up its {company} quota for now. Try again later.",
+    "accountOverdue": "Your {company} account is overdue. Add funds to keep going.",
+    "videoStarted": "{company} had already started this video, so you may still be charged.",
+    "videoBlocked": "Video blocked. It came from an unknown site."
   },
   "presets": {
     "errors": {
@@ -1433,7 +1473,10 @@
         "images": "Images",
         "style": "Style",
         "many": "{name} ×n",
-        "noReferences": "This model doesn't take reference images"
+        "noReferences": "This model doesn't take reference images",
+        "startFrame": "Start frame",
+        "endFrame": "End frame",
+        "video": "Video"
       },
       "connect": {
         "mismatch": "{from, select, text {Text} image {An image} mask {A mask} preset {A style} other {This}} can't go into {to, select, text {a text} image {an image} mask {a mask} preset {a style} other {this}} input on {node}.",
@@ -1499,7 +1542,8 @@
         "tooManyJobs": "This makes more than {max} images. Use fewer images or takes.",
         "upstreamFailed": "An earlier node didn't finish",
         "upstreamBlocked": "An earlier node can't run yet",
-        "loop": "This node is in a loop, or reads from one. Remove a connection to run it."
+        "loop": "This node is in a loop, or reads from one. Remove a connection to run it.",
+        "noEndFrame": "This model can't end on a chosen frame. Pick another model."
       },
       "collapsed": {
         "expand": "Expand {name}",
@@ -1564,7 +1608,8 @@
         "groups": {
           "references": "References",
           "image": "Image",
-          "utilities": "Utilities"
+          "utilities": "Utilities",
+          "video": "Video"
         },
         "noMatches": "No nodes match \"{query}\"."
       },
@@ -1583,6 +1628,12 @@
         "pager": "{index} of {count}",
         "previous": "Previous image",
         "next": "Next image"
+      },
+      "video": {
+        "label": "Video",
+        "description": "Make a video from a prompt or frames",
+        "promptPlaceholder": "Describe the video",
+        "promptField": "Prompt for this node"
       }
     },
     "run": {
@@ -1789,6 +1840,10 @@
       "label": "Filters",
       "scope": "In {folder}",
       "searchAll": "Search all images",
+      "type": "Type",
+      "anyType": "Any type",
+      "images": "Images",
+      "videos": "Videos",
       "model": "Model",
       "anyModel": "Any model",
       "company": "Company",
@@ -1852,6 +1907,7 @@
       "deletedForGood": "{count, plural, one {Deleted # image for good.} other {Deleted # images for good.}}",
       "trashEmptied": "Emptied the trash.",
       "recreating": "{count, plural, one {Recreating # image.} other {Recreating # images.}}",
+      "recreatingVideo": "{count, plural, one {Recreating # video.} other {Recreating # videos.}}",
       "preparingDownload": "{count, plural, one {Getting # image ready.} other {Getting # images ready.}}"
     },
     "emptyStates": {
@@ -1887,8 +1943,11 @@
     },
     "detail": {
       "label": "Image details",
+      "labelVideo": "Video details",
       "previous": "Previous image",
+      "previousVideo": "Previous video",
       "next": "Next image",
+      "nextVideo": "Next video",
       "close": "Close",
       "inTrash": "{when, select, today {In the trash since today} yesterday {In the trash since yesterday} other {In the trash since {date}}}",
       "prompt": "Prompt",
@@ -1901,8 +1960,12 @@
       "details": "Details",
       "model": "Model",
       "speed": "Speed",
+      "length": "Length",
+      "lengthWithSound": "{seconds} s · with sound",
       "size": "Size",
       "sizeValue": "{width} × {height}",
+      "sizeValueVideo": "{width} × {height} · {resolution}",
+      "cost": "Cost",
       "created": "Created",
       "folders": "Folders",
       "noFolders": "None",
@@ -1935,5 +1998,67 @@
     "heic": "This computer can't open HEIC files. Save it as JPEG or PNG and try again.",
     "heicTooLarge": "This photo is too large once converted. Save a smaller copy and try again.",
     "noFile": "Choose an image to upload."
+  },
+  "video": {
+    "placeholder": "Describe the video you want",
+    "count": "{count, plural, one {# video} other {# videos}}",
+    "duration": "{seconds}s",
+    "chips": {
+      "duration": {
+        "label": "Duration",
+        "value": "{seconds} s"
+      },
+      "resolution": {
+        "label": "Resolution"
+      },
+      "sound": {
+        "label": "Sound",
+        "on": "On",
+        "off": "Off",
+        "unsupported": "{model} makes videos without sound."
+      },
+      "cameraFixed": {
+        "label": "Still camera",
+        "hint": "Keep the camera in one place",
+        "unsupported": "{model} moves the camera as it sees fit."
+      },
+      "startFrame": {
+        "label": "Start frame",
+        "add": "Add a start frame",
+        "remove": "Remove start frame"
+      },
+      "endFrame": {
+        "label": "End frame",
+        "add": "Add an end frame",
+        "remove": "Remove end frame",
+        "unsupported": "{model} can't end on a chosen frame.",
+        "needsStart": "Add a start frame first."
+      }
+    },
+    "aspectFromFrame": "The video takes the shape of the start frame.",
+    "autoNeedsFrame": "{model} picks its own shape only from a start frame.",
+    "hevc": "Saved as HEVC, which some browsers can't play. QuickTime, VLC and mpv can.",
+    "frameSize": "Frames need 300 to 6000 pixels a side, and a shape between 2:5 and 5:2.",
+    "frameTooLarge": "This frame is too large. The limit is {size}.",
+    "generating": "Videos take a minute or two.",
+    "frames": {
+      "pickerTitle": "Choose a frame",
+      "start": "START",
+      "end": "END",
+      "addImage": "Add image",
+      "optional": "Optional",
+      "oneImage": "1 image",
+      "upload": "Upload a file",
+      "fromLibrary": "Choose from library"
+    },
+    "controls": {
+      "play": "Play",
+      "pause": "Pause",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "loop": "Loop",
+      "fullScreen": "Full screen",
+      "exitFullScreen": "Exit full screen"
+    }
   }
 }

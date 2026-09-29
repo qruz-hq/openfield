@@ -3,7 +3,7 @@ import { wouldCreateCycle } from "@openfield/canvas/store/graph";
 import { t } from "@openfield/core";
 import { cn, Tooltip } from "@openfield/ui";
 import { Handle, Position } from "@xyflow/react";
-import { Image, type LucideIcon, Palette, SquareDashed, Type } from "lucide-react";
+import { Film, Image, type LucideIcon, Palette, SquareDashed, Type } from "lucide-react";
 import { memo } from "react";
 import { useCanvas } from "../../store/context";
 import type { CanvasState } from "../../store/types";
@@ -17,6 +17,7 @@ const ICONS: Partial<Record<PortType, LucideIcon>> = {
   image: Image,
   mask: SquareDashed,
   preset: Palette,
+  video: Film,
 };
 
 type PortLook = "idle" | "ready" | "target" | "dimmed";

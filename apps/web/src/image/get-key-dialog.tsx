@@ -26,6 +26,11 @@ const GUIDES: Record<string, { for: MessageKey; go: MessageKey; steps: MessageKe
     go: "getKey.google.go",
     steps: ["getKey.google.step1", "getKey.google.step2", "getKey.google.step3"],
   },
+  byteplus: {
+    for: "getKey.byteplus.for",
+    go: "getKey.byteplus.go",
+    steps: ["getKey.byteplus.step1", "getKey.byteplus.step2", "getKey.byteplus.step3"],
+  },
 };
 
 /** Companies we can walk someone through, in the order the server lists them. */

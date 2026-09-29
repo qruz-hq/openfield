@@ -2,6 +2,7 @@ import { statSync } from "node:fs";
 import type { ImageContent } from "@modelcontextprotocol/sdk/types.js";
 import type { AssetRow } from "@openfield/db";
 import { absolutePath } from "../config/home";
+import { thumbSourceOf } from "../files/thumbs";
 import type { ToolContext } from "./kit";
 
 // How an agent sees an image: a small inline preview it can look at, and where the full one is:
@@ -44,7 +45,10 @@ export async function preview(
   row: AssetRow,
   edge = PREVIEW_EDGE,
 ): Promise<ImageContent | null> {
-  const jpeg = await ctx.svc.thumbs.jpeg(row, edge);
+  // A video shows its poster frame, when it has one.
+  const source = thumbSourceOf(row);
+  if (!source) return null;
+  const jpeg = await ctx.svc.thumbs.jpeg(source, edge);
   if (jpeg) return { type: "image", data: Buffer.from(jpeg).toString("base64"), mimeType: "image/jpeg" };
   if (!INLINE_MIMES.has(row.mime)) return null;
   const file = absolutePath(ctx.svc.paths, row.path);

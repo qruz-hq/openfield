@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/contents/generations/tasks"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "error": {
+        "code": "SetLimitExceeded",
+        "message": "Your account [3000123456] has reached the set inference limit for the [seedance-1-0-pro] model, and the model service has been paused. Request ID: 0217906907913",
+        "type": "TooManyRequests"
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/contents/generations/tasks"
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "error": {
+        "code": "InvalidParameter",
+        "message": "The parameter duration specified in the request is not valid for model seedance-1-0-pro. Request id: 0217906907915",
+        "param": "duration",
+        "type": "BadRequest"
+      }
+    }
+  }
+}

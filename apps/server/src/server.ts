@@ -175,7 +175,7 @@ async function boot(
       'Fake models are on. Nothing goes to a real company and nothing is billed. Any key works, except one containing "invalid".',
     );
 
-  const ingest = new Ingest(paths, db);
+  const ingest = new Ingest(paths, db, ffmpegOption(env));
   const thumbs = await Thumbs.create({
     paths,
     logger,
@@ -222,7 +222,7 @@ async function boot(
     contexts,
     logger,
     jobLog,
-    ...(opts.queue && { options: opts.queue }),
+    options: { ...videoDeadline(env), ...opts.queue },
   });
 
   // Before the listener takes traffic (§8.4.5). The setting is read once, here. It only moves jobs
@@ -396,6 +396,23 @@ function fakeOptions(env: Record<string, string | undefined>): { slowMs?: number
   return Number.isFinite(slowMs) && slowMs >= 0 && env.OPENFIELD_FAKE_SLOW_MS
     ? { slowMs, resumeSlowMs: slowMs }
     : {};
+}
+
+/**
+ * OPENFIELD_FFMPEG picks the ffmpeg that takes a video's first frame for its poster: a path, or
+ * "off" to use the company's own still. Unset: whatever ffmpeg is on PATH.
+ */
+function ffmpegOption(env: Record<string, string | undefined>): { ffmpeg?: string | null } {
+  const value = env.OPENFIELD_FFMPEG?.trim();
+  if (!value) return {};
+  return { ffmpeg: value === "off" ? null : value };
+}
+
+/** OPENFIELD_VIDEO_DEADLINE_MINUTES: how long a video run may take in all, from 10 minutes to 2 days. */
+function videoDeadline(env: Record<string, string | undefined>): { videoJobDeadlineMs?: number } {
+  const minutes = Number(env.OPENFIELD_VIDEO_DEADLINE_MINUTES);
+  if (!env.OPENFIELD_VIDEO_DEADLINE_MINUTES || !Number.isFinite(minutes)) return {};
+  return { videoJobDeadlineMs: Math.min(2_880, Math.max(10, minutes)) * 60_000 };
 }
 
 function authKindOf(provider: Provider): AuthKind {

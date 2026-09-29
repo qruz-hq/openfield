@@ -209,7 +209,7 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
     const references = referenceInputsFor(model.capabilities, composer.references);
     const body = generateBody(model, resolved, composer.prompt, newId(), references);
     generate.mutate(
-      { body, placeholder: expectedSize(model.capabilities, resolved), speed },
+      { body, placeholder: expectedSize(model.capabilities, resolved), speed, modality: "image" },
       {
         onSuccess: announceStarted,
         onError: (error) => notifyError(errorMessage(error)),

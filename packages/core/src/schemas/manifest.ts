@@ -4,8 +4,10 @@ import {
   BATCH_MAX,
   CONTROL_IDS,
   CONTROL_STATES,
+  DEFAULT_MODALITY,
   MODEL_BADGES,
   MODEL_SOURCES,
+  type Modality,
   PROMPT_ENHANCE_MODES,
   REFERENCE_STRENGTH_MODES,
   SPEED_DELIVERIES,
@@ -15,6 +17,7 @@ import {
   adapterOpSchema,
   aspectRatioSchema,
   dateOrTimestampSchema,
+  modalitySchema,
   modelIdSchema,
   modelKeySchema,
   outputFormatSchema,
@@ -23,6 +26,7 @@ import {
   referenceRoleSchema,
   resolutionTierSchema,
   speedIdSchema,
+  videoResolutionSchema,
 } from "./common";
 import { priceModelSchema } from "./cost";
 
@@ -110,6 +114,65 @@ const sizeCapabilitySchema = z.discriminatedUnion("mode", [
 ]);
 
 const pair = z.tuple([z.number(), z.number()]);
+
+/**
+ * What a video model makes (§0.3). Only on manifests with modality "video"; the image controls
+ * (size, seed, batch) still describe it, and this adds what only video has. Ratios come from
+ * `size`, where "auto" is the company's own choice of shape.
+ */
+export const videoCapabilitySchema = z
+  .strictObject({
+    resolutions: z.array(videoResolutionSchema).min(1),
+    defaultResolution: videoResolutionSchema,
+    /** Whole seconds the model can make, shortest first. */
+    durations: z.array(z.int().positive()).min(1),
+    defaultDuration: z.int().positive(),
+    fps: z.int().positive(),
+    /** The exact pixels each resolution and ratio comes out at, from the company's table. */
+    sizes: z
+      .array(
+        z.strictObject({
+          resolution: videoResolutionSchema,
+          aspect: aspectRatioSchema,
+          width: z.int().positive(),
+          height: z.int().positive(),
+        }),
+      )
+      .min(1),
+    /** Images the video starts or ends on. */
+    frames: z.strictObject({
+      start: z.boolean(),
+      end: z.boolean(),
+      mimeTypes: z.array(z.string().min(1)),
+      maxBytes: z.int().nonnegative(),
+    }),
+    /**
+     * When "auto" may be picked: always, or only with a start frame, whose shape it then takes.
+     * `startFrameForcesAuto`: with a start frame the video always takes the frame's shape.
+     */
+    autoAspect: z.enum(["always", "with_start_frame"]),
+    startFrameForcesAuto: z.boolean(),
+    /** Sound made with the picture. */
+    audio: z.strictObject({ supported: z.boolean(), default: z.boolean() }),
+    /** A switch that keeps the camera still. */
+    cameraFixed: z.boolean(),
+  })
+  .refine((v) => v.resolutions.includes(v.defaultResolution), {
+    message: "defaultResolution must be one of resolutions",
+    path: ["defaultResolution"],
+  })
+  .refine((v) => v.durations.includes(v.defaultDuration), {
+    message: "defaultDuration must be one of durations",
+    path: ["defaultDuration"],
+  })
+  .refine((v) => v.frames.start || !v.frames.end, {
+    message: "an end frame needs a start frame",
+    path: ["frames", "end"],
+  })
+  .refine((v) => v.audio.supported || !v.audio.default, {
+    message: "sound can't default on when it isn't supported",
+    path: ["audio", "default"],
+  });
 
 export const capabilitiesSchema = z.strictObject({
   ops: z.strictObject({
@@ -227,6 +290,9 @@ export const capabilitiesSchema = z.strictObject({
   unsupported: z.partialRecord(controlIdSchema, z.strictObject({ reason: z.string().min(1) })).optional(),
 
   unsupportedParamPolicy: z.enum(UNSUPPORTED_PARAM_POLICIES),
+
+  /** Video models only. */
+  video: videoCapabilitySchema.optional(),
 });
 
 /**
@@ -272,6 +338,8 @@ export const modelManifestSchema = z
     /** Model picker subtitle. */
     description: z.string().max(90).optional(),
     family: z.string().optional(),
+    /** What the model makes. Absent: images, as every model did before video. */
+    modality: modalitySchema.optional(),
     badges: z.array(z.enum(MODEL_BADGES)).optional(),
     capabilities: capabilitiesSchema,
     /** The Standard price. */
@@ -309,6 +377,14 @@ export const modelManifestSchema = z
     message: "key must be <providerId>:<modelId>",
     path: ["key"],
   })
+  .refine((m) => (m.modality === "video") === (m.capabilities.video !== undefined), {
+    message: "a video model declares capabilities.video, and only a video model does",
+    path: ["capabilities", "video"],
+  })
+  .refine((m) => m.price.kind !== "video_tokens" || m.capabilities.video !== undefined, {
+    message: "a video price needs capabilities.video for its sizes",
+    path: ["price"],
+  })
   .refine(
     (m) =>
       (m.resumableSpeeds ?? []).every(
@@ -331,6 +407,11 @@ export type QualityLevel = z.infer<typeof qualityLevelSchema>;
 export type ExtraField = z.infer<typeof extraFieldSchema>;
 export type ExtraSchema = z.infer<typeof extraSchemaSchema>;
 export type SizeCapability = z.infer<typeof sizeCapabilitySchema>;
+export type VideoCapability = z.infer<typeof videoCapabilitySchema>;
 export type Capabilities = z.infer<typeof capabilitiesSchema>;
 export type ModelManifest = z.infer<typeof modelManifestSchema>;
 export type SpeedOffer = z.infer<typeof speedOfferSchema>;
+
+/** What a model makes: its own modality, or images when it names none. */
+export const modalityOf = (manifest: Pick<ModelManifest, "modality">): Modality =>
+  manifest.modality ?? DEFAULT_MODALITY;

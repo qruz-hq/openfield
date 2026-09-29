@@ -26,6 +26,7 @@ const MARGIN = 12;
 const GROUP_LABEL: Record<MenuGroup | "connects" | "other", () => string> = {
   references: () => t("canvas.nodes.addMenu.groups.references"),
   image: () => t("canvas.nodes.addMenu.groups.image"),
+  video: () => t("canvas.nodes.addMenu.groups.video"),
   utilities: () => t("canvas.nodes.addMenu.groups.utilities"),
   connects: () => t("canvas.nodes.addMenu.connects"),
   other: () => t("canvas.nodes.addMenu.other"),

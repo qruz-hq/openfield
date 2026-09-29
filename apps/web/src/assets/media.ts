@@ -14,9 +14,9 @@ export function thumbPath(asset: Pick<AssetListItem, "id" | "thumbUrl">, rung: n
   return `${url.pathname}${url.search}`;
 }
 
-/** Every model the server knows, enabled or not: an old image may come from one turned off since. */
+/** Every model the server knows, enabled or not: an old image or video may come from one turned off since. */
 export function useModelNames() {
-  const models = useQuery({ ...modelsQuery, select: (data) => data.models });
+  const models = useQuery({ ...modelsQuery("all"), select: (data) => data.models });
   return useCallback(
     (providerId: string | null, modelId: string | null): string | undefined => {
       if (!modelId) return undefined;

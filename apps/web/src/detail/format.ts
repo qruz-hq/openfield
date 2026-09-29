@@ -15,6 +15,8 @@ import {
   type SpeedId,
   speedIdSchema,
   t,
+  type VideoRequest,
+  videoRequestSchema,
 } from "@openfield/core";
 import { nearestRatio } from "@openfield/providers/manifest";
 
@@ -74,11 +76,14 @@ const EXTENSIONS: Record<string, string> = {
   "image/gif": "gif",
   "image/heic": "heic",
   "image/heif": "heif",
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
 };
 
 /**
  * `openfield_{yyyymmdd-hhmm}_{model}_{shortid}.{ext}` in local time (§4.4). The short id is the
- * last 8 characters, as the library's cards use, so one image saves under one name everywhere.
+ * last 8 characters, as the library's cards use, so one image or video saves under one name
+ * everywhere.
  */
 export function downloadName(asset: {
   id: string;
@@ -111,6 +116,8 @@ export interface FrozenSettings {
   /** The speed it ran at, and the one the company's settings asked for. */
   speed?: SpeedId;
   speedRequested?: SpeedId;
+  /** A video run's own settings, for Reuse and Recreate's estimate. */
+  video?: VideoRequest;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -135,6 +142,8 @@ export function frozenSettings(params: Record<string, unknown> | null | undefine
   if (speed.success) out.speed = speed.data;
   const requested = speedIdSchema.safeParse(params.speedRequested);
   if (requested.success) out.speedRequested = requested.data;
+  const video = videoRequestSchema.safeParse(params.video);
+  if (video.success && Object.keys(video.data).length) out.video = video.data;
 
   const size = params.size;
   if (isRecord(size)) {

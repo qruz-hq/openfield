@@ -26,7 +26,9 @@ import { useCanvasStoreApi } from "../../store/context";
 /** The canvas order of the size chips (design Y5jjx), whatever order the manifest lists them in. */
 const CANVAS_ORDER: readonly SizeControlId[] = ["resolution", "quality", "aspect"];
 
-export type SizeControlId = "resolution" | "quality" | "aspect";
+// "duration" is the Video node's Length chip (video/controls.tsx): same SizeField shape, a
+// setting no image model has, so it never appears in CANVAS_ORDER or this file's own chips.
+export type SizeControlId = "resolution" | "quality" | "aspect" | "duration";
 
 /** A chip's option: the composer's own choice, with an optional glyph in front (the aspect shape). */
 export type SizeOption = ControlChoice & { leading?: ReactNode };
@@ -37,8 +39,13 @@ export interface SizeControl {
   value: string;
   valueLabel: string;
   options: SizeOption[];
-  /** The patch that picks an option. */
-  patch: (value: string) => Partial<SizeParams>;
+  /**
+   * The patch that picks an option, handed to setParams as-is (a generic record: useSetParams
+   * doesn't know a node type's own params shape, so neither does this). Typed as Partial<SizeParams>
+   * for this file's own image chips; the Video node's Length and Resolution chips (video/controls.tsx)
+   * return a Partial<VideoParams> patch instead.
+   */
+  patch: (value: string) => Record<string, unknown>;
 }
 
 /** `speed`: what the company's settings resolve to, so each row's price follows it (§0.3). */

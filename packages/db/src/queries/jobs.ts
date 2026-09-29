@@ -5,6 +5,7 @@ import {
   type JobSetState,
   type JobState,
   jobIdempotencyKey,
+  type Modality,
 } from "@openfield/core";
 import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
 import type { Executor } from "../client";
@@ -120,7 +121,7 @@ export function getJobSetBundle(db: Executor, id: string): JobSetBundle | undefi
 /** GET /api/job-sets, newest first. "active" means not finished yet. */
 export function listJobSets(
   db: Executor,
-  q: PageQuery & { status?: "active" | "all" } = {},
+  q: PageQuery & { status?: "active" | "all"; modality?: Modality | "all" } = {},
 ): Page<JobSetBundle> {
   const limit = pageSize(q.limit);
   const sets = db
@@ -129,6 +130,8 @@ export function listJobSets(
     .where(
       and(
         q.status === "all" ? undefined : inArray(jobSets.status, [...ACTIVE_JOB_STATES]),
+        // No modality: every run. The route defaults to images, so the Image page never sees video.
+        q.modality && q.modality !== "all" ? eq(jobSets.modality, q.modality) : undefined,
         olderThan(jobSets.createdAt, jobSets.id, q.cursor),
       ),
     )

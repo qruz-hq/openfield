@@ -19,6 +19,28 @@ export interface ThumbSource {
   path: string;
 }
 
+/**
+ * What an asset's thumbnails are made from: the image itself, or a video's poster frame. Null for
+ * a video without a poster, which has nothing to show yet.
+ */
+export function thumbSourceOf(asset: {
+  sha256: string;
+  path: string;
+  mime: string;
+  posterPath: string | null;
+}): ThumbSource | null {
+  if (!asset.mime.startsWith("video/")) return asset;
+  return asset.posterPath ? { sha256: asset.sha256, path: asset.posterPath } : null;
+}
+
+/** The type of a still by its extension: what a poster or thumbnail source is served as. */
+export function stillMime(path: string): string {
+  const ext = path.split(".").at(-1)?.toLowerCase();
+  if (ext === "png") return "image/png";
+  if (ext === "webp") return "image/webp";
+  return "image/jpeg";
+}
+
 export type ThumbFile =
   | { kind: "thumb"; file: string; etag: string }
   /** Thumbnails are off or this one couldn't be made: send the original, uncached. */

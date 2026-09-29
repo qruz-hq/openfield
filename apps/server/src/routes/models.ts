@@ -28,7 +28,9 @@ export const modelsRoutes = new Hono<Env>()
   })
   .get("/models/:providerId/:modelId", zValidator("param", modelParamSchema, onInvalid), (c) => {
     const { providerId, modelId } = c.req.valid("param");
-    const item = c.var.svc.models.list({ provider: providerId }).models.find((m) => m.modelId === modelId);
+    const item = c.var.svc.models
+      .list({ provider: providerId, modality: "all" })
+      .models.find((m) => m.modelId === modelId);
     if (!item) return notFound(c, "That model");
     return c.json(item satisfies ModelListItem, 200);
   })
@@ -60,6 +62,9 @@ export const modelsRoutes = new Hono<Env>()
         ...(body.resolution && { resolution: body.resolution }),
         ...(body.quality && { quality: body.quality }),
         ...(size && { size }),
+        ...(body.size?.kind === "aspect" && { size: { aspect: body.size.ratio } }),
+        ...(body.size?.kind === "auto" && { size: { aspect: "auto" as const } }),
+        ...(body.video && { video: body.video }),
         inputImages: (body.references?.length ?? 0) + (body.base ? 1 : 0),
       });
       return c.json(cost satisfies CostEstimate, 200);

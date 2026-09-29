@@ -48,9 +48,13 @@ export const queryKeys = {
   providers: ["providers"] as const,
   providerSettings: (providerId: string) => ["providers", providerId, "settings"] as const,
   models: ["models"] as const,
-  assets: (filter: "all" | "favourites") => ["assets", filter] as const,
+  /** GET /api/models?modality=. Nested under "models" so refreshing invalidates every modality. */
+  modelsList: (modality: "image" | "video" | "all") => ["models", modality] as const,
+  assets: (filter: "all" | "favourites", modality?: "image" | "video") =>
+    modality ? (["assets", filter, "modality", modality] as const) : (["assets", filter] as const),
   allAssets: ["assets"] as const,
-  jobSets: ["job-sets"] as const,
+  jobSetsRoot: ["job-sets"] as const,
+  jobSets: (modality: "image" | "video" = "image") => ["job-sets", modality] as const,
   /** Every spending figure. A finished run refreshes all of them. */
   usage: ["usage"] as const,
   usageToday: ["usage", "today"] as const,

@@ -30,6 +30,10 @@ export const FAKE_SCENARIOS = [
   "slow",
   "resume_slow",
   "resume_gone",
+  // Video tasks (BytePlus): accepted, then ended without a video, or dropped by the company's
+  // own expiry before they ran.
+  "failed",
+  "expired",
 ] as const;
 export type FakeScenario = (typeof FAKE_SCENARIOS)[number];
 

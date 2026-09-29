@@ -6,6 +6,10 @@ import { type ModelKey, safeParseModelKey } from "./ids";
 import type { Folder } from "./schemas/asset";
 import { modelKeySchema, providerIdSchema } from "./schemas/common";
 
+/** The library's own type filter (§0.16): images, videos, or left out for both. Never "audio". */
+export type LibraryModality = "image" | "video";
+export const libraryModalitySchema = z.enum(["image", "video"]);
+
 // The Assets library's shared logic (§2.8): the folder tree the client builds from the flat
 // GET /api/folders list, what a library view asks the server for, and date groups. Pure, so the
 // web app, the server and the tests all agree on it.
@@ -169,17 +173,20 @@ export interface LibraryQuery {
   /** The Company filter. */
   provider?: string;
   date?: LibraryDatePreset;
+  /** The Type filter: images, videos, or left out for both. */
+  modality?: LibraryModality;
 }
 
 /** A value the URL can't carry is dropped, never an error: a stale link still opens. */
 const lenient = <T extends z.ZodType>(schema: T) => schema.optional().catch(undefined);
 
-/** `?q=&model=&provider=&date=` on the /assets routes (§2.1). */
+/** `?q=&model=&provider=&date=&modality=` on the /assets routes (§2.1). */
 export const libraryUrlParamsSchema = z.object({
   q: lenient(z.string().trim().min(1).max(500)),
   model: lenient(modelKeySchema),
   provider: lenient(providerIdSchema),
   date: lenient(z.enum(LIBRARY_DATE_PRESETS)),
+  modality: lenient(libraryModalitySchema),
 });
 
 /** Reads the view's words and filters from the URL. `params` is a URLSearchParams. */
@@ -194,6 +201,7 @@ export function parseLibraryUrl(
     model: read("model"),
     provider: read("provider"),
     date: read("date"),
+    modality: read("modality"),
   });
   const query: LibraryQuery = { view };
   if (view === "folder" && folderId) query.folderId = folderId;
@@ -203,6 +211,7 @@ export function parseLibraryUrl(
   if (parsed.model) query.model = parsed.model;
   if (parsed.provider) query.provider = parsed.provider;
   if (parsed.date) query.date = parsed.date;
+  if (parsed.modality) query.modality = parsed.modality;
   return query;
 }
 
@@ -224,6 +233,7 @@ export function libraryHref(query: LibraryQuery): string {
     ["model", query.model],
     ["provider", query.provider],
     ["date", query.date],
+    ["modality", query.modality],
   ];
   const search = params
     .filter((p): p is [string, string] => Boolean(p[1]))
@@ -234,7 +244,7 @@ export function libraryHref(query: LibraryQuery): string {
 
 /** Whether any filter (not the words) is set, for "Clear all" and the no-results copy. */
 export const hasLibraryFilters = (query: LibraryQuery): boolean =>
-  Boolean(query.model || query.provider || query.date);
+  Boolean(query.model || query.provider || query.date || query.modality);
 
 /**
  * Where a Date filter starts: midnight in the viewer's time zone. "Last 7 days" is today and the
@@ -263,6 +273,7 @@ export interface LibraryListParams {
   model?: string;
   provider?: string;
   from?: string;
+  modality?: LibraryModality;
 }
 
 export function libraryListParams(query: LibraryQuery, now: Date = new Date()): LibraryListParams {
@@ -280,6 +291,7 @@ export function libraryListParams(query: LibraryQuery, now: Date = new Date()): 
   // Both set and different companies: the server finds nothing, which is the honest answer.
   if (query.provider) params.provider = query.provider;
   if (query.date) params.from = libraryDateFrom(query.date, now);
+  if (query.modality) params.modality = query.modality;
   return params;
 }
 

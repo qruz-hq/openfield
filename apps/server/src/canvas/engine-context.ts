@@ -22,7 +22,8 @@ export interface EngineContextDeps {
 }
 
 export function serverEngineContext(deps: EngineContextDeps): EngineContext {
-  const { models } = deps.models.list();
+  // Every model: image nodes keep to image models themselves, and the Video node to video ones.
+  const { models } = deps.models.list({ modality: "all" });
   const providers = providerSummaries(deps);
   const speeds = new Map<string, ProviderSettingsResponse>(
     providers.map((p) => [p.id, deps.providerSettings.view(p.id)]),

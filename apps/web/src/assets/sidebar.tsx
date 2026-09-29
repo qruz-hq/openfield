@@ -65,9 +65,10 @@ export function LibrarySidebar({
   tree: FolderTree | undefined;
   actions: FolderActions;
 }) {
-  const summary = useLibrarySummary();
-  const counts = summary.data?.counts;
   const { view, query } = route;
+  // Counts follow the Type filter (§0.16), same as the grid they sit beside.
+  const summary = useLibrarySummary(query.modality ?? "all");
+  const counts = summary.data?.counts;
   const words = searchOf(query);
 
   return (

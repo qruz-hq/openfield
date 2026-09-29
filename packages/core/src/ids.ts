@@ -69,6 +69,8 @@ export function thumbCacheKey(sha256: string, size: { h: ThumbRung; dpr?: 1 | 2 
 }
 
 export const assetFileUrl = (assetId: string): string => `/files/asset/${assetId}`;
+/** A video's poster frame at full size. */
+export const assetPosterUrl = (assetId: string): string => `/files/poster/${assetId}`;
 
 export function assetThumbUrl(assetId: string, size: { h: number; dpr?: 1 | 2 } | "preview"): string {
   if (size === "preview") return `/files/thumb/${assetId}?p=${DETAIL_PREVIEW_EDGE}`;

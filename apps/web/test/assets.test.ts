@@ -21,6 +21,7 @@ const item = (id: string, extra: Partial<AssetListItem> = {}): AssetListItem => 
   kind: "generated",
   jobSetId: null,
   jobId: null,
+  modality: "image",
   width: 1024,
   height: 1024,
   mime: "image/png",

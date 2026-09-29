@@ -9,6 +9,7 @@ import {
   type ModelListItem,
   type SpeedId,
   t,
+  type VideoRequest,
 } from "@openfield/core";
 import {
   Button,
@@ -63,7 +64,8 @@ export interface DetailActions {
   restoring: boolean;
   onRecreate: () => void;
   onReuse: () => void;
-  onCopyImage: () => void;
+  /** Left out for a video: it can't go on the clipboard the way an image can. */
+  onCopyImage?: () => void;
   onDownload: () => void;
   onFavourite: () => void;
   onDelete: () => void;
@@ -91,6 +93,10 @@ interface DetailPanelProps {
   /** Null when it wasn't made by a run here, or the details haven't loaded. */
   speed: RunSpeedInfo | null;
   models: readonly ModelListItem[] | undefined;
+  /** A video's own settings, for its Length row. Undefined for an image. */
+  video?: VideoRequest | undefined;
+  /** "$0.58", the run's cost, for a video's Cost row. */
+  cost?: string | undefined;
   trashed: boolean;
   /** The details couldn't load; the header and prompt still show from the list. */
   loadFailed: boolean;
@@ -111,6 +117,8 @@ export function DetailPanel({
   folders,
   speed,
   models,
+  video,
+  cost,
   trashed,
   loadFailed,
   onRetry,
@@ -138,7 +146,14 @@ export function DetailPanel({
           references={references ?? []}
           onOpenReference={onOpenReference}
         />
-        <DetailsSection asset={asset} folders={folders} speed={speed} models={models} />
+        <DetailsSection
+          asset={asset}
+          folders={folders}
+          speed={speed}
+          models={models}
+          video={video}
+          cost={cost}
+        />
         {loadFailed ? (
           <div className="flex w-full items-center justify-between gap-8 px-12">
             <span className="text-small text-text-secondary">{t("assets.detail.loadFailed")}</span>
@@ -285,11 +300,15 @@ function DetailsSection({
   folders,
   speed,
   models,
+  video,
+  cost,
 }: {
   asset: DetailPanelProps["asset"];
   folders: readonly Folder[] | undefined;
   speed: RunSpeedInfo | null;
   models: readonly ModelListItem[] | undefined;
+  video?: VideoRequest | undefined;
+  cost?: string | undefined;
 }) {
   const speedName = useSpeedName();
   const providerId = asset.providerId;
@@ -323,11 +342,30 @@ function DetailsSection({
           />
         ) : null}
         {speedValue ? <KeyValueRow label={t("assets.detail.speed")} value={speedValue} /> : null}
+        {video?.seconds !== undefined ? (
+          <KeyValueRow
+            label={t("assets.detail.length")}
+            value={
+              video.audio
+                ? t("assets.detail.lengthWithSound", { seconds: video.seconds })
+                : t("video.duration", { seconds: video.seconds })
+            }
+          />
+        ) : null}
         <KeyValueRow
           label={t("assets.detail.size")}
-          value={t("assets.detail.sizeValue", { width: asset.width, height: asset.height })}
+          value={
+            video?.resolution
+              ? t("assets.detail.sizeValueVideo", {
+                  width: asset.width,
+                  height: asset.height,
+                  resolution: video.resolution,
+                })
+              : t("assets.detail.sizeValue", { width: asset.width, height: asset.height })
+          }
           mono
         />
+        {cost ? <KeyValueRow label={t("assets.detail.cost")} value={cost} mono /> : null}
         <KeyValueRow label={t("assets.detail.created")} value={formatDateTime(asset.createdAt)} />
         {folders ? <FoldersRow folders={folders} /> : null}
       </KeyValueList>
@@ -439,9 +477,11 @@ function LibraryActions({ id, actions }: { id: string; actions: DetailActions })
             {t("assets.detail.reuse")}
           </Button>
         </Hint>
-        <Button variant="secondary" size="l" icon={Copy} onClick={actions.onCopyImage} className="flex-1">
-          {t("assets.detail.copyImage")}
-        </Button>
+        {actions.onCopyImage ? (
+          <Button variant="secondary" size="l" icon={Copy} onClick={actions.onCopyImage} className="flex-1">
+            {t("assets.detail.copyImage")}
+          </Button>
+        ) : null}
       </div>
       <div className="flex w-full gap-8">
         <Button variant="secondary" size="l" icon={Download} onClick={actions.onDownload} className="flex-1">

@@ -59,7 +59,7 @@ credentials: {
 },
 ```
 
-- `networkHosts` lists every API host. `assetHosts` lists every host an image may be downloaded from. Use `[]` when images arrive inline in the response, which is the safest choice. The server blocks any other host at runtime.
+- `networkHosts` lists every API host. `assetHosts` lists every host an image may be downloaded from. Use `[]` when images arrive inline in the response, which is the safest choice. The server blocks any other host at runtime. When the company's storage names a bucket per region and its docs don't say which, `"*.storage.company.example"` allows exactly one label under a domain the company owns (never the domain itself, never two labels deep): see `hostAllowed()` in `@openfield/core` and the BytePlus adapter.
 - `envVars` puts `OPENFIELD_<PROVIDER>_<FIELD>` first, then the company's usual variable name.
 - `validateCredentials()` checks the shape only, with no network. `verifyCredentials()` makes one cheap call that proves the key works; it powers **Check key**.
 - `stable: false` hides the provider behind Settings > Experimental.
@@ -84,9 +84,13 @@ The capability rules:
 7. A control that doesn't work gets an `unsupported` entry whose reason names the model, like "Nano Banana Pro doesn't support seeds." A control the adapter fakes goes in `emulated`.
 8. `controlOrder` sets the order of the controls in the composer.
 
+### Video models
+
+A model that makes videos sets `modality: "video"` and declares `capabilities.video`: its resolutions (`480p`, `720p`, `1080p`, `4k`, the company's own names), whole-second durations, frame rate, the exact output size for each resolution and ratio, whether it takes a start and an end frame, whether it makes sound, and when `auto` (the company's own shape) may be picked. The image controls still describe the rest: `size` holds the ratios, `seed` the seed, and `batch.max` is 1, one video per run. Requests carry the video settings in `video` (`seconds`, `resolution`, `audio`, `cameraFixed`, `startFrame`, `endFrame`), which normalize() resolves against the manifest before your code sees them. `packages/providers/src/byteplus/` is the model to follow; `docs/video.md` has the whole contract.
+
 ## 4. Add prices
 
-`pricing.ts` declares a `PriceModel` for each model, with `pricedAt` and `sourceUrl`. Use `per_image`, `per_token` (with a table of output tokens per quality and size) or `per_second`, and `unknown` when there is no published price. The UI then shows "Cost unknown". When the company bills the images a request sends in (references, an edit's base), say how many input tokens one costs: `inputImage` on a `per_image` price, `imageInputTokens` on a `per_token` one. Either a fixed count per image, or a patch rule worked out from the image's size, with the range to use while the size isn't known yet. Every estimate then adds them, as "1 × $0.067 + 4 reference images ($0.002)".
+`pricing.ts` declares a `PriceModel` for each model, with `pricedAt` and `sourceUrl`. Use `per_image`, `per_token` (with a table of output tokens per quality and size), `video_tokens` (a video billed on tokens counted from its output's pixels, frame rate and seconds, priced from the manifest's size table) or `per_second`, and `unknown` when there is no published price. The UI then shows "Cost unknown". When the company bills the images a request sends in (references, an edit's base), say how many input tokens one costs: `inputImage` on a `per_image` price, `imageInputTokens` on a `per_token` one. Either a fixed count per image, or a patch rule worked out from the image's size, with the range to use while the size isn't known yet. Every estimate then adds them, as "1 × $0.067 + 4 reference images ($0.002)".
 
 You don't write an estimate function. The shared, pure `estimate(manifest, request)` in `@openfield/providers/manifest` reads your price data, in the browser and on the server alike. Add `estimateRemote()` only when the company has a documented cost endpoint, and give those models `price.kind: "provider_estimate"`. The server then asks it for the composer, the canvas, Settings and each run, through one cache that keeps each answer for a day (`apps/server/src/services/remote-prices.ts`). It swaps the prompt and seed for fixed ones before asking, so check that your company's price doesn't depend on them. Return `confidence: "unknown"` when the company answers without an amount.
 

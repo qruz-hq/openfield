@@ -9,6 +9,7 @@ import {
   type JobSetAccepted,
   type JobState,
   type ModelManifest,
+  modalityOf,
   type NormalizedRequest,
   newId,
   type Op,
@@ -50,7 +51,7 @@ import {
   planCalls,
 } from "@openfield/providers/server";
 import type { EventHub } from "../events/hub";
-import type { AttemptSink, Ingest } from "../files/ingest";
+import { type AttemptSink, type Ingest, isVideoMime } from "../files/ingest";
 import type { Thumbs } from "../files/thumbs";
 import { ApiFailure } from "../http/errors";
 import type { Logger } from "../log/logger";
@@ -422,6 +423,7 @@ export class Runner {
         id: request.jobSetId,
         idempotencyKey: request.idempotencyKey,
         op: meta.op,
+        modality: modalityOf(manifest),
         providerId,
         modelId,
         prompt: request.promptAfterPreset,
@@ -1179,7 +1181,7 @@ export class Runner {
     }
   }
 
-  #succeed(
+  async #succeed(
     unit: Unit,
     set: JobSetRow,
     manifest: ModelManifest,
@@ -1187,7 +1189,7 @@ export class Runner {
     result: JobResult,
     sink: AttemptSink,
     latencyMs: number,
-  ): void {
+  ): Promise<void> {
     const { db } = this.deps;
     const images = result.images.filter((i) => !i.partial);
     // Cost follows the speed the company served: a Priority call served at Standard bills Standard.
@@ -1195,7 +1197,7 @@ export class Runner {
     const cost = this.outcomes.cost(manifest, call, speedUsed, result, set);
     const jobs = unit.jobIds.map((id) => getJob(db, id)).filter((j): j is JobRow => j !== undefined);
 
-    jobs.forEach((job, i) => {
+    for (const [i, job] of jobs.entries()) {
       this.#busy.delete(job.id);
       const image = images.find((img) => img.index === job.idx) ?? images[i];
       const staged = image && sink.take(image.assetId);
@@ -1206,9 +1208,15 @@ export class Runner {
           new ProviderError("provider_error", { message: "The model sent no image for this slot" }),
           { latencyMs, speed: speedUsed },
         );
-        return;
+        continue;
       }
-      this.outcomes.succeed({
+      // A video gets its poster before it's filed, so its first tile already has a picture. A still
+      // sent with an image has no use.
+      const still = image.poster ? sink.take(image.poster.assetId) : undefined;
+      let posterPath: string | null = null;
+      if (isVideoMime(staged.mime)) posterPath = await this.deps.ingest.poster(staged, still);
+      else if (still) this.deps.ingest.discard(still);
+      const committed = this.outcomes.succeed({
         set,
         job,
         call,
@@ -1218,8 +1226,11 @@ export class Runner {
         speedUsed,
         latencyMs,
         usage: result.usage,
+        posterPath,
       });
-    });
+      // A cancel won while the poster was made: the poster goes with the file.
+      if (!committed && posterPath && !staged.duplicate) this.deps.ingest.discardPath(posterPath);
+    }
 
     // Anything the adapter wrote that no job claimed.
     sink.discardAll();

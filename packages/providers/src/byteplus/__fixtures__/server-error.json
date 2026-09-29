@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/contents/generations/tasks"
+  },
+  "response": {
+    "status": 500,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "error": {
+        "code": "InternalServiceError",
+        "message": "The service encountered an unexpected internal error. Request id: 0217906907914",
+        "type": "InternalServerError"
+      }
+    }
+  }
+}

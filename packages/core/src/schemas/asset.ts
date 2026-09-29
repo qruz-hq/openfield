@@ -36,9 +36,16 @@ export const assetListItemSchema = z.object({
   kind: assetKindSchema,
   jobSetId: ulidSchema.nullable(),
   jobId: ulidSchema.nullable(),
+  /** "video" for a clip: fileUrl is the video, thumbUrl its poster frame. */
+  modality: modalitySchema.default("image"),
   width: z.int().positive(),
   height: z.int().positive(),
   mime: z.string(),
+  /** Videos only: how long it runs, and whether it has sound. */
+  durationMs: z.int().nonnegative().nullish(),
+  hasAudio: z.boolean().nullish(),
+  /** Videos only: the full-size poster frame, a JPEG. Null until one exists. */
+  posterUrl: z.string().nullish(),
   sha256: sha256Schema,
   /** "local" for crop, grade and overlay. */
   providerId: z.string().nullable(),
@@ -59,7 +66,6 @@ export const assetListItemSchema = z.object({
 });
 
 export const assetSchema = assetListItemSchema.extend({
-  modality: modalitySchema,
   bytes: z.int().nonnegative(),
   seed: z.int().nullable(),
   /** The exact settings that made it. */
@@ -100,6 +106,7 @@ export const folderSchema = z.object({
  * GET /api/assets. `folder` lists images filed directly in it; `q` is the prompt search and
  * combines with every other filter on the same cursor. `trash=1` lists deleted images instead,
  * newest deletion first, and ignores q, folder, favourite and the filters. Masks are never listed.
+ * `modality` narrows to images or videos; without it both are listed.
  */
 export const assetsListQuerySchema = z.object({
   cursor: cursorSchema.optional(),

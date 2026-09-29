@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/contents/generations/tasks"
+  },
+  "response": {
+    "status": 400,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "error": {
+        "code": "InputImageSensitiveContentDetected",
+        "message": "The request failed because the input image may contain sensitive information. Request id: 0217906907916",
+        "type": "BadRequest"
+      }
+    }
+  }
+}

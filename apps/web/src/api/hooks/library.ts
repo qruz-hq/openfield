@@ -10,6 +10,7 @@ import {
   type BulkAction,
   type EmptyTrashResponse,
   type LibraryListParams,
+  type LibraryModality,
   type LibraryQuery,
   type LibrarySummary,
   libraryListParams,
@@ -48,7 +49,8 @@ import {
 export const libraryKeys = {
   lists: ["assets", "library"] as const,
   list: (params: LibraryListParams) => ["assets", "library", params] as const,
-  summary: ["library", "summary"] as const,
+  summaryRoot: ["library", "summary"] as const,
+  summary: (modality: LibraryModality | "all" = "all") => ["library", "summary", modality] as const,
   detail: (id: string) => ["asset", id] as const,
   details: ["asset"] as const,
   neighbours: (id: string, params: LibraryListParams) => ["asset", id, "neighbours", params] as const,
@@ -131,15 +133,28 @@ export function neighboursIn(items: readonly AssetListItem[], id: string) {
 
 // Sidebar counts and filter choices
 
-export function useLibrarySummary() {
+/** The sidebar's counts and filter choices, all modalities unless asked for one (§0.16). */
+export function useLibrarySummary(modality: LibraryModality | "all" = "all") {
   return useQuery({
-    queryKey: libraryKeys.summary,
-    queryFn: ({ signal }) => requestJson<LibrarySummary>("GET", "/api/library/summary", undefined, signal),
+    queryKey: libraryKeys.summary(modality),
+    queryFn: ({ signal }) =>
+      requestJson<LibrarySummary>(
+        "GET",
+        withQuery("/api/library/summary", modality === "all" ? {} : { modality }),
+        undefined,
+        signal,
+      ),
   });
 }
 
+/**
+ * Applies the same delta to every cached summary, image-only, video-only and combined alike: a
+ * mutation doesn't know here which modality its assets were, so this is an estimate that
+ * invalidateSummary() corrects once the mutation settles (§0.16, matching the job-set cache's
+ * patchAllJobSetLists).
+ */
 function patchSummary(update: (counts: LibrarySummary["counts"]) => Partial<LibrarySummary["counts"]>) {
-  queryClient.setQueryData<LibrarySummary>(libraryKeys.summary, (data) =>
+  queryClient.setQueriesData<LibrarySummary>({ queryKey: libraryKeys.summaryRoot }, (data) =>
     data ? { ...data, counts: clampCounts({ ...data.counts, ...update(data.counts) }) } : data,
   );
 }
@@ -265,7 +280,7 @@ export async function bulk(
 }
 
 const invalidateLists = () => queryClient.invalidateQueries({ queryKey: queryKeys.allAssets });
-const invalidateSummary = () => queryClient.invalidateQueries({ queryKey: libraryKeys.summary });
+const invalidateSummary = () => queryClient.invalidateQueries({ queryKey: libraryKeys.summaryRoot });
 const invalidateFolders = () => queryClient.invalidateQueries({ queryKey: libraryKeys.folders });
 const trashLists = () => ({ queryKey: libraryKeys.list({ trash: "1" }) });
 

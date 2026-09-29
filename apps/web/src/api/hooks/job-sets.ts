@@ -11,21 +11,26 @@ import {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { api, call, queryClient, queryKeys } from "../client";
 
-// Runs on the feed: placeholders while they work, failed tiles when they don't (§2.4).
+// Runs on the feed: placeholders while they work, failed tiles when they don't (§2.4). The Image
+// and Video pages each cache their own modality's list, so a run of one kind never shows on the
+// other's feed; patches below reach into whichever list actually holds the run (§0.16).
+
+/** Only the modalities a page's feed can be. audio has no page yet. */
+export type JobModality = "image" | "video";
 
 export const isActiveJob = (job: Pick<Job, "status">) =>
   (ACTIVE_JOB_STATES as readonly string[]).includes(job.status);
 
 const JOB_SET_LIMIT = 50;
 
-export function useJobSets({ poll }: { poll: boolean }) {
+export function useJobSets({ poll, modality = "image" }: { poll: boolean; modality?: JobModality }) {
   return useQuery({
-    queryKey: queryKeys.jobSets,
+    queryKey: queryKeys.jobSets(modality),
     queryFn: async ({ signal }) => {
-      const previous = queryClient.getQueryData<JobSetWithJobs[]>(queryKeys.jobSets);
+      const previous = queryClient.getQueryData<JobSetWithJobs[]>(queryKeys.jobSets(modality));
       const res = await call(
         api.api["job-sets"].$get(
-          { query: { status: "all", limit: String(JOB_SET_LIMIT) } },
+          { query: { status: "all", limit: String(JOB_SET_LIMIT), modality } },
           { init: { signal } },
         ),
       );
@@ -33,7 +38,7 @@ export function useJobSets({ poll }: { poll: boolean }) {
       if (previous && finishedSince(previous, res.items)) {
         void queryClient.invalidateQueries({ queryKey: queryKeys.allAssets });
       }
-      return mergeOptimistic(res.items);
+      return mergeOptimistic(modality, res.items);
     },
     refetchInterval: poll ? 2000 : false,
   });
@@ -48,26 +53,33 @@ function finishedSince(before: readonly JobSetWithJobs[], after: readonly JobSet
 const OPTIMISTIC = "optimistic:";
 export const isOptimistic = (jobSetId: string) => jobSetId.startsWith(OPTIMISTIC);
 
-function mergeOptimistic(items: JobSetWithJobs[]): JobSetWithJobs[] {
+function mergeOptimistic(modality: JobModality, items: JobSetWithJobs[]): JobSetWithJobs[] {
   const pending = queryClient
-    .getQueryData<JobSetWithJobs[]>(queryKeys.jobSets)
+    .getQueryData<JobSetWithJobs[]>(queryKeys.jobSets(modality))
     ?.filter((s) => isOptimistic(s.jobSet.id));
   return pending?.length ? [...pending, ...items] : items;
 }
 
+/** No page asks for audio runs yet; every run this app makes is one of the other two. */
+const jobModalityOf = (modality: JobSet["modality"]): JobModality =>
+  modality === "video" ? "video" : "image";
+
 /**
- * Add or replace a run in the loaded list. With nothing loaded yet it does nothing: seeding the
- * cache with one run would pass for the whole list and skip the real fetch.
+ * Add or replace a run in its modality's loaded list. With nothing loaded yet it does nothing:
+ * seeding the cache with one run would pass for the whole list and skip the real fetch.
  */
 export function upsertJobSet(next: JobSetWithJobs) {
-  queryClient.setQueryData<JobSetWithJobs[]>(queryKeys.jobSets, (list) => {
-    if (!list) return list;
-    const at = list.findIndex((s) => s.jobSet.id === next.jobSet.id);
-    if (at < 0) return [next, ...list];
-    const copy = list.slice();
-    copy[at] = next;
-    return copy;
-  });
+  queryClient.setQueryData<JobSetWithJobs[]>(
+    queryKeys.jobSets(jobModalityOf(next.jobSet.modality)),
+    (list) => {
+      if (!list) return list;
+      const at = list.findIndex((s) => s.jobSet.id === next.jobSet.id);
+      if (at < 0) return [next, ...list];
+      const copy = list.slice();
+      copy[at] = next;
+      return copy;
+    },
+  );
 }
 
 /**
@@ -75,28 +87,36 @@ export function upsertJobSet(next: JobSetWithJobs) {
  * (job_set.created, then job.started, before the 202 lands), so a copy already here wins.
  */
 export function addJobSet(accepted: JobSetWithJobs) {
-  queryClient.setQueryData<JobSetWithJobs[]>(queryKeys.jobSets, (list) => {
-    if (!list || list.some((s) => s.jobSet.id === accepted.jobSet.id)) return list;
-    return [accepted, ...list];
-  });
+  queryClient.setQueryData<JobSetWithJobs[]>(
+    queryKeys.jobSets(jobModalityOf(accepted.jobSet.modality)),
+    (list) => {
+      if (!list || list.some((s) => s.jobSet.id === accepted.jobSet.id)) return list;
+      return [accepted, ...list];
+    },
+  );
+}
+
+/** Patches every modality's cache; the one that doesn't hold this run is a no-op. */
+function patchAllJobSetLists(updater: (list: JobSetWithJobs[]) => JobSetWithJobs[]) {
+  queryClient.setQueriesData<JobSetWithJobs[]>({ queryKey: queryKeys.jobSetsRoot }, (list) =>
+    list ? updater(list) : list,
+  );
 }
 
 export function patchJobSet(jobSetId: string, patch: Partial<JobSet>) {
-  queryClient.setQueryData<JobSetWithJobs[]>(queryKeys.jobSets, (list) =>
-    list?.map((s) => (s.jobSet.id === jobSetId ? { ...s, jobSet: { ...s.jobSet, ...patch } } : s)),
+  patchAllJobSetLists((list) =>
+    list.map((s) => (s.jobSet.id === jobSetId ? { ...s, jobSet: { ...s.jobSet, ...patch } } : s)),
   );
 }
 
 /** A Batch run's provider batch changed state (batch.updated). */
 export function patchBatch(jobSetId: string, batch: BatchSummary) {
-  queryClient.setQueryData<JobSetWithJobs[]>(queryKeys.jobSets, (list) =>
-    list?.map((s) => (s.jobSet.id === jobSetId ? { ...s, batch } : s)),
-  );
+  patchAllJobSetLists((list) => list.map((s) => (s.jobSet.id === jobSetId ? { ...s, batch } : s)));
 }
 
 export function patchJob(jobSetId: string, jobId: string, patch: Partial<Job>) {
-  queryClient.setQueryData<JobSetWithJobs[]>(queryKeys.jobSets, (list) =>
-    list?.map((s) =>
+  patchAllJobSetLists((list) =>
+    list.map((s) =>
       s.jobSet.id === jobSetId
         ? { ...s, jobs: s.jobs.map((job) => (job.id === jobId ? { ...job, ...patch } : job)) }
         : s,
@@ -105,12 +125,15 @@ export function patchJob(jobSetId: string, jobId: string, patch: Partial<Job>) {
 }
 
 function removeJobSet(jobSetId: string) {
-  queryClient.setQueryData<JobSetWithJobs[]>(queryKeys.jobSets, (list) =>
-    list?.filter((s) => s.jobSet.id !== jobSetId),
-  );
+  patchAllJobSetLists((list) => list.filter((s) => s.jobSet.id !== jobSetId));
 }
 
-function optimisticJobSet(body: GenerateBody, size: PixelSize, speed: SpeedId): JobSetWithJobs {
+function optimisticJobSet(
+  body: GenerateBody,
+  size: PixelSize,
+  speed: SpeedId,
+  modality: JobModality,
+): JobSetWithJobs {
   const now = new Date().toISOString();
   const id = `${OPTIMISTIC}${body.idempotencyKey}`;
   return {
@@ -119,6 +142,7 @@ function optimisticJobSet(body: GenerateBody, size: PixelSize, speed: SpeedId): 
       status: "pending",
       op: body.op,
       model: body.model,
+      modality,
       batchSize: body.batch,
       prompt: body.prompt,
       promptOriginal: null,
@@ -162,13 +186,15 @@ export interface GenerateInput {
   placeholder: PixelSize;
   /** What the company's settings resolve to, so a Batch run's tiles wait from the start. */
   speed: SpeedId;
+  /** Which feed the placeholder belongs to. */
+  modality: JobModality;
 }
 
 export function useGenerate() {
   return useMutation({
     mutationFn: ({ body }: GenerateInput) => call(api.api.generate.$post({ json: body })),
-    onMutate: ({ body, placeholder, speed }) => {
-      upsertJobSet(optimisticJobSet(body, placeholder, speed));
+    onMutate: ({ body, placeholder, speed, modality }) => {
+      upsertJobSet(optimisticJobSet(body, placeholder, speed, modality));
     },
     onSuccess: (accepted, { body }) => {
       removeJobSet(`${OPTIMISTIC}${body.idempotencyKey}`);

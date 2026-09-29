@@ -89,6 +89,9 @@ export interface WrittenAsset {
   height: number;
   bytes: number;
   sha256: string;
+  /** Videos only, read from the file. */
+  durationMs?: number;
+  hasAudio?: boolean;
 }
 
 export interface StoredAsset {

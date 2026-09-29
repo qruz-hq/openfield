@@ -41,7 +41,7 @@ import {
 } from "@openfield/providers/server";
 import type { EventHub } from "../events/hub";
 import type { Ingest, StagedFile } from "../files/ingest";
-import { Thumbs } from "../files/thumbs";
+import { Thumbs, thumbSourceOf } from "../files/thumbs";
 import type { Logger } from "../log/logger";
 import { toAssetListItem } from "../mappers/asset";
 import type { SettingsService } from "../services/settings";
@@ -128,9 +128,14 @@ export class Outcomes {
     speedUsed: SpeedId;
     latencyMs: number;
     usage?: ProviderUsage | undefined;
+    /** A video's poster frame, already in the library next to it. */
+    posterPath?: string | null;
   }): AssetRow | undefined {
     const { set, job, call, image, staged, cost, speedUsed, latencyMs } = args;
     const base = call.base?.assetId;
+    const video = staged.mime.startsWith("video/");
+    // A video's frames are its inputs, in the order it plays them: start, then end.
+    const frames = [call.video?.startFrame, call.video?.endFrame].flatMap((f) => (f ? [f.assetId] : []));
     const committed = this.deps.db.transaction((tx) => {
       const moved = transitionJob(
         tx,
@@ -166,11 +171,18 @@ export class Outcomes {
         opParams: call.canvas ? { source: canvasSource(call.canvas.canvasId, call.canvas.nodeId) } : null,
         maskAssetId: call.mask?.assetId ?? null,
         generative: true,
+        modality: video ? "video" : "image",
+        ...(video && {
+          // The file's own headers win over what the company said.
+          durationMs: staged.durationMs ?? image.durationMs ?? null,
+          hasAudio: staged.hasAudio ?? image.hasAudio ?? null,
+          posterPath: args.posterPath ?? null,
+        }),
       });
       insertAssetEdges(tx, [
         ...(base ? [{ parentAssetId: base, childAssetId: asset.id, relation: "derived" as const }] : []),
-        ...(call.references ?? []).map((r, ordinal) => ({
-          parentAssetId: r.assetId,
+        ...[...(call.references ?? []).map((r) => r.assetId), ...frames].map((parentAssetId, ordinal) => ({
+          parentAssetId,
           childAssetId: asset.id,
           relation: "reference" as const,
           ordinal,
@@ -219,7 +231,8 @@ export class Outcomes {
       speed: speedUsed,
     });
     const rung = THUMB_RUNGS[this.deps.settings.get().feedZoom] ?? 456;
-    this.deps.thumbs.warm(committed, Thumbs.sizeFor({ h: rung }));
+    const source = thumbSourceOf(committed);
+    if (source) this.deps.thumbs.warm(source, Thumbs.sizeFor({ h: rung }));
     return committed;
   }
 
@@ -442,11 +455,13 @@ function paramsOf(call: NormalizedRequest): Record<string, unknown> {
 function unitsOf(usage?: ProviderUsage): UsageUnits | null {
   if (!usage) return null;
   const tokensIn = (usage.inputTextTokens ?? 0) + (usage.inputImageTokens ?? 0);
+  const tokensOut = usage.outputImageTokens ?? usage.outputVideoTokens;
   return {
     ...(usage.imagesBilled !== undefined && { images: usage.imagesBilled }),
     ...(tokensIn > 0 && { tokensIn }),
-    ...(usage.outputImageTokens !== undefined && { tokensOut: usage.outputImageTokens }),
+    ...(tokensOut !== undefined && { tokensOut }),
     ...(usage.cachedInputTokens !== undefined && { cachedIn: usage.cachedInputTokens }),
+    ...(usage.seconds !== undefined && { seconds: usage.seconds }),
   };
 }
 

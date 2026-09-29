@@ -3,6 +3,7 @@ import type { ProviderError } from "./errors";
 
 // §6.6, §6.7. In-process result types: they never cross HTTP as-is, so they aren't core schemas.
 
+/** One output of a call: an image, or on a video model a video (mimeType video/*). */
 export interface GeneratedImage {
   /** Already written through ctx.assets. */
   assetId: string;
@@ -15,6 +16,14 @@ export interface GeneratedImage {
   seed?: number;
   /** A progressive preview, superseded by the final frame. */
   partial?: boolean;
+  /** Videos: how long it runs and whether it has sound, when the company says. The file's own wins. */
+  durationMs?: number;
+  hasAudio?: boolean;
+  /**
+   * Videos: a still the company sent with it (Seedance's last frame), already written through
+   * ctx.assets. The server keeps it as the poster when it can't take the first frame itself.
+   */
+  poster?: { assetId: string; mimeType: string };
 }
 
 export interface ProviderUsage {
@@ -23,6 +32,8 @@ export interface ProviderUsage {
   /** Billed at price.cachedInputPerMTok where reported (§6.9). */
   cachedInputTokens?: number;
   outputImageTokens?: number;
+  /** Tokens the company counted for a video's output, which is what it bills. */
+  outputVideoTokens?: number;
   imagesBilled?: number;
   seconds?: number;
   raw?: Record<string, number>;
