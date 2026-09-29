@@ -4,6 +4,8 @@
 // Jobs (§0.4)
 export const MODALITIES = ["image", "video", "audio"] as const;
 export type Modality = (typeof MODALITIES)[number];
+/** A model or asset with no modality of its own makes images: every one did before video. */
+export const DEFAULT_MODALITY: Modality = "image";
 
 export const JOB_STATES = [
   "pending",
@@ -290,6 +292,19 @@ export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 export const RESOLUTION_TIERS = ["512", "1K", "1.5K", "2K", "4K"] as const;
 export type ResolutionTier = (typeof RESOLUTION_TIERS)[number];
 
+/** Video resolutions, as the company names them on the wire ("720p"). Image tiers don't apply. */
+export const VIDEO_RESOLUTIONS = ["480p", "720p", "1080p", "4k"] as const;
+export type VideoResolution = (typeof VIDEO_RESOLUTIONS)[number];
+/** The short edge of each video resolution, for a placeholder before the exact size is known. */
+export const VIDEO_RESOLUTION_PX: Record<VideoResolution, number> = {
+  "480p": 480,
+  "720p": 720,
+  "1080p": 1080,
+  "4k": 2160,
+};
+/** Whole-job wall clock for a video run: companies take minutes, and queue for longer when busy. */
+export const VIDEO_JOB_DEADLINE_MS = 2 * 3_600_000;
+
 /** Long-edge target in pixels per tier. */
 export const RESOLUTION_TIER_PX: Record<ResolutionTier, number> = {
   "512": 512,
@@ -315,7 +330,14 @@ export const SIZE_SPEC_KINDS = ["auto", "aspect", "pixels"] as const;
 export const DIAGNOSTIC_LEVELS = ["error", "warning"] as const;
 
 // Cost (§0.13)
-export const PRICE_KINDS = ["per_image", "per_token", "per_second", "provider_estimate", "unknown"] as const;
+export const PRICE_KINDS = [
+  "per_image",
+  "per_token",
+  "per_second",
+  "video_tokens",
+  "provider_estimate",
+  "unknown",
+] as const;
 export const ESTIMATE_CONFIDENCES = ["exact", "estimated", "unknown"] as const;
 export type EstimateConfidence = (typeof ESTIMATE_CONFIDENCES)[number];
 export const COST_SOURCES = ["reconciled", "estimated", "unknown"] as const;
@@ -348,6 +370,8 @@ export const EDGE_RELATIONS = ["derived", "reference", "import"] as const;
 export type EdgeRelation = (typeof EDGE_RELATIONS)[number];
 
 export const IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp"] as const;
+/** What a video model's file is stored as. */
+export const VIDEO_MIME_TYPES = ["video/mp4", "video/quicktime"] as const;
 export const UPLOAD_MIME_TYPES = [...IMAGE_MIME_TYPES, "image/heic"] as const;
 export const UPLOAD_EXTENSIONS = [".jpg", ".jpeg", ".png", ".webp", ".heic"] as const;
 
@@ -417,6 +441,7 @@ export const CANVAS_NODE_TYPES = [
   "image.edit",
   "image.upscale",
   "image.variations",
+  "video.generate",
   "preset",
   "note",
   "frame",

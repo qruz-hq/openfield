@@ -353,7 +353,10 @@
     "free": "Free",
     "credits": "{credits, plural, one {# credit} other {# credits}}",
     "withCount": "{cost} · {count, plural, one {# image} other {# images}}",
-    "pricesAsOf": "Prices as of {date}. They may have changed since."
+    "pricesAsOf": "Prices as of {date}. They may have changed since.",
+    "video": "{seconds}s at {size}",
+    "videoAnyShape": "{seconds}s at {resolution}, in the shape the model picks",
+    "videoTokens": "{tokens} tokens at {rate} per million"
   },
   "settings": {
     "title": "Settings",
@@ -1005,7 +1008,13 @@
     "batchGone": "{company} can't find this run anymore.",
     "batchUnchecked": "Openfield couldn't reach {company} to check on this run.",
     "resumeGone": "{company} no longer has this image.",
-    "resumeUnchecked": "Openfield couldn't reach {company} to check on this image."
+    "resumeUnchecked": "Openfield couldn't reach {company} to check on this image.",
+    "modelNotActivated": "Turn on {model} in {company} first, then try again.",
+    "spendLimit": "You reached the spending limit you set for {model} in {company}.",
+    "usageQuota": "This key used up its {company} quota for now. Try again later.",
+    "accountOverdue": "Your {company} account is overdue. Add funds to keep going.",
+    "videoStarted": "{company} had already started this video, so you may still be charged.",
+    "videoBlocked": "Video blocked. It came from an unknown site."
   },
   "presets": {
     "errors": {
@@ -1431,7 +1440,10 @@
         "images": "Images",
         "style": "Style",
         "many": "{name} ×n",
-        "noReferences": "This model doesn't take reference images"
+        "noReferences": "This model doesn't take reference images",
+        "startFrame": "Start frame",
+        "endFrame": "End frame",
+        "video": "Video"
       },
       "connect": {
         "mismatch": "{from, select, text {Text} image {An image} mask {A mask} preset {A style} other {This}} can't go into {to, select, text {a text} image {an image} mask {a mask} preset {a style} other {this}} input on {node}.",
@@ -1497,7 +1509,8 @@
         "tooManyJobs": "This makes more than {max} images. Use fewer images or takes.",
         "upstreamFailed": "An earlier node didn't finish",
         "upstreamBlocked": "An earlier node can't run yet",
-        "loop": "This node is in a loop, or reads from one. Remove a connection to run it."
+        "loop": "This node is in a loop, or reads from one. Remove a connection to run it.",
+        "noEndFrame": "This model can't end on a chosen frame. Pick another model."
       },
       "collapsed": {
         "expand": "Expand {name}",
@@ -1544,7 +1557,8 @@
         "groups": {
           "references": "References",
           "image": "Image",
-          "utilities": "Utilities"
+          "utilities": "Utilities",
+          "video": "Video"
         },
         "noMatches": "No nodes match \"{query}\"."
       },
@@ -1563,6 +1577,12 @@
         "pager": "{index} of {count}",
         "previous": "Previous image",
         "next": "Next image"
+      },
+      "video": {
+        "label": "Video",
+        "description": "Make a video from a prompt or frames",
+        "promptPlaceholder": "Describe the video",
+        "promptField": "Prompt for this node"
       }
     },
     "run": {
@@ -1915,5 +1935,47 @@
     "heic": "This computer can't open HEIC files. Save it as JPEG or PNG and try again.",
     "heicTooLarge": "This photo is too large once converted. Save a smaller copy and try again.",
     "noFile": "Choose an image to upload."
+  },
+  "video": {
+    "placeholder": "Describe the video you want",
+    "count": "{count, plural, one {# video} other {# videos}}",
+    "duration": "{seconds}s",
+    "chips": {
+      "duration": {
+        "label": "Duration",
+        "value": "{seconds}s"
+      },
+      "resolution": {
+        "label": "Resolution"
+      },
+      "sound": {
+        "label": "Sound",
+        "on": "On",
+        "off": "Off",
+        "unsupported": "{model} makes videos without sound."
+      },
+      "cameraFixed": {
+        "label": "Still camera",
+        "hint": "Keep the camera in one place",
+        "unsupported": "{model} moves the camera as it sees fit."
+      },
+      "startFrame": {
+        "label": "Start frame",
+        "add": "Add a start frame",
+        "remove": "Remove start frame"
+      },
+      "endFrame": {
+        "label": "End frame",
+        "add": "Add an end frame",
+        "remove": "Remove end frame",
+        "unsupported": "{model} can't end on a chosen frame.",
+        "needsStart": "Add a start frame first."
+      }
+    },
+    "aspectFromFrame": "The video takes the shape of the start frame.",
+    "autoNeedsFrame": "{model} picks its own shape only from a start frame.",
+    "hevc": "Saved as HEVC, which some browsers can't play. QuickTime, VLC and mpv can.",
+    "frameSize": "Frames need 300 to 6000 pixels a side, and a shape between 2:5 and 5:2.",
+    "frameTooLarge": "This frame is too large. The limit is {size}."
   }
 }

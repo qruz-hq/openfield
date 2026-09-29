@@ -119,6 +119,7 @@ function optimisticJobSet(body: GenerateBody, size: PixelSize, speed: SpeedId): 
       status: "pending",
       op: body.op,
       model: body.model,
+      modality: "image",
       batchSize: body.batch,
       prompt: body.prompt,
       promptOriginal: null,

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { COST_SOURCES, ESTIMATE_CONFIDENCES } from "../constants";
-import { currencySchema, dateOrTimestampSchema, resolutionTierSchema } from "./common";
+import { currencySchema, dateOrTimestampSchema, resolutionTierSchema, videoResolutionSchema } from "./common";
 
 // Cost is pure data (§0.13, §6.9). Currency is a string with USD the only v1 value (§2.12).
 
@@ -66,6 +66,25 @@ export const priceModelSchema = z.discriminatedUnion("kind", [
     ),
   }),
   z.strictObject({ kind: z.literal("per_second"), ...priced, perSecond: z.number().nonnegative() }),
+  /**
+   * A video billed on tokens the company counts from its output: width × height × fps × seconds /
+   * 1024 (BytePlus Seedance). The sizes and frame rate come from the manifest's video capability,
+   * so an estimate is exact once the aspect ratio is. The first rate that matches the run wins; a
+   * row without a resolution or sound matches any.
+   */
+  z.strictObject({
+    kind: z.literal("video_tokens"),
+    ...priced,
+    rates: z
+      .array(
+        z.strictObject({
+          resolution: videoResolutionSchema.optional(),
+          audio: z.boolean().optional(),
+          perMTok: z.number().nonnegative(),
+        }),
+      )
+      .min(1),
+  }),
   z.strictObject({ kind: z.literal("provider_estimate"), ...priced }),
   z.strictObject({ kind: z.literal("unknown") }),
 ]);
@@ -95,6 +114,8 @@ export const usageUnitsSchema = z.object({
   tokensIn: z.int().nonnegative().optional(),
   tokensOut: z.int().nonnegative().optional(),
   cachedIn: z.int().nonnegative().optional(),
+  /** Seconds of video billed. */
+  seconds: z.number().nonnegative().optional(),
 });
 
 export type PerImagePrice = z.infer<typeof perImagePriceSchema>;

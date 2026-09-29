@@ -16,6 +16,7 @@ import {
   REFERENCE_ROLES,
   RESOLUTION_TIERS,
   SPEED_IDS,
+  VIDEO_RESOLUTIONS,
 } from "../constants";
 import { MODEL_ID_RE, PROVIDER_ID_RE } from "../ids";
 
@@ -49,6 +50,7 @@ export const errorCodeSchema = z.enum(ERROR_CODES);
 export const errorActionSchema = z.enum(ERROR_ACTIONS);
 export const aspectRatioSchema = z.enum(ASPECT_RATIOS);
 export const resolutionTierSchema = z.enum(RESOLUTION_TIERS);
+export const videoResolutionSchema = z.enum(VIDEO_RESOLUTIONS);
 export const outputFormatSchema = z.enum(OUTPUT_FORMATS);
 export const referenceRoleSchema = z.enum(REFERENCE_ROLES);
 export const adapterOpSchema = z.enum(ADAPTER_OPS);
