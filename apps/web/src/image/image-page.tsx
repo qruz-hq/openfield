@@ -29,8 +29,8 @@ export function ImagePage() {
   const providers = useProviders();
   const settings = useSettings();
   const updateSettings = useUpdateSettings();
-  const assets = useAssets("all");
-  const jobSets = useJobSets({ poll: !connected });
+  const assets = useAssets("all", { modality: "image" });
+  const jobSets = useJobSets({ poll: !connected, modality: "image" });
   const zoom = settings.data?.feedZoom ?? DEFAULT_FEED_ZOOM;
 
   const items = useMemo(

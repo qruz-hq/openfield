@@ -12,7 +12,8 @@ import { SettingRow, SettingsSection } from "./section";
 // Settings · Models: every model with its usual price, and the daily check for new ones.
 
 export function ModelsPane() {
-  const models = useModels();
+  // Every model, images and video both.
+  const models = useModels("all");
   const providers = useProviders().data;
   const settings = useSettings().data;
   const refresh = useRefreshModels();

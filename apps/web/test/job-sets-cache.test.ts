@@ -11,9 +11,9 @@ import { at, jobSet } from "./fixtures";
 // The feed's cache as the stream and the 202 race to fill it (§2.3): whichever lands last, a job
 // never moves backwards.
 
-const cached = () => queryClient.getQueryData<JobSetWithJobs[]>(queryKeys.jobSets) ?? [];
+const cached = () => queryClient.getQueryData<JobSetWithJobs[]>(queryKeys.jobSets("image")) ?? [];
 
-beforeEach(() => queryClient.setQueryData<JobSetWithJobs[]>(queryKeys.jobSets, []));
+beforeEach(() => queryClient.setQueryData<JobSetWithJobs[]>(queryKeys.jobSets("image"), []));
 
 describe("a new run in the cache", () => {
   test("job_set.created, then job.started, then the 202: the started job stays started", () => {

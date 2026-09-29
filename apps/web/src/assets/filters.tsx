@@ -79,6 +79,41 @@ export function FilterRow({
         </>
       ) : null}
       <FilterMenu
+        label={t("assets.filters.type")}
+        value={query.modality ? t(`assets.filters.${query.modality}s` as const) : undefined}
+        onClear={() => set({ modality: undefined })}
+        width="w-200"
+      >
+        {(close) => (
+          <>
+            <Option
+              title={t("assets.filters.anyType")}
+              selected={!query.modality}
+              onPick={() => {
+                set({ modality: undefined });
+                close();
+              }}
+            />
+            <Option
+              title={t("assets.filters.images")}
+              selected={query.modality === "image"}
+              onPick={() => {
+                set({ modality: "image" });
+                close();
+              }}
+            />
+            <Option
+              title={t("assets.filters.videos")}
+              selected={query.modality === "video"}
+              onPick={() => {
+                set({ modality: "video" });
+                close();
+              }}
+            />
+          </>
+        )}
+      </FilterMenu>
+      <FilterMenu
         label={t("assets.filters.model")}
         value={query.model ? modelLabel(query.model) : undefined}
         onClear={() => set({ model: undefined })}
@@ -182,7 +217,7 @@ export function FilterRow({
         <Button
           variant="ghost"
           size="s"
-          onClick={() => set({ model: undefined, provider: undefined, date: undefined })}
+          onClick={() => set({ model: undefined, provider: undefined, date: undefined, modality: undefined })}
         >
           {t("assets.filters.clearAll")}
         </Button>

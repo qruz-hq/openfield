@@ -29,9 +29,7 @@ export function announceStarted(set: JobSetWithJobs) {
 function announceFinished(jobSetId: string, status: string) {
   if (announced.has(`end:${jobSetId}`)) return;
   announced.add(`end:${jobSetId}`);
-  const set = queryClient
-    .getQueryData<JobSetWithJobs[]>(queryKeys.jobSets)
-    ?.find((s) => s.jobSet.id === jobSetId);
+  const set = jobSetsCache().find((s) => s.jobSet.id === jobSetId);
   // A Batch run that wasn't canceled gets a finish toast, and the toaster is already a live region.
   if (set?.batch && !set.batch.stopping && status !== "canceled") return;
   const ready = set?.jobs.filter((job) => job.status === "succeeded").length ?? 0;
@@ -41,8 +39,11 @@ function announceFinished(jobSetId: string, status: string) {
   announce(failed?.errorReason ?? errorCopy(failed?.errorCode ?? "unknown").reason);
 }
 
+/** Every loaded run, images and videos both: the Image and Video pages each cache their own list. */
 function jobSetsCache(): JobSetWithJobs[] {
-  return queryClient.getQueryData<JobSetWithJobs[]>(queryKeys.jobSets) ?? [];
+  return queryClient
+    .getQueriesData<JobSetWithJobs[]>({ queryKey: queryKeys.jobSetsRoot })
+    .flatMap(([, list]) => list ?? []);
 }
 
 const findJob = (jobSetId: string, jobId: string) =>
@@ -53,7 +54,7 @@ const findJob = (jobSetId: string, jobId: string) =>
 /** Names for the finish notice, fetched when this tab hasn't loaded them yet. */
 const names: BatchNameLookups = {
   model: async (key) =>
-    (await queryClient.ensureQueryData(modelsQuery)).models.find((m) => m.key === key)?.displayName,
+    (await queryClient.ensureQueryData(modelsQuery("all"))).models.find((m) => m.key === key)?.displayName,
   company: async (id) =>
     (await queryClient.ensureQueryData(providersQuery)).find((p) => p.id === id)?.meta.displayName,
 };
@@ -230,7 +231,8 @@ export function useEventStream() {
               everConnected = true;
               setConnected(true);
               // Anything missed while offline: the snapshot covers active runs, this covers the rest.
-              if (jobSetsCache().length) void queryClient.invalidateQueries({ queryKey: queryKeys.jobSets });
+              if (jobSetsCache().length)
+                void queryClient.invalidateQueries({ queryKey: queryKeys.jobSetsRoot });
             },
             onEvent: (event, id) => {
               if (id) lastEventId = id;

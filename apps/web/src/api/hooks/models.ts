@@ -4,17 +4,27 @@ import { useMemo } from "react";
 import { asksForPrice, usePriceVersion } from "../../lib/remote-price";
 import { api, call, queryClient, queryKeys } from "../client";
 
-/** Every model, enabled or not, as GET /api/models sends it. Shared by hooks and event handlers. */
-export const modelsQuery = queryOptions({
-  queryKey: queryKeys.models,
-  queryFn: () => call(api.api.models.$get({ query: {} })),
-  staleTime: 5 * 60_000,
-});
+export type ModelModality = "image" | "video" | "all";
+
+/**
+ * Every model, enabled or not, as GET /api/models sends it. Shared by hooks and event handlers.
+ * "image" (the default) is what every screen but the Video page and the canvas wants; the canvas
+ * needs "all" to see both kinds of model at once (§0.16).
+ */
+export const modelsQuery = (modality: ModelModality = "image") =>
+  queryOptions({
+    queryKey: queryKeys.modelsList(modality),
+    queryFn: () => call(api.api.models.$get({ query: { modality } })),
+    staleTime: 5 * 60_000,
+  });
 
 /** The registry with every manifest. It drives every chip in the composer (§3.5). */
-export function useModels() {
+export function useModels(modality: ModelModality = "image") {
   const prices = usePriceVersion();
-  const query = useQuery({ ...modelsQuery, select: (data) => data.models.filter((m) => m.enabled) });
+  const query = useQuery({
+    ...modelsQuery(modality),
+    select: (data) => data.models.filter((m) => m.enabled),
+  });
   const data = useMemo(() => repriced(query.data, prices), [query.data, prices]);
   return { ...query, data };
 }

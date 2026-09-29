@@ -18,7 +18,8 @@ export function LibraryPicker({ open, initial, onOpenChange, onPick }: LibraryPi
   const [picked, setPicked] = useState<string[]>([...initial]);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
-  const library = useAssets("all", { q: query, enabled: open });
+  // The Assets node only ever holds images (§0.16): videos aren't offered here.
+  const library = useAssets("all", { q: query, enabled: open, modality: "image" });
 
   useEffect(() => {
     if (open) setPicked([...initial]);

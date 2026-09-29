@@ -3,16 +3,25 @@ import { type InfiniteData, useInfiniteQuery } from "@tanstack/react-query";
 import { api, call, queryClient, queryKeys } from "../client";
 
 export type AssetFilter = "all" | "favourites";
+export type AssetModalityFilter = "image" | "video";
 export type AssetPages = InfiniteData<AssetsListResponse, string | null>;
 
 /**
- * The feed's images, newest first, 50 a page (§2.3). `q` searches them (the canvas library picker);
- * a search is cached under its own key, beside the feed's.
+ * The feed's images (or videos), newest first, 50 a page (§2.3). `q` searches them (the canvas
+ * library picker); a search is cached under its own key, beside the feed's. `modality` narrows to
+ * one kind, as the Image and Video pages and the image-only pickers all need (§0.16); left out,
+ * the server answers with both.
  */
-export function useAssets(filter: AssetFilter, opts: { q?: string; enabled?: boolean } = {}) {
+export function useAssets(
+  filter: AssetFilter,
+  opts: { q?: string; enabled?: boolean; modality?: AssetModalityFilter } = {},
+) {
   const q = opts.q?.trim() || undefined;
+  const { modality } = opts;
   return useInfiniteQuery({
-    queryKey: q ? ([...queryKeys.assets(filter), "q", q] as const) : queryKeys.assets(filter),
+    queryKey: q
+      ? ([...queryKeys.assets(filter, modality), "q", q] as const)
+      : queryKeys.assets(filter, modality),
     enabled: opts.enabled ?? true,
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) =>
@@ -23,6 +32,7 @@ export function useAssets(filter: AssetFilter, opts: { q?: string; enabled?: boo
               limit: String(ASSET_PAGE_SIZE),
               ...(pageParam ? { cursor: pageParam } : {}),
               ...(filter === "favourites" ? { favourite: "1" as const } : {}),
+              ...(modality ? { modality } : {}),
               ...(q ? { q } : {}),
             },
           },
@@ -33,14 +43,21 @@ export function useAssets(filter: AssetFilter, opts: { q?: string; enabled?: boo
   });
 }
 
-/** Put a new image at the top of the unfiltered feed, once. */
+/**
+ * Put a new asset at the top of every loaded, unfiltered "all" feed whose modality it matches (the
+ * Image page's, the Video page's, and the library's own, which has none and takes every kind).
+ */
 export function prependAsset(asset: AssetListItem) {
-  queryClient.setQueryData<AssetPages>(queryKeys.assets("all"), (data) => {
-    if (!data?.pages.length) return data;
-    if (data.pages.some((page) => page.items.some((item) => item.id === asset.id))) return data;
-    const [first, ...rest] = data.pages;
-    return { ...data, pages: [{ ...first!, items: [asset, ...first!.items] }, ...rest] };
-  });
+  // No page or picker asks for audio yet, so this cache never carries an "audio" key.
+  if (asset.modality !== "image" && asset.modality !== "video") return;
+  for (const modality of [undefined, asset.modality] as const) {
+    queryClient.setQueryData<AssetPages>(queryKeys.assets("all", modality), (data) => {
+      if (!data?.pages.length) return data;
+      if (data.pages.some((page) => page.items.some((item) => item.id === asset.id))) return data;
+      const [first, ...rest] = data.pages;
+      return { ...data, pages: [{ ...first!, items: [asset, ...first!.items] }, ...rest] };
+    });
+  }
 }
 
 /** Apply a change to an image wherever it's cached. */

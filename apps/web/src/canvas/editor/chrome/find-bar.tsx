@@ -18,7 +18,7 @@ export function FindBar({ right }: { right: number }) {
   const doc = useCanvas((s) => s.doc);
   const query = useEditorUi((s) => s.findQuery);
   const index = useEditorUi((s) => s.findIndex);
-  const models = useModels().data;
+  const models = useModels("all").data;
   const input = useRef<HTMLInputElement>(null);
 
   const matches = useMemo(

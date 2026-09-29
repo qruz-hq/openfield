@@ -3,6 +3,7 @@
     "name": "Openfield",
     "nav": {
       "image": "Image",
+      "video": "Video",
       "assets": "Assets",
       "canvas": "Canvas",
       "settings": "Settings",
@@ -62,6 +63,14 @@
     "startCreating": "Start creating",
     "bodyOne": "Add a key from {company}. It takes a minute."
   },
+  "firstRunVideo": {
+    "title": "Let's make your first video",
+    "steps": {
+      "addKey": "Add a key",
+      "describe": "Describe a video",
+      "generate": "Generate"
+    }
+  },
   "getKey": {
     "title": "Get a key",
     "intro": "You only need one key. Either company works.",
@@ -77,6 +86,13 @@
       "go": "Go to Google AI Studio",
       "step1": "Sign in with your Google account.",
       "step2": "Create a new key.",
+      "step3": "Copy it and paste it in Settings under API keys."
+    },
+    "byteplus": {
+      "for": "For Seedance video models",
+      "go": "Go to BytePlus",
+      "step1": "Sign in to BytePlus and open ModelArk.",
+      "step2": "Create a new API key.",
       "step3": "Copy it and paste it in Settings under API keys."
     },
     "cost": "Keys cost nothing to create. You pay for the images you make.",
@@ -95,6 +111,15 @@
       },
       "browseStyles": "Browse styles",
       "tryThis": "Try this"
+    },
+    "readyVideo": {
+      "title": "Your first video",
+      "body": "Try one of these, or write your own.",
+      "examples": {
+        "kite": "A kite climbs over a green hill, the wind picking up",
+        "train": "A train pulls away from a rain-lit platform at night",
+        "waves": "Waves roll over dark sand, slow and steady, at dusk"
+      }
     },
     "library": {
       "title": "Your images will show up here",
@@ -377,6 +402,8 @@
       "title": "API keys",
       "intro": "Add a key to start making images. Your keys stay on this computer.",
       "tagline": "Makes and edits images",
+      "taglineVideo": "Makes videos",
+      "byteplusNote": "Seedance 2.0 and 2.5 need turning on in the BytePlus console first (add a balance over $30, or a resource pack).",
       "status": {
         "connected": "Connected",
         "notConnected": "Not connected",
@@ -1789,6 +1816,10 @@
       "label": "Filters",
       "scope": "In {folder}",
       "searchAll": "Search all images",
+      "type": "Type",
+      "anyType": "Any type",
+      "images": "Images",
+      "videos": "Videos",
       "model": "Model",
       "anyModel": "Any model",
       "company": "Company",
@@ -1901,8 +1932,12 @@
       "details": "Details",
       "model": "Model",
       "speed": "Speed",
+      "length": "Length",
+      "lengthWithSound": "{seconds} s · with sound",
       "size": "Size",
       "sizeValue": "{width} × {height}",
+      "sizeValueVideo": "{width} × {height} · {resolution}",
+      "cost": "Cost",
       "created": "Created",
       "folders": "Folders",
       "noFolders": "None",
@@ -1943,7 +1978,7 @@
     "chips": {
       "duration": {
         "label": "Duration",
-        "value": "{seconds}s"
+        "value": "{seconds} s"
       },
       "resolution": {
         "label": "Resolution"
@@ -1976,6 +2011,26 @@
     "autoNeedsFrame": "{model} picks its own shape only from a start frame.",
     "hevc": "Saved as HEVC, which some browsers can't play. QuickTime, VLC and mpv can.",
     "frameSize": "Frames need 300 to 6000 pixels a side, and a shape between 2:5 and 5:2.",
-    "frameTooLarge": "This frame is too large. The limit is {size}."
+    "frameTooLarge": "This frame is too large. The limit is {size}.",
+    "generating": "Videos take a minute or two.",
+    "frames": {
+      "pickerTitle": "Choose a frame",
+      "start": "START",
+      "end": "END",
+      "addImage": "Add image",
+      "optional": "Optional",
+      "oneImage": "1 image",
+      "upload": "Upload a file",
+      "fromLibrary": "Choose from library"
+    },
+    "controls": {
+      "play": "Play",
+      "pause": "Pause",
+      "mute": "Mute",
+      "unmute": "Unmute",
+      "loop": "Loop",
+      "fullScreen": "Full screen",
+      "exitFullScreen": "Exit full screen"
+    }
   }
 }

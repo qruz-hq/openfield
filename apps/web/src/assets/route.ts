@@ -19,7 +19,7 @@ export function useLibraryRoute() {
   const navigate = useNavigate();
   const view = viewOf(pathname);
   // Only the library's own params count: opening an image (?asset=) mustn't make a new query.
-  const words = ["q", "model", "provider", "date"].map((key) => params.get(key) ?? "").join("\n");
+  const words = ["q", "model", "provider", "date", "modality"].map((key) => params.get(key) ?? "").join("\n");
   // biome-ignore lint/correctness/useExhaustiveDependencies: `words` stands for the params read here.
   const query = useMemo(() => parseLibraryUrl(view, params, folderId), [view, words, folderId]);
 
@@ -41,8 +41,9 @@ export const searchOf = (query: LibraryQuery): Omit<LibraryQuery, "view" | "fold
   ...(query.model && { model: query.model }),
   ...(query.provider && { provider: query.provider }),
   ...(query.date && { date: query.date }),
+  ...(query.modality && { modality: query.modality }),
 });
 
 /** Whether the view is showing search results: words, or any filter. */
 export const isFiltered = (query: LibraryQuery) =>
-  Boolean(query.q || query.model || query.provider || query.date);
+  Boolean(query.q || query.model || query.provider || query.date || query.modality);
