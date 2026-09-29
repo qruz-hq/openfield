@@ -3,6 +3,7 @@ import {
   type KeyStatus,
   type ModelListItem,
   type ModelManifest,
+  modalityOf,
   type ProviderSummary,
 } from "@openfield/core";
 import type { ProviderRow } from "@openfield/db";
@@ -30,5 +31,6 @@ export function toModelListItem(
   manifest: ModelManifest,
   state: { ready: boolean; enabled: boolean },
 ): ModelListItem {
-  return { ...manifest, ready: state.ready, enabled: state.enabled };
+  // Every item says what it makes, so a client never has to know that absent means images.
+  return { ...manifest, modality: modalityOf(manifest), ready: state.ready, enabled: state.enabled };
 }

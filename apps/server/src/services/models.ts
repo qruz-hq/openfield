@@ -4,6 +4,7 @@ import {
   type ModelManifest,
   type ModelsListResponse,
   type ModelsRefreshResponse,
+  modalityOf,
   modelManifestSchema,
   type RefreshReport,
   safeParseModelKey,
@@ -139,6 +140,11 @@ export class ModelService {
     return shown && this.opts.credentials.resolve(providerId).present;
   }
 
+  /**
+   * The models to show. `modality` defaults to image, so everything written before video (the
+   * composer, agents' tools, the canvas's image nodes) never meets a video model; "all" lists every
+   * one.
+   */
   list(query: { provider?: string | undefined; modality?: string | undefined } = {}): ModelsListResponse {
     const showEarly = this.opts.settings.get().showExperimental;
     const providerEnabled = new Map(listProviders(this.opts.db).map((r) => [r.id, r.enabled]));
@@ -151,8 +157,10 @@ export class ModelService {
         (providerEnabled.get(p.meta.id) ?? true) && this.opts.credentials.usable(p.meta.id),
       ]),
     );
-    // Every v1 model makes images; other modalities have none yet.
-    const manifests = query.modality && query.modality !== "image" ? [] : [...this.#manifests.values()];
+    const modality = query.modality ?? "image";
+    const manifests = [...this.#manifests.values()].filter(
+      (m) => modality === "all" || modalityOf(m) === modality,
+    );
     return {
       models: manifests
         .filter((m) => !query.provider || m.providerId === query.provider)
@@ -318,7 +326,7 @@ export class ModelService {
         modelId: m.modelId,
         displayName: m.displayName,
         family: m.family ?? null,
-        modality: "image",
+        modality: modalityOf(m),
         badges: m.badges ?? null,
         capabilities: m.capabilities,
         pricing: m.price,

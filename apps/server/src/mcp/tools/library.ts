@@ -72,6 +72,8 @@ export function libraryTools(server: McpServer, ctx: ToolContext): void {
             from: args.from,
             to: args.to,
           }),
+          // These tools are about images: videos stay out of what an agent searches.
+          modality: "image",
           cursor: args.cursor,
           limit: args.limit ?? 20,
         },

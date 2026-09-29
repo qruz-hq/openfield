@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { type StatsResponse, sha256Hex } from "@openfield/core";
 import { feedPage, getAsset, insertAsset } from "@openfield/db";
 import sharp from "sharp";
+import { VIDEO_WITH_SOUND } from "../../../packages/providers/src/byteplus/__fixtures__/media";
 import { probeImage } from "../src/files/probe";
 import { completed, generate, saveKey, startTestServer, type TestServer } from "./helpers";
 
@@ -29,6 +30,54 @@ const streamOf = (bytes: Uint8Array, chunk = 1000) =>
       controller.close();
     },
   });
+
+describe("ingest of a video", () => {
+  const mp4 = new Uint8Array(Buffer.from(VIDEO_WITH_SOUND, "base64"));
+
+  /** The same file with its moov box moved after the media, as some encoders write it. */
+  function moovLast(bytes: Uint8Array): Uint8Array {
+    const boxes: { type: string; start: number; size: number }[] = [];
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    for (let at = 0; at < bytes.length; ) {
+      const size = view.getUint32(at);
+      boxes.push({ type: String.fromCharCode(...bytes.subarray(at + 4, at + 8)), start: at, size });
+      at += size;
+    }
+    const order = [...boxes.filter((b) => b.type !== "moov"), ...boxes.filter((b) => b.type === "moov")];
+    return new Uint8Array(order.flatMap((b) => [...bytes.subarray(b.start, b.start + b.size)]));
+  }
+
+  test("a model's MP4 lands as a video with its size, length and sound", async () => {
+    server = await startTestServer();
+    const staged = await server.services.ingest.stage(streamOf(mp4), { video: true });
+    expect(staged.path).toMatch(new RegExp(`^assets/\\d{4}/\\d{2}/\\d{2}/${staged.assetId}\\.mp4$`));
+    expect(staged).toMatchObject({
+      mime: "video/mp4",
+      width: 64,
+      height: 36,
+      durationMs: 1000,
+      hasAudio: true,
+    });
+    expect(new Uint8Array(readFileSync(join(server.home, staged.path)))).toEqual(mp4);
+  });
+
+  test("a moov kept after the media is still read, from the file on disk", async () => {
+    server = await startTestServer();
+    const staged = await server.services.ingest.stage(streamOf(moovLast(mp4)), { video: true });
+    expect(staged).toMatchObject({ mime: "video/mp4", durationMs: 1000 });
+  });
+
+  test("a video is never taken where only images belong, such as an upload", async () => {
+    server = await startTestServer();
+    await expect(server.services.ingest.stage(streamOf(mp4))).rejects.toMatchObject({
+      code: "provider_error",
+    });
+    const form = new FormData();
+    form.append("file", new File([mp4], "clip.png"));
+    const res = await server.request("/api/uploads", { method: "POST", body: form });
+    expect(res.status).toBe(400);
+  });
+});
 
 describe("ingest", () => {
   test("streams, hashes, probes and places the file under assets/YYYY/MM/DD", async () => {

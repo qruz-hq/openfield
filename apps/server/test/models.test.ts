@@ -38,7 +38,9 @@ describe("model registry", () => {
     ]);
     expect(list.models.every((m) => !m.ready && m.enabled)).toBe(true);
     expect(list.staleAt).toBeNull();
-    const rows = listModels(server.services.db).filter((r) => r.providerId !== "higgsfield");
+    const rows = listModels(server.services.db).filter(
+      (r) => r.providerId !== "higgsfield" && r.providerId !== "byteplus",
+    );
     expect(rows).toHaveLength(6);
     // Speeds travel with the manifest (and into the models table); the batch path never does.
     expect(listed.map((m) => m.speeds?.map((o) => o.id))).toEqual([

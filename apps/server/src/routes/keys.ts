@@ -4,6 +4,7 @@ import {
   type KeyTestResponse,
   keyPutBodySchema,
   keyTestBodySchema,
+  modalityOf,
   providerParamSchema,
   t,
 } from "@openfield/core";
@@ -72,8 +73,9 @@ export const keysRoutes = new Hono<Env>()
       }
       // First run (§2.10 step 5): the first key that works picks the default model, the head of
       // that company's catalog. A default the person chose is never replaced, and an early
-      // company's model is never picked for them (§6.2).
-      const first = provider.catalog()[0];
+      // company's model is never picked for them (§6.2). The default is an image model: a company
+      // that only makes videos leaves it alone.
+      const first = provider.catalog().find((m) => modalityOf(m) === "image");
       if (result.ok && first && provider.meta.stable && settings.get().defaultModel === null) {
         settings.update({ defaultModel: first.key });
       }

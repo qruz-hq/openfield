@@ -3,7 +3,9 @@ import {
   FLEX_BUSY_BACKOFF_MS,
   FLEX_JOB_DEADLINE_MS,
   type ModelManifest,
+  modalityOf,
   type SpeedId,
+  VIDEO_JOB_DEADLINE_MS,
 } from "@openfield/core";
 import { speedTimeouts } from "@openfield/providers/manifest";
 
@@ -17,6 +19,11 @@ export interface QueueOptions {
   retryDelaysMs: readonly number[];
   /** Whole-job wall clock across every attempt. */
   jobDeadlineMs: number;
+  /**
+   * The same for a video: companies take minutes per clip and queue for longer when busy.
+   * OPENFIELD_VIDEO_DEADLINE_MINUTES sets it.
+   */
+  videoJobDeadlineMs: number;
   /** Overrides the manifest's limits.requestTimeoutMs, for tests. */
   attemptTimeoutMs?: number;
   /** How often the scheduler looks for work even when nothing happened (§8.4.1). */
@@ -29,6 +36,8 @@ export interface QueueOptions {
   flexBusyDelaysMs: readonly number[];
   /** Replaces the batch poll schedule, for tests. */
   batchPollMs?: number;
+  /** Caps the wait an adapter asks for between reads (a video's 5 to 20 s), for tests. */
+  pollHintCapMs?: number;
 }
 
 /**
@@ -43,6 +52,7 @@ export const QUEUE_DEFAULTS: QueueOptions = {
   maxAttempts: 3,
   retryDelaysMs: [1_000, 4_000, 15_000],
   jobDeadlineMs: 900_000,
+  videoJobDeadlineMs: VIDEO_JOB_DEADLINE_MS,
   heartbeatMs: 1_000,
   poll: { firstMs: 800, factor: 1.6, capMs: 5_000 },
   jitter: 0.2,
@@ -68,7 +78,7 @@ export function busyDelay(opts: QueueOptions, busyCount: number, retryAfterMs?: 
 }
 
 export function pollDelay(opts: QueueOptions, poll: number, hint?: number): number {
-  if (hint !== undefined) return hint;
+  if (hint !== undefined) return Math.min(hint, opts.pollHintCapMs ?? hint);
   const { firstMs, factor, capMs } = opts.poll;
   return jittered(Math.min(capMs, firstMs * factor ** poll), opts.jitter);
 }
@@ -82,10 +92,11 @@ export function batchPollDelay(opts: QueueOptions, elapsedMs: number, fake: bool
 /** One call's timeout and the whole job's deadline at a speed (§0.12). */
 export function runTimeouts(
   opts: QueueOptions,
-  manifest: Pick<ModelManifest, "capabilities" | "speeds">,
+  manifest: Pick<ModelManifest, "capabilities" | "speeds" | "modality">,
   speed: SpeedId,
 ): { attemptMs: number; deadlineMs: number } {
-  const t = speedTimeouts(manifest, speed, { jobDeadlineMs: opts.jobDeadlineMs });
+  const base = modalityOf(manifest) === "video" ? opts.videoJobDeadlineMs : opts.jobDeadlineMs;
+  const t = speedTimeouts(manifest, speed, { jobDeadlineMs: base });
   return {
     attemptMs: opts.attemptTimeoutMs ?? t.attemptTimeoutMs,
     deadlineMs: speed === "flex" ? opts.flexJobDeadlineMs : t.jobDeadlineMs,

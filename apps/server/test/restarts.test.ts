@@ -906,6 +906,6 @@ describe("the test company", () => {
   test("its card comes after the real companies', so first run still lands on Google's key field", async () => {
     server = await start(resumableFake());
     const { body } = await server.json<{ id: string }[]>("/api/providers");
-    expect(body.map((p) => p.id)).toEqual(["google", "openai", "higgsfield", "fake"]);
+    expect(body.map((p) => p.id)).toEqual(["google", "openai", "higgsfield", "byteplus", "fake"]);
   });
 });

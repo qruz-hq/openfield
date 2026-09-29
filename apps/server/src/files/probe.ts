@@ -1,5 +1,10 @@
+import { type ProbedVideo, probeMoov, readBoxHeader, videoMimeOfBrand } from "@openfield/providers/server";
+
 // Real type and pixel size from the first bytes of a file. The declared type is never trusted
-// (§8.5.1). Covers what Openfield stores: PNG, JPEG, WebP, and HEIC uploads (type only).
+// (§8.5.1). Covers what Openfield stores: PNG, JPEG, WebP, HEIC uploads (type only), and the MP4
+// and QuickTime videos a video model makes.
+
+export type { ProbedVideo };
 
 export interface Probed {
   mime: "image/png" | "image/jpeg" | "image/webp" | "image/heic";
@@ -84,4 +89,46 @@ export const EXTENSION: Record<Probed["mime"], string> = {
   "image/jpeg": "jpg",
   "image/webp": "webp",
   "image/heic": "heic",
+};
+
+/** The most of a moov box read into memory: headers for hours of video fit in far less. */
+const MOOV_MAX_BYTES = 64 * 1024 * 1024;
+
+/**
+ * A video's container, size, length and sound, read from the file's box headers on disk. Walks the
+ * top-level boxes by their sizes, so a moov kept after the media is found without reading the
+ * media. Null when the file isn't an MP4 or QuickTime video with a picture.
+ */
+export async function probeVideoFile(path: string): Promise<ProbedVideo | null> {
+  const file = Bun.file(path);
+  const size = file.size;
+  const headerAt = async (at: number) => {
+    const head = new Uint8Array(await file.slice(at, Math.min(size, at + 32)).arrayBuffer());
+    const box = readBoxHeader(head, 0, size - at);
+    return box && { ...box, start: at, head };
+  };
+  const first = await headerAt(0);
+  if (first?.type !== "ftyp") return null;
+  const mime = videoMimeOfBrand(
+    first.head.subarray(first.headerSize, Math.min(first.size, first.head.length)),
+  );
+  if (!mime) return null;
+  let at = first.size;
+  while (at < size) {
+    const box = await headerAt(at);
+    if (!box) return null;
+    if (box.type === "moov") {
+      if (box.size > MOOV_MAX_BYTES) return null;
+      const moov = new Uint8Array(await file.slice(at + box.headerSize, at + box.size).arrayBuffer());
+      return probeMoov(moov, mime);
+    }
+    at += box.size;
+  }
+  return null;
+}
+
+/** The file extension a stored video gets. */
+export const VIDEO_EXTENSION: Record<ProbedVideo["mime"], string> = {
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
 };

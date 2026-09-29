@@ -118,6 +118,7 @@ const SHOWN_PARAMS: Partial<Record<string, readonly string[]>> = {
   "image.asset": ["assetIds"],
   "image.generate": ["model", "prompt", "size", "resolution", "quality", "batch", "seed"],
   "image.variations": ["strategy", "count", "model", "models", "prompts", "size", "resolution", "quality"],
+  "video.generate": ["model", "prompt", "size", "resolution", "seconds", "sound", "cameraFixed", "seed"],
   note: ["text"],
   text: ["text"],
   shape: ["shape", "text"],

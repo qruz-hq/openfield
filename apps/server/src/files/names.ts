@@ -6,7 +6,13 @@ import type { AssetRow } from "@openfield/db";
 
 type Named = Pick<AssetRow, "id" | "createdAt" | "modelId" | "kind" | "mime">;
 
-const EXTENSIONS: Record<string, string> = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" };
+const EXTENSIONS: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+  "video/mp4": "mp4",
+  "video/quicktime": "mov",
+};
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const extensionOf = (mime: string) => EXTENSIONS[mime] ?? (mime.split("/")[1]?.replace(/\W+/g, "") || "bin");
@@ -14,7 +20,7 @@ const extensionOf = (mime: string) => EXTENSIONS[mime] ?? (mime.split("/")[1]?.r
 const shortId = (id: string) => id.slice(-6).toLowerCase();
 const day = (at: Date) => `${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}`;
 
-/** A single download: "openfield_20260924-1432_gemini-3-pro-image_7k2m9q.png". */
+/** A single download: "openfield_20260924-1432_gemini-3-pro-image_7k2m9q.png", or ".mp4" for a video. */
 export function downloadName(asset: Named): string {
   const at = new Date(asset.createdAt);
   const made = (asset.modelId ?? asset.kind).replace(/[^A-Za-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "");

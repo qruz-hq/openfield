@@ -21,6 +21,8 @@ export async function resolveImage(ctx: ToolContext, ref: string): Promise<Asset
   if (ULID_RE.test(value)) {
     const row = getAsset(ctx.svc.db, value);
     if (!row) throw new Refusal(`There's no image with the id ${value} in the library.`);
+    // Agents' tools work on images; a video can't be a reference or an edit's base.
+    if (row.modality === "video") throw new Refusal(`${value} is a video, not an image.`);
     return row;
   }
   if (/^https?:\/\//i.test(value)) return upload(ctx, await download(value));

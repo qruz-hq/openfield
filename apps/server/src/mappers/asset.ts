@@ -2,6 +2,7 @@ import {
   type Asset,
   type AssetListItem,
   assetFileUrl,
+  assetPosterUrl,
   assetThumbUrl,
   type Folder,
   type Modality,
@@ -21,14 +22,22 @@ const FEED_THUMB = { h: 456 } as const;
  */
 export function toAssetListItem(row: AssetRow, isFavourite: boolean, rerun: boolean): AssetListItem {
   const trashed = row.deletedAt !== null;
+  const video = row.modality === "video";
   return {
     id: row.id,
     kind: row.kind,
     jobSetId: row.jobSetId,
     jobId: row.jobId,
+    modality: row.modality as Modality,
     width: row.width,
     height: row.height,
     mime: row.mime,
+    // A video's own fields; an image leaves them out, so image payloads read as they always did.
+    ...(video && {
+      durationMs: row.durationMs,
+      hasAudio: row.hasAudio,
+      posterUrl: row.posterPath ? assetPosterUrl(row.id) + (trashed ? "?trash=1" : "") : null,
+    }),
     sha256: row.sha256,
     providerId: row.providerId,
     modelId: row.modelId,
@@ -46,7 +55,6 @@ export function toAssetListItem(row: AssetRow, isFavourite: boolean, rerun: bool
 export function toAsset(row: AssetRow, isFavourite: boolean, rerun: boolean): Asset {
   return {
     ...toAssetListItem(row, isFavourite, rerun),
-    modality: row.modality as Modality,
     bytes: row.bytes,
     seed: row.seed,
     params: row.params,

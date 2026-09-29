@@ -16,8 +16,8 @@ import { jobSetViews } from "../services/job-sets";
 
 export const jobSetsRoutes = new Hono<Env>()
   .get("/job-sets", zValidator("query", jobSetsListQuerySchema, onInvalid), (c) => {
-    const { status, cursor, limit } = c.req.valid("query");
-    const page = listJobSets(c.var.svc.db, { status, cursor, limit });
+    const { status, modality, cursor, limit } = c.req.valid("query");
+    const page = listJobSets(c.var.svc.db, { status, modality, cursor, limit });
     const body: JobSetsListResponse = {
       items: jobSetViews(c.var.svc.db, page.items),
       nextCursor: page.nextCursor,

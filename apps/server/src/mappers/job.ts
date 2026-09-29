@@ -7,11 +7,12 @@ import {
   type Job,
   type JobSet,
   type JobSetWithJobs,
+  type Modality,
   type NormalizedRequest,
   type PixelSize,
 } from "@openfield/core";
 import type { AssetRow, JobRow, JobSetRow, ProviderBatchRow } from "@openfield/db";
-import { resolveSize } from "@openfield/providers/manifest";
+import { plannedVideoSize, resolveSize } from "@openfield/providers/manifest";
 import { modelKeyOf } from "./asset";
 
 // Job set and job rows to wire shapes (§8.3.1).
@@ -22,6 +23,7 @@ export function toJobSet(row: JobSetRow): JobSet {
     status: row.status,
     op: row.op,
     model: modelKeyOf(row.providerId, row.modelId),
+    modality: row.modality as Modality,
     batchSize: row.batchSize,
     prompt: row.prompt,
     promptOriginal: row.promptOriginal,
@@ -47,6 +49,8 @@ export function toJobSet(row: JobSetRow): JobSet {
 export function plannedSize(request: NormalizedRequest): PixelSize {
   const size = request.size;
   if ("width" in size) return { width: size.width, height: size.height };
+  // A video's shape at its own resolution: 720p is 1280×720 at 16:9, whatever image tiers say.
+  if (request.video?.resolution) return plannedVideoSize(size.aspect, request.video.resolution);
   return resolveSize(size.aspect, request.resolution ?? "1K");
 }
 

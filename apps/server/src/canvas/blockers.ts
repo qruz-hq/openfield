@@ -21,6 +21,8 @@ export function blockerMessage(blocker: NodeBlocker, providers: readonly Provide
       return t("canvas.nodes.blocked.noReferences");
     case "too_many_references":
       return t("canvas.nodes.blocked.tooManyReferences", { max: blocker.max });
+    case "end_frame_unsupported":
+      return t("canvas.nodes.blocked.noEndFrame");
     case "no_prompt":
       return t("canvas.nodes.blocked.noPrompt");
     case "missing_input":
