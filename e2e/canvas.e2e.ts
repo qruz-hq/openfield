@@ -1,6 +1,6 @@
 import { type APIRequestContext, expect, type Locator, type Page, test } from "@playwright/test";
 import type { CanvasDetail, CanvasTemplate } from "../packages/core/src/schemas/canvas.ts";
-import { api, FAKE_KEY, libraryRoot, queryDb, SESSION_HEADER, sessionToken } from "./support";
+import { api, FAKE_KEY, libraryRoot, makeImage, queryDb, SESSION_HEADER, sessionToken } from "./support";
 
 // M4 on fake models: a template runs end to end, a second Run all with nothing changed makes no
 // new images, a reload keeps the graph, and an uploaded photo reaches the model as a reference.
@@ -1169,4 +1169,94 @@ test("a locked frame keeps its nodes inside and takes nothing new", async ({ pag
   await page.keyboard.press("Backspace");
   await expect(toastWith(page, "2 locked nodes stayed. Unlock them to delete them.")).toBeVisible();
   await expect(pane(page).locator(".react-flow__node")).toHaveCount(3);
+});
+
+// The Assets node's picker (design q31cb): Favorites first, picked in order, reachable by keyboard.
+
+const assetsNode = (page: Page) => pane(page).locator(".react-flow__node-image\\.asset");
+const picker = (page: Page) => page.getByRole("dialog", { name: "Choose images" });
+
+test("picking in order, removing from the Picked list, and reopening starts from what's there", async ({
+  page,
+  request,
+}) => {
+  const token = await sessionToken(request);
+  const [a, b] = [
+    await makeImage(request, token, "a lantern at dusk"),
+    await makeImage(request, token, "a paper boat"),
+  ];
+  for (const id of [a, b]) await api(request, token, "PUT", `/api/assets/${id}/favourite`);
+
+  await openWith(page, request, [{ id: "n", type: "image.asset", x: 200, y: 200 }]);
+  await assetsNode(page).getByRole("button", { name: "Choose images" }).click();
+  await expect(picker(page)).toBeVisible();
+
+  // Favorites is open by default, with both just-favourited images in it.
+  await expect(picker(page).getByRole("button", { name: "Favorites" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  const thumb = (prompt: string) => picker(page).getByRole("button", { name: prompt });
+  await expect(thumb("a lantern at dusk")).toBeVisible();
+  await expect(thumb("a paper boat")).toBeVisible();
+
+  // Pick the newer one (paper boat) first, then the lantern: the Picked list keeps that order.
+  await thumb("a paper boat").click();
+  await thumb("a lantern at dusk").click();
+  await expect(picker(page).getByText("Picked · 2")).toBeVisible();
+  const pickedRows = picker(page).getByRole("list", { name: "Picked images" }).getByRole("listitem");
+  await expect(pickedRows).toHaveCount(2);
+  await expect(pickedRows.nth(0)).toContainText("a paper boat");
+  await expect(pickedRows.nth(1)).toContainText("a lantern at dusk");
+
+  // Alt+ArrowDown on the first row's grip moves it after the second, without a mouse.
+  await pickedRows
+    .nth(0)
+    .getByRole("button", { name: /^Reorder/ })
+    .focus();
+  await page.keyboard.press("Alt+ArrowDown");
+  await expect(pickedRows.nth(0)).toContainText("a lantern at dusk");
+  await expect(pickedRows.nth(1)).toContainText("a paper boat");
+
+  // Removing the lantern leaves just the boat, order badge back to 1.
+  await pickedRows
+    .nth(0)
+    .getByRole("button", { name: /^Remove/ })
+    .click();
+  await expect(picker(page).getByText("Picked · 1")).toBeVisible();
+  await expect(thumb("a paper boat")).toHaveAttribute("aria-pressed", "true");
+
+  await picker(page).getByRole("button", { name: "Add 1 image" }).click();
+  await expect(picker(page)).toHaveCount(0);
+  await expect(assetsNode(page).getByText("1 image")).toBeVisible();
+
+  // Reopening (now "Change") starts from what the node has, not empty.
+  await assetsNode(page).getByRole("button", { name: "Change" }).click();
+  await expect(picker(page).getByText("Picked · 1")).toBeVisible();
+  await expect(thumb("a paper boat")).toHaveAttribute("aria-pressed", "true");
+});
+
+test("a folder in Places browses that folder, and Cancel changes nothing on the node", async ({
+  page,
+  request,
+}) => {
+  const token = await sessionToken(request);
+  const id = await makeImage(request, token, "a rowboat on the lake");
+  const folder = await api<{ id: string }>(request, token, "POST", "/api/folders", { name: "Boats" });
+  await api(request, token, "PUT", `/api/assets/${id}/folders/${folder.id}`);
+
+  await openWith(page, request, [{ id: "n", type: "image.asset", x: 200, y: 200 }]);
+  await assetsNode(page).getByRole("button", { name: "Choose images" }).click();
+  await expect(picker(page)).toBeVisible();
+
+  await picker(page).getByRole("button", { name: "Boats" }).click();
+  await expect(picker(page).getByRole("button", { name: "Boats" })).toHaveAttribute("aria-pressed", "true");
+  const thumb = picker(page).getByRole("button", { name: "a rowboat on the lake" });
+  await expect(thumb).toBeVisible();
+  await thumb.click();
+  await expect(picker(page).getByText("Picked · 1")).toBeVisible();
+
+  await picker(page).getByRole("button", { name: "Cancel" }).click();
+  await expect(picker(page)).toHaveCount(0);
+  await expect(assetsNode(page).getByText("Pick from your library")).toBeVisible();
 });
