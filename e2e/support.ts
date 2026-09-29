@@ -107,3 +107,42 @@ export async function makeImage(request: APIRequestContext, token: string, promp
     .not.toBeNull();
   return assetId!;
 }
+
+export const SEEDANCE = "byteplus:dreamina-seedance-2-0-fast-260128";
+
+/** Adds the fake BytePlus key and makes one video through the API. Returns the new video's row id. */
+export async function makeVideo(
+  request: APIRequestContext,
+  token: string,
+  prompt: string,
+  video: Record<string, unknown> = {},
+): Promise<string> {
+  await api(request, token, "PUT", "/api/settings/keys/byteplus", { apiKey: FAKE_KEY });
+  const accepted = await api<{ jobSet: { id: string } }>(request, token, "POST", "/api/generate", {
+    idempotencyKey: newId(),
+    model: SEEDANCE,
+    op: "generate",
+    prompt,
+    size: { kind: "aspect", ratio: "16:9" },
+    batch: 1,
+    video,
+    source: "api",
+  });
+  let assetId: string | null = null;
+  await expect
+    .poll(
+      async () => {
+        const sets = await api<{ items: { jobSet: { id: string }; jobs: { assetId: string | null }[] }[] }>(
+          request,
+          token,
+          "GET",
+          "/api/job-sets?status=all&modality=video",
+        );
+        assetId = sets.items.find((s) => s.jobSet.id === accepted.jobSet.id)?.jobs[0]?.assetId ?? null;
+        return assetId;
+      },
+      { timeout: 20_000 },
+    )
+    .not.toBeNull();
+  return assetId!;
+}
