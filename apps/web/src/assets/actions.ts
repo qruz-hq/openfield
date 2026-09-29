@@ -16,6 +16,7 @@ import { errorMessage } from "../api/raw";
 import { downloadOriginal } from "../detail/actions";
 import { useReuse } from "../image/composer/use-reuse";
 import { notify, notifyError } from "../lib/notify";
+import { useVideoReuse } from "../video/composer/use-reuse";
 import { confirm } from "./confirm";
 import { useSelection } from "./selection";
 
@@ -37,6 +38,7 @@ export function useLibraryActions() {
   const removeFromFolderMutation = useRemoveFromFolder();
   const recreateJobSet = useRecreateJobSet();
   const reuseRun = useReuse();
+  const reuseVideoRun = useVideoReuse();
   const retention = settings.data?.trashRetentionDays ?? null;
 
   const favourite = useCallback(
@@ -210,26 +212,35 @@ export function useLibraryActions() {
     }
   }, []);
 
-  /** Reuse (§0.1): the prompt and model go into the composer on the Image page. Nothing runs. */
+  /** Reuse (§0.1): the prompt and model go into the right composer, Image or Video. Nothing runs. */
   const reuse = useCallback(
     (item: AssetListItem) => {
-      navigate("/image");
+      const isVideo = item.modality === "video";
+      navigate(isVideo ? "/video" : "/image");
       const model = item.providerId && item.modelId ? `${item.providerId}:${item.modelId}` : "";
-      // After the Image page mounts, so the composer is there to take focus.
-      requestAnimationFrame(() => reuseRun({ prompt: item.prompt, model }));
+      // After the page mounts, so the composer is there to take focus.
+      requestAnimationFrame(() =>
+        isVideo ? reuseVideoRun({ prompt: item.prompt, model }) : reuseRun({ prompt: item.prompt, model }),
+      );
     },
-    [navigate, reuseRun],
+    [navigate, reuseRun, reuseVideoRun],
   );
 
-  /** Recreate replays the run that made it; the new images land in the feed and All images. */
+  /** Recreate replays the run that made it; the new images or videos land in the feed and All. */
   const recreate = useCallback(
     (item: AssetListItem) => {
       if (!item.jobSetId) return;
+      const isVideo = item.modality === "video";
       recreateJobSet.mutate(item.jobSetId, {
         onSuccess: (set) =>
-          notify(t("assets.toast.recreating", { count: set.jobs.length }), {
-            action: { label: t("actions.show"), onClick: () => navigate("/image") },
-          }),
+          notify(
+            t(isVideo ? "assets.toast.recreatingVideo" : "assets.toast.recreating", {
+              count: set.jobs.length,
+            }),
+            {
+              action: { label: t("actions.show"), onClick: () => navigate(isVideo ? "/video" : "/image") },
+            },
+          ),
         onError: (error) => notifyError(errorMessage(error)),
       });
     },
