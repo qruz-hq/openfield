@@ -35,6 +35,7 @@ const suites: { name: string; testMatch: string; env?: Record<string, string> }[
   // Live edits from the server, with the fake-mode agent stand-in (§7.11).
   { name: "live", testMatch: "live.e2e.ts" },
   { name: "assets", testMatch: "assets.e2e.ts" },
+  { name: "feed-tile", testMatch: "feed-tile.e2e.ts" },
   { name: "spending", testMatch: "spending.e2e.ts" },
   { name: "openai", testMatch: "openai.e2e.ts" },
   { name: "higgsfield", testMatch: "higgsfield.e2e.ts" },

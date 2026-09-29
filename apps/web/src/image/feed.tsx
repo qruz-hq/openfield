@@ -1,6 +1,7 @@
 import { type ModelListItem, THUMB_RUNGS, t } from "@openfield/core";
 import { Button } from "@openfield/ui";
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { LibraryActions } from "../assets/actions";
 import { useReveal } from "../lib/reveal";
 import type { FeedItem } from "./feed-items";
 import { solveRows } from "./rows";
@@ -18,6 +19,7 @@ export interface FeedProps {
   loadingMore: boolean;
   loadMoreFailed: boolean;
   onLoadMore: () => void;
+  actions: LibraryActions;
 }
 
 const ratioOf = (item: FeedItem) =>
@@ -46,6 +48,7 @@ export function Feed({
   loadingMore,
   loadMoreFailed,
   onLoadMore,
+  actions,
 }: FeedProps) {
   const rung = THUMB_RUNGS[zoom] ?? THUMB_RUNGS[3];
   const container = useRef<HTMLDivElement>(null);
@@ -103,6 +106,7 @@ export function Feed({
                   rung={rung}
                   model={modelName(item.asset.providerId, item.asset.modelId)}
                   rerun={item.rerun}
+                  actions={actions}
                   style={style}
                 />
               ) : (

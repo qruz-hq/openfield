@@ -18,6 +18,7 @@ import {
 import { nearestRatio } from "@openfield/providers/manifest";
 import {
   Button,
+  cn,
   IconButton,
   KeyValueList,
   KeyValueRow,
@@ -38,8 +39,12 @@ import {
 import {
   ArrowUpRight,
   CircleAlert,
+  Download,
   Eye,
+  FolderPlus,
   HardDrive,
+  Heart,
+  Image as ImageIcon,
   KeyRound,
   type LucideIcon,
   RefreshCcw,
@@ -62,10 +67,13 @@ import {
 import { useProviders } from "../api/hooks/keys";
 import { useSpeedName } from "../api/hooks/provider-settings";
 import { ApiError, errorMessage } from "../api/raw";
+import type { LibraryActions } from "../assets/actions";
+import { AddToFolderPopover } from "../assets/add-to-folder";
 import { detailTarget, useIsLastViewed, useOpenDetail } from "../detail";
 import { useDismissed, useLive } from "../lib/live";
 import { notify, notifyError } from "../lib/notify";
 import { companyName, logoFor, providerOfKey } from "../lib/provider";
+import { useAddReference } from "./composer/use-reference";
 import { useReuse } from "./composer/use-reuse";
 import {
   endedWithoutImage,
@@ -78,7 +86,9 @@ import {
 } from "./feed-items";
 
 // Feed / Tile / {Idle, Generating, Queued, Waiting at provider, Failed}. Radius 0: the image is the
-// tile (§2.4).
+// tile (§2.4). Idle's hover (design sZjeU, Favorited FYmuP, badge nPfg4): favourite, download,
+// recreate, add to folder and Use as reference, over a scrim, with the model caption. No cost in
+// the caption yet - a plain asset the feed lists doesn't carry what its run was billed.
 
 interface TileBox {
   style: CSSProperties;
@@ -99,11 +109,21 @@ export function AssetTile({
   rung,
   model,
   rerun = false,
+  actions,
   style,
-}: TileBox & { asset: AssetListItem; rung: number; model?: string; rerun?: boolean }) {
+}: TileBox & {
+  asset: AssetListItem;
+  rung: number;
+  model?: string;
+  rerun?: boolean;
+  /** Favourite, download, recreate and Add to folder: the same actions every card in the app shares. */
+  actions: LibraryActions;
+}) {
   const image = useAuthedImage(thumbPath(asset, rung));
   const openDetail = useOpenDetail();
   const lastViewed = useIsLastViewed(asset.id);
+  const addReference = useAddReference();
+  const [filing, setFiling] = useState(false);
   const label = t("feed.tile.label", {
     prompt: asset.prompt.trim() ? truncate(asset.prompt, 80) : t("feed.tile.noPrompt"),
     model: model ?? asset.modelId ?? "",
@@ -111,11 +131,17 @@ export function AssetTile({
   });
   // The pill is too short to warn about billing, so the name carries it for a screen reader.
   const name = rerun ? `${label}. ${t("feed.tile.rerunLabel")}` : label;
+  const logo = logoFor(asset.providerId ?? undefined);
+  const modelLabel = model ?? asset.modelId ?? "";
+  // Faded out by its own opacity, but the group's hover/focus still reaches it: with the mouse it
+  // never gets a click before the hover reveals it; a keyboard Tab lands on it and reveals the rest.
+  const idle = "opacity-100 transition-opacity group-hover:opacity-0 group-focus-within:opacity-0";
+
   return (
     <li
       aria-label={name}
       data-job-set={asset.jobSetId ?? undefined}
-      className={`${box} bg-elevated`}
+      className={`${box} group bg-elevated`}
       style={style}
     >
       {image.status === "ready" ? (
@@ -129,13 +155,23 @@ export function AssetTile({
         />
       ) : null}
       {lastViewed || rerun ? (
-        // One row at 10,10: the eye badge, then the note 8 after it (design MKHsL).
+        // One row at 10,10: the eye badge, then the note 8 after it (design MKHsL). The hover
+        // overlay takes this corner over, so it steps aside while that's up.
         <span
           aria-hidden
-          className="pointer-events-none absolute top-10 left-10 flex max-w-[calc(100%-20px)] items-center gap-8"
+          className={cn(
+            "pointer-events-none absolute top-10 left-10 flex max-w-[calc(100%-20px)] items-center gap-8",
+            idle,
+          )}
         >
           {lastViewed ? <LastViewedBadge /> : null}
           {rerun ? <RerunNote /> : null}
+        </span>
+      ) : null}
+      {/* Feed / Tile / Favorite badge (design nPfg4): at rest only, the hover actions say it once hovered. */}
+      {asset.isFavourite ? (
+        <span aria-hidden className={cn("pointer-events-none absolute right-10 bottom-10", idle)}>
+          <FavoriteBadge />
         </span>
       ) : null}
       {/* A plain click opens the detail view (§4.0); it takes focus back when that closes. */}
@@ -146,6 +182,74 @@ export function AssetTile({
         onClick={() => openDetail(asset.id)}
         className="absolute inset-0 cursor-pointer focus-visible:-outline-offset-2"
       />
+      {/*
+       * Feed / Tile / Hover (design sZjeU, Favorited FYmuP): a scrim, the actions column, the
+       * model caption and Use as reference. The scrim never catches a click itself (it would block
+       * the button above for the plain "open" click); only its own buttons do.
+       */}
+      <div className="pointer-events-none absolute inset-0 bg-scrim opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
+        <div className="pointer-events-auto absolute top-10 right-10 flex flex-col gap-4">
+          <IconButton
+            variant="overlay"
+            size={38}
+            icon={Heart}
+            label={asset.isFavourite ? t("feed.tile.actions.unfavorite") : t("feed.tile.actions.favorite")}
+            aria-pressed={asset.isFavourite}
+            // Filled accent when on, the same look every favourite toggle in the app uses.
+            className={cn(asset.isFavourite && "text-accent [&>svg]:fill-current")}
+            onClick={() => actions.favourite([asset.id], !asset.isFavourite)}
+          />
+          <IconButton
+            variant="overlay"
+            size={38}
+            icon={Download}
+            label={t("feed.tile.actions.download")}
+            onClick={() => void actions.download([asset])}
+          />
+          {/* An uploaded image never ran, so it has nothing to recreate. */}
+          {asset.jobSetId ? (
+            <IconButton
+              variant="overlay"
+              size={38}
+              icon={RefreshCw}
+              label={t("feed.tile.actions.recreate")}
+              onClick={() => actions.recreate(asset)}
+            />
+          ) : null}
+          <AddToFolderPopover
+            ids={[asset.id]}
+            open={filing}
+            onOpenChange={setFiling}
+            side="left"
+            align="start"
+          >
+            <IconButton
+              variant="overlay"
+              size={38}
+              icon={FolderPlus}
+              label={t("feed.tile.actions.addToFolder")}
+            />
+          </AddToFolderPopover>
+        </div>
+        <div className="pointer-events-none absolute inset-x-10 bottom-20 flex flex-col items-start gap-16">
+          {modelLabel ? (
+            logo ? (
+              <ModelCaption provider={logo} name={modelLabel} onImage />
+            ) : (
+              <span className="text-micro font-medium text-overlay-fg">{modelLabel}</span>
+            )
+          ) : null}
+          <Button
+            variant="primary"
+            size="s"
+            icon={ImageIcon}
+            className="pointer-events-auto"
+            onClick={() => addReference(asset.id)}
+          >
+            {t("feed.tile.actions.useAsReference")}
+          </Button>
+        </div>
+      </div>
     </li>
   );
 }
@@ -159,11 +263,19 @@ function LastViewedBadge() {
   );
 }
 
+/** Feed / Tile / Favorite badge (design nPfg4): the Last viewed badge's box, a filled accent heart. */
+function FavoriteBadge() {
+  return (
+    <span className="flex size-24 shrink-0 items-center justify-center rounded-full bg-overlay inset-ring inset-ring-overlay-line backdrop-blur-chip">
+      <Heart size={13} className="fill-current text-accent" />
+    </span>
+  );
+}
+
 /**
  * Pill / Tile note / Ran again (design MKHsL): the Last viewed badge's treatment, dark in both
- * themes because it sits on the image. It belongs to the idle tile: hover and selection put the
- * checkbox in this corner (§2.4). The tile has neither state yet: when they come, hide the badge
- * row on hover and selection.
+ * themes because it sits on the image. It belongs to the idle tile: the hover actions take this
+ * corner over (a future Select checkbox would too), so it steps aside while either is up.
  */
 function RerunNote() {
   return (
