@@ -3,7 +3,8 @@ import { generateSpec } from "@openfield/canvas/nodes/generate/spec";
 import { promptSpec } from "@openfield/canvas/nodes/prompt/spec";
 import { uploadSpec } from "@openfield/canvas/nodes/upload/spec";
 import { variationsSpec } from "@openfield/canvas/nodes/variations/spec";
-import { Images, LayoutGrid, Sparkles, Type, Upload } from "lucide-react";
+import { videoSpec } from "@openfield/canvas/nodes/video/spec";
+import { Film, Images, LayoutGrid, Sparkles, Type, Upload } from "lucide-react";
 import { AssetsNode } from "./assets/assets-node";
 import { generateBox, generateRest } from "./generate/card-media";
 import { GenerateInspector } from "./generate/generate-inspector";
@@ -14,10 +15,13 @@ import { UploadNode } from "./upload/upload-node";
 import { variationsBoxOf, variationsRest } from "./variations/box";
 import { VariationsInspector } from "./variations/variations-inspector";
 import { VariationsNode } from "./variations/variations-node";
+import { videoBox, videoRest } from "./video/card-media";
+import { VideoInspector } from "./video/video-inspector";
+import { VideoNode } from "./video/video-node";
 
-// Data node definitions, in catalogue order: Prompt, Upload, Assets, Generate, Variations. Each is
-// its pure spec (@openfield/canvas, which the engine, its tests and the server use) plus its icon
-// and React parts.
+// Data node definitions, in catalogue order: Prompt, Upload, Assets, Generate, Variations, Video.
+// Each is its pure spec (@openfield/canvas, which the engine, its tests and the server use) plus
+// its icon and React parts.
 // Edit (M4-19) and Style (M4-20) join this list when they ship; until then a saved node of either
 // type opens as the editor's placeholder and saves back unchanged.
 
@@ -40,5 +44,13 @@ export const DATA_NODES: readonly NodeDefinition[] = [
     rest: variationsRest,
     Component: VariationsNode,
     Inspector: VariationsInspector,
+  }),
+  defineNode({
+    ...videoSpec,
+    icon: Film,
+    box: videoBox,
+    rest: videoRest,
+    Component: VideoNode,
+    Inspector: VideoInspector,
   }),
 ];
