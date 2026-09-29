@@ -7,6 +7,7 @@ import { useProviders } from "../api/hooks/keys";
 import { useModels } from "../api/hooks/models";
 import { useSettings, useUpdateSettings } from "../api/hooks/settings";
 import { errorMessage } from "../api/raw";
+import { useLibraryActions } from "../assets/actions";
 import { DetailView } from "../detail";
 import { buildFeed } from "../image/feed-items";
 import { FilterBar } from "../image/filter-bar";
@@ -31,6 +32,7 @@ export function VideoPage() {
   const updateSettings = useUpdateSettings();
   const assets = useAssets("all", { modality: "video" });
   const jobSets = useJobSets({ poll: !connected, modality: "video" });
+  const actions = useLibraryActions();
   const zoom = settings.data?.feedZoom ?? DEFAULT_FEED_ZOOM;
 
   const items = useMemo(
@@ -84,6 +86,7 @@ export function VideoPage() {
           loadingMore={assets.isFetchingNextPage}
           loadMoreFailed={assets.isFetchNextPageError}
           onLoadMore={loadMore}
+          actions={actions}
         />
       </>
     );

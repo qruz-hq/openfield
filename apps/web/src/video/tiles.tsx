@@ -6,7 +6,6 @@ import {
   formatDate,
   type Job,
   type JobSet,
-  type JobSetWithJobs,
   type ModelListItem,
   t,
 } from "@openfield/core";
@@ -15,9 +14,6 @@ import { Button, IconButton, ModelCaption, TileCancelPill, TileStatusPill } from
 import {
   ArrowUpRight,
   CircleAlert,
-  Download,
-  FolderPlus,
-  Heart,
   KeyRound,
   type LucideIcon,
   Pause,
@@ -31,16 +27,14 @@ import {
 import { type CSSProperties, useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useAuthedImage } from "../api/hooks/images";
-import { useCancelJob, useRecreateJobSet, useRetryJobSet } from "../api/hooks/job-sets";
+import { useCancelJob, useRetryJobSet } from "../api/hooks/job-sets";
 import { useProviders } from "../api/hooks/keys";
-import { useSetFavourite } from "../api/hooks/library";
 import { useAuthedVideo } from "../api/hooks/videos";
 import { ApiError, errorMessage } from "../api/raw";
-import { AddToFolderPopover } from "../assets/add-to-folder";
+import type { LibraryActions } from "../assets/actions";
 import { detailTarget, useIsLastViewed, useOpenDetail } from "../detail";
-import { downloadOriginal } from "../detail/actions";
 import { endedWithoutImage, failedAction, jobTileState, type WaitKind, waitKind } from "../image/feed-items";
-import { type JobTileProps, WaitingTile } from "../image/tiles";
+import { type JobTileProps, TileActions, WaitingTile } from "../image/tiles";
 import { useDismissed, useLive } from "../lib/live";
 import { notify, notifyError } from "../lib/notify";
 import { companyName, logoFor, providerOfKey } from "../lib/provider";
@@ -86,18 +80,22 @@ export function VideoAssetTile({
   asset,
   rung,
   model,
+  actions,
   style,
-}: TileBox & { asset: AssetListItem; rung: number; model?: string }) {
+}: TileBox & {
+  asset: AssetListItem;
+  rung: number;
+  model?: string;
+  /** Favourite, download, recreate and Add to folder: the same actions column the image feed's tiles share. */
+  actions: LibraryActions;
+}) {
   const [hovered, setHovered] = useState(false);
   const [muted, setMuted] = useState(true);
   const [progress, setProgress] = useState({ current: 0, total: (asset.durationMs ?? 0) / 1000 });
-  const [filing, setFiling] = useState(false);
   const poster = useAuthedImage(thumbPath(asset, rung));
   const clip = useAuthedVideo(hovered ? asset.fileUrl : null);
   const openDetail = useOpenDetail();
   const lastViewed = useIsLastViewed(asset.id);
-  const setFavourite = useSetFavourite();
-  const recreate = useRecreateJobSet();
   const logo = logoFor(asset.providerId ?? undefined);
   const seconds = asset.durationMs ? asset.durationMs / 1000 : null;
 
@@ -174,62 +172,12 @@ export function VideoAssetTile({
             icon={muted ? VolumeX : Volume2}
             label={muted ? t("video.controls.unmute") : t("video.controls.mute")}
             aria-pressed={muted}
-            onClick={(event) => {
-              event.stopPropagation();
-              setMuted((m) => !m);
-            }}
+            onClick={() => setMuted((m) => !m)}
             className="absolute top-10 left-10"
           />
-          <div className="absolute top-10 right-10 flex flex-col gap-4">
-            <IconButton
-              variant="overlay"
-              size={38}
-              icon={Heart}
-              label={asset.isFavourite ? t("assets.card.unfavorite") : t("assets.card.favorite")}
-              aria-pressed={asset.isFavourite}
-              className={asset.isFavourite ? "text-accent [&>svg]:fill-current" : undefined}
-              onClick={(event) => {
-                event.stopPropagation();
-                setFavourite.mutate({ ids: [asset.id], on: !asset.isFavourite });
-              }}
-            />
-            <IconButton
-              variant="overlay"
-              size={38}
-              icon={Download}
-              label={t("assets.card.download")}
-              onClick={(event) => {
-                event.stopPropagation();
-                void downloadOriginal(asset).catch((error: unknown) => notifyError(errorMessage(error)));
-              }}
-            />
-            {asset.jobSetId ? (
-              <IconButton
-                variant="overlay"
-                size={38}
-                icon={RefreshCw}
-                label={t("feed.tile.menu.recreate")}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  const jobSetId = asset.jobSetId!;
-                  recreate.mutateAsync(jobSetId).then(
-                    (set: JobSetWithJobs) =>
-                      notify(t("assets.toast.recreatingVideo", { count: set.jobs.length })),
-                    (error: unknown) => notifyError(errorMessage(error)),
-                  );
-                }}
-              />
-            ) : null}
-            <AddToFolderPopover ids={[asset.id]} open={filing} onOpenChange={setFiling}>
-              <IconButton
-                variant="overlay"
-                size={38}
-                icon={FolderPlus}
-                label={t("assets.detail.addToFolder")}
-                onClick={(event) => event.stopPropagation()}
-              />
-            </AddToFolderPopover>
-          </div>
+          {/* Same actions column the image feed's tiles use (../image/tiles.tsx): favourite,
+              download, recreate, add to folder. */}
+          <TileActions asset={asset} actions={actions} />
           <div className="pointer-events-none absolute bottom-10 left-10 flex max-w-[calc(100%-96px)] items-center gap-6">
             {logo ? (
               <ModelCaption provider={logo} name={model ?? asset.modelId ?? ""} />

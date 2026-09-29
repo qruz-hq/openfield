@@ -1,6 +1,7 @@
 import { type ModelListItem, THUMB_RUNGS, t } from "@openfield/core";
 import { Button } from "@openfield/ui";
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { LibraryActions } from "../assets/actions";
 import type { FeedItem } from "../image/feed-items";
 import { solveRows } from "../image/rows";
 import { useReveal } from "../lib/reveal";
@@ -18,6 +19,8 @@ export interface VideoFeedProps {
   loadingMore: boolean;
   loadMoreFailed: boolean;
   onLoadMore: () => void;
+  /** Favourite, download, recreate and Add to folder: the same actions the image feed's tiles share. */
+  actions: LibraryActions;
 }
 
 const ratioOf = (item: FeedItem) =>
@@ -45,6 +48,7 @@ export function VideoFeed({
   loadingMore,
   loadMoreFailed,
   onLoadMore,
+  actions,
 }: VideoFeedProps) {
   const rung = THUMB_RUNGS[zoom] ?? THUMB_RUNGS[3];
   const container = useRef<HTMLDivElement>(null);
@@ -97,6 +101,7 @@ export function VideoFeed({
                   asset={item.asset}
                   rung={rung}
                   model={modelName(item.asset.providerId, item.asset.modelId)}
+                  actions={actions}
                   style={style}
                 />
               ) : (
