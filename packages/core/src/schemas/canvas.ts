@@ -25,7 +25,7 @@ import {
 } from "./common";
 import { costEstimateSchema } from "./cost";
 import { errorEnvelopeSchema } from "./errors";
-import { generateRequestSchema } from "./request";
+import { generateRequestSchema, videoRequestSchema } from "./request";
 
 // Canvas routes (§8.3). The document itself lives in ../canvas.
 
@@ -155,6 +155,8 @@ export const canvasRunCallSchema = generateRequestSchema
   })
   .extend({
     op: z.enum(["generate", "variation", "edit", "inpaint"]),
+    /** A video's settings. Its frames come from the item's inputs, never from here. */
+    video: videoRequestSchema.omit({ startFrame: true, endFrame: true }).optional(),
     /** Caption for this call's images, e.g. the prompt line. */
     label: z.string().max(CANVAS_CALL_LABEL_MAX).optional(),
   });

@@ -15,6 +15,7 @@ import type {
   ReferenceRole,
   ResolutionTier,
   SizeSpec,
+  VideoRequest,
 } from "@openfield/core";
 import type { CanvasNodeResult } from "@openfield/core/canvas";
 import type { AskPrice, RunSpeed } from "@openfield/providers/manifest";
@@ -36,7 +37,10 @@ export type PortBinding =
   | { to: "prompt" }
   | { to: "references"; role: ReferenceRole }
   | { to: "base" }
-  | { to: "mask" };
+  | { to: "mask" }
+  /** A video's first and last frame (`video.startFrame`, `video.endFrame`). */
+  | { to: "start_frame" }
+  | { to: "end_frame" };
 
 export interface PortSpec {
   /** The React Flow handle id, stored on edges as sourceHandle / targetHandle. Never rename. */
@@ -94,11 +98,16 @@ export const PORT_SPACING = 36;
 // Context every pure engine function receives
 
 export interface EngineContext {
-  /** Enabled models with their manifests, from GET /api/models. */
+  /**
+   * Enabled models with their manifests, from GET /api/models: images only, or every modality
+   * (?modality=all). Each node keeps to the models that make what it makes.
+   */
   models: readonly ModelListItem[];
   model(key: string | null | undefined): ModelListItem | undefined;
-  /** settings.defaultModel, else the first model with a key. */
+  /** settings.defaultModel, else the first image model with a key. Image nodes start on it. */
   defaultModel: ModelKey | null;
+  /** The first video model with a key, else the first video model. The Video node starts on it. */
+  defaultVideoModel?: ModelKey | null;
   /** settings.defaultBatch: how many images a new Generate node makes. */
   defaultBatch?: number;
   /** settings.defaultAspect: written into a new node. A node without a size uses the model's default. */
@@ -153,6 +162,8 @@ export type NodeBlocker =
   | { kind: "no_prompt" }
   | { kind: "references_unsupported"; model: ModelKey }
   | { kind: "too_many_references"; model: ModelKey; max: number }
+  /** An end frame is connected, and this video model can't end on one. */
+  | { kind: "end_frame_unsupported"; model: ModelKey }
   /** Variations in Prompts or Models mode needs at least `min` entries. */
   | { kind: "needs_more"; what: "prompts" | "models"; min: number }
   /** A fan-out that would make more images than a run can (CANVAS_RUN_MAX_JOBS). */
@@ -202,6 +213,8 @@ export interface RunCall {
   size: SizeSpec;
   resolution?: ResolutionTier;
   quality?: string;
+  /** A video's settings; its frames come from the item's inputs. */
+  video?: Omit<VideoRequest, "startFrame" | "endFrame">;
   batch: number;
   /** null: the server picks seeds, only on models that take them (§0.11). */
   seed: number | null;
@@ -213,7 +226,7 @@ export interface RunCall {
 /** One image input of a plan item, bound into every request the node makes. */
 export interface RunInput {
   port: string;
-  to: "references" | "base" | "mask";
+  to: "references" | "base" | "mask" | "start_frame" | "end_frame";
   role?: ReferenceRole;
   arity: PortArity;
   values: ({ kind: "asset"; assetId: string } | { kind: "node"; nodeId: string; port: string })[];

@@ -53,6 +53,8 @@ export function blockerCopy(
         t("canvas.nodes.blocked.pickModel"),
         t("canvas.nodes.blocked.tooManyReferences", { max: blocker.max }),
       );
+    case "end_frame_unsupported":
+      return fix("pick_model", t("canvas.nodes.blocked.pickModel"), t("canvas.nodes.blocked.noEndFrame"));
     case "no_prompt":
       return plain(t("canvas.nodes.blocked.noPrompt"));
     case "missing_input":

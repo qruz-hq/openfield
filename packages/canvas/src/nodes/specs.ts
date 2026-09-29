@@ -5,6 +5,7 @@ import { promptSpec } from "./prompt/spec";
 import { createNodeRegistry, type NodeRegistry, type NodeSpec } from "./registry";
 import { uploadSpec } from "./upload/spec";
 import { variationsSpec } from "./variations/spec";
+import { videoSpec } from "./video/spec";
 
 // The node types without their React parts, in catalogue order. The engine's tests and the server
 // build a registry from these; the web app's registry adds icons and components (its catalogue.ts).
@@ -15,6 +16,7 @@ export const DATA_SPECS: readonly NodeSpec<object>[] = [
   assetsSpec,
   generateSpec,
   variationsSpec,
+  videoSpec,
 ] as unknown as readonly NodeSpec<object>[];
 
 export const ANNOTATION_SPECS: readonly NodeSpec<object>[] = [

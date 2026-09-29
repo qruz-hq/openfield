@@ -482,7 +482,8 @@ export const CANVAS_BLOCK_REASONS = [
   "upstream_failed",
 ] as const;
 export type CanvasBlockReason = (typeof CANVAS_BLOCK_REASONS)[number];
-export const CANVAS_INPUT_TARGETS = ["references", "base", "mask"] as const;
+/** Where an input's images go in a request. The frames are a video's start and end (`video.*Frame`). */
+export const CANVAS_INPUT_TARGETS = ["references", "base", "mask", "start_frame", "end_frame"] as const;
 export const CANVAS_PORT_ARITIES = ["single", "multi"] as const;
 export const CANVAS_VERSION_KINDS = [
   "auto",

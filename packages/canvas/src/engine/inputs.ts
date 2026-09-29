@@ -1,4 +1,10 @@
-import { type ModelKey, type ModelListItem, safeParseModelKey } from "@openfield/core";
+import {
+  type Modality,
+  type ModelKey,
+  type ModelListItem,
+  modalityOf,
+  safeParseModelKey,
+} from "@openfield/core";
 import type { EngineContext, NodeBlocker, PortValue, ResolvedInputs } from "./types";
 import { PROMPT_JOINER } from "./types";
 
@@ -37,10 +43,18 @@ export const planValue = (v: ImageValue) =>
 export const modelKeyOf = (key: ModelKey | undefined, ctx: EngineContext): ModelKey | null =>
   key ?? ctx.defaultModel;
 
-/** Why this model can't run right now, or null when it can. */
-export function modelBlocker(key: ModelKey | null, ctx: EngineContext): NodeBlocker | null {
+/**
+ * Why this model can't run right now, or null when it can. A model that makes something else than
+ * the node does (a video model on an image node) is as good as missing.
+ */
+export function modelBlocker(
+  key: ModelKey | null,
+  ctx: EngineContext,
+  modality: Modality = "image",
+): NodeBlocker | null {
   if (!key) return { kind: "model_unavailable", model: null };
   const model = ctx.model(key);
+  if (model && modalityOf(model) !== modality) return { kind: "model_unavailable", model: key };
   if (!model) {
     const providerId = safeParseModelKey(key)?.providerId;
     if (providerId && ctx.companyOff?.(providerId)) return { kind: "company_off", model: key };
@@ -66,6 +80,7 @@ export const STANDING_BLOCKERS: ReadonlySet<NodeBlocker["kind"]> = new Set([
   "company_off",
   "references_unsupported",
   "too_many_references",
+  "end_frame_unsupported",
   "too_many_jobs",
   "loop",
 ]);
@@ -79,8 +94,9 @@ export function modelsFitting(
   needs: { references: number },
   current?: ModelKey | null,
 ): ModelListItem[] {
-  if (needs.references === 0) return [...models];
-  return models.filter((m) => {
+  const images = models.filter((m) => modalityOf(m) === "image" || m.key === current);
+  if (needs.references === 0) return images;
+  return images.filter((m) => {
     if (m.key === current) return true;
     const refs = m.capabilities.references;
     return refs.supported && refs.max >= needs.references;
