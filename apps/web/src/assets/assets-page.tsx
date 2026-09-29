@@ -35,7 +35,8 @@ export function AssetsPage() {
   const route = useLibraryRoute();
   const { view, folderId, query } = route;
   const tree = useLibraryTree();
-  const summary = useLibrarySummary();
+  // Counts and the Model/Company filter choices follow the Type filter (§0.16).
+  const summary = useLibrarySummary(query.modality ?? "all");
   const settings = useSettings();
   const library = useLibrary(query);
   // useLibrary's pages carry the cursor as their param, which its inferred type loses.

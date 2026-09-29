@@ -8,7 +8,7 @@ import { modelKeySchema, providerIdSchema } from "./schemas/common";
 
 /** The library's own type filter (§0.16): images, videos, or left out for both. Never "audio". */
 export type LibraryModality = "image" | "video";
-const libraryModalitySchema = z.enum(["image", "video"]);
+export const libraryModalitySchema = z.enum(["image", "video"]);
 
 // The Assets library's shared logic (§2.8): the folder tree the client builds from the flat
 // GET /api/folders list, what a library view asks the server for, and date groups. Pure, so the
