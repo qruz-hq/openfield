@@ -1,6 +1,15 @@
 import { type APIRequestContext, expect, type Locator, type Page, test } from "@playwright/test";
 import type { CanvasDetail, CanvasTemplate } from "../packages/core/src/schemas/canvas.ts";
-import { api, FAKE_KEY, libraryRoot, makeImage, queryDb, SESSION_HEADER, sessionToken } from "./support";
+import {
+  api,
+  FAKE_KEY,
+  libraryRoot,
+  makeImage,
+  makeVideo,
+  queryDb,
+  SESSION_HEADER,
+  sessionToken,
+} from "./support";
 
 // M4 on fake models: a template runs end to end, a second Run all with nothing changed makes no
 // new images, a reload keeps the graph, and an uploaded photo reaches the model as a reference.
@@ -1234,6 +1243,23 @@ test("picking in order, removing from the Picked list, and reopening starts from
   await assetsNode(page).getByRole("button", { name: "Change" }).click();
   await expect(picker(page).getByText("Picked · 1")).toBeVisible();
   await expect(thumb("a paper boat")).toHaveAttribute("aria-pressed", "true");
+});
+
+test("the picker's All images count leaves videos out", async ({ page, request }) => {
+  const token = await sessionToken(request);
+  await makeVideo(request, token, "steam rising from a kettle for the picker count test");
+
+  // A fresh canvas and page load each time, so the summary is read fresh rather than cached.
+  await openWith(page, request, [{ id: "n", type: "image.asset", x: 200, y: 200 }]);
+  await assetsNode(page).getByRole("button", { name: "Choose images" }).click();
+  const allCount = () =>
+    picker(page).getByRole("button", { name: "All images" }).locator("span").last().textContent();
+  const before = Number(await allCount());
+
+  await makeImage(request, token, "a kettle boiling over for the picker count test");
+  await openWith(page, request, [{ id: "n", type: "image.asset", x: 200, y: 200 }]);
+  await assetsNode(page).getByRole("button", { name: "Choose images" }).click();
+  await expect.poll(async () => Number(await allCount())).toBe(before + 1);
 });
 
 test("a folder in Places browses that folder, and Cancel changes nothing on the node", async ({

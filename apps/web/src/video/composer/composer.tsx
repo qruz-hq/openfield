@@ -200,6 +200,7 @@ export function VideoComposer({ firstRun = false }: { firstRun?: boolean }) {
         className="flex min-w-0 flex-1 gap-12 rounded-24 bg-elevated p-22 inset-ring inset-ring-border transition-shadow has-[textarea:focus]:inset-ring-accent-line"
       >
         <div className="flex min-w-0 flex-1 flex-col justify-between gap-12">
+          {/* 32 tall like the design's row, whose attach button sets its height (pgLPU). */}
           <div className="flex min-h-32 w-full items-center gap-12">
             <textarea
               ref={(el) => {
