@@ -19,6 +19,7 @@ import { createEdgeCache, createNodeCache, type FlowNodeInputs } from "../src/ca
 import { edgeTypes } from "../src/canvas/editor/flow/edges";
 import {
   clockAt,
+  firstLanding,
   linkActivity,
   PULSE,
   pulseEase,
@@ -39,6 +40,7 @@ import { cardView } from "../src/canvas/nodes/generate/card-state";
 import type { NodeDefinition } from "../src/canvas/nodes/registry";
 import { companyWaitOf } from "../src/canvas/nodes/shell/company-wait";
 import { railLayout } from "../src/canvas/nodes/shell/ports";
+import { NodeRing, ringLook } from "../src/canvas/nodes/shell/ring";
 import {
   type CanvasStore,
   CanvasStoreProvider,
@@ -496,6 +498,56 @@ describe("link pulse", () => {
     expect(pulseEase(0.5)).toBeCloseTo(0.5, 6);
     expect(pulseEase(0.25) + pulseEase(0.75)).toBeCloseTo(1, 6);
     expect(pulseEase(0.1)).toBeLessThan(0.1);
+  });
+
+  test("a new pulse waits for the next cycle, same rule startPulse uses to join one", () => {
+    // Just past a cycle's start: this one still counts as it, so the wait is the shortest.
+    expect(firstLanding(2400)).toBe(2400 + PULSE.travelMs);
+    expect(firstLanding(2449)).toBe(2400 + PULSE.travelMs);
+    // Past the 50 ms grace: waits for the next cycle instead.
+    expect(firstLanding(2450)).toBe(4800 + PULSE.travelMs);
+    expect(firstLanding(4799)).toBe(4800 + PULSE.travelMs);
+    // Never before the travel itself finishes, never more than a full cycle plus the travel.
+    for (const now of [0, 1, 1234, 2399, 5000, 123456]) {
+      const wait = firstLanding(now) - now;
+      expect(wait).toBeGreaterThan(0);
+      expect(wait).toBeLessThanOrEqual(PULSE.cycleMs + PULSE.travelMs);
+    }
+  });
+});
+
+describe("generating ring", () => {
+  test("circles while active, is the still outline waiting or under reduced motion, else nothing", () => {
+    expect(ringLook("active", false)).toBe("circling");
+    expect(ringLook("active", true)).toBe("still");
+    expect(ringLook("waiting", false)).toBe("still");
+    expect(ringLook("waiting", true)).toBe("still");
+    expect(ringLook("idle", false)).toBe("none");
+    expect(ringLook("idle", true)).toBe("none");
+  });
+
+  test("rings the node the shell hands it, nothing more: no edges needed", () => {
+    const store = createCanvasStore({
+      id: CANVAS_ID,
+      name: "Solo node",
+      graphVersion: 1,
+      updatedAt: "2026-09-24T09:00:00.000Z",
+      graph: { ...emptyDocument(CANVAS_ID, "Solo node"), nodes: [node("gen")], edges: [] },
+    });
+    const { actions } = store.getState();
+    const current: CanvasStore = { ...store, getInitialState: store.getState };
+    const render = () =>
+      renderToStaticMarkup(
+        <CanvasStoreProvider store={current}>
+          <NodeRing id="gen" />
+        </CanvasStoreProvider>,
+      );
+    actions.setRuntime({ gen: { ...idleRuntime(), state: "running" } });
+    expect(render()).toContain("of-ring-circling");
+    actions.setRuntime({ gen: { ...idleRuntime(), state: "queued" } });
+    expect(render()).toBe("");
+    actions.setRuntime({ gen: { ...idleRuntime(), state: "done" } });
+    expect(render()).toBe("");
   });
 });
 

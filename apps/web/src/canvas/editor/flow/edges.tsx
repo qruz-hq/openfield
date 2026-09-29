@@ -11,23 +11,14 @@ import {
   Position,
 } from "@xyflow/react";
 import { SquareDashed, X } from "lucide-react";
-import {
-  createContext,
-  memo,
-  useContext,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { createContext, memo, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useCompanyWait } from "../../nodes/shell/company-wait";
 import { useLinkLit } from "../../nodes/shell/linked-text";
 import { useCanvas, useCanvasActions, useReadOnly } from "../../store";
 import { ANNOTATION_EDGE_TYPE, DATA_EDGE_TYPE, type FlowEdge } from "./adapter";
 import { freshLinkDelay } from "./fresh-links";
 import { GroupLines } from "./group-lines";
+import { useFadeOut, useReducedMotion } from "./motion-state";
 import { type LinkActivity, linkActivity } from "./pulse";
 import { type PulseHandle, startPulse } from "./pulse-clock";
 
@@ -67,23 +58,6 @@ function usePath(
   return simple ? getSimpleBezierPath(p) : getBezierPath(p);
 }
 
-const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
-
-function subscribeMotion(onChange: () => void) {
-  const query = window.matchMedia(REDUCED_MOTION);
-  query.addEventListener("change", onChange);
-  return () => query.removeEventListener("change", onChange);
-}
-
-/** True when the system asks for less motion. Follows the setting live. */
-export function useReducedMotion(): boolean {
-  return useSyncExternalStore(
-    subscribeMotion,
-    () => window.matchMedia(REDUCED_MOTION).matches,
-    () => false,
-  );
-}
-
 /** What the node a link feeds is doing, as far as the link shows it (pulse.ts). */
 function useLinkActivity(target: string): LinkActivity {
   const state = useCanvas((s) => s.runtime[target]?.state);
@@ -93,25 +67,6 @@ function useLinkActivity(target: string): LinkActivity {
 
 /** Ids used in url(#…) references: letters, digits, _ and - only. */
 const svgId = (prefix: string, id: string) => `${prefix}-${id.replace(/[^A-Za-z0-9_-]/g, "_")}`;
-
-/**
- * True while a pulse that just stopped fades out, for FADE_MS after `running` turns false. Set
- * during render, so the pulse's elements stay mounted (and where they were) through the change.
- */
-function useFadeOut(running: boolean): boolean {
-  const [was, setWas] = useState(running);
-  const [fading, setFading] = useState(false);
-  if (was !== running) {
-    setWas(running);
-    setFading(!running);
-  }
-  useEffect(() => {
-    if (!fading) return;
-    const timer = setTimeout(() => setFading(false), FADE_MS);
-    return () => clearTimeout(timer);
-  }, [fading]);
-  return fading;
-}
 
 const DataEdge = memo(function DataEdge(props: EdgeProps<FlowEdge>) {
   const { id, target, sourceY, targetY, sourcePosition, targetPosition, selected, data } = props;
@@ -154,7 +109,7 @@ const DataEdge = memo(function DataEdge(props: EdgeProps<FlowEdge>) {
   const running = activity === "active" && !reduced;
   // The × shows on hover and stays while the link is selected, so it can be removed either way.
   const removable = (hover || selected) && !readOnly;
-  const fading = useFadeOut(running);
+  const fading = useFadeOut(running, FADE_MS);
   const pulsing = running && !selected;
   const drawPulse = (pulsing || fading) && !selected;
   const still = activity === "active" && reduced && !selected;

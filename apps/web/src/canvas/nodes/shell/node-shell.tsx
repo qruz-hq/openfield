@@ -19,6 +19,7 @@ import { useSourceLit } from "./linked-text";
 import { NodeLabel } from "./node-label";
 import { NodeMenu } from "./node-menu";
 import { PortRails } from "./ports";
+import { NodeRing } from "./ring";
 import { AssetImage } from "./thumb";
 import "../nodes.css";
 
@@ -203,6 +204,7 @@ export function NodeShell({
           className="pointer-events-none absolute -inset-4 rounded-[18px] border-2 border-dashed border-accent"
         />
       ) : null}
+      <NodeRing id={id} />
       {card ? (
         // The card's hairline is its own; selection is a 2 px outline outside it (design upuBC).
         selected ? (

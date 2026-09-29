@@ -1,8 +1,8 @@
 import type { PortSpec } from "@openfield/canvas/engine/types";
 import { GENERATE_PORTS } from "@openfield/canvas/nodes/generate/spec";
 import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useReducedMotion } from "../../../editor/flow/edges";
-import { clockAt, PULSE } from "../../../editor/flow/pulse";
+import { useReducedMotion } from "../../../editor/flow/motion-state";
+import { firstLanding } from "../../../editor/flow/pulse";
 import { useCanvas, useNodeRuntime } from "../../../store/context";
 import { railLayout } from "../../shell/ports";
 import { attachVoxels, CELL, type VoxelHandle, type VoxelParams } from "./renderer";
@@ -133,16 +133,6 @@ function useConnectedPorts(
       .map(({ offset }) => (middle + offset) / height)
       .filter((share) => share >= 0 && share <= 1);
   }, [handles, height, ports, middle]);
-}
-
-/**
- * A link that lights up starts pulsing on the next cycle of the shared clock (pulse-clock.ts), so
- * the first puff waits for that pulse to land.
- */
-function firstLanding(now: number): number {
-  const { cycle, phase } = clockAt(now);
-  const from = phase < 50 ? cycle : cycle + 1;
-  return from * PULSE.cycleMs + PULSE.travelMs;
 }
 
 /** A run's own sky: its id hashed to a whole number, 0 to 999 (FNV-1a). */

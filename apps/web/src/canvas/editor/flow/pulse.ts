@@ -89,6 +89,17 @@ export const clockAt = (now: number) => ({
 });
 
 /**
+ * A link that lights up starts pulsing on the next cycle of the shared clock, so the first pulse to
+ * reach a node lands this many ms into the clock's own timeline, counted from `now`. Anything that
+ * waits for that first arrival (the voxel swarm's first puff, the ring's first lap) reads it here.
+ */
+export function firstLanding(now: number): number {
+  const { cycle, phase } = clockAt(now);
+  const from = phase < 50 ? cycle : cycle + 1;
+  return from * PULSE.cycleMs + PULSE.travelMs;
+}
+
+/**
  * Where the pulse's head is, as a distance along a link `total` long, at `phase` ms into the cycle;
  * null while it rests. The head leaves the source port's centre at 0 and the pulse is done when
  * its tail reaches the target's, so the head runs to total + length.
