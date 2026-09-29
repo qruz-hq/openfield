@@ -7,6 +7,7 @@ import { useProviders } from "../api/hooks/keys";
 import { useModels } from "../api/hooks/models";
 import { useSettings, useUpdateSettings } from "../api/hooks/settings";
 import { errorMessage } from "../api/raw";
+import { useLibraryActions } from "../assets/actions";
 import { DetailView } from "../detail";
 import { useDismissed, useLive } from "../lib/live";
 import { Composer } from "./composer/composer";
@@ -31,6 +32,7 @@ export function ImagePage() {
   const updateSettings = useUpdateSettings();
   const assets = useAssets("all");
   const jobSets = useJobSets({ poll: !connected });
+  const actions = useLibraryActions();
   const zoom = settings.data?.feedZoom ?? DEFAULT_FEED_ZOOM;
 
   const items = useMemo(
@@ -85,6 +87,7 @@ export function ImagePage() {
           loadingMore={assets.isFetchingNextPage}
           loadMoreFailed={assets.isFetchNextPageError}
           onLoadMore={loadMore}
+          actions={actions}
         />
       </>
     );

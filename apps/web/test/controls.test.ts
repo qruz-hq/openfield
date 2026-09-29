@@ -8,6 +8,7 @@ import {
   generateBody,
   generateState,
   qualityLabel,
+  referenceInputsFor,
   resolveValues,
 } from "@openfield/providers/manifest";
 import { banana, flare, lite } from "./fixtures";
@@ -105,6 +106,51 @@ describe("requests", () => {
       width: 1536,
       height: 2048,
     });
+  });
+});
+
+describe("references", () => {
+  const REF1 = "01K6BQ8000000000000000REF1";
+  const REF2 = "01K6BQ8000000000000000REF2";
+
+  test("caps to what the model takes, in $subject when it offers it", () => {
+    expect(referenceInputsFor(banana.capabilities, [])).toEqual([]);
+    expect(referenceInputsFor(banana.capabilities, [REF1, REF2])).toEqual([
+      { assetId: REF1, role: "subject" },
+      { assetId: REF2, role: "subject" },
+    ]);
+    const capped = { ...banana.capabilities, references: { ...banana.capabilities.references, max: 1 } };
+    expect(referenceInputsFor(capped, [REF1, REF2])).toEqual([{ assetId: REF1, role: "subject" }]);
+  });
+
+  test("falls back to the model's first role when it doesn't offer $subject", () => {
+    const styleOnly = {
+      ...banana.capabilities,
+      references: { ...banana.capabilities.references, roles: ["style" as const] },
+    };
+    expect(referenceInputsFor(styleOnly, [REF1])).toEqual([{ assetId: REF1, role: "style" }]);
+  });
+
+  test("a model that doesn't take references gets none", () => {
+    const none = {
+      ...banana.capabilities,
+      references: { ...banana.capabilities.references, supported: false, max: 0 },
+    };
+    expect(referenceInputsFor(none, [REF1])).toEqual([]);
+  });
+
+  test("generateBody only sends references when there are any, and they pass the wire schema", () => {
+    const resolved = resolveValues(banana.capabilities, {}, 1);
+    expect(generateBody(banana, resolved, "x", ULID)).not.toHaveProperty("references");
+    const withRefs = generateBody(
+      banana,
+      resolved,
+      "x",
+      ULID,
+      referenceInputsFor(banana.capabilities, [REF1]),
+    );
+    expect(generateBodySchema.safeParse(withRefs).success).toBe(true);
+    expect(withRefs.references).toEqual([{ assetId: REF1, role: "subject" }]);
   });
 });
 

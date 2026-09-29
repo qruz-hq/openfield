@@ -59,6 +59,9 @@ export {
   type ModalContentProps,
   ModalDescription,
   ModalFooter,
+  ModalSurface,
+  type ModalSurfaceProps,
+  ModalTitle,
   ModalTrigger,
 } from "./components/modal";
 export { ModelRow, type ModelRowProps } from "./components/model-row";

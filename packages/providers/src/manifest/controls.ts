@@ -7,6 +7,7 @@ import {
   type ModelListItem,
   type PixelSize,
   RESOLUTION_TIER_PX,
+  type ReferenceInput,
   type ResolutionTier,
   type SizeSpec,
   type SpeedId,
@@ -217,11 +218,24 @@ export function estimateRun(
   });
 }
 
+/**
+ * The composer's queued references (a feed tile's Use as reference) as a run sends them: capped to
+ * what the model takes, in $subject when it offers that role, else its first one. A model that
+ * doesn't take references at all gets none, rather than a request it would only reject.
+ */
+export function referenceInputsFor(caps: Capabilities, assetIds: readonly string[]): ReferenceInput[] {
+  if (!caps.references.supported || !assetIds.length) return [];
+  const role = caps.references.roles.includes("subject") ? "subject" : caps.references.roles[0];
+  if (!role) return [];
+  return assetIds.slice(0, caps.references.max).map((assetId) => ({ assetId, role }));
+}
+
 export function generateBody(
   model: ModelListItem,
   resolved: Resolved,
   prompt: string,
   idempotencyKey: string,
+  references: readonly ReferenceInput[] = [],
 ): GenerateBody {
   const caps = model.capabilities;
   return {
@@ -236,6 +250,7 @@ export function generateBody(
     // Seeds are the server's to pick (§0.11).
     seed: null,
     source: "composer",
+    ...(references.length ? { references: [...references] } : {}),
   };
 }
 

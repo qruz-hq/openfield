@@ -175,6 +175,8 @@
         "recreate": "Recreate",
         "more": "More",
         "useAsReference": "Use as reference",
+        "referenceAdded": "Added as a reference.",
+        "addToFolder": "Add to folder",
         "edit": "Edit",
         "sendToCanvas": "Send to Canvas"
       },
@@ -1517,7 +1519,25 @@
         "loadFailed": "Couldn't load your images.",
         "add": "Add {count, plural, =0 {images} one {# image} other {# images}}",
         "select": "Select image",
-        "loadMore": "Show more"
+        "loadMore": "Show more",
+        "places": {
+          "favorites": "Favorites",
+          "favoritesEmpty": "No favorites yet.",
+          "allImages": "All images",
+          "folders": "Folders",
+          "expand": "Show subfolders of {folder}",
+          "collapse": "Hide subfolders of {folder}"
+        },
+        "picked": {
+          "title": "Picked · {count}",
+          "list": "Picked images",
+          "clear": "Clear",
+          "emptyTitle": "Nothing picked yet",
+          "emptyBody": "Click images to add them. They go to the node in this order.",
+          "order": "{index, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}",
+          "remove": "Remove {order}",
+          "reorder": "Reorder {order}. Drag it, or use Alt and an arrow key."
+        }
       },
       "inspector": {
         "close": "Close settings",

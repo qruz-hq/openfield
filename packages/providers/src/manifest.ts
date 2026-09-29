@@ -46,6 +46,7 @@ export {
   generateState,
   qualityLabel,
   type Resolved,
+  referenceInputsFor,
   resolveValues,
 } from "./manifest/controls";
 export { type EstimateRequest, estimate } from "./manifest/estimate";
