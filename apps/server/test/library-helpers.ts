@@ -16,6 +16,8 @@ export interface SeedOptions {
   model?: string;
   provider?: string;
   kind?: "generated" | "uploaded" | "mask";
+  /** Defaults to "image"; the file itself is always a PNG regardless (only the row's modality changes). */
+  modality?: "image" | "video";
 }
 
 let colour = 0;
@@ -29,6 +31,7 @@ export async function seedImage(server: TestServer, o: SeedOptions = {}): Promis
   return insertAsset(server.services.db, {
     id: staged.assetId,
     kind: o.kind ?? "generated",
+    modality: o.modality ?? "image",
     path: staged.path,
     mime: staged.mime,
     width: staged.width,
