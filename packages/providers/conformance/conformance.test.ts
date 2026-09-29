@@ -2,8 +2,10 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
   batchHandleSchema,
   credentialSchemaSchema,
+  hostAllowed,
   jobHandleSchema,
   type ModelManifest,
+  modalityOf,
   modelManifestSchema,
   newId,
   normalizedRequestSchema,
@@ -26,6 +28,7 @@ import {
   harness,
   type Kit,
   kits,
+  outputsOf,
   prepare,
   request,
   run,
@@ -60,6 +63,7 @@ const expectError = async (promise: Promise<unknown>): Promise<ProviderError> =>
 
 describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_id, kit: Kit) => {
   const catalog = kit.provider.catalog();
+  const isVideo = (m: ModelManifest) => modalityOf(m) === "video";
 
   test("1. meta, credentials and every manifest parse strictly", () => {
     expect(() => providerMetaSchema.parse(kit.provider.meta)).not.toThrow();
@@ -83,6 +87,17 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
       // An off-by-one here would ship a control that sends the wrong tier (§6.12 rule 3).
       if (caps.quality)
         expect(new Set(caps.quality.levels.map((l) => l.id)).size).toBe(caps.quality.levels.length);
+      if (caps.video) {
+        expect(caps.video.resolutions).toContain(caps.video.defaultResolution);
+        expect(caps.video.durations).toContain(caps.video.defaultDuration);
+        // Every resolution and ratio the model offers has an exact size to price it by.
+        for (const resolution of caps.video.resolutions)
+          for (const ratio of caps.size.mode === "aspect" ? caps.size.ratios : [])
+            if (ratio !== "auto")
+              expect(caps.video.sizes.some((s) => s.resolution === resolution && s.aspect === ratio)).toBe(
+                true,
+              );
+      }
     }
   });
 
@@ -90,6 +105,37 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
     for (const manifest of catalog) {
       const caps = manifest.capabilities;
       const ratios = caps.size.mode === "aspect" ? caps.size.ratios : [undefined];
+      if (caps.video) {
+        // A video model: every ratio at every resolution, then each end of its duration range,
+        // with sound off and on where it makes sound.
+        const video = caps.video;
+        for (const ratio of ratios) {
+          for (const resolution of video.resolutions) {
+            const h = harness(kit);
+            // "auto" needs a start frame on a model that takes its shape only from one.
+            const frame = ratio === "auto" && video.autoAspect === "with_start_frame";
+            const start = frame ? await addImage(h, 320, 480) : undefined;
+            const req = request(manifest, {
+              ...(ratio && { size: ratio === "auto" ? { kind: "auto" } : { kind: "aspect", ratio } }),
+              video: { resolution, ...(start && { startFrame: { assetId: start } }) },
+            });
+            const { normalized } = await run(kit, manifest, req, h);
+            expect(normalized.diagnostics).toEqual([]);
+            expect(outputsOf(h, manifest)).toHaveLength(1);
+          }
+        }
+        const ends = [video.durations[0]!, video.durations.at(-1)!];
+        for (const seconds of ends) {
+          for (const audio of video.audio.supported ? [false, true] : [undefined]) {
+            const h = harness(kit);
+            const req = request(manifest, { video: { seconds, ...(audio !== undefined && { audio }) } });
+            const { normalized } = await run(kit, manifest, req, h);
+            expect(normalized.diagnostics).toEqual([]);
+            expect(normalized.request.video?.seconds).toBe(seconds);
+          }
+        }
+        continue;
+      }
       const tiers = caps.resolution?.tiers ?? [undefined];
       const qualities = caps.quality?.levels.map((l) => l.id) ?? [undefined];
       for (const ratio of ratios) {
@@ -169,7 +215,7 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
       for (const handle of handles) images.push(...((await finish(model, handle, h)).result?.images ?? []));
       expect(images).toHaveLength(n);
       expect(new Set(images.map((i) => i.assetId)).size).toBe(n);
-      expect(new Set(h.ctx.assets.written.map((a) => a.sha256)).size).toBe(n);
+      expect(new Set(outputsOf(h, manifest).map((a) => a.sha256)).size).toBe(n);
       expect(images.map((i) => i.index).sort()).toEqual(Array.from({ length: n }, (_, i) => i));
     }
   });
@@ -283,8 +329,9 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
       expect(image.assetId).toBeTruthy();
       expect(image.width).toBeGreaterThan(0);
       expect(image.height).toBeGreaterThan(0);
-      expect(image.mimeType).toMatch(/^image\//);
+      expect(image.mimeType).toMatch(isVideo(manifest) ? /^video\// : /^image\//);
       expect(image.bytes).toBeGreaterThan(0);
+      if (isVideo(manifest)) expect(image.durationMs).toBeGreaterThan(0);
     }
     expect(findBase64(handles)).toBeUndefined();
     expect(findBase64(update)).toBeUndefined();
@@ -345,12 +392,13 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
   });
 
   test("19. only declared hosts are contacted; an image from anywhere else is refused", async () => {
-    const allowed = new Set([...kit.provider.meta.networkHosts, ...kit.provider.meta.assetHosts]);
+    const allowed = [...kit.provider.meta.networkHosts, ...kit.provider.meta.assetHosts];
     const manifest = catalog[0]!;
     const h = harness(kit);
-    await generate(kit, manifest, request(manifest), h);
+    const { handles, model } = await generate(kit, manifest, request(manifest), h);
+    await finish(model, handles[0]!, h);
     await kit.provider.verifyCredentials(h.ctx);
-    for (const call of h.fetch.calls) expect(allowed.has(call.host)).toBe(true);
+    for (const call of h.fetch.calls) expect(hostAllowed(call.host, allowed)).toBe(true);
 
     if (kit.fake.fixtures.foreign_asset) {
       const blocked = harness(kit, { scenario: "foreign_asset" });
@@ -364,6 +412,45 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
     for (const manifest of catalog) {
       const caps = manifest.capabilities;
       const golden: Record<string, unknown> = {};
+
+      if (caps.video) {
+        // A video model instead: words only, a start frame, and a start and end frame.
+        const sent = (h: ReturnType<typeof harness>) =>
+          h.sent.map((s) => ({ url: s.url, body: withoutImageBytes(s.body) }));
+        const t2v = harness(kit);
+        await generate(kit, manifest, request(manifest, { size: { kind: "aspect", ratio: "16:9" } }), t2v);
+        golden.t2v = sent(t2v);
+        const i2v = harness(kit);
+        const start = await addImage(i2v, 480, 320);
+        await generate(
+          kit,
+          manifest,
+          request(manifest, {
+            prompt: "The kite climbs",
+            size: { kind: "aspect", ratio: "3:4" },
+            video: { seconds: caps.video.durations.at(-1)!, startFrame: { assetId: start } },
+          }),
+          i2v,
+        );
+        golden.startFrame = sent(i2v);
+        if (caps.video.frames.end) {
+          const both = harness(kit);
+          const from = await addImage(both, 480, 320);
+          const to = await addImage(both, 320, 480);
+          await generate(
+            kit,
+            manifest,
+            request(manifest, {
+              size: { kind: "auto" },
+              video: { startFrame: { assetId: from }, endFrame: { assetId: to } },
+            }),
+            both,
+          );
+          golden.startAndEnd = sent(both);
+        }
+        expect(golden).toMatchSnapshot(manifest.key);
+        continue;
+      }
 
       const t2i = harness(kit);
       const ratio = caps.size.mode === "aspect" && caps.size.ratios.includes("3:4") ? "3:4" : undefined;
@@ -597,7 +684,7 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
 
         // Accepted, not finished: the company's id is there, the image isn't.
         expect(handle.providerRef).toBeTruthy();
-        expect(h.ctx.assets.written).toHaveLength(0);
+        expect(outputsOf(h, manifest)).toHaveLength(0);
         expect(["queued", "running"]).toContain((await model.poll(handle, h.ctx)).state);
 
         // Only the stored handle carries over: a fresh binding, context and fake API stand in for a
@@ -609,10 +696,11 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
         expect(done.state).toBe("succeeded");
         expect(done.result?.images).toHaveLength(1);
         expect(done.result?.speedUsed ?? speed).toBe(speed);
-        expect(later.ctx.assets.written).toHaveLength(1);
+        expect(outputsOf(later, manifest)).toHaveLength(1);
         // Read again, it writes nothing more.
+        const writes = later.ctx.assets.written.length;
         expect(await restarted.poll(stored, later.ctx)).toEqual(done);
-        expect(later.ctx.assets.written).toHaveLength(1);
+        expect(later.ctx.assets.written).toHaveLength(writes);
         // One create call in all, and none after the restart.
         const creates = (calls: { method: string }[]) => calls.filter((c) => c.method === "POST").length;
         expect([creates(h.fetch.calls), creates(later.fetch.calls)]).toEqual([1, 0]);
@@ -632,6 +720,43 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
         );
         expect([gone.code, gone.notFound, gone.retryable]).toEqual(["provider_error", true, false]);
         expect(gone.userMessage).toContain(kit.provider.meta.displayName);
+      }
+    }
+  });
+
+  test("28. video: a video file with its length, sound and poster, billed from the company's tokens", async () => {
+    for (const manifest of catalog.filter(isVideo)) {
+      const video = manifest.capabilities.video!;
+      const h = harness(kit);
+      const req = request(manifest, { video: { seconds: video.defaultDuration } });
+      const { updates, normalized } = await run(kit, manifest, req, h);
+      const result = updates[0]!.result!;
+      const [clip] = result.images;
+      expect(clip?.mimeType).toMatch(/^video\//);
+      expect(clip?.durationMs).toBeGreaterThan(0);
+      expect(clip?.hasAudio).toBe(normalized.request.video?.audio ?? false);
+      // The poster is a still, written through the same sink, never the video itself.
+      if (clip?.poster) {
+        expect(clip.poster.mimeType).toMatch(/^image\//);
+        expect(h.ctx.assets.written.find((a) => a.assetId === clip.poster!.assetId)?.mimeType).toMatch(
+          /^image\//,
+        );
+      }
+      // Only a finished video is billed, from the tokens the company reported.
+      if (manifest.price.kind === "video_tokens") {
+        expect(result.usage?.outputVideoTokens).toBeGreaterThan(0);
+        expect(result.cost?.confidence).toBe("reconciled");
+        expect(result.cost?.amount).toBeGreaterThan(0);
+      }
+      expect(normalized.calls).toHaveLength(1);
+
+      // A failed task writes nothing and bills nothing.
+      for (const scenario of ["failed", "expired"] as const) {
+        if (!kit.fake.fixtures[scenario]) continue;
+        const f = harness(kit, { scenario });
+        const err = await expectError(run(kit, manifest, request(manifest), f));
+        expect(err.code).toBe(scenario === "expired" ? "timeout" : "provider_unavailable");
+        expect(f.ctx.assets.written).toHaveLength(0);
       }
     }
   });

@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/contents/generations/tasks"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "error": {
+        "code": "ModelNotOpen",
+        "message": "Your account 3000123456 has not activated the model seedance-1-0-pro. Please activate the model service in the Ark Console. Request id: 0217906907908",
+        "type": "NotFound"
+      }
+    }
+  }
+}

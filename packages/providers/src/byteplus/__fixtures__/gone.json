@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v3/contents/generations/tasks/{id}"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "error": {
+        "code": "ResourceNotFound",
+        "message": "The requested resource does not exist, or the caller does not have access to it.",
+        "type": "NotFound"
+      }
+    }
+  }
+}

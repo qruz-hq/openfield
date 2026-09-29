@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/contents/generations/tasks"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "content-type": "application/json",
+      "retry-after": "12"
+    },
+    "body": {
+      "error": {
+        "code": "RateLimitExceeded.EndpointRPMExceeded",
+        "message": "The Requests Per Minute (RPM) limit of the associated endpoint for your account has been exceeded. Request ID: 0217906907911",
+        "type": "TooManyRequests"
+      }
+    }
+  }
+}

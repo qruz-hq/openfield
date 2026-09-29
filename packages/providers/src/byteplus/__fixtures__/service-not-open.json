@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/contents/generations/tasks"
+  },
+  "response": {
+    "status": 403,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "error": {
+        "code": "OperationDenied.ServiceNotOpen",
+        "message": "Operation is denied because the model service is unavailable, please go to the console activation management page to activate the corresponding model service. Request id: 0217906907909",
+        "type": "Forbidden"
+      }
+    }
+  }
+}

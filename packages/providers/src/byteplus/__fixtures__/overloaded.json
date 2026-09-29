@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/contents/generations/tasks"
+  },
+  "response": {
+    "status": 429,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "error": {
+        "code": "ServerOverloaded",
+        "message": "The service is currently overloaded. Please try again later. Request id: 0217906907912",
+        "type": "TooManyRequests"
+      }
+    }
+  }
+}

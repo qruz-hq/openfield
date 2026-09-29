@@ -25,6 +25,9 @@ export type {
   SizeCapability,
   SpeedId,
   SpeedOffer,
+  VideoCapability,
+  VideoRequest,
+  VideoResolution,
 } from "@openfield/core";
 export {
   type AskPrice,
@@ -79,3 +82,13 @@ export {
   speedOffer,
   speedTimeouts,
 } from "./manifest/speed";
+export {
+  nearestDuration,
+  plannedVideoSize,
+  type ResolvedVideo,
+  resolveVideo,
+  videoRate,
+  videoSize,
+  videoSizes,
+  videoTokens,
+} from "./manifest/video";

@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "DELETE",
+    "path": "/api/v3/contents/generations/tasks/{id}"
+  },
+  "response": {
+    "status": 409,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "error": {
+        "code": "InvalidParameter.TaskStatus",
+        "message": "Only tasks in the queued state can be cancelled. Request id: 0217906907917",
+        "type": "BadRequest"
+      }
+    }
+  }
+}

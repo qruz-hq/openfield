@@ -1,5 +1,6 @@
 import type { ModelKey, ModelManifest, ProviderErrorData, ProviderId, RefreshReport } from "@openfield/core";
 import { safeParseModelKey } from "@openfield/core";
+import { createByteplusProvider } from "./byteplus";
 import { createGoogleProvider } from "./google";
 import { createHiggsfieldProvider } from "./higgsfield";
 import { createOpenAiProvider } from "./openai";
@@ -22,6 +23,7 @@ export const builtinProviders: readonly Provider[] = [
   createGoogleProvider(),
   createOpenAiProvider(),
   createHiggsfieldProvider(),
+  createByteplusProvider(),
 ];
 
 /**

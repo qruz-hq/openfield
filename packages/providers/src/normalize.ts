@@ -10,6 +10,7 @@ import {
   hashCanonical,
   type MessageKey,
   type ModelManifest,
+  modalityOf,
   type NormalizedRequest,
   newId,
   type PixelSize,
@@ -18,9 +19,11 @@ import {
   type ResolutionTier,
   type ResolvedProviderSettings,
   t,
+  type VideoResolution,
 } from "@openfield/core";
 import { resolveProviderSettings } from "./manifest/provider-settings";
 import { nearestRatio, placeholderSize, resolveSize } from "./manifest/size";
+import { plannedVideoSize, type ResolvedVideo, resolveVideo, videoSize } from "./manifest/video";
 import { ProviderError } from "./types";
 
 // §6.5: GenerateRequest → NormalizedRequest, once, before any adapter code runs. Checks the
@@ -102,8 +105,10 @@ export async function normalize(
   if (req.model !== manifest.key) block("model", "invalid_request", t("errors.invalid_request.reason"));
 
   // Op (§0.4)
+  const isVideo = modalityOf(manifest) === "video";
   const op = adapterOpFor(req.op, { hasMask: Boolean(req.mask), canInpaint: caps.ops.inpaint });
-  if (!op || !canDo(caps, op))
+  // A video model only generates: from words, or from frames.
+  if (!op || (isVideo ? op !== "generate" || !caps.video : !canDo(caps, op)))
     block("op", "capability_unsupported", t("errors.capability_unsupported.reason"));
   if (op && EDIT_SOURCE_OPS.includes(op) && !req.base) {
     block("base", "invalid_request", t("errors.invalid_request.reason"));
@@ -121,7 +126,8 @@ export async function normalize(
   }
 
   let references = resolved.references ?? [];
-  if (op === "generate" && !promptAfterPreset.trim() && references.length === 0) {
+  const startFrame = isVideo && caps.video?.frames.start ? req.video?.startFrame : undefined;
+  if (op === "generate" && !promptAfterPreset.trim() && references.length === 0 && !startFrame) {
     block("prompt", "invalid_request", t("composer.generate.emptyPrompt"));
   }
   const maxChars = caps.limits.maxPromptChars;
@@ -148,9 +154,23 @@ export async function normalize(
   } else if (req.resolution) {
     unsupportedSetting("resolution", "composer.chips.resolution.label");
   }
-  const size = resolveRequestSize(caps, req, resolution, () =>
+  let size = resolveRequestSize(caps, req, resolution, () =>
     unsupportedSetting("size", "composer.chips.aspect.label"),
   );
+
+  // Video (§0.3): duration, resolution, sound and frames, by the model's own rules.
+  let video: ResolvedVideo["video"] | undefined;
+  if (isVideo && caps.video) {
+    const resolvedVideo = resolveVideo(manifest, req.video, "aspect" in size ? size.aspect : "auto");
+    video = resolvedVideo.video;
+    if ("aspect" in size) size = { aspect: resolvedVideo.aspect };
+    for (const note of resolvedVideo.notes) {
+      if (note.level === "error") block(note.field, "invalid_request", note.message);
+      else unsupported(note.field, note.message);
+    }
+  } else if (req.video) {
+    unsupported("video", t("errors.capability_unsupported.reason"));
+  }
 
   let quality: string | undefined;
   if (caps.quality) {
@@ -238,6 +258,7 @@ export async function normalize(
     mask: op === "inpaint" || op === "outpaint" ? req.mask : undefined,
     expand: op === "outpaint" ? req.expand : undefined,
     moderation,
+    video,
     source: req.source,
     canvas: req.canvas,
     providerOptions,
@@ -259,7 +280,9 @@ export async function normalize(
     request,
     calls: planCalls(manifest, request, jobIds),
     jobIds,
-    dimensions: placeholderSize(caps, size, resolution),
+    dimensions: video
+      ? videoDimensions(caps, size, video.resolution)
+      : placeholderSize(caps, size, resolution),
     diagnostics,
     emulated,
     settings,
@@ -304,6 +327,19 @@ export function appendAvoid(prompt: string, avoid: string): string {
   const clause = `Avoid: ${avoid.replace(/[.\s]+$/, "")}.`;
   if (!base) return clause;
   return /[.!?]$/.test(base) ? `${base} ${clause}` : `${base}. ${clause}`;
+}
+
+/** A video's exact size where the model's table has it, else roughly, for its placeholder. */
+function videoDimensions(
+  caps: Capabilities,
+  size: PixelSize | { aspect: AspectRatio },
+  resolution: VideoResolution,
+): PixelSize {
+  if ("width" in size) return size;
+  return (
+    (caps.video && videoSize(caps.video, resolution, size.aspect)) ??
+    plannedVideoSize(size.aspect, resolution)
+  );
 }
 
 function canDo(caps: Capabilities, op: AdapterOp): boolean {

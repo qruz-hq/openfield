@@ -4,6 +4,7 @@ import {
   isTerminalState,
   type JobHandle,
   type ModelManifest,
+  modalityOf,
   newId,
   type SettingValue,
 } from "@openfield/core";
@@ -233,12 +234,26 @@ export async function addImage(h: Harness, width = 24, height = 32): Promise<str
 }
 
 /**
+ * What a run wrote as its outputs: every asset for an image model, and only the videos for a video
+ * model, which also writes a still to use as its poster.
+ */
+export function outputsOf(h: Harness, manifest: ModelManifest) {
+  const written = h.ctx.assets.written;
+  return modalityOf(manifest) === "video" ? written.filter((a) => a.mimeType.startsWith("video/")) : written;
+}
+
+/**
  * Replaces base64 image data so golden snapshots stay readable and stable. Not its length: the test
  * PNGs are deflated by the runtime's own zlib, which packs them to different sizes on each OS.
  */
 export function withoutImageBytes(value: unknown): unknown {
   return JSON.parse(
-    JSON.stringify(value, (key, v) => (key === "data" && typeof v === "string" ? "<base64 image>" : v)),
+    JSON.stringify(value, (key, v) => {
+      if (key === "data" && typeof v === "string") return "<base64 image>";
+      // Frames go as data URLs (BytePlus): keep the type, drop the bytes.
+      const dataUrl = typeof v === "string" ? /^data:([a-z]+\/[a-z0-9.+-]+);base64,/i.exec(v) : null;
+      return dataUrl ? `<base64 ${dataUrl[1]}>` : v;
+    }),
   );
 }
 

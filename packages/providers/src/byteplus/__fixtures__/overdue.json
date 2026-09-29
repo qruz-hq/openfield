@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/contents/generations/tasks"
+  },
+  "response": {
+    "status": 403,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "error": {
+        "code": "AccountOverdueError",
+        "message": "The request failed because your account has an overdue balance. Request ID: 0217906907910.",
+        "type": "Forbidden"
+      }
+    }
+  }
+}

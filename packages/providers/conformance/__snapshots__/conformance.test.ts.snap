@@ -1312,3 +1312,788 @@ exports[`fake 24. speed on the wire: golden payloads per sync speed, and cost fo
   ],
 }
 `;
+
+exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:dreamina-seedance-2-5-260628 1`] = `
+{
+  "startAndEnd": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "first_frame",
+            "type": "image_url",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "last_frame",
+            "type": "image_url",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-5-260628",
+        "ratio": "adaptive",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+  "startFrame": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "The kite climbs",
+            "type": "text",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "first_frame",
+            "type": "image_url",
+          },
+        ],
+        "duration": 30,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-5-260628",
+        "ratio": "adaptive",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+  "t2v": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-5-260628",
+        "ratio": "16:9",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:dreamina-seedance-2-0-260128 1`] = `
+{
+  "startAndEnd": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "first_frame",
+            "type": "image_url",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "last_frame",
+            "type": "image_url",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-0-260128",
+        "ratio": "adaptive",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+  "startFrame": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "The kite climbs",
+            "type": "text",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "first_frame",
+            "type": "image_url",
+          },
+        ],
+        "duration": 15,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-0-260128",
+        "ratio": "3:4",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+  "t2v": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-0-260128",
+        "ratio": "16:9",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:dreamina-seedance-2-0-fast-260128 1`] = `
+{
+  "startAndEnd": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "first_frame",
+            "type": "image_url",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "last_frame",
+            "type": "image_url",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-0-fast-260128",
+        "ratio": "adaptive",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+  "startFrame": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "The kite climbs",
+            "type": "text",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "first_frame",
+            "type": "image_url",
+          },
+        ],
+        "duration": 15,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-0-fast-260128",
+        "ratio": "3:4",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+  "t2v": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-0-fast-260128",
+        "ratio": "16:9",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:dreamina-seedance-2-0-mini-260615 1`] = `
+{
+  "startAndEnd": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "first_frame",
+            "type": "image_url",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "last_frame",
+            "type": "image_url",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-0-mini-260615",
+        "ratio": "adaptive",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+  "startFrame": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "The kite climbs",
+            "type": "text",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "first_frame",
+            "type": "image_url",
+          },
+        ],
+        "duration": 15,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-0-mini-260615",
+        "ratio": "3:4",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+  "t2v": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-0-mini-260615",
+        "ratio": "16:9",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:seedance-1-5-pro-251215 1`] = `
+{
+  "startAndEnd": [
+    {
+      "body": {
+        "camera_fixed": false,
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "first_frame",
+            "type": "image_url",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "last_frame",
+            "type": "image_url",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "seedance-1-5-pro-251215",
+        "ratio": "adaptive",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "seed": 1234,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+  "startFrame": [
+    {
+      "body": {
+        "camera_fixed": false,
+        "content": [
+          {
+            "text": "The kite climbs",
+            "type": "text",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "first_frame",
+            "type": "image_url",
+          },
+        ],
+        "duration": 12,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "seedance-1-5-pro-251215",
+        "ratio": "3:4",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "seed": 1234,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+  "t2v": [
+    {
+      "body": {
+        "camera_fixed": false,
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "seedance-1-5-pro-251215",
+        "ratio": "16:9",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "seed": 1234,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:seedance-1-0-pro-250528 1`] = `
+{
+  "startAndEnd": [
+    {
+      "body": {
+        "camera_fixed": false,
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "first_frame",
+            "type": "image_url",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "last_frame",
+            "type": "image_url",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "model": "seedance-1-0-pro-250528",
+        "ratio": "adaptive",
+        "resolution": "1080p",
+        "return_last_frame": true,
+        "seed": 1234,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+  "startFrame": [
+    {
+      "body": {
+        "camera_fixed": false,
+        "content": [
+          {
+            "text": "The kite climbs",
+            "type": "text",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "first_frame",
+            "type": "image_url",
+          },
+        ],
+        "duration": 12,
+        "execution_expires_after": 7200,
+        "model": "seedance-1-0-pro-250528",
+        "ratio": "3:4",
+        "resolution": "1080p",
+        "return_last_frame": true,
+        "seed": 1234,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+  "t2v": [
+    {
+      "body": {
+        "camera_fixed": false,
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "model": "seedance-1-0-pro-250528",
+        "ratio": "16:9",
+        "resolution": "1080p",
+        "return_last_frame": true,
+        "seed": 1234,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:seedance-1-0-pro-fast-251015 1`] = `
+{
+  "startFrame": [
+    {
+      "body": {
+        "camera_fixed": false,
+        "content": [
+          {
+            "text": "The kite climbs",
+            "type": "text",
+          },
+          {
+            "image_url": {
+              "url": "<base64 image/png>",
+            },
+            "role": "first_frame",
+            "type": "image_url",
+          },
+        ],
+        "duration": 12,
+        "execution_expires_after": 7200,
+        "model": "seedance-1-0-pro-fast-251015",
+        "ratio": "3:4",
+        "resolution": "1080p",
+        "return_last_frame": true,
+        "seed": 1234,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+  "t2v": [
+    {
+      "body": {
+        "camera_fixed": false,
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "model": "seedance-1-0-pro-fast-251015",
+        "ratio": "16:9",
+        "resolution": "1080p",
+        "return_last_frame": true,
+        "seed": 1234,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: byteplus:dreamina-seedance-2-5-260628 speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-5-260628",
+        "ratio": "16:9",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: byteplus:dreamina-seedance-2-0-260128 speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-0-260128",
+        "ratio": "16:9",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: byteplus:dreamina-seedance-2-0-fast-260128 speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-0-fast-260128",
+        "ratio": "16:9",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: byteplus:dreamina-seedance-2-0-mini-260615 speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "dreamina-seedance-2-0-mini-260615",
+        "ratio": "16:9",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: byteplus:seedance-1-5-pro-251215 speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "camera_fixed": false,
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "generate_audio": true,
+        "model": "seedance-1-5-pro-251215",
+        "ratio": "16:9",
+        "resolution": "720p",
+        "return_last_frame": true,
+        "seed": 1234,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: byteplus:seedance-1-0-pro-250528 speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "camera_fixed": false,
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "model": "seedance-1-0-pro-250528",
+        "ratio": "16:9",
+        "resolution": "1080p",
+        "return_last_frame": true,
+        "seed": 1234,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: byteplus:seedance-1-0-pro-fast-251015 speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "camera_fixed": false,
+        "content": [
+          {
+            "text": "A red kite over a green hill",
+            "type": "text",
+          },
+        ],
+        "duration": 5,
+        "execution_expires_after": 7200,
+        "model": "seedance-1-0-pro-fast-251015",
+        "ratio": "16:9",
+        "resolution": "1080p",
+        "return_last_frame": true,
+        "seed": 1234,
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/contents/generations/tasks",
+    },
+  ],
+}
+`;

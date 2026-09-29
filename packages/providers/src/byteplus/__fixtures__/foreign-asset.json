@@ -1,0 +1,30 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v3/contents/generations/tasks/{id}"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "id": "cgt-20260929140512-8xk2p",
+      "model": "seedance-1-0-pro-250528",
+      "created_at": 1790690712,
+      "updated_at": 1790690712,
+      "status": "succeeded",
+      "error": null,
+      "content": {
+        "video_url": "https://files.unknown-host.example/cgt-20260929140512-8xk2p/video.mp4"
+      },
+      "usage": {
+        "completion_tokens": 102960,
+        "total_tokens": 102960
+      },
+      "resolution": "720p",
+      "ratio": "16:9",
+      "duration": 5
+    }
+  }
+}

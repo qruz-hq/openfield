@@ -11,6 +11,7 @@ import {
   t,
 } from "@openfield/core";
 import { pricedOp, priceFor, resolveSpeed } from "./speed";
+import { resolveVideo, videoRate, videoSize, videoSizes, videoTokens } from "./video";
 
 // §0.13: pure. Reads the manifest's prices and the request, never credentials, the network or the
 // clock, so the composer can re-run it on every chip change.
@@ -26,7 +27,15 @@ export type EstimateRequest = Pick<NormalizedRequest, "batch"> &
   Partial<
     Pick<
       NormalizedRequest,
-      "resolution" | "quality" | "size" | "prompt" | "promptAfterPreset" | "op" | "references" | "base"
+      | "resolution"
+      | "quality"
+      | "size"
+      | "prompt"
+      | "promptAfterPreset"
+      | "op"
+      | "references"
+      | "base"
+      | "video"
     >
   > & {
     speed?: SpeedId;
@@ -104,9 +113,11 @@ export function estimate(manifest: ModelManifest, req: EstimateRequest): CostEst
       const output = perToken(manifest, price, req, count, speedLabel);
       return output.confidence === "unknown" ? output : withInputs(manifest, price, req, count, output);
     }
+    case "video_tokens":
+      return perVideo(manifest, price, req, count, speedLabel);
     case "per_second":
     case "provider_estimate":
-      // Images have no duration, and a remote estimate needs estimateRemote().
+      // Nothing uses per_second yet, and a remote estimate needs estimateRemote().
       return unknownCost(price.pricedAt);
     case "unknown":
       return unknownCost();
@@ -266,6 +277,60 @@ function perToken(
     max: round(high * count),
     confidence: "estimated",
     basis: basis(count, moneyRange(low, high, price.currency), speedLabel),
+    pricedAt: price.pricedAt,
+  };
+}
+
+type VideoTokenPriceModel = Extract<PriceModel, { kind: "video_tokens" }>;
+
+/**
+ * A video priced on the tokens its output counts to (§0.13): exact pixels from the model's size
+ * table, times its frame rate and seconds. "auto" could be any shape at that resolution, so it's
+ * the range over them. Never exact: the company bills the tokens it reports afterwards.
+ */
+function perVideo(
+  manifest: ModelManifest,
+  price: VideoTokenPriceModel,
+  req: EstimateRequest,
+  count: number,
+  speedLabel: string | undefined,
+): CostEstimate {
+  const caps = manifest.capabilities.video;
+  if (!caps) return unknownCost(price.pricedAt);
+  const size = manifest.capabilities.size;
+  const asked =
+    req.size && "aspect" in req.size
+      ? req.size.aspect
+      : req.size && "width" in req.size
+        ? undefined
+        : size.mode === "aspect"
+          ? size.default
+          : undefined;
+  const { video, aspect } = resolveVideo(manifest, req.video, asked ?? "auto");
+  const rate = videoRate(price, video.resolution, video.audio);
+  if (rate === undefined) return unknownCost(price.pricedAt);
+
+  const exact = aspect === "auto" ? undefined : videoSize(caps, video.resolution, aspect);
+  const pixels =
+    req.size && "width" in req.size ? [req.size] : exact ? [exact] : videoSizes(caps, video.resolution);
+  if (!pixels.length) return unknownCost(price.pricedAt);
+  const costs = pixels.map((p) => (videoTokens(p, caps.fps, video.seconds) * rate) / 1e6);
+  const low = Math.min(...costs);
+  const high = Math.max(...costs);
+  const detail =
+    pixels.length === 1
+      ? t("cost.video", { seconds: video.seconds, size: `${pixels[0]!.width}×${pixels[0]!.height}` })
+      : t("cost.videoAnyShape", { seconds: video.seconds, resolution: video.resolution });
+  return {
+    currency: price.currency,
+    min: round(low * count),
+    max: round(high * count),
+    confidence: "estimated",
+    basis: basis(
+      count,
+      moneyRange(low, high, price.currency),
+      speedLabel ? `${detail}, ${speedLabel}` : detail,
+    ),
     pricedAt: price.pricedAt,
   };
 }

@@ -1,0 +1,35 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v3/contents/generations/tasks/{id}"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "id": "cgt-20260929140512-8xk2p",
+      "model": "seedance-1-0-pro-250528",
+      "created_at": 1790690712,
+      "updated_at": 1790690790,
+      "status": "succeeded",
+      "error": null,
+      "content": {
+        "video_url": "https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.bytepluses.com/seedance-1-0-pro/cgt-20260929140512-8xk2p/video.mp4?X-Tos-Algorithm=TOS4-HMAC-SHA256&X-Tos-Signature=0f1e",
+        "last_frame_url": "https://ark-content-generation-v2-ap-southeast-1.tos-ap-southeast-1.bytepluses.com/seedance-1-0-pro/cgt-20260929140512-8xk2p/last_frame.jpeg?X-Tos-Algorithm=TOS4-HMAC-SHA256&X-Tos-Signature=0f1e"
+      },
+      "usage": {
+        "completion_tokens": 102960,
+        "total_tokens": 102960
+      },
+      "seed": 11,
+      "resolution": "720p",
+      "ratio": "16:9",
+      "duration": 5,
+      "framespersecond": 24,
+      "service_tier": "default",
+      "execution_expires_after": 7200
+    }
+  }
+}

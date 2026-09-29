@@ -1,0 +1,25 @@
+{
+  "request": {
+    "method": "GET",
+    "path": "/api/v3/contents/generations/tasks/{id}"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "id": "cgt-20260929140512-8xk2p",
+      "model": "seedance-1-0-pro-250528",
+      "created_at": 1790690712,
+      "updated_at": 1790690712,
+      "status": "failed",
+      "error": {
+        "code": "InternalServiceError",
+        "message": "The service encountered an unexpected internal error. Request id: 0217906907906"
+      },
+      "content": null,
+      "usage": null
+    }
+  }
+}

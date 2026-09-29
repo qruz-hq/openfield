@@ -1,0 +1,19 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/contents/generations/tasks"
+  },
+  "response": {
+    "status": 401,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "error": {
+        "code": "AuthenticationError",
+        "message": "The API key or AK/SK in the request is missing or invalid. Request id: 0217906907907",
+        "type": "Unauthorized"
+      }
+    }
+  }
+}
