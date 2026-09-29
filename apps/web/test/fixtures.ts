@@ -293,3 +293,69 @@ export function speedSettings(
   );
   return { schema, values: { speed: "standard", flexBusy: "wait", concurrencyCap: 4, ...values } };
 }
+
+// A video model, roughly Seedance 2.0 Fast: 480p/720p, 4 to 15 seconds, sound, a start and end
+// frame, no seed or still camera.
+
+export const seedance: ModelListItem = {
+  key: "byteplus:seedance-2-0-fast",
+  providerId: "byteplus",
+  modelId: "seedance-2-0-fast",
+  displayName: "Seedance 2.0 Fast",
+  modality: "video",
+  capabilities: {
+    ...base,
+    ops: { ...base.ops, textToImage: false, imageEdit: false },
+    references: {
+      supported: false,
+      max: 0,
+      roles: [],
+      mimeTypes: [],
+      weights: false,
+      strengthMode: "none",
+      maxBytes: 0,
+    },
+    size: { mode: "aspect", ratios: ["auto", "16:9", "4:3", "1:1", "3:4", "9:16", "21:9"], default: "16:9" },
+    resolution: undefined,
+    quality: undefined,
+    seed: { supported: false, echoed: false },
+    controlOrder: ["model", "aspect", "seed"],
+    emulated: [],
+    unsupported: {},
+    video: {
+      resolutions: ["480p", "720p"],
+      defaultResolution: "720p",
+      durations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+      defaultDuration: 5,
+      fps: 24,
+      sizes: [
+        { resolution: "720p", aspect: "16:9", width: 1248, height: 704 },
+        { resolution: "720p", aspect: "9:16", width: 704, height: 1248 },
+        { resolution: "720p", aspect: "1:1", width: 960, height: 960 },
+        { resolution: "480p", aspect: "16:9", width: 864, height: 480 },
+      ],
+      frames: {
+        start: true,
+        end: true,
+        mimeTypes: ["image/jpeg", "image/png", "image/webp"],
+        maxBytes: 31_457_280,
+      },
+      autoAspect: "with_start_frame",
+      startFrameForcesAuto: false,
+      audio: { supported: true, default: true },
+      cameraFixed: false,
+    },
+  },
+  price: {
+    kind: "video_tokens",
+    currency: "USD",
+    pricedAt: "2026-09-23",
+    sourceUrl: "https://example.com/prices",
+    rates: [{ perMTok: 2.5 }],
+  },
+  source: "static",
+  manifestVersion: "1",
+  fetchedAt: "2026-09-23",
+  ready: true,
+  enabled: true,
+};

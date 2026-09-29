@@ -144,6 +144,30 @@ describe("format", () => {
     expect(frozenSettings(null)).toEqual({});
   });
 
+  test("a video run's settings come back under video, a malformed block dropped whole", () => {
+    const frozen = frozenSettings({
+      prompt: "a kite",
+      model: "byteplus:seedance-2-0-fast",
+      size: { aspect: "16:9" },
+      video: {
+        seconds: 8,
+        resolution: "720p",
+        audio: true,
+        startFrame: { assetId: "01K6BQ8000000000000000ABCD" },
+      },
+    });
+    expect(frozen.video).toEqual({
+      seconds: 8,
+      resolution: "720p",
+      audio: true,
+      startFrame: { assetId: "01K6BQ8000000000000000ABCD" },
+    });
+    // A field that doesn't parse fails the whole (strict) block, same as an unreadable size does.
+    expect(frozenSettings({ video: { seconds: "soon" } }).video).toBeUndefined();
+    // An empty video object parses fine but says nothing, so it's left out too.
+    expect(frozenSettings({ video: {} }).video).toBeUndefined();
+  });
+
   test("relative times read in sentence case, then as a date", () => {
     const now = Date.parse("2026-09-24T12:00:00Z");
     expect(relativeTime("2026-09-24T11:59:40Z", now)).toBe("A moment ago");
