@@ -80,7 +80,7 @@ import {
 // Feed / Tile / {Idle, Generating, Queued, Waiting at provider, Failed}. Radius 0: the image is the
 // tile (§2.4).
 
-interface TileBox {
+export interface TileBox {
   style: CSSProperties;
 }
 
@@ -236,7 +236,7 @@ function waitLabel(ms: number): string {
 
 const clock = (seconds: number) => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
-interface JobTileProps extends TileBox {
+export interface JobTileProps extends TileBox {
   jobSet: JobSet;
   job: Job;
   /** Every job in the run. */
@@ -344,7 +344,9 @@ function WorkingTile({
  * progress bar, because there's no progress to show. A Batch run's images stop together, so its
  * Cancel asks first, and the tiles say they're stopping until the company has (§2.4).
  */
-function WaitingTile({
+/** Exported so the Video feed can reuse it too: BytePlus has no Batch or Flex speed today, but a
+ * future video company might. */
+export function WaitingTile({
   jobSet,
   job,
   jobs,
