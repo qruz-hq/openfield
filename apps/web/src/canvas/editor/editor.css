@@ -53,6 +53,8 @@
   /* The pulse's transparent tail: $accent at 0% (not transparent black), so the fade stays warm
      instead of going grey. One per theme, like --of-accent. */
   --of-accent-clear: light-dark(#1b1d2100, #e9e3d800);
+  /* The generating ring's glow (design ULrpL): $accent at 15%. */
+  --of-accent-glow: light-dark(#1b1d2126, #e9e3d826);
 }
 
 /* The off-screen card picture is taken once per theme (preview-capture.tsx). */
@@ -239,6 +241,61 @@
 /* The run ended: the pulse fades where it is. */
 .of-canvas .of-pulse.of-pulse-out {
   opacity: 0;
+}
+
+/* The ring around a generating node (design ULrpL "Circling", Put28 "Still", screen v74jhh;
+   nodes/shell/ring.tsx): sits outside the card like the selection ring, so -inset-2/rounded-16
+   matches node-shell.tsx's own selected-card geometry. */
+@property --of-ring-angle {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+.of-canvas .of-ring {
+  transition: opacity 200ms ease-out;
+}
+
+.of-canvas .of-ring.of-ring-out {
+  opacity: 0;
+}
+
+/* Waiting at the company, or reduced motion: the plain outline, no glow, nothing moves. */
+.of-canvas .of-ring-still {
+  border: 2px solid var(--of-accent-line);
+}
+
+/* Actively generating: a comet of $accent, most of the ring clear, rotating one lap every
+   PULSE.travelMs (ring.tsx keeps its start in step with the pulse that lands on the node). The
+   padding + double mask cuts the conic gradient down to a 2 px ring with rounded corners. */
+.of-canvas .of-ring-circling {
+  padding: 2px;
+  background: conic-gradient(
+    from calc(90deg + var(--of-ring-angle)),
+    var(--of-accent-clear) 0%,
+    var(--of-accent-clear) 55%,
+    var(--of-accent) 97%,
+    var(--of-accent-clear) 100%
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  box-shadow: 0 0 12px var(--of-accent-glow);
+  animation: of-ring-spin 1600ms linear infinite;
+}
+
+@keyframes of-ring-spin {
+  to {
+    --of-ring-angle: 360deg;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .of-canvas .of-ring-circling {
+    animation: none;
+  }
 }
 
 .of-canvas .react-flow__edge-path.of-arrow,

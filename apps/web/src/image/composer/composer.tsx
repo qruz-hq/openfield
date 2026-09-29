@@ -16,6 +16,7 @@ import {
   generateBody,
   generateState,
   qualityLabel,
+  referenceInputsFor,
   resolveValues,
   visibleControls,
 } from "@openfield/providers/manifest";
@@ -205,7 +206,8 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
     }
     // Browsers only ask from a click, and a Batch run's finish is worth a system notification.
     if (speed === "batch") askToNotifyOnce();
-    const body = generateBody(model, resolved, composer.prompt, newId());
+    const references = referenceInputsFor(model.capabilities, composer.references);
+    const body = generateBody(model, resolved, composer.prompt, newId(), references);
     generate.mutate(
       { body, placeholder: expectedSize(model.capabilities, resolved), speed, modality: "image" },
       {
