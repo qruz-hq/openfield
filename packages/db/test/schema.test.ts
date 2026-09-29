@@ -229,6 +229,9 @@ const COLUMNS: Record<string, string[]> = {
     "created_at text not null",
     "updated_at text not null",
     "deleted_at text",
+    "duration_ms integer",
+    "has_audio integer",
+    "poster_path text",
   ],
   asset_edges: [
     "parent_asset_id text not null pk1",
@@ -674,18 +677,18 @@ describe("boot (§8.2.4)", () => {
   });
 
   test("every migration is in the journal and applied, newest tag reported", () => {
-    expect(opened.schemaTag).toBe("0007_agents");
-    expect(raw.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 8 });
+    expect(opened.schemaTag).toBe("0008_video");
+    expect(raw.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 9 });
   });
 
   test("reopening applies nothing twice", () => {
     const again = openDb(file);
-    expect(again.schemaTag).toBe("0007_agents");
-    expect(again.db.$client.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 8 });
+    expect(again.schemaTag).toBe("0008_video");
+    expect(again.db.$client.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 9 });
     again.close();
   });
 
-  test("0003 to 0006 keep existing rows: Standard runs, real spend, no settings, no restarts, canvases", () => {
+  test("0003 to 0008 keep existing rows: Standard runs, real spend, no settings, no restarts, canvases, images", () => {
     // A library last opened at 0002, with a run and its usage row in it.
     const folder = join(dir, "migrations-0002");
     cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
@@ -728,6 +731,11 @@ describe("boot (§8.2.4)", () => {
       [at, at],
     );
     old.run(
+      `INSERT INTO assets (id, kind, job_id, job_set_id, path, mime, width, height, bytes, sha256, root_asset_id, created_at, updated_at)
+       VALUES ('asset1', 'generated', 'job1', 'set1', 'assets/a.png', 'image/png', 8, 8, 64, ?, 'asset1', ?, ?)`,
+      ["a".repeat(64), at, at],
+    );
+    old.run(
       `INSERT INTO usage_log (ts, provider_id, model_id, job_set_id, job_id, operation, outcome, cost_usd, discarded)
        VALUES (?, 'google', 'gemini-3-pro-image', 'set1', 'job1', 'generate', 'succeeded', 0.134, 0)`,
       [at],
@@ -736,7 +744,12 @@ describe("boot (§8.2.4)", () => {
 
     const upgraded = openDb(path);
     const db = upgraded.db.$client;
-    expect(upgraded.schemaTag).toBe("0007_agents");
+    expect(upgraded.schemaTag).toBe("0008_video");
+    // 0008: everything made before video is an image, with no length, sound or poster.
+    expect(
+      db.query("SELECT modality, duration_ms, has_audio, poster_path FROM assets WHERE id = 'asset1'").get(),
+    ).toEqual({ modality: "image", duration_ms: null, has_audio: null, poster_path: null });
+    expect(db.query("SELECT modality FROM job_sets").get()).toEqual({ modality: "image" });
     // 0007: runs made before agents existed were made by a person.
     expect(db.query("SELECT speed, cost_actual_usd, request_json, agent FROM job_sets").get()).toEqual({
       speed: "standard",
@@ -834,8 +847,8 @@ describe("boot (§8.2.4)", () => {
 
     const upgraded = openDb(path);
     const db = upgraded.db.$client;
-    expect(upgraded.schemaTag).toBe("0007_agents");
-    expect(db.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 8 });
+    expect(upgraded.schemaTag).toBe("0008_video");
+    expect(db.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 9 });
     expect(db.query("SELECT name FROM sqlite_master WHERE name = 'provider_batches'").get()).toEqual({
       name: "provider_batches",
     });
@@ -848,7 +861,7 @@ describe("boot (§8.2.4)", () => {
     upgraded.close();
     // And the next boot has nothing left to do.
     const again = openDb(path);
-    expect(again.schemaTag).toBe("0007_agents");
+    expect(again.schemaTag).toBe("0008_video");
     again.close();
   });
 

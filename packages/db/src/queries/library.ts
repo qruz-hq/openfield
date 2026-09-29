@@ -5,7 +5,7 @@ import { InvalidCursorError } from "../errors";
 import type { AssetRow } from "../rows";
 import { assets } from "../schema";
 import { chunked, nowIso, type Page, pageSize, toPage } from "./_util";
-import type { FeedItem, FeedQuery } from "./assets";
+import { type FeedItem, type FeedQuery, modalityIs } from "./assets";
 import { toFtsQuery } from "./search";
 
 // The Assets library's listings (§2.8, §8.2.2): every view, search and filter on the one
@@ -41,10 +41,12 @@ const itemFields = {
  * words hold nothing searchable: that search matches nothing.
  */
 function scope(q: LibraryFilter): SQL[] | null {
-  const modality = eq(assets.modality, q.modality ?? "image");
+  // The library lists images and videos together unless asked for one (§2.8).
+  const modality = modalityIs(q.modality ?? "all");
   // Masks are internal: never listed, never counted (§8.3).
   const notMask = ne(assets.kind, "mask");
-  if (q.trash) return [isNotNull(assets.deletedAt), modality, notMask];
+  if (q.trash)
+    return [isNotNull(assets.deletedAt), modality, notMask].filter((c): c is SQL => c !== undefined);
 
   const where: (SQL | undefined)[] = [
     isNull(assets.deletedAt),
@@ -189,7 +191,7 @@ export interface LibraryCounts {
   trash: number;
 }
 
-/** The sidebar's counts in one pass (§2.8). Masks never count. */
+/** The sidebar's counts in one pass (§2.8): images and videos alike. Masks never count. */
 export function libraryCounts(db: Executor): LibraryCounts {
   const row = db
     .select({
@@ -198,7 +200,7 @@ export function libraryCounts(db: Executor): LibraryCounts {
       trash: sql<number>`coalesce(sum(${assets.deletedAt} IS NOT NULL), 0)`,
     })
     .from(assets)
-    .where(and(eq(assets.modality, "image"), ne(assets.kind, "mask")))
+    .where(ne(assets.kind, "mask"))
     .get();
   return { all: row?.all ?? 0, favourites: row?.favourites ?? 0, trash: row?.trash ?? 0 };
 }
@@ -210,7 +212,7 @@ export interface LibraryFacets {
 
 /** The models and companies that made a live image, for the Model and Company filters (§2.8). */
 export function libraryFacets(db: Executor): LibraryFacets {
-  const live = and(isNull(assets.deletedAt), eq(assets.modality, "image"), ne(assets.kind, "mask"));
+  const live = and(isNull(assets.deletedAt), ne(assets.kind, "mask"));
   const models = db
     .select({ providerId: assets.providerId, modelId: assets.modelId, count: sql<number>`count(*)` })
     .from(assets)
@@ -315,7 +317,12 @@ function orphansOf(db: Executor, deleted: AssetRow[]): PurgeResult {
   };
   const usedPaths = stillUsed(assets.path, [...bytesByPath.keys()]);
   const usedHashes = stillUsed(assets.sha256, [...hashes]);
-  const files = [...bytesByPath.keys()].filter((path) => !usedPaths.has(path));
+  const orphaned = [...bytesByPath.keys()].filter((path) => !usedPaths.has(path));
+  // A video's poster goes with its file: identical videos share both.
+  const posters = deleted.flatMap((row) =>
+    row.posterPath && orphaned.includes(row.path) ? [row.posterPath] : [],
+  );
+  const files = [...orphaned, ...new Set(posters)];
   return {
     deleted,
     files,

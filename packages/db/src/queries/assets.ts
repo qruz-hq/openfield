@@ -8,7 +8,8 @@ import { type Draft, nowIso, olderThan, type PageQuery } from "./_util";
 export type FeedItem = AssetRow & { isFavourite: boolean };
 
 export interface FeedQuery extends PageQuery {
-  modality?: Modality;
+  /** Images, videos, or "all". The feed and search default to images; the library to all. */
+  modality?: Modality | "all";
   folderId?: string;
   favouritesOnly?: boolean;
   modelId?: string;
@@ -25,7 +26,7 @@ export const isFavouriteExpr = sql<boolean>`(${favourites.assetId} IS NOT NULL)`
 export function feedFilters(q: FeedQuery): SQL[] {
   const where: (SQL | undefined)[] = [
     isNull(assets.deletedAt),
-    eq(assets.modality, q.modality ?? "image"),
+    modalityIs(q.modality ?? "image"),
     ne(assets.kind, "mask"),
     q.modelId ? eq(assets.modelId, q.modelId) : undefined,
     q.providerId ? eq(assets.providerId, q.providerId) : undefined,
@@ -36,6 +37,10 @@ export function feedFilters(q: FeedQuery): SQL[] {
   ];
   return where.filter((c): c is SQL => c !== undefined);
 }
+
+/** A modality filter, or none for "all". */
+export const modalityIs = (modality: Modality | "all"): SQL | undefined =>
+  modality === "all" ? undefined : eq(assets.modality, modality);
 
 /** An original is its own lineage root, so rootAssetId defaults to the asset's id. */
 export function insertAsset(

@@ -45,6 +45,12 @@ export const assets = sqliteTable(
     approximate: flag("approximate", 0), // 1 when made by the regional fallback (§0.9)
     approximateReason: text("approximate_reason"),
     fileState: text("file_state", { enum: FILE_STATES }).notNull().default("ok"),
+    // Videos only (0008): how long it runs, whether it has sound, and its poster frame, a JPEG the
+    // thumbnails are made from. Null on images.
+    durationMs: integer("duration_ms"),
+    hasAudio: integer("has_audio", { mode: "boolean" }),
+    posterPath: text("poster_path"), // relative to OPENFIELD_HOME, like path
+
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
     deletedAt: text("deleted_at"), // soft delete: in the trash
