@@ -157,13 +157,23 @@ export function VideoAssetTile({
           className="pointer-events-none absolute inset-0 inset-ring inset-ring-border-strong"
         />
       ) : null}
+      {/* Under the hover controls in paint order, so their clicks reach them first; everywhere
+          else on the tile still opens the detail view. */}
+      <button
+        type="button"
+        aria-label={label}
+        {...detailTarget(asset.id)}
+        onClick={() => openDetail(asset.id)}
+        className="absolute inset-0 cursor-pointer focus-visible:-outline-offset-2"
+      />
       {hovered ? (
         <>
           <IconButton
             variant="overlay"
             size={32}
             icon={muted ? VolumeX : Volume2}
-            label={muted ? t("video.chips.sound.off") : t("video.chips.sound.on")}
+            label={muted ? t("video.controls.unmute") : t("video.controls.mute")}
+            aria-pressed={muted}
             onClick={(event) => {
               event.stopPropagation();
               setMuted((m) => !m);
@@ -203,7 +213,8 @@ export function VideoAssetTile({
                   event.stopPropagation();
                   const jobSetId = asset.jobSetId!;
                   recreate.mutateAsync(jobSetId).then(
-                    (set: JobSetWithJobs) => notify(t("assets.toast.recreating", { count: set.jobs.length })),
+                    (set: JobSetWithJobs) =>
+                      notify(t("assets.toast.recreatingVideo", { count: set.jobs.length })),
                     (error: unknown) => notifyError(errorMessage(error)),
                   );
                 }}
@@ -246,13 +257,6 @@ export function VideoAssetTile({
       ) : seconds !== null ? (
         <DurationPill seconds={seconds} playing={false} />
       ) : null}
-      <button
-        type="button"
-        aria-label={label}
-        {...detailTarget(asset.id)}
-        onClick={() => openDetail(asset.id)}
-        className="absolute inset-0 cursor-pointer focus-visible:-outline-offset-2"
-      />
     </li>
   );
 }

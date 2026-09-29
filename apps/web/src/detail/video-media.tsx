@@ -109,12 +109,15 @@ export function VideoMedia({ item, expanded, label, ref }: VideoMediaProps) {
             className="absolute inset-0 size-full rounded-4 object-contain"
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
-            onTimeUpdate={(event) =>
-              setTime({ current: event.currentTarget.currentTime, total: event.currentTarget.duration || 0 })
-            }
-            onLoadedMetadata={(event) =>
-              setTime((prev) => ({ ...prev, total: event.currentTarget.duration || prev.total }))
-            }
+            onTimeUpdate={(event) => {
+              // The element itself, not the (possibly since-recycled) event, once inside the updater.
+              const el = event.currentTarget;
+              setTime({ current: el.currentTime, total: el.duration || 0 });
+            }}
+            onLoadedMetadata={(event) => {
+              const total = event.currentTarget.duration;
+              setTime((prev) => ({ ...prev, total: total || prev.total }));
+            }}
           />
         ) : null}
       </div>
