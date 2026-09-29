@@ -309,7 +309,11 @@ export function ProviderCard({
             <span id={`${helperId}-name`} className="text-body-strong text-text-primary">
               {company}
             </span>
-            <span className="text-caption text-text-tertiary">{t("settings.apiKeys.tagline")}</span>
+            <span className="text-caption text-text-tertiary">
+              {provider.id === "byteplus"
+                ? t("settings.apiKeys.taglineVideo")
+                : t("settings.apiKeys.tagline")}
+            </span>
           </div>
         </div>
         <StatusPill status={PILL[state].pill} role="status">
@@ -326,6 +330,9 @@ export function ProviderCard({
       ) : (
         keyRow
       )}
+      {provider.id === "byteplus" ? (
+        <p className="w-full text-caption text-text-tertiary">{t("settings.apiKeys.byteplusNote")}</p>
+      ) : null}
       <div className="flex w-full items-center justify-between gap-12">
         <div className="flex min-w-0 flex-wrap items-center gap-6">
           {models.map((model) => {

@@ -29,6 +29,11 @@ export const router = createBrowserRouter([
     children: [
       { path: "/", element: <ToImage /> },
       { path: "/image", element: <ImagePage /> },
+      {
+        path: "/video",
+        lazy: async () => ({ Component: (await import("./video/video-page")).VideoPage }),
+        HydrateFallback: EditorLoading,
+      },
       // The library's four views share one page, so the sidebar stays put between them (§2.8). Its
       // code loads when it's first opened.
       ...["/assets", "/assets/favourites", "/assets/trash", "/assets/folder/:folderId"].map((path) => ({
