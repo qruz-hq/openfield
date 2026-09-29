@@ -175,6 +175,8 @@
         "recreate": "Recreate",
         "more": "More",
         "useAsReference": "Use as reference",
+        "referenceAdded": "Added as a reference.",
+        "addToFolder": "Add to folder",
         "edit": "Edit",
         "sendToCanvas": "Send to Canvas"
       },
