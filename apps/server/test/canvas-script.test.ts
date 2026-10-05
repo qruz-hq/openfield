@@ -120,6 +120,22 @@ async function ready() {
 }
 
 describe("canvas_script tool", () => {
+  test("a big canvas builds in one call, and past the cap is refused", async () => {
+    const c = await ready();
+    const out = await call(c, "canvas_script", {
+      createCanvas: "Big",
+      code: 'for (let i = 0; i < 600; i++) { const p = Add("prompt", {text: "p" + i}); const g = Add("image.generate"); Connect(p + ".text", g + ".prompt"); }',
+    });
+    expect(out.isError).toBe(false);
+    expect(j(out).edits).toBe(1800);
+    const over = await call(c, "canvas_script", {
+      createCanvas: "Too big",
+      code: 'for (let i = 0; i < 2001; i++) Add("note");',
+    });
+    expect(over.isError).toBe(true);
+    expect(over.text).toContain("at most 2000");
+  });
+
   test("creates a canvas and fills it in one call", async () => {
     const c = await ready();
     const out = await call(c, "canvas_script", {

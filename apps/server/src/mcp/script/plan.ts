@@ -1,10 +1,12 @@
 import { CANVAS_NODE_TYPES } from "@openfield/core";
-import { CANVAS_EDITS_MAX, type CanvasDocument, type CanvasEdit } from "@openfield/core/canvas";
+import type { CanvasDocument, CanvasEdit } from "@openfield/core/canvas";
 import type { Host } from "./sandbox";
 
 // What a script's calls do: reads answer from a snapshot of the canvas with the script's own pending
 // edits laid over it, writes are only recorded. The caller validates and applies the plan.
 
+/** More than edit_canvas's 500: a script's edits come from loops, and apply as one batch all the same. */
+export const SCRIPT_EDITS_MAX = 2000;
 export const MAX_PRINT_LINES = 60;
 export const MAX_PRINT_CHARS = 4000;
 export const MAX_ARG_BYTES = 256 * 1024;
@@ -65,8 +67,8 @@ export function planHost(
   let printChars = 0;
 
   const record = (edit: CanvasEdit, line: number) => {
-    if (plan.edits.length >= CANVAS_EDITS_MAX) {
-      throw new Error(`A script can make at most ${CANVAS_EDITS_MAX} edits.`);
+    if (plan.edits.length >= SCRIPT_EDITS_MAX) {
+      throw new Error(`A script can make at most ${SCRIPT_EDITS_MAX} edits.`);
     }
     plan.edits.push(edit);
     plan.lines.push(line);
