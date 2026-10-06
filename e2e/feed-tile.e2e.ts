@@ -131,6 +131,8 @@ test("Use as reference queues the image, and Generate sends it as a $subject ref
     .getByRole("listitem")
     .filter({ hasText: "Added as a reference." })
     .getByRole("button", { name: "Undo" })
+    // CI sometimes shows the toast twice; either one takes the reference back off.
+    .first()
     .click();
   await tile(page, prompt).hover();
   await tile(page, prompt).getByRole("button", { name: "Use as reference" }).click();
