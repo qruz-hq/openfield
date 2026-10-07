@@ -28,8 +28,8 @@
     "desktop:sidecar": "bun run scripts/build-sidecar.ts"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.5.14",
-    "@modelcontextprotocol/sdk": "1.30.1",
+    "@biomejs/biome": "2.5.15",
+    "@modelcontextprotocol/sdk": "1.32.0",
     "@playwright/test": "1.63.0",
     "@types/bun": "1.4.2",
     "typescript": "7.0.2"
