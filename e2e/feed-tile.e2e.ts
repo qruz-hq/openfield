@@ -140,6 +140,8 @@ test("Use as reference queues the image, and Generate sends it as a $subject ref
     .getByRole("listitem")
     .filter({ hasText: "Added as a reference." })
     .getByRole("button", { name: "Undo" })
+    // The first toast may still be fading out; the newest is first, and any Undo takes it back off.
+    .first()
     .click();
   await field.fill(unique("with no reference"));
   const sentAgain = page.waitForRequest((r) => r.url().endsWith("/api/generate") && r.method() === "POST");
