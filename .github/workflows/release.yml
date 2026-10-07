@@ -221,7 +221,7 @@ jobs:
           releaseBody: |
             Download the installer for your computer below.
 
-            These builds are not signed yet, so your computer will ask before opening them the first time. See https://github.com/${{ github.repository }}/blob/main/docs/desktop.md#installing-an-unsigned-build for the one-time steps.
+            The Mac builds are signed and notarized by Apple. The Windows builds aren't signed yet: if SmartScreen appears, click **More info**, then **Run anyway**. On Linux, make the AppImage executable first with `chmod +x`. More in https://github.com/${{ github.repository }}/blob/main/docs/desktop.md#installing-an-unsigned-build.
           releaseDraft: true
           prerelease: false
           uploadUpdaterJson: ${{ steps.signing.outputs.updater }}
