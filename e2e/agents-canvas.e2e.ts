@@ -84,3 +84,70 @@ test("an agent builds and runs a canvas while the person watches", async ({ page
   expect(status.clients.find((c) => c.name === "Claude Code")?.today.images).toBe(1);
   await client.close();
 });
+
+test("an agent builds a grid with canvas_script while the person watches", async ({
+  page,
+  request,
+  baseURL,
+}) => {
+  const token = await sessionToken(request);
+  const { key } = await api<{ key: string }>(request, token, "PUT", "/api/agents", { enabled: true });
+  const client = new Client({ name: "claude-code", version: "1.0.0" });
+  await client.connect(
+    new StreamableHTTPClientTransport(new URL("/mcp", baseURL), {
+      requestInit: { headers: { authorization: `Bearer ${key}` } },
+    }),
+  );
+
+  const canvas = (await tool(client, "create_canvas", { name: "Mug grid" })).json;
+  await page.goto(`/canvas/${canvas.canvasId}`);
+  await expect(page.getByRole("button", { name: "Canvas menu" })).toBeVisible();
+
+  const code = [
+    'const colors = ["sage", "rust", "cobalt"];',
+    "const spots = Grid(colors.length, { cols: 3 });",
+    "colors.forEach((c, i) => {",
+    '  const p = Add("prompt", { text: "A " + c + " stoneware mug on linen" }, { at: spots[i] });',
+    '  const g = Add("image.generate", { aspect: "1:1" }, { near: p });',
+    '  Connect(p + ".text", g + ".prompt");',
+    "});",
+    "Print(Nodes().length);",
+  ].join("\n");
+
+  // A dry run says what it would do and leaves the open tab alone.
+  const dry = (await tool(client, "canvas_script", { canvas: canvas.canvasId, dryRun: true, code })).json;
+  expect(dry).toMatchObject({ dryRun: true, edits: 9, ops: { add_node: 6, connect: 3 }, prints: ["6"] });
+  await expect(pane(page).locator(".react-flow__node")).toHaveCount(0);
+
+  // A broken script changes nothing and hands back a retryId to patch it with.
+  const broken = (await client.callTool({
+    name: "canvas_script",
+    arguments: { canvas: canvas.canvasId, code: code.replace('"image.generate"', '"image.banana"') },
+  })) as CallToolResult;
+  expect(broken.isError).toBe(true);
+  const text = broken.content[0]?.type === "text" ? broken.content[0].text : "";
+  expect(text).toContain("Nothing was changed");
+  const retryId = /retryId: (\w+)/.exec(text)?.[1];
+  expect(retryId).toBeTruthy();
+  await expect(pane(page).locator(".react-flow__node")).toHaveCount(0);
+
+  // The patched script lands as one batch, live in the tab.
+  const done = (
+    await tool(client, "canvas_script", {
+      canvas: canvas.canvasId,
+      retryId,
+      edits: [{ find: '"image.banana"', replace: '"image.generate"' }],
+    })
+  ).json;
+  expect(done).toMatchObject({ canvasId: canvas.canvasId, edits: 9, prints: ["6"] });
+  // The canvas only draws nodes in view, so count the wires; get_canvas has every node.
+  await expect(pane(page).locator(".react-flow__edge")).toHaveCount(3);
+  await expect(page.getByRole("textbox", { name: "Prompt text" }).first()).toHaveValue(
+    /stoneware mug on linen/,
+  );
+  await expect(pill(page)).toHaveText(/Claude Code is editing/);
+
+  const read = (await tool(client, "get_canvas", { canvas: canvas.canvasId })).json;
+  expect(read.nodes).toHaveLength(6);
+  await client.close();
+});
