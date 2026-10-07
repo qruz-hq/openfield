@@ -11,7 +11,8 @@ import {
   seedProviders,
 } from "@openfield/db";
 import { createFakeFetch, type FetchLike, type Provider, providersFor } from "@openfield/providers/server";
-import pkg from "../package.json";
+// The app's version lives in the root package.json; the desktop app reads the same one.
+import pkg from "../../../package.json";
 import { createApp } from "./app";
 import { CanvasService } from "./canvas/canvases";
 import { serverEngineContext } from "./canvas/engine-context";

@@ -297,7 +297,7 @@ function DetailContent({
             size={30}
             icon={X}
             label={t("assets.detail.close")}
-            className="absolute top-20 right-20"
+            className="absolute top-20 right-20 mac-window:top-48 other-window:top-64"
           />
         </ModalClose>
       </Shell>
@@ -519,7 +519,11 @@ function DetailContent({
     >
       <Backdrop item={item} expanded={expanded} />
       {/* The media area: the window left of the panel, or all of it when expanded. */}
-      <div className="absolute inset-y-0 left-0" style={{ right: expanded ? 0 : PANEL_GUTTER }}>
+      {/* In the desktop app it starts below the title bar that ModalWindowBar draws over the view. */}
+      <div
+        className="absolute inset-y-0 left-0 mac-window:top-28 other-window:top-44"
+        style={{ right: expanded ? 0 : PANEL_GUTTER }}
+      >
         <div ref={mediaBox} className="absolute inset-0">
           {isVideo ? (
             <VideoMedia key={item.id} ref={videoMedia} item={item} expanded={expanded} label={title} />
@@ -605,7 +609,7 @@ function DetailContent({
             size={38}
             icon={X}
             label={t("assets.detail.close")}
-            className="absolute top-16 right-16"
+            className="absolute top-16 right-16 mac-window:top-44 other-window:top-60"
           />
         </ModalClose>
       ) : null}
@@ -670,7 +674,7 @@ function Shell({
         if (onEscape()) event.preventDefault();
       }}
       onInteractOutside={(event) => event.preventDefault()}
-      className="inset-0 h-dvh max-h-none w-auto max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none bg-surface p-0 shadow-none inset-ring-0 data-[state=open]:animate-none"
+      className="inset-0 h-dvh max-h-none w-auto mac-window:max-h-none other-window:max-h-none max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none bg-surface p-0 shadow-none inset-ring-0 data-[state=open]:animate-none"
     >
       {children}
     </ModalContent>

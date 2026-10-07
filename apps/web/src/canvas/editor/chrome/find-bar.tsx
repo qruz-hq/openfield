@@ -70,7 +70,7 @@ export function FindBar({ right }: { right: number }) {
       role="search"
       aria-label={t("canvas.editor.find.label")}
       style={{ right }}
-      className="absolute top-64 z-10 h-44 w-fit gap-4 rounded-12 p-6"
+      className="absolute top-64 z-10 h-44 w-fit gap-4 rounded-12 p-6 mac-window:top-92"
     >
       <SearchInput
         ref={input}

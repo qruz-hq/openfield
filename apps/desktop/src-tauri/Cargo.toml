@@ -28,9 +28,12 @@ open = "5.3"
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
 tauri-plugin-single-instance = "2.5.2"
 
+[target.'cfg(windows)'.dependencies]
+windows-version = "0.1.7"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6.5"
-objc2-foundation = { version = "0.3.2", features = ["NSData"] }
+objc2-foundation = { version = "0.3.2", features = ["NSData", "NSProcessInfo", "NSString", "NSUserDefaults"] }
 objc2-app-kit = { version = "0.3.2", features = ["NSApplication", "NSImage", "NSResponder"] }
 
 [profile.release]

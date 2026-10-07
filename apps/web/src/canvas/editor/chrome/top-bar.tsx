@@ -21,19 +21,22 @@ import { duplicateCanvas } from "../../../api/hooks/canvas-doc";
 import { errorMessage } from "../../../api/raw";
 import { useIsGenerating } from "../../../lib/live";
 import { notify, notifyError } from "../../../lib/notify";
+import { WindowControls } from "../../../shell/window-chrome";
 import { RunControls } from "../../engine/run-controls";
 import type { SaveFailure, SaveStatus } from "../../store/types";
 import { useEditorUi, useMain, useSession } from "../session";
 import { SpendPill } from "./spend-pill";
 
 // Top bar (design JDH76 left, buf6z right). Left: the Openfield menu pill and the canvas name pill,
-// each with its menu. Right: what the canvas has spent, the save state, then the run controls.
+// each with its menu. Right: what the canvas has spent, the save state, then the run controls, and
+// in the desktop app on Windows and Linux the window's buttons. On a Mac's desktop app both rows sit
+// 28 lower, under the traffic lights (window-chrome.tsx), and so does everything placed below them.
 
 const pill = "flex h-40 cursor-pointer items-center rounded-10 bg-elevated inset-ring inset-ring-border";
 
 export function TopBarLeft() {
   return (
-    <div className="absolute top-12 left-12 z-10 flex items-center gap-8">
+    <div className="absolute top-12 left-12 z-10 flex items-center gap-8 mac-window:top-40">
       <AppMenu />
       <NamePill />
     </div>
@@ -236,10 +239,11 @@ export function SaveState() {
 
 export function TopBarRight() {
   return (
-    <div className="absolute top-12 right-12 z-10 flex h-40 items-center justify-end gap-12">
+    <div className="absolute top-12 right-12 z-10 flex h-40 items-center justify-end gap-12 mac-window:top-40">
       <SpendPill />
       <SaveState />
       <RunControls />
+      <WindowControls placement="floating" />
     </div>
   );
 }

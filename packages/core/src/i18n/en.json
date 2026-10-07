@@ -12,6 +12,12 @@
       "menu": "Openfield menu",
       "spentToday": "Spent today"
     },
+    "window": {
+      "minimize": "Minimize",
+      "maximize": "Maximize",
+      "restore": "Restore",
+      "close": "Close"
+    },
     "menu": {
       "newCanvas": "New canvas",
       "openLibrary": "Open library",

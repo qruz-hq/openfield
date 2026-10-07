@@ -11,7 +11,7 @@ Tauri doesn't render Openfield itself. It starts the Openfield server as a **sid
 
   | Folder | What it holds |
   |---|---|
-  | `web/` | The built web app (`apps/web/dist`). |
+  | `web/` | The built web app (`apps/web/dist`), without its source maps. |
   | `migrations/` | Database migrations (`packages/db/migrations`). |
   | `templates/` | Built-in canvas templates (`apps/server/seed/templates`). |
   | `native/` | sharp's native libraries for the target platform (`@img/sharp-<platform>` and `@img/sharp-libvips-<platform>`), used for thumbnails. |
@@ -58,7 +58,38 @@ The server exits with code 0 after a clean stop.
 
 ### Closing while images are generating
 
-The web app tells the window whether anything is generating, through a single Tauri command, `set_generating`. The page is served from `http://127.0.0.1`, so the app's capability lets that origin call `set_generating` and nothing else. While something is generating, the dock or taskbar icon slowly turns with a soft glow, and closing the window asks first. If you close anyway, the app sends `quit` and waits for the server to finish, the same as Ctrl-C.
+The web app tells the window whether anything is generating, through one Tauri command, `set_generating`. While something is generating, the dock or taskbar icon slowly turns with a soft glow, and closing the window asks first. If you close anyway, the app sends `quit` and waits for the server to finish, the same as Ctrl-C.
+
+The window keeps doing this while it's hidden or covered: its webview is built with background throttling off (macOS 14 and later honour that), and on other systems the page holds a Web Lock so it isn't frozen.
+
+On macOS 26 and later the Dock draws app icons with a glass rim and shading, but shows an icon set while running as is. So the animation there uses frames rendered through that same treatment (`icons/generating-macos/`), and its first frame is pixel for pixel the resting icon. Only the glow-free icon goes through it, and the glow is added afterwards: macOS puts an icon with a faint glow on a lighter grey plate, which made the Dock flash. Older macOS, Windows and Linux use the flat frames in `icons/generating/`. Both sets are drawn in macOS's Default icon style. With another style (System Settings > Appearance > Icon & widget style: Dark, Clear or Tinted) macOS restyles the resting icon live, so the Dock icon stays still there rather than jumping to full colour and back; the logo in the app still turns. `bun run desktop:icons` makes `generating-macos/` only on macOS 26 or later in the Default style, records the `app-icon.svg` it came from in `generating-macos/source.sha256`, and anywhere else refuses to run once the icon has changed, so the two sets always show the same logo.
+
+### The title bar
+
+The window has no native title bar; the web app draws its own (`apps/web/src/shell/window-chrome.tsx`). In a browser none of it renders.
+
+- **macOS:** the title bar is an overlay with a hidden title. The traffic lights sit in an empty 28px strip above the app's nav, centred and 12 from the left (`TRAFFIC_LIGHTS` in `window.rs`). In the canvas editor, which has no nav, the floating top chrome moves 28 down (Tailwind's `mac-window:` variant, keyed on `<html data-window="mac">`) and a see-through strip covers the top of the canvas.
+- **Windows and Linux:** the window has no frame (`decorations: false`; Tauri keeps the edges resizable). On Windows 11 it has a shadow, which gives it the system's edge and rounded corners. Windows 10 draws that shadow as a 1px white border, so there the window has none. The nav ends with minimize, maximize or restore, and close. In the canvas editor they sit in a pill at the end of the top-right row.
+- **Over a modal:** a modal's scrim covers the nav, so every modal draws the strip and the window buttons again on top, in the same place. The full-window image view starts its own content below them.
+- Whether the window has a frame is never saved with its size and position, so `window.rs` alone decides it.
+- **Known limit:** the maximize button is drawn by the page, so on Windows 11 resting the pointer on it doesn't show Snap Layouts. Win+Z and dragging to a screen edge still work.
+- Empty parts of the nav and of the strip move the window, and double-clicking them maximizes it (Tauri's `data-tauri-drag-region`). The bundled splash can be dragged too.
+- The close button closes the window the same way the system's does, so it asks first while images are being made.
+
+### What the page may call
+
+The page is served from `http://127.0.0.1`, so a remote capability decides what that origin may ask of the app. `window.rs` adds it once the server is ready, for the port the server bound and nothing else: another local server on another port gets no permissions, and a link to it opens in the browser rather than in the window. It allows:
+
+| Permission | For |
+|---|---|
+| `generating-indicator` (`set_generating`) | The busy icon and the question before quitting. |
+| `core:window:allow-start-dragging` | Moving the window by the nav or strip. |
+| `core:window:allow-internal-toggle-maximize` | The maximize button, and double-clicking the nav or strip. |
+| `core:window:allow-minimize` | The minimize button. |
+| `core:window:allow-is-maximized` | Showing maximize or restore. |
+| `core:window:allow-close` | The close button. |
+
+Nothing else: no events, no files, no shell.
 
 ### Agents (MCP)
 
@@ -85,7 +116,7 @@ Rebuild the sidecar after changing server or web code: the app runs the compiled
 
 `bun run desktop:sidecar --target <bun target>` builds for another platform (`bun-darwin-arm64`, `bun-darwin-x64`, `bun-windows-x64`, `bun-linux-x64`, `bun-linux-arm64`). It stops with an error if sharp's native packages for that target aren't installed. To get them on macOS for the other architecture, install with `bun install --os=darwin --cpu='*'`.
 
-The animated icon frames and the app icon are generated by `scripts/desktop-icons.ts` from the logo and committed. Run it again only if the logo changes.
+The animated icon frames and the app icon are generated by `scripts/desktop-icons.ts` from the logo and committed. Run it again only if the logo changes, on macOS 26 or later so the macOS frames are made too (it needs Xcode's command line tools for `swiftc` and `iconutil`).
 
 ## Building installers locally
 
@@ -101,7 +132,7 @@ bun run desktop:build --config '{"bundle":{"createUpdaterArtifacts":false}}'
 
 ## Releasing
 
-1. Bump `version` in `apps/desktop/package.json` (`tauri.conf.json` reads it from there) and in `apps/desktop/src-tauri/Cargo.toml`, then merge to `main`. The workflow stops if the tag doesn't match both.
+1. Bump `version` in the root `package.json` and in `apps/desktop/src-tauri/Cargo.toml`, then merge to `main`. The root `package.json` is the app's one version: `tauri.conf.json` reads it, and the server reports it in `/api/health` and to agents over MCP. `bun test` fails if `Cargo.toml` says something else, and the workflow stops if the tag doesn't match both.
 2. Tag and push:
 
    ```sh

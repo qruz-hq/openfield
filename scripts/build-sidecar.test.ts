@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { dirname, join } from "node:path";
-import { hostTarget, parseArgs, patchSharpLoader, sidecarPath, TARGETS } from "./build-sidecar";
+import { hostTarget, parseArgs, patchSharpLoader, shipsInApp, sidecarPath, TARGETS } from "./build-sidecar";
 
 // The sidecar build itself runs in CI per OS; these cover the parts that decide what it builds.
 
@@ -75,5 +75,15 @@ describe("patchSharpLoader", () => {
 
   test("a sharp that changed shape stops the build instead of shipping without thumbnails", () => {
     expect(() => patchSharpLoader("let binding;", "cjs")).toThrow(/changed shape/);
+  });
+});
+
+describe("resources", () => {
+  test("source maps stay out of the app, everything else goes in", () => {
+    expect(shipsInApp("/web/assets/index-abc.js.map")).toBe(false);
+    expect(shipsInApp("/web/assets/index-abc.css.map")).toBe(false);
+    expect(shipsInApp("/web/assets/index-abc.js")).toBe(true);
+    expect(shipsInApp("/web/assets")).toBe(true);
+    expect(shipsInApp("/migrations/0008_video.sql")).toBe(true);
   });
 });

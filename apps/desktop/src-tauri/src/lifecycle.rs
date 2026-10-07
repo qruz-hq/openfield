@@ -13,7 +13,8 @@ use crate::{busy_icon, server};
 
 /// Size, position and maximized state. Not visibility: the window hides while the server drains on
 /// quit, and that should not carry over to the next launch.
-pub const WINDOW_STATE_FLAGS: StateFlags = StateFlags::all().difference(StateFlags::VISIBLE);
+pub const WINDOW_STATE_FLAGS: StateFlags =
+    StateFlags::all().difference(StateFlags::VISIBLE.union(StateFlags::DECORATIONS));
 
 #[derive(Default)]
 pub struct Lifecycle {

@@ -170,6 +170,15 @@ fn on_ready(app: &AppHandle, url: &str) {
             return;
         }
     };
+    if let Err(err) = crate::window::allow_server(app, &url) {
+        lifecycle::startup_failed(
+            app,
+            Failure::start_failed(format!(
+                "Openfield couldn't open its window to the server: {err}"
+            )),
+        );
+        return;
+    }
     if let Some(window) = app.get_webview_window("main") {
         if let Err(err) = window.navigate(url) {
             eprintln!("[desktop] couldn't open the app page: {err}");

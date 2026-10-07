@@ -66,10 +66,10 @@ jobs:
         shell: bash
         run: |
           tag="${GITHUB_REF_NAME#v}"
-          app=$(bun -p 'require("./apps/desktop/package.json").version')
+          app=$(bun -p 'require("./package.json").version')
           crate=$(sed -n 's/^version = "\(.*\)"$/\1/p' apps/desktop/src-tauri/Cargo.toml | head -n 1)
           if [ "$tag" != "$app" ] || [ "$tag" != "$crate" ]; then
-            echo "::error::Tag $GITHUB_REF_NAME doesn't match the app version (apps/desktop/package.json $app, Cargo.toml $crate). Bump both, then tag again."
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match the app version (package.json $app, Cargo.toml $crate). Bump both, then tag again."
             exit 1
           fi
 

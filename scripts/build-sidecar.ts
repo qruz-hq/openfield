@@ -136,11 +136,14 @@ function stageNative(target: TargetName, out: string): void {
   }
 }
 
-/** Replaces a resource folder with a fresh copy of `from`. */
+/** Source maps help while developing; in the app they would only add megabytes nobody opens. */
+export const shipsInApp = (path: string): boolean => !path.endsWith(".map");
+
+/** Replaces a resource folder with a fresh copy of `from`, without source maps. */
 function stage(from: string, to: string): void {
   if (!existsSync(from)) throw new Error(`${from} doesn't exist.`);
   rmSync(to, { recursive: true, force: true });
-  cpSync(from, to, { recursive: true, dereference: true });
+  cpSync(from, to, { recursive: true, dereference: true, filter: shipsInApp });
 }
 
 async function run(cmd: string[]): Promise<void> {

@@ -1,12 +1,18 @@
 import { X } from "lucide-react";
 import { Dialog } from "radix-ui";
-import type { ComponentProps, ReactNode } from "react";
+import { type ComponentProps, createContext, type ReactNode, use } from "react";
 import { cn } from "../lib/cn";
 import { IconButton } from "./icon-button";
 
 export const Modal = Dialog.Root;
 export const ModalTrigger = Dialog.Trigger;
 export const ModalClose = Dialog.Close;
+
+/**
+ * Drawn above every open modal, scrim included, for app chrome that must stay reachable: the
+ * desktop app's own title bar, which the scrim would otherwise cover. Nothing by default.
+ */
+export const ModalChrome = createContext<ReactNode>(null);
 
 export interface ModalSurfaceProps extends ComponentProps<typeof Dialog.Content> {
   /** For destructive confirmations: announced as an alert dialog. */
@@ -19,19 +25,21 @@ export interface ModalSurfaceProps extends ComponentProps<typeof Dialog.Content>
  * ModalContent's title-and-body common case below.
  */
 export function ModalSurface({ alert = false, className, children, ...props }: ModalSurfaceProps) {
+  const chrome = use(ModalChrome);
   return (
     <Dialog.Portal>
       <Dialog.Overlay className="fixed inset-0 z-50 bg-scrim data-[state=open]:animate-pop-in" />
       <Dialog.Content
         role={alert ? "alertdialog" : "dialog"}
         className={cn(
-          "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100vh-48px)] max-w-[calc(100vw-32px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-20 bg-elevated inset-ring inset-ring-border shadow-popover outline-none data-[state=open]:animate-pop-in",
+          "fixed top-1/2 left-1/2 z-50 flex max-h-[calc(100vh-48px)] max-w-[calc(100vw-32px)] mac-window:max-h-[calc(100vh-64px)] other-window:max-h-[calc(100vh-112px)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-20 bg-elevated inset-ring inset-ring-border shadow-popover outline-none data-[state=open]:animate-pop-in",
           className,
         )}
         {...props}
       >
         {children}
       </Dialog.Content>
+      {chrome}
     </Dialog.Portal>
   );
 }

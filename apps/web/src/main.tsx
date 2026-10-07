@@ -6,6 +6,9 @@ import { createRoot } from "react-dom/client";
 import { RouterProvider } from "react-router/dom";
 import { queryClient } from "./api/client";
 import { router } from "./router";
+import { markWindowPlatform } from "./shell/window-chrome";
+
+markWindowPlatform(document.documentElement);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
