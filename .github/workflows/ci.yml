@@ -14,6 +14,31 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Docs-only pull requests skip the end-to-end and desktop jobs. Everything
+  # else, and every push to main, runs all of them.
+  changes:
+    name: What changed
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: diff
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "${{ github.event.pull_request.base.sha }}...${{ github.event.pull_request.head.sha }}")
+          echo "$files"
+          # Anything outside Markdown, docs/, the license and GitHub's issue and PR templates counts as code.
+          code=$(printf '%s\n' "$files" | grep -vE '\.md$|^docs/|^LICENSE$|^\.github/(ISSUE_TEMPLATE/|CODEOWNERS$)' | grep -c . || true)
+          if [ "$code" -gt 0 ]; then echo "code=true" >> "$GITHUB_OUTPUT"; else echo "code=false" >> "$GITHUB_OUTPUT"; fi
+
   check:
     name: Lint, types, tests, build, bundle
     runs-on: ubuntu-latest
@@ -41,6 +66,8 @@ jobs:
 
   e2e:
     name: End-to-end (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     # The first-run path (PRD AC-2.10.1) has to hold on macOS and Linux.
     strategy:
       fail-fast: false
@@ -77,6 +104,8 @@ jobs:
 
   desktop:
     name: Desktop shell (Rust)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 30
     steps:
@@ -114,3 +143,21 @@ jobs:
         working-directory: apps/desktop/src-tauri
       - run: cargo test
         working-directory: apps/desktop/src-tauri
+
+  # The one check main's ruleset requires. A skipped job counts as passed; a
+  # failed or cancelled one doesn't. (A skipped matrix job reports under an
+  # unexpanded name, so requiring the jobs one by one would block docs PRs.)
+  ci-passed:
+    name: CI passed
+    needs: [changes, check, e2e, desktop]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - shell: bash
+        run: |
+          echo '${{ toJSON(needs) }}'
+          if [ "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}" = "true" ]; then
+            echo "::error::A required job failed or was cancelled."
+            exit 1
+          fi
