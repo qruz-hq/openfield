@@ -119,10 +119,17 @@ jobs:
           security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
           rm "$RUNNER_TEMP/certificate.p12"
+          # codesign only finds identities in keychains on the search list, even with --keychain.
+          previous=$(security list-keychains -d user | tr -d '"')
+          # shellcheck disable=SC2086
+          security list-keychains -d user -s "$keychain" $previous
+          security find-identity -v -p codesigning "$keychain"
           find apps/desktop/src-tauri/resources/native -type f \( -name '*.node' -o -name '*.dylib' \) -print0 |
             xargs -0 codesign --force --timestamp --options runtime --keychain "$keychain" --sign "$APPLE_SIGNING_IDENTITY"
           find apps/desktop/src-tauri/resources/native -type f \( -name '*.node' -o -name '*.dylib' \) -print0 |
             xargs -0 -n1 codesign --verify --strict --verbose=1
+          # shellcheck disable=SC2086
+          security list-keychains -d user -s $previous
           security delete-keychain "$keychain"
 
       # Signing is optional. Tauri treats a set-but-empty variable as "sign
