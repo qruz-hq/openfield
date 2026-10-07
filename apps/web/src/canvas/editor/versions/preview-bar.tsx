@@ -30,7 +30,7 @@ export function PreviewBar() {
   };
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-12 z-20 flex justify-center">
+    <div className="pointer-events-none absolute inset-x-0 top-12 z-20 flex justify-center mac-window:top-40">
       <Surface variant="floating-bar" role="status" className="pointer-events-auto gap-10 p-8">
         <span className="flex size-32 shrink-0 items-center justify-center rounded-8 bg-elevated-2">
           <History size={16} aria-hidden className="text-text-secondary" />

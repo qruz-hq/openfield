@@ -1132,6 +1132,11 @@ export class CanvasRunService {
       this.#runs.delete(run.id);
       if (run.emitTimer) clearTimeout(run.emitTimer);
       run.emitTimer = undefined;
+      // Nothing else will speak for this run now, so say it ended: open tabs (and the desktop
+      // app's busy icon) would otherwise count it as running until they reconnect.
+      run.status = "canceled";
+      run.finishedAt = new Date().toISOString();
+      if (!this.#stopped) this.deps.events.publish("canvas_run.updated", stateOf(run));
       for (const launch of run.record.launches) {
         if (!launch.jobSetId) continue;
         this.deps.runner.cancelJobSet(launch.jobSetId);

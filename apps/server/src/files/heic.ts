@@ -1,7 +1,7 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import { newId } from "@openfield/core";
-import type SharpModule from "sharp";
+import { loadSharp, type Sharp } from "./sharp";
 
 // HEIC to PNG for uploads (§8.5.1). The sharp that ships reads AVIF but not HEVC, which is what
 // every iPhone photo is, so the operating system's own converter does it where there is one: sips
@@ -28,7 +28,7 @@ function converters(): Converter[] {
 
 async function viaSharp(bytes: Uint8Array): Promise<Uint8Array | null> {
   try {
-    const sharp = (await import("sharp")).default;
+    const sharp = await loadSharp();
     return new Uint8Array(await sharp(bytes).rotate().png().toBuffer());
   } catch {
     return null;
@@ -46,7 +46,8 @@ async function viaCommand(
   const output = join(tmpDir, `${id}.png`);
   try {
     await Bun.write(input, bytes);
-    const proc = Bun.spawn(command(input, output), { stdout: "ignore", stderr: "ignore" });
+    // windowsHide: under the desktop app the server has no console, so Windows would flash one up.
+    const proc = Bun.spawn(command(input, output), { stdout: "ignore", stderr: "ignore", windowsHide: true });
     const timer = setTimeout(() => proc.kill(), timeoutMs);
     const code = await proc.exited.finally(() => clearTimeout(timer));
     const file = Bun.file(output);
@@ -93,9 +94,9 @@ export const canConvertHeic = (): boolean => converters().length > 0;
  */
 export async function shrinkPng(png: Uint8Array, maxBytes: number): Promise<Uint8Array | null> {
   if (png.byteLength <= maxBytes) return png;
-  let sharp: typeof SharpModule;
+  let sharp: Sharp;
   try {
-    sharp = (await import("sharp")).default;
+    sharp = await loadSharp();
   } catch {
     return null;
   }

@@ -69,7 +69,7 @@ function EditorSurface({ previewing }: { previewing: boolean }) {
       <TopBarLeft />
       <TopBarRight />
       {previewing ? <PreviewBar /> : <AgentPill />}
-      <div className="pointer-events-none absolute inset-x-0 top-64 z-10 flex flex-col items-center gap-12">
+      <div className="pointer-events-none absolute inset-x-0 top-64 z-10 flex flex-col items-center gap-12 mac-window:top-92">
         <ConflictBanner />
         <NothingInView onBack={commands.fit} />
       </div>
@@ -100,14 +100,14 @@ function DrawerHost({ previewing }: { previewing: boolean }) {
   if (!drawer) return null;
   if (drawer.panel === "versions") {
     return (
-      <div className="absolute top-64 right-12 bottom-12 z-20 w-354">
+      <div className="absolute top-64 right-12 bottom-12 z-20 w-354 mac-window:top-92">
         <VersionsDrawer />
       </div>
     );
   }
   if (previewing || !drawer.nodeId) return null;
   return (
-    <div className="absolute top-64 right-12 z-20 max-h-[calc(100%-76px)] w-354 overflow-y-auto">
+    <div className="absolute top-64 right-12 z-20 max-h-[calc(100%-76px)] w-354 overflow-y-auto mac-window:top-92 mac-window:max-h-[calc(100%-104px)]">
       <CanvasStoreProvider store={session.main}>
         <NodeInspector nodeId={drawer.nodeId} />
       </CanvasStoreProvider>

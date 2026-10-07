@@ -1,4 +1,12 @@
-import { getQuickJS, type QuickJSContext } from "quickjs-emscripten";
+/// <reference path="../../assets.d.ts" />
+import wasmFile from "@jitl/quickjs-wasmfile-release-sync/wasm" with { type: "file" };
+import {
+  newQuickJSWASMModuleFromVariant,
+  newVariant,
+  type QuickJSContext,
+  type QuickJSWASMModule,
+  RELEASE_SYNC,
+} from "quickjs-emscripten";
 
 // Runs an agent's script in QuickJS compiled to WebAssembly: no files, network, timers or imports.
 // The only way out is one host function that takes and returns JSON text, so nothing the script
@@ -79,8 +87,21 @@ function describe(context: QuickJSContext, error: unknown): { message: string; l
   return { message, ...(line !== undefined && { line }) };
 }
 
+// The engine's .wasm is named here so `bun build --compile` embeds it: left to find its own file
+// next to the package, it looks in a folder the compiled server doesn't have.
+let engine: Promise<QuickJSWASMModule> | undefined;
+function quickJS(): Promise<QuickJSWASMModule> {
+  engine ??= newQuickJSWASMModuleFromVariant(
+    newVariant(RELEASE_SYNC, { wasmBinary: () => Bun.file(wasmFile).arrayBuffer() }),
+  ).catch((error: unknown) => {
+    engine = undefined;
+    throw error;
+  });
+  return engine;
+}
+
 export async function runInSandbox(code: string, host: Host): Promise<SandboxResult> {
-  const QuickJS = await getQuickJS();
+  const QuickJS = await quickJS();
   const runtime = QuickJS.newRuntime();
   runtime.setMemoryLimit(LIMITS.memoryBytes);
   runtime.setMaxStackSize(LIMITS.stackBytes);

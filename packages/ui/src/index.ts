@@ -54,6 +54,7 @@ export {
 } from "./components/menu";
 export {
   Modal,
+  ModalChrome,
   ModalClose,
   ModalContent,
   type ModalContentProps,

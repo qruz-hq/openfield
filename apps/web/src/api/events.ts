@@ -1,4 +1,11 @@
-import { type BatchUpdated, errorCopy, type JobSetWithJobs, type SseEvent, t } from "@openfield/core";
+import {
+  type BatchUpdated,
+  errorCopy,
+  isTerminalState,
+  type JobSetWithJobs,
+  type SseEvent,
+  t,
+} from "@openfield/core";
 import { useEffect } from "react";
 import { type BatchNameLookups, batchNotice } from "../lib/batch-copy";
 import { announce, useLive } from "../lib/live";
@@ -119,12 +126,18 @@ function applyToCache(event: SseEvent) {
   switch (event.event) {
     case "snapshot":
       for (const set of event.data.activeJobSets) upsertJobSet(set);
+      useLive
+        .getState()
+        .resetActive(
+          event.data.activeJobSets.filter((s) => !isTerminalState(s.jobSet.status)).map((s) => s.jobSet.id),
+        );
       // The snapshot lists every Batch run in flight, so one that ended while offline drops out.
       useLive.getState().clearBatches();
       for (const batch of event.data.batches) batchUpdated(batch);
       return;
     case "job_set.created":
       upsertJobSet(event.data);
+      useLive.getState().setJobSetActive(event.data.jobSet.id, !isTerminalState(event.data.jobSet.status));
       announceStarted(event.data);
       return;
     case "job.queued": {
@@ -174,6 +187,7 @@ function applyToCache(event: SseEvent) {
       setRetry(event.data.jobId, undefined);
       return;
     case "job_set.completed":
+      useLive.getState().setJobSetActive(event.data.jobSetId, false);
       patchJobSet(event.data.jobSetId, {
         status: event.data.status,
         costActualUsd: event.data.costActualUsd,
@@ -196,12 +210,16 @@ function applyToCache(event: SseEvent) {
     case "batch.updated":
       batchUpdated(event.data);
       return;
+    case "canvas_run.updated":
+      // The canvas editor follows the run itself through subscribeEvents.
+      useLive.getState().setCanvasRun(event.data.runId, event.data.status);
+      return;
     case "ui.navigate":
       // An agent asked this tab, and only this one, to open something (§7.11).
       if (event.data.tabId === tabId) useNavigateRequest.getState().request(event.data.to);
       return;
     default:
-      // Canvas runs and live edits reach the canvas editor through subscribeEvents. Partial
+      // Live canvas edits reach the canvas editor through subscribeEvents. Partial
       // previews, folders and maintenance aren't on these screens yet.
       return;
   }

@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <title>Openfield</title>
+  <defs>
+    <clipPath id="sq"><rect x="100" y="100" width="824" height="824" rx="185"/></clipPath>
+    <radialGradient id="halo">
+      <stop offset="0" stop-color="#E9E3D8" stop-opacity="0.4"/>
+      <stop offset="0.55" stop-color="#E9E3D8" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#E9E3D8" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="34"/></filter>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="#0E1012"/>
+  <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="#E9E3D8" stroke-opacity="0.08" stroke-width="4"/>
+  
+  <g transform="translate(512 512) rotate(0) scale(10.714285714285714) translate(-28 -28)" fill="#E9E3D8"><path d="M9.595 28.276L16.92 17.778A3.911 3.911 0 0 1 23.334 22.254L16.009 32.751A3.911 3.911 0 0 1 9.595 28.276Z"/><path d="M27.724 9.595L38.222 16.92A3.911 3.911 0 0 1 33.746 23.334L23.249 16.009A3.911 3.911 0 0 1 27.724 9.595Z"/><path d="M46.405 27.724L39.08 38.222A3.911 3.911 0 0 1 32.666 33.746L39.991 23.249A3.911 3.911 0 0 1 46.405 27.724Z"/><path d="M28.276 46.405L17.778 39.08A3.911 3.911 0 0 1 22.254 32.666L32.751 39.991A3.911 3.911 0 0 1 28.276 46.405Z"/></g>
+</svg>

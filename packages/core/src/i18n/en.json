@@ -12,6 +12,12 @@
       "menu": "Openfield menu",
       "spentToday": "Spent today"
     },
+    "window": {
+      "minimize": "Minimize",
+      "maximize": "Maximize",
+      "restore": "Restore",
+      "close": "Close"
+    },
     "menu": {
       "newCanvas": "New canvas",
       "openLibrary": "Open library",
@@ -722,6 +728,7 @@
       },
       "withKey": "Copy adds your full key. Openfield has to be running while an app uses it.",
       "withoutKey": "Nothing to paste: {app} reads the key from your Openfield folder. Openfield has to be running.",
+      "temporaryPlace": "Openfield is running from the disk image or your Downloads folder, so this command stops working once you quit. Move Openfield to your Applications folder, open it from there, then copy this again.",
       "copy": "Copy",
       "copied": "Copied",
       "spending": "Spending by agents",

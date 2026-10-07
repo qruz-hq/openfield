@@ -9,7 +9,13 @@ import type { Logger } from "../log/logger";
 // Both folders are read on every request, so a dropped-in file shows up without a restart.
 
 export const TEMPLATE_SUFFIX = ".ofcanvas.json";
-export const BUNDLED_TEMPLATES_DIR = join(import.meta.dir, "../../seed/templates");
+
+/** The bundled ones. The desktop app ships them beside its compiled server: OPENFIELD_TEMPLATES_DIR. */
+export function bundledTemplatesDir(env: Record<string, string | undefined> = process.env): string {
+  return env.OPENFIELD_TEMPLATES_DIR?.trim() || join(import.meta.dir, "../../seed/templates");
+}
+
+export const BUNDLED_TEMPLATES_DIR = bundledTemplatesDir();
 const USER_PREFIX = "user-";
 
 export class CanvasTemplates {

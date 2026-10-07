@@ -17,8 +17,9 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { DEFAULT_PORT } from "@openfield/core";
 import { resolveHome } from "../config/home";
+import { isCompiled } from "../desktop";
 
-// `bun run mcp`: the bridge for agent apps that can only start a program (Claude Desktop, Codex).
+// `bun run mcp`, or `openfield-server mcp` from the desktop app: the bridge for agent apps that can only start a program (Claude Desktop, Codex).
 // It speaks MCP on stdin/stdout and passes every message to the running Openfield at /mcp, with
 // the agent key read from the library folder, so nothing needs pasting. It never starts Openfield:
 // when it isn't running the app is told how to start it. When Openfield restarts, the bridge
@@ -28,6 +29,8 @@ import { resolveHome } from "../config/home";
 
 const REPO = join(import.meta.dir, "../../../..");
 const HANDSHAKE_TIMEOUT_MS = 10_000;
+/** After the app closes stdin, how long requests already sent may take to be answered. */
+const DRAIN_TIMEOUT_MS = 10_000;
 
 type FetchLike = (url: string | URL, init?: RequestInit) => Promise<Response>;
 
@@ -39,8 +42,11 @@ export interface BridgeOptions {
   handshakeTimeoutMs?: number;
 }
 
-export const notRunning = () =>
-  `Openfield isn't running. Start it with \`bun start\` in ${REPO}, then try again.`;
+/** How to start Openfield: open the app when this bridge is the desktop app's, else from the checkout. */
+export const notRunning = (desktop = isCompiled()) =>
+  desktop
+    ? "Openfield isn't running. Open the Openfield app, then try again."
+    : `Openfield isn't running. Start it with \`bun start\` in ${REPO}, then try again.`;
 const notOn =
   "Agents aren't turned on in Openfield. The person can turn them on in Openfield, Settings > Agents.";
 
@@ -73,6 +79,10 @@ export class Bridge {
   #replays = 0;
   readonly #ours = new Map<string, (message: JSONRPCMessage) => void>();
   #queue: Promise<void> = Promise.resolve();
+  /** The app's requests still owed an answer, and the replies on their way out. */
+  readonly #owed = new Set<string | number>();
+  readonly #writing = new Set<Promise<void>>();
+  #settled: (() => void) | null = null;
 
   constructor(
     /** Sends a message back to the app. */
@@ -82,8 +92,39 @@ export class Bridge {
 
   /** One message from the app, passed on in order. */
   receive(message: JSONRPCMessage): Promise<void> {
+    if (isJSONRPCRequest(message)) this.#owed.add(message.id);
     this.#queue = this.#queue.then(() => this.#forward(message));
     return this.#queue;
+  }
+
+  /**
+   * Waits until every request the app sent has its answer written, or the time runs out. An app
+   * may send its last request and close stdin straight away; that request still deserves a reply.
+   */
+  async drain(timeoutMs = DRAIN_TIMEOUT_MS): Promise<void> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<void>((resolve) => {
+      timer = setTimeout(resolve, timeoutMs);
+    });
+    const done = (async () => {
+      await this.#queue;
+      if (this.#owed.size > 0) await new Promise<void>((resolve) => (this.#settled = resolve));
+      await Promise.all(this.#writing);
+    })();
+    await Promise.race([done, timeout]);
+    clearTimeout(timer);
+    this.#settled = null;
+  }
+
+  /** Sends to the app, keeping track of the write so a drain can wait for it. */
+  #reply(message: JSONRPCMessage): Promise<void> {
+    const write = this.reply(message).catch(() => {});
+    this.#writing.add(write);
+    void write.finally(() => this.#writing.delete(write));
+    const answered = isJSONRPCResultResponse(message) || isJSONRPCErrorResponse(message);
+    if (answered && message.id !== undefined && this.#owed.delete(message.id) && this.#owed.size === 0)
+      this.#settled?.();
+    return write;
   }
 
   async close(): Promise<void> {
@@ -143,7 +184,7 @@ export class Bridge {
         const version = (message.result as InitializeResult).protocolVersion;
         if (version) http.setProtocolVersion(version);
       }
-      void this.reply(message).catch(() => {});
+      void this.#reply(message);
     };
     // Failures reach the app through the request that failed.
     http.onerror = () => {};
@@ -190,14 +231,14 @@ export class Bridge {
     if (!isJSONRPCRequest(message)) return;
     const text = reasonOf(error);
     if (message.method === "tools/call") {
-      await this.reply({
+      await this.#reply({
         jsonrpc: "2.0",
         id: message.id,
         result: { content: [{ type: "text", text }], isError: true },
       });
       return;
     }
-    await this.reply({ jsonrpc: "2.0", id: message.id, error: { code: -32000, message: text } });
+    await this.#reply({ jsonrpc: "2.0", id: message.id, error: { code: -32000, message: text } });
   }
 }
 
@@ -225,7 +266,8 @@ function reasonOf(error: unknown): string {
   return notRunning();
 }
 
-if (import.meta.main) {
+/** Bridges this process's stdin and stdout to Openfield until the app closes them. */
+export async function runBridge(): Promise<void> {
   const stdio = new StdioServerTransport();
   const bridge = new Bridge((message) => stdio.send(message));
   stdio.onmessage = (message) => void bridge.receive(message);
@@ -233,5 +275,11 @@ if (import.meta.main) {
   stdio.onclose = () => {
     void bridge.close().finally(() => process.exit(0));
   };
+  // The transport doesn't notice the app closing stdin, and the open connection to Openfield would
+  // keep this process alive after the app is gone. Closing stdin only means no more requests, so
+  // the ones already sent get their answers first.
+  process.stdin.once("end", () => void bridge.drain().finally(() => stdio.close()));
   await stdio.start();
 }
+
+if (import.meta.main) await runBridge();

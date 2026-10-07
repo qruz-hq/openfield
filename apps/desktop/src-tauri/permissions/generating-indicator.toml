@@ -1,0 +1,6 @@
+"$schema" = "../gen/schemas/permission.json"
+
+[[set]]
+identifier = "generating-indicator"
+description = "Lets the web app turn the busy animation on the Dock or taskbar icon on and off. Nothing else."
+permissions = ["allow-set-generating"]

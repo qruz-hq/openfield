@@ -1,4 +1,5 @@
 import type { ReactFlowInstance } from "@xyflow/react";
+import { windowTopInset } from "../../../lib/desktop";
 import type { ViewController } from "../../store/types";
 import type { FlowEdge, FlowNode } from "./adapter";
 
@@ -54,7 +55,8 @@ export function createViewController(rf: ReactFlowInstance<FlowNode, FlowEdge>):
       if (!rect) return;
       const { x, y, zoom } = rf.getViewport();
       const pane = paneSize();
-      const inset = { top: 64, right: 12, bottom: 72, left: 12, ...insets };
+      // Clear of the top bar, which sits lower under a Mac desktop window's traffic lights.
+      const inset = { top: 64 + windowTopInset(), right: 12, bottom: 72, left: 12, ...insets };
       // The node's box on screen, and how far it has to move to sit inside the free area.
       const left = rect.x * zoom + x;
       const top = rect.y * zoom + y;

@@ -228,6 +228,11 @@ describe("running a canvas", () => {
     await Bun.sleep(50);
     expect(sets()).toHaveLength(1);
     expect(started.runId).toBeTruthy();
+    // Open tabs hear that the run ended, or they'd count it as running until they reconnect.
+    expect(runFrames(server, started.runId!).at(-1)).toMatchObject({
+      status: "canceled",
+      finishedAt: expect.any(String),
+    });
     const log = await Bun.file(`${server.home}/logs/openfield.log`)
       .text()
       .catch(() => "");

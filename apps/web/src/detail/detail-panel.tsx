@@ -127,7 +127,11 @@ export function DetailPanel({
   hidden = false,
 }: DetailPanelProps) {
   return (
-    <Surface variant="panel" hidden={hidden} className="absolute top-8 right-8 bottom-8">
+    <Surface
+      variant="panel"
+      hidden={hidden}
+      className="absolute top-8 right-8 bottom-8 mac-window:top-36 other-window:top-52"
+    >
       {/* Detail / Panel header */}
       <div className="flex w-full shrink-0 items-center justify-between gap-12">
         <div className="flex min-w-0 flex-col gap-2">

@@ -31,6 +31,11 @@ export const agentLaunchSchema = z.object({
   args: z.array(z.string()),
   /** Only what differs from the defaults, such as OPENFIELD_HOME. */
   env: z.record(z.string(), z.string()),
+  /**
+   * The desktop app is running from somewhere that goes away (the disk image, or a copy macOS made
+   * because it wasn't moved to Applications), so this command will stop working.
+   */
+  temporary: z.boolean().optional(),
 });
 
 /** GET /api/agents, and the reply to every change on it. */

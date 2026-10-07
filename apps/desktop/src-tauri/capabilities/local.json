@@ -1,0 +1,19 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "local",
+  "description": "The bundled splash page that shows while the server starts. Dragging it moves the window, which has no title bar.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "dialog:default",
+    "updater:default",
+    "process:allow-restart",
+    "process:allow-exit",
+    {
+      "identifier": "shell:allow-spawn",
+      "allow": [{ "name": "binaries/openfield-server", "sidecar": true, "args": ["mcp"] }]
+    },
+    "shell:allow-kill"
+  ]
+}

@@ -20,6 +20,7 @@ import {
 import { type ReactElement, useCallback } from "react";
 import { shallow } from "zustand/shallow";
 import { tightCost } from "../../../lib/cost";
+import { windowTopInset } from "../../../lib/desktop";
 import { useEngineStore } from "../../engine/engine-store";
 import { nodeRegistry } from "../../nodes/registry";
 import { useCanvas } from "../../store";
@@ -93,7 +94,7 @@ export function ContextToolbar({ commands }: { commands: EditorCommands }) {
 
   if (ids.length < 2 || !box) return null;
   const centre = (box.left + box.right) / 2;
-  const top = Math.max(MIN_TOP, box.top - GAP - BAR_HEIGHT);
+  const top = Math.max(MIN_TOP + windowTopInset(), box.top - GAP - BAR_HEIGHT);
 
   return (
     <div

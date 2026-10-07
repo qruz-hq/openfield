@@ -13,8 +13,16 @@ export type Db = BunSQLiteDatabase<Schema> & { $client: Database };
 /** The database or an open transaction. Every query helper accepts either. */
 export type Executor = BaseSQLiteDatabase<"sync", void, Schema>;
 
-/** Resolved from this file, so booting from any working directory finds the migrations. */
-export const MIGRATIONS_FOLDER = join(import.meta.dir, "../migrations");
+/**
+ * Resolved from this file, so booting from any working directory finds the migrations. A compiled
+ * server has no folder beside this file, so the desktop app points OPENFIELD_MIGRATIONS_DIR at the
+ * copy it ships.
+ */
+export function migrationsFolder(env: Record<string, string | undefined> = process.env): string {
+  return env.OPENFIELD_MIGRATIONS_DIR?.trim() || join(import.meta.dir, "../migrations");
+}
+
+export const MIGRATIONS_FOLDER = migrationsFolder();
 
 const MIGRATIONS_TABLE = "__drizzle_migrations";
 

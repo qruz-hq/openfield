@@ -25,6 +25,17 @@ With `OPENFIELD_FAKE_PROVIDERS=1` every model call is answered on your computer,
 
 To try restarts by hand: send a Google image tagged `#fake:slow` and one to the Resumable test model tagged `#fake:resume_slow` (it exists only in fake mode; any key works), then save a server file, press Ctrl-C, or `kill -9` the server and save a file to start it again. `OPENFIELD_FAKE_SLOW_MS=8000` makes both take 8 seconds instead of 30 and 60.
 
+## Desktop app
+
+`apps/desktop` is a Tauri v2 shell that runs the compiled server as a sidecar. Working on it needs [Rust](https://rustup.rs) and [Tauri's system dependencies](https://v2.tauri.app/start/prerequisites/) too:
+
+```sh
+bun run desktop:sidecar   # web app + compiled server + resources, for this computer
+bun run desktop           # the same build, then the app in dev mode
+```
+
+The app runs the compiled server, not your sources, so rebuild the sidecar after changing server or web code. Anything that isn't about the window, the icon, closing or updates is quicker to work on with `bun dev`. CI runs `cargo check`, `cargo clippy -- -D warnings` and `cargo test` on the Rust side. [docs/desktop.md](docs/desktop.md) covers how the app and the server talk, building installers and releasing.
+
 ## Layout and import rules
 
 | Workspace | Owns | May import |

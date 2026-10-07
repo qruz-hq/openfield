@@ -5,6 +5,7 @@ import { applyOps, type CanvasOp, type Size } from "@openfield/canvas/store/ops"
 import { t } from "@openfield/core";
 import { cn, SearchInput, surfaceVariants } from "@openfield/ui";
 import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { windowTopInset } from "../../lib/desktop";
 import { notify } from "../../lib/notify";
 import { markFreshLinks } from "../editor/flow/fresh-links";
 import { useCanvasEngineContext } from "../engine/engine-store";
@@ -67,8 +68,11 @@ function AddNodePanel({ menu }: { menu: AddMenuState }) {
     left: menu.screenPosition.x,
     top: menu.screenPosition.y,
   });
-  // Above the toolbar, the panel may not grow past the space there is.
-  const maxHeight = menu.above ? `${Math.max(160, menu.screenPosition.y - MARGIN)}px` : undefined;
+  // Above the toolbar, the panel may not grow past the space there is, which on a Mac desktop
+  // window ends at the traffic lights' strip.
+  const maxHeight = menu.above
+    ? `${Math.max(160, menu.screenPosition.y - MARGIN - windowTopInset())}px`
+    : undefined;
 
   // No query: the catalogue's groups. A query: one list, best match first, so ↵ adds what was
   // typed ("Prompt" adds Prompt, not the Generate node that mentions prompts).
@@ -111,11 +115,13 @@ function AddNodePanel({ menu }: { menu: AddMenuState }) {
     if (!el) return;
     const height = el.offsetHeight;
     const { x, y } = menu.screenPosition;
+    // Below a Mac desktop window's traffic lights, too.
+    const minTop = MARGIN + windowTopInset();
     setPlace({
       left: Math.max(MARGIN, Math.min(x, window.innerWidth - WIDTH - MARGIN)),
       top: menu.above
-        ? Math.max(MARGIN, y - height)
-        : Math.max(MARGIN, Math.min(y, window.innerHeight - height - MARGIN)),
+        ? Math.max(minTop, y - height)
+        : Math.max(minTop, Math.min(y, window.innerHeight - height - MARGIN)),
     });
   }, [menu.screenPosition, menu.above]);
 
@@ -221,7 +227,7 @@ function AddNodePanel({ menu }: { menu: AddMenuState }) {
       onKeyDown={onKeyDown}
       className={cn(
         surfaceVariants({ variant: "popover" }),
-        "fixed z-50 max-h-[calc(100vh-24px)] w-320 overflow-y-auto data-[state=open]:animate-pop-in",
+        "fixed z-50 max-h-[calc(100vh-24px)] w-320 mac-window:max-h-[calc(100vh-52px)] overflow-y-auto data-[state=open]:animate-pop-in",
       )}
       style={{ ...place, ...(maxHeight && { maxHeight }) }}
       data-state="open"

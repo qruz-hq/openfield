@@ -8,12 +8,12 @@ import {
 } from "@openfield/core";
 import { findLiveAssetBySha256, getAsset, insertAsset, isFavourite } from "@openfield/db";
 import { isProviderError } from "@openfield/providers/server";
-import type SharpModule from "sharp";
 import type { Services } from "../context";
 import { ApiFailure } from "../http/errors";
 import { toAsset } from "../mappers/asset";
 import { heicToPng, shrinkPng } from "./heic";
 import { probeImage } from "./probe";
+import { loadSharp, type Sharp } from "./sharp";
 import { Thumbs } from "./thumbs";
 
 // One reference image into the library (M1-07, §8.3), from POST /api/uploads or an agent's
@@ -39,9 +39,9 @@ const tooLarge = (message: string) =>
  * won't load on this computer, so only the header could be checked.
  */
 async function decodes(bytes: Uint8Array): Promise<boolean | null> {
-  let sharp: typeof SharpModule;
+  let sharp: Sharp;
   try {
-    sharp = (await import("sharp")).default;
+    sharp = await loadSharp();
   } catch {
     return null;
   }

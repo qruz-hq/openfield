@@ -19,6 +19,14 @@ Open <http://127.0.0.1:4317>, go to **Settings > API keys**, paste a key and pic
 
 To stop Openfield, press Ctrl-C. Images being made finish first, and it says how many: "Finishing 1 image. Press Ctrl-C again to stop now." A second Ctrl-C stops at once.
 
+## Desktop app
+
+Prefer an app to a terminal? Download the installer for your computer from the [latest release](https://github.com/qruz-hq/openfield/releases/latest): a `.dmg` for macOS, a `-setup.exe` or `.msi` for Windows, and an `.AppImage`, `.deb` or `.rpm` for Linux. You don't need Bun for it.
+
+The app uses the same library as `bun start`, so your images, keys and settings show up in both, but only one can be open at a time. It checks for updates and asks before installing one.
+
+The installers aren't signed yet, so your computer asks before opening Openfield the first time. [docs/desktop.md](docs/desktop.md#installing-an-unsigned-build) shows what to do, and how the app is built.
+
 ## Requirements
 
 - [Bun](https://bun.sh) 1.3 or newer.
@@ -173,6 +181,8 @@ Tags use underscores, not hyphens: an unknown tag is ignored and the run succeed
 |---|---|
 | `bun dev` | Runs the server and the Vite dev server (port 4318) together. Open <http://127.0.0.1:4317>. Saving a server file restarts the server once running images are saved. |
 | `bun start` | Runs the server in production mode, serving the built web app. |
+| `bun run desktop:sidecar` | Builds the web app and the server for the desktop app ([docs/desktop.md](docs/desktop.md)). |
+| `bun run desktop` | Builds the sidecar, then opens the desktop app in dev mode. |
 | `bun run mcp` | The bridge for agent apps that start a program, like Claude Desktop ([docs/agents.md](docs/agents.md)). |
 | `bun run build` | Type-checks every workspace, then builds `apps/web` to `apps/web/dist`. |
 | `bun run typecheck` | Type-checks every workspace, the end-to-end tests and `scripts/`. |
@@ -189,6 +199,7 @@ Tags use underscores, not hyphens: an unknown tag is ignored and the run succeed
 apps/
   web/          @openfield/web        React app (Vite, Tailwind, React Router, TanStack Query)
   server/       @openfield/server     Hono server on Bun: API, job queue, files, keys
+  desktop/                            Desktop app (Tauri) that runs the server as a sidecar
 packages/
   core/         @openfield/core       Shared zod schemas, constants, i18n. Runs anywhere.
   providers/    @openfield/providers  Adapters, model registry, cost estimates

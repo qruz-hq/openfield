@@ -35,7 +35,7 @@ export function AgentPill() {
   if (!agent || previewing || Date.now() - agent.at >= AGENT_SHOWN_MS) return null;
   const { name } = agent;
   return (
-    <div className="pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2">
+    <div className="pointer-events-none absolute top-12 left-1/2 z-10 -translate-x-1/2 mac-window:top-40">
       <div
         role="status"
         className={cn(
