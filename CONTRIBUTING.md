@@ -111,6 +111,20 @@ Commit messages follow [Conventional Commits](https://www.conventionalcommits.or
 
 Keep pull requests focused on one change. Link the issue, describe what changed and how you tested it, and add a screenshot for anything visible. The template has a checklist.
 
+### How changes reach main
+
+`main` is protected, and these rules apply to everyone:
+
+- Every change lands through a pull request. Nobody pushes to `main` directly, force pushes are blocked and the branch can't be deleted.
+- CI must pass: lint, types, tests, build and bundle, both end-to-end runs and the desktop shell check.
+- A maintainer approves the pull request. A new push dismisses earlier approvals, and every review conversation has to be resolved.
+- Pull requests are squash merged. The title becomes the commit on `main`, so write it as a Conventional Commit. The branch is deleted after the merge.
+- Files listed in [`.github/CODEOWNERS`](.github/CODEOWNERS) (workflows, signing and release config) need the code owner's review.
+
+Release tags (`v*`) can only be created by maintainers. Pushing one builds and signs a release.
+
+Fork your own copy, work on a branch there, and open the pull request from it. CI on a first-time contributor's pull request waits for a maintainer to start it.
+
 ## Proposing a provider
 
 Open a **New provider** issue first, with a link to the company's public API docs and pricing. A provider is a good fit when its API is public, takes a key the person owns, and its terms allow this use. Then follow [docs/adding-a-provider.md](docs/adding-a-provider.md). Adapters are built into the repo: adding one is a pull request, and there is no plugin loading.

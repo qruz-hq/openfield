@@ -1,0 +1,13 @@
+# The maintainer reviews every pull request. The lines below are listed on their own so
+# it's clear why: they control CI, releases, signing and what the desktop app may do.
+*                                     @qruz-hq
+
+/.github/                             @qruz-hq
+/scripts/build-sidecar.ts             @qruz-hq
+/apps/desktop/src-tauri/tauri.conf.json   @qruz-hq
+/apps/desktop/src-tauri/capabilities/ @qruz-hq
+/apps/desktop/src-tauri/permissions/  @qruz-hq
+/apps/desktop/src-tauri/Entitlements.plist @qruz-hq
+/apps/server/src/http/                @qruz-hq
+/package.json                         @qruz-hq
+/bun.lock                             @qruz-hq
