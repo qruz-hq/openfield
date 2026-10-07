@@ -58,7 +58,7 @@ The server exits with code 0 after a clean stop.
 
 ### Closing while images are generating
 
-The web app tells the window whether anything is generating, through one Tauri command, `set_generating`. While something is generating, the dock or taskbar icon slowly turns with a soft glow, and closing the window asks first. If you close anyway, the app sends `quit` and waits for the server to finish, the same as Ctrl-C.
+The web app tells the window whether anything is generating, through one Tauri command, `set_generating`. While something is generating, the dock or taskbar icon slowly turns with a soft glow, and closing the window asks first. If you close anyway, the window hides and the app sends `quit`, so images being made can finish and be saved, the same as Ctrl-C. It waits up to 20 seconds (`DRAIN_TIMEOUT` in `server.rs`), then sends `now` and waits 5 more, then kills the server.
 
 The window keeps doing this while it's hidden or covered: its webview is built with background throttling off (macOS 14 and later honour that), and on other systems the page holds a Web Lock so it isn't frozen.
 
@@ -202,15 +202,15 @@ When all three exist, the workflow imports the certificate on the Windows runner
 
 ## Installing an unsigned build
 
-Until releases are signed, your computer asks before opening Openfield the first time. This is expected.
+**macOS.** Open the `.dmg` and drag Openfield to Applications. Release builds are signed and notarized by Apple, so Openfield opens normally.
 
-**macOS.** Open the `.dmg` and drag Openfield to Applications. The first time, open it, then go to **System Settings > Privacy & Security** and choose **Open Anyway** next to the message about Openfield. If macOS says the app "is damaged and can't be opened", run this once in Terminal, then open it again:
+If you build it yourself without signing, macOS asks before opening it the first time. Open it, then go to **System Settings > Privacy & Security** and choose **Open Anyway** next to the message about Openfield. If macOS says the app "is damaged and can't be opened", run this once in Terminal, then open it again:
 
 ```sh
 xattr -dr com.apple.quarantine /Applications/Openfield.app
 ```
 
-**Windows.** Run the installer. If Windows SmartScreen says it protected your PC, choose **More info**, then **Run anyway**.
+**Windows.** Windows builds aren't signed yet, so Windows asks the first time. Run the installer. If Windows SmartScreen says it protected your PC, choose **More info**, then **Run anyway**.
 
 **Linux.** Install the `.deb` or `.rpm` with your package manager, or make the `.AppImage` runnable and open it:
 

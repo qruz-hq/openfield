@@ -160,13 +160,18 @@ describe("secret scan", () => {
     );
   });
 
+  test("finds a literal Higgsfield Key header value", () => {
+    const found = scanForSecrets("a.js", 'h.set("authorization","Key abcd1234-ef56:secretsecretsecret")');
+    expect(found.map((f) => f.kind)).toEqual(["Higgsfield key header value"]);
+  });
+
   test("ignores key-like runs inside base64 data", () => {
     const data = `url(data:image/png;base64,iVBOR${google}Qm9vaw==)`;
     expect(scanForSecrets("a.css", data)).toEqual([]);
   });
 
   test("leaves ordinary code alone", () => {
-    const code = `const h={"x-goog-api-key":e};const a=\`Bearer \${t}\`;const c="task-list-item-container-wide";`;
+    const code = `const h={"x-goog-api-key":e};const a=\`Bearer \${t}\`;const c="task-list-item-container-wide";const k=\`Key \${key}\`;const l="API Key settings for this company";`;
     expect(scanForSecrets("a.js", code)).toEqual([]);
   });
 
@@ -174,9 +179,16 @@ describe("secret scan", () => {
     const keys = await loadConfiguredKeys({
       OPENFIELD_HOME: "/nonexistent/openfield-home",
       OPENAI_API_KEY: "local-key-value-123",
+      ARK_API_KEY: "local-ark-value-456",
+      OPENFIELD_HIGGSFIELD_API_KEY: "local-hf-value-789",
+      HF_KEY: "hugging-face-token-000",
       HOME: "/home/x",
     });
-    expect(keys).toEqual([{ label: "OPENAI_API_KEY", value: "local-key-value-123" }]);
+    expect(keys).toEqual([
+      { label: "OPENAI_API_KEY", value: "local-key-value-123" },
+      { label: "ARK_API_KEY", value: "local-ark-value-456" },
+      { label: "OPENFIELD_HIGGSFIELD_API_KEY", value: "local-hf-value-789" },
+    ]);
     const found = scanForSecrets("a.js", 'x="local-key-value-123"', keys);
     expect(found[0]?.kind).toBe("Your key from OPENAI_API_KEY");
   });
