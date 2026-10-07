@@ -160,15 +160,19 @@ Updates are signed with a key of your own, separate from any Apple or Microsoft 
    ```
 
 2. Put the contents of `~/.tauri/openfield.key.pub` (the text itself, not a path) in `plugins.updater.pubkey` in `apps/desktop/src-tauri/tauri.conf.json`.
-3. In the repository's **Settings > Secrets and variables > Actions**, add:
+3. In the repository's **Settings > Environments > release**, add these environment secrets:
    - `TAURI_SIGNING_PRIVATE_KEY`: the contents of `~/.tauri/openfield.key`
    - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: its password, if you set one
 
 Without `TAURI_SIGNING_PRIVATE_KEY` the release still builds (forks, for example) but leaves out `latest.json` and the signatures, and prints a warning. With the secret set but step 2 skipped, the workflow stops: those builds could never verify an update.
 
-### Signing for macOS (later)
+### Where the secrets live
 
-Builds are unsigned for now. The workflow already passes these secrets to Tauri when they exist, and skips them when they don't, so turning signing on is a matter of adding them:
+Every signing secret is an **environment secret** of the `release` environment (**Settings > Environments > release**), not a repository secret. The release job declares `environment: release`, and the environment only accepts runs from `main` and from `v*` tags. Pull requests, other branches and other workflows never see the keys. Only the repository owner can push to `main` or create `v*` tags (see the rulesets in [CONTRIBUTING.md](../CONTRIBUTING.md#how-changes-reach-main)).
+
+### Signing for macOS
+
+The Mac builds are signed and notarized. The workflow passes these secrets to Tauri when they exist, and skips them when they don't, so a fork without them still builds unsigned:
 
 | Secret | What it is |
 |---|---|
@@ -186,7 +190,7 @@ Tauri's guide: <https://v2.tauri.app/distribute/sign/macos/>.
 
 ### Signing for Windows (later)
 
-With a code signing certificate as a `.pfx`, add:
+Windows builds are unsigned for now. With a code signing certificate as a `.pfx`, add these to the `release` environment:
 
 | Secret | What it is |
 |---|---|

@@ -20,6 +20,9 @@ concurrency:
 jobs:
   desktop:
     name: Desktop (${{ matrix.name }})
+    # The signing secrets live in the "release" environment, which only main
+    # and v* tags may use, so no other branch or workflow can read them.
+    environment: release
     strategy:
       fail-fast: false
       matrix:
