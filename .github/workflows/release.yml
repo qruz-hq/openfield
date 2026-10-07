@@ -94,6 +94,37 @@ jobs:
       # its resources (web, migrations, templates, sharp's native libs).
       - run: bun run desktop:sidecar --target ${{ matrix.bun-target }}
 
+      # Tauri signs the app and the server binary, but not loose files in
+      # Resources. Notarization rejects sharp's .node and libvips .dylib
+      # unless they carry our Developer ID, a secure timestamp and the
+      # hardened runtime, so sign them here before the bundle is made.
+      - name: Sign native libraries (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            echo "No Apple certificate, leaving native libraries unsigned."
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/native-signing.keychain-db"
+          keychain_password=$(openssl rand -hex 16)
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 3600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
+          rm "$RUNNER_TEMP/certificate.p12"
+          find apps/desktop/src-tauri/resources/native -type f \( -name '*.node' -o -name '*.dylib' \) -print0 |
+            xargs -0 codesign --force --timestamp --options runtime --keychain "$keychain" --sign "$APPLE_SIGNING_IDENTITY"
+          find apps/desktop/src-tauri/resources/native -type f \( -name '*.node' -o -name '*.dylib' \) -print0 |
+            xargs -0 -n1 codesign --verify --strict --verbose=1
+          security delete-keychain "$keychain"
+
       # Signing is optional. Tauri treats a set-but-empty variable as "sign
       # with this", so an unset secret has to stay unset rather than arrive
       # as "". This step exports only the secrets that exist and collects

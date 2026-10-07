@@ -177,10 +177,10 @@ Builds are unsigned for now. The workflow already passes these secrets to Tauri 
 | `APPLE_SIGNING_IDENTITY` | For example `Developer ID Application: Your Name (TEAMID)`. |
 | `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` | For notarization. `APPLE_PASSWORD` is an [app-specific password](https://support.apple.com/102654), not your account password. |
 
-Before the first signed release, check two things that unsigned builds don't exercise:
+Two things signed builds need that unsigned ones don't:
 
 - The Bun sidecar runs under the hardened runtime and needs JIT entitlements (`com.apple.security.cs.allow-jit`, `allow-unsigned-executable-memory`, `disable-executable-page-protection`) in `bundle.macOS.entitlements`.
-- Every `.node` and `.dylib` under `resources/native` must be signed with the same identity, or notarization rejects the app. Sign them before bundling, for example in a `beforeBundleCommand`.
+- Tauri doesn't sign loose files in Resources, so every `.node` and `.dylib` under `resources/native` is signed by the release workflow's "Sign native libraries" step (Developer ID, secure timestamp, hardened runtime). Notarization rejects the app otherwise. For a signed local build, run the same `codesign` command on them after `bun run desktop:sidecar`.
 
 Tauri's guide: <https://v2.tauri.app/distribute/sign/macos/>.
 
