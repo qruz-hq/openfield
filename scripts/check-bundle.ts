@@ -131,6 +131,8 @@ const SECRET_PATTERNS: { kind: string; re: RegExp }[] = [
   { kind: "OpenAI API key", re: /(?<![A-Za-z0-9_-])sk-[A-Za-z0-9_-]{20,}/g },
   { kind: "x-goog-api-key header value", re: /x-goog-api-key["'`]?\s*[:,=]\s*["'`][^"'`\s]{8,}["'`]/gi },
   { kind: "Bearer token", re: /Bearer\s+(?!\$\{)[A-Za-z0-9._~+/=-]{20,}/g },
+  // Higgsfield's "Authorization: Key <key>" scheme. The opening quote keeps prose like "API Key" out.
+  { kind: "Higgsfield key header value", re: /["'`]Key\s+(?!\$\{)[A-Za-z0-9._~+/=:-]{20,}/g },
 ];
 
 // Never print a key. Enough to find it, not enough to use it.
@@ -164,8 +166,9 @@ export function scanForSecrets(
   return out;
 }
 
+// Every key variable a provider reads (its credentials' envVars). OPENFIELD_* covers Higgsfield's.
 const KEY_ENV =
-  /^(?:OPENFIELD_\w*(?:API_KEY|KEY_ID|KEY_SECRET)|OPENAI_API_KEY|GOOGLE_API_KEY|GEMINI_API_KEY)$/;
+  /^(?:OPENFIELD_\w*(?:API_KEY|KEY_ID|KEY_SECRET)|OPENAI_API_KEY|GOOGLE_API_KEY|GEMINI_API_KEY|ARK_API_KEY)$/;
 
 /** Keys from env vars and config.json, so the scan also catches this machine's real keys (§6.11). */
 export async function loadConfiguredKeys(env: Record<string, string | undefined>) {
