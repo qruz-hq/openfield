@@ -196,7 +196,8 @@ export class Ingest {
     try {
       const proc = Bun.spawn(
         [this.#ffmpeg!, "-v", "error", "-nostdin", "-y", "-i", source, "-frames:v", "1", "-q:v", "3", tmp],
-        { stdout: "ignore", stderr: "ignore" },
+        // windowsHide: under the desktop app the server has no console, so Windows would flash one up.
+        { stdout: "ignore", stderr: "ignore", windowsHide: true },
       );
       const timer = setTimeout(() => proc.kill(), POSTER_TIMEOUT_MS);
       const code = await proc.exited.finally(() => clearTimeout(timer));

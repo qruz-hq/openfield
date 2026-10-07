@@ -2,14 +2,12 @@ import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { dirname, join } from "node:path";
 import { newId, resolveThumbRung, type ThumbEngine, type ThumbRung, thumbCacheKey } from "@openfield/core";
-import type SharpModule from "sharp";
 import { absolutePath, type HomePaths } from "../config/home";
 import type { Logger } from "../log/logger";
+import { loadSharp, type Sharp } from "./sharp";
 
 // Thumbnails (§0.10, §8.5.2): WebP from sharp, cached by content hash, made on first request.
 // If sharp won't load, thumbnails are off and the original is served instead. No WASM fallback.
-
-type Sharp = typeof SharpModule;
 
 export type ThumbSize = { h: ThumbRung; dpr: 1 | 2 } | { p: number };
 
@@ -87,7 +85,7 @@ export class Thumbs {
   static async create(opts: ThumbsOptions): Promise<Thumbs> {
     if (opts.disabled) return new Thumbs(opts, null);
     try {
-      const sharp = (await import("sharp")).default;
+      const sharp = await loadSharp();
       await sharp({ create: { width: 2, height: 2, channels: 3, background: "#000" } })
         .webp()
         .toBuffer();

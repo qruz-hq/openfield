@@ -1,5 +1,5 @@
-import { statSync } from "node:fs";
-import { join } from "node:path";
+import { accessSync, constants, statSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { type AgentLaunch, type AuthKind, DEFAULT_PORT } from "@openfield/core";
 import {
   activeJobSets,
@@ -19,6 +19,7 @@ import { CanvasRunService } from "./canvas/runs";
 import { ConfigStore } from "./config/config-file";
 import { ensureLayout, type HomePaths, homePaths, keepFilePrivate, resolveHome } from "./config/home";
 import type { Services } from "./context";
+import { isCompiled, isDesktop } from "./desktop";
 import { EventHub } from "./events/hub";
 import { Ingest } from "./files/ingest";
 import { Thumbs } from "./files/thumbs";
@@ -276,7 +277,7 @@ async function boot(
     config,
     db,
     endpoint: `http://127.0.0.1:${port}/mcp`,
-    launch: agentLaunch(paths, port, config.data.port ?? DEFAULT_PORT),
+    launch: agentLaunch({ paths, port, configuredPort: config.data.port ?? DEFAULT_PORT, env }),
     events,
   });
   const mcp = new McpSessions(() => services);
@@ -428,14 +429,50 @@ function viteOriginFrom(env: Record<string, string | undefined>): string {
 }
 
 /**
- * How an app that can only start programs reaches this server: the stdio bridge (`bun run mcp`),
- * run by this same bun from this checkout. Only what the bridge couldn't find on its own goes in env.
+ * How an app that can only start programs reaches this server: the stdio bridge. From a checkout
+ * it's `bun run mcp`, run by this same bun. In the desktop app it's the installed server binary
+ * itself with `mcp`; there's no checkout, and without `mcp` the binary would start a second server.
+ * Only what the bridge couldn't find on its own goes in env.
  */
-function agentLaunch(paths: HomePaths, port: number, configuredPort: number): AgentLaunch {
+export function agentLaunch(opts: {
+  paths: HomePaths;
+  port: number;
+  configuredPort: number;
+  env: Record<string, string | undefined>;
+  /** For tests: whether this is the compiled desktop binary. */
+  compiled?: boolean;
+  execPath?: string;
+}): AgentLaunch {
   const env: Record<string, string> = {};
-  if (paths.root !== resolveHome({})) env.OPENFIELD_HOME = paths.root;
-  if (port !== configuredPort) env.OPENFIELD_PORT = String(port);
-  return { command: process.execPath, args: ["run", "--silent", "--cwd", REPO_ROOT, "mcp"], env };
+  if (opts.paths.root !== resolveHome({})) env.OPENFIELD_HOME = opts.paths.root;
+  if (opts.port !== opts.configuredPort) env.OPENFIELD_PORT = String(opts.port);
+  if (isDesktop(opts.env) || (opts.compiled ?? isCompiled())) {
+    // The app passes a path that lasts when its own doesn't: the AppImage file, not its mount.
+    const command = opts.execPath ?? (opts.env.OPENFIELD_AGENT_COMMAND?.trim() || process.execPath);
+    return { command, args: ["mcp"], env, ...(isTemporaryPlace(command) && { temporary: true }) };
+  }
+  const command = opts.execPath ?? process.execPath;
+  return { command, args: ["run", "--silent", "--cwd", REPO_ROOT, "mcp"], env };
+}
+
+/**
+ * Places an app runs from that vanish later: macOS's randomized copy of an app opened before it
+ * was moved (App Translocation), a mounted disk image (read-only, under /Volumes), or an AppImage's
+ * mount. A command pointing there breaks after the next quit or eject.
+ */
+export function isTemporaryPlace(
+  path: string,
+  writable: (dir: string) => boolean = (dir) => {
+    try {
+      accessSync(dir, constants.W_OK);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+): boolean {
+  if (path.includes("/AppTranslocation/") || /^\/tmp\/\.mount_/.test(path)) return true;
+  return path.startsWith("/Volumes/") && !writable(dirname(path));
 }
 
 /** The Openfield checkout this server runs from. */

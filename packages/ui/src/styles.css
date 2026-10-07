@@ -215,6 +215,7 @@
 
   --animate-pop-in: pop-in 120ms ease-out;
   --animate-progress-indeterminate: progress-indeterminate 1.6s ease-in-out infinite;
+  --animate-brand-glow: brand-glow 2.4s ease-in-out infinite;
 
   @keyframes pop-in {
     from {
@@ -230,6 +231,17 @@
     }
     to {
       transform: translateX(300%);
+    }
+  }
+
+  /* The soft glow behind the mark while something generates (BrandMark). */
+  @keyframes brand-glow {
+    0%,
+    100% {
+      opacity: 0.35;
+    }
+    50% {
+      opacity: 0.9;
     }
   }
 }
@@ -297,5 +309,13 @@
     animation-iteration-count: 1;
     transition-duration: 0.01ms;
     scroll-behavior: auto;
+  }
+}
+
+/* The mark's glow is a slow fade with no movement, so it keeps pulsing; the mark itself stays still. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-brand-glow {
+    animation-duration: 2.4s;
+    animation-iteration-count: infinite;
   }
 }

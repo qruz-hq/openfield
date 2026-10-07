@@ -1,4 +1,4 @@
-import type { BatchState } from "@openfield/core";
+import { type BatchState, isTerminalState, type JobSetState } from "@openfield/core";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { safeStorage } from "./storage";
@@ -14,17 +14,29 @@ export interface LiveBatch {
   stopping: boolean;
 }
 
-interface LiveState {
+export interface LiveState {
   /** The event stream is connected. When it isn't, the feed polls every 2 s. */
   connected: boolean;
   /** The stream dropped, or failed to connect twice in a row (§8.4.6). */
   reconnecting: boolean;
+  /**
+   * This connection's snapshot has arrived. Until it has, the runs above are what the last
+   * connection knew, and some of them may have ended while the stream was down.
+   */
+  synced: boolean;
   /** Runs ahead of each waiting job, from job.queued. */
   positions: Record<string, number>;
   /** Jobs waiting out a retry, from job.queued: when they go again, and whether Flex was busy. */
   retries: Record<string, { at: string; busy: boolean }>;
   /** Batch runs not finished yet, by job set id. */
   batches: Record<string, LiveBatch>;
+  /**
+   * Runs in progress, by job set id: every image, video and canvas node run is one. Kept here and
+   * not read from the feed's cache, which only holds the lists a screen has loaded.
+   */
+  activeJobSets: Record<string, true>;
+  /** Canvas runs not settled yet, by run id. Covers the moment between one node and the next. */
+  canvasRuns: Record<string, true>;
   /** One polite announcement per run (§2.11). The id makes a repeat message re-announce. */
   announcement: { id: number; text: string };
   /** The server restarted with a new session token, so this page has to reload. */
@@ -35,6 +47,10 @@ interface LiveState {
   /** Undefined drops a finished run. */
   setBatch: (jobSetId: string, batch: LiveBatch | undefined) => void;
   clearBatches: () => void;
+  /** The snapshot's list of runs in progress replaces what this tab had. */
+  resetActive: (jobSetIds: readonly string[]) => void;
+  setJobSetActive: (jobSetId: string, active: boolean) => void;
+  setCanvasRun: (runId: string, status: JobSetState) => void;
   announce: (text: string) => void;
   expireSession: () => void;
 }
@@ -42,13 +58,16 @@ interface LiveState {
 export const useLive = create<LiveState>((set) => ({
   connected: false,
   reconnecting: false,
+  synced: false,
   positions: {},
   retries: {},
   batches: {},
+  activeJobSets: {},
+  canvasRuns: {},
   announcement: { id: 0, text: "" },
   sessionExpired: false,
   setConnected: (connected, reconnecting = false) =>
-    set({ connected, reconnecting: !connected && reconnecting }),
+    set({ connected, reconnecting: !connected && reconnecting, synced: false }),
   setPosition: (jobId, position) =>
     set((s) => {
       const positions = { ...s.positions };
@@ -73,11 +92,48 @@ export const useLive = create<LiveState>((set) => ({
       return { batches };
     }),
   clearBatches: () => set({ batches: {} }),
+  // A canvas run that settled while the stream was down sends nothing more, so the snapshot
+  // drops them all; one still going says so again on its next update.
+  resetActive: (ids) =>
+    set({
+      activeJobSets: Object.fromEntries(ids.map((id) => [id, true] as const)),
+      canvasRuns: {},
+      synced: true,
+    }),
+  setJobSetActive: (jobSetId, active) =>
+    set((s) => {
+      if (active === jobSetId in s.activeJobSets) return s;
+      const activeJobSets = { ...s.activeJobSets };
+      if (active) activeJobSets[jobSetId] = true;
+      else delete activeJobSets[jobSetId];
+      return { activeJobSets };
+    }),
+  setCanvasRun: (runId, status) =>
+    set((s) => {
+      const active = !isTerminalState(status);
+      if (active === runId in s.canvasRuns) return s;
+      const canvasRuns = { ...s.canvasRuns };
+      if (active) canvasRuns[runId] = true;
+      else delete canvasRuns[runId];
+      return { canvasRuns };
+    }),
   announce: (text) => set((s) => ({ announcement: { id: s.announcement.id + 1, text } })),
   expireSession: () => set({ sessionExpired: true }),
 }));
 
 export const announce = (text: string) => useLive.getState().announce(text);
+
+/** The stream is up and its snapshot is in, so what this tab knows about runs is current. */
+export const selectInSync = (s: LiveState): boolean => s.connected && s.synced;
+
+/**
+ * Something is being made right now: a run, a Batch run waiting at a company, or a canvas run.
+ * Only while in sync, since otherwise this tab can't know when it ends.
+ */
+export const selectGenerating = (s: LiveState): boolean =>
+  selectInSync(s) && [s.activeJobSets, s.batches, s.canvasRuns].some((ids) => Object.keys(ids).length > 0);
+
+export const useIsGenerating = () => useLive(selectGenerating);
 
 interface DismissedState {
   jobs: string[];

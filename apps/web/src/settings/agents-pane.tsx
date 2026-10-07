@@ -117,6 +117,14 @@ function AddToApp() {
                     : t("settings.agents.withoutKey", { app: t(`settings.agents.apps.${id}`) })}
                 </span>
               </p>
+              {status.launch.temporary && (id === "claude-desktop" || id === "codex" || id === "other") && (
+                <p className="flex items-center gap-6">
+                  <Info aria-hidden size={14} className="shrink-0 text-text-tertiary" />
+                  <span className="text-caption text-text-secondary">
+                    {t("settings.agents.temporaryPlace")}
+                  </span>
+                </p>
+              )}
             </TabsContent>
           );
         })}

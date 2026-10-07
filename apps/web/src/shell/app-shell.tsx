@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { Toaster } from "sonner";
 import { useEventStream } from "../api/events";
+import { useDesktopBridge } from "../lib/desktop";
 import { useLive } from "../lib/live";
 import { pathFor, useNavigateRequest, usePresence } from "../lib/presence";
 import { useReveal } from "../lib/reveal";
@@ -13,6 +14,7 @@ import { TopNav } from "./top-nav";
 
 export function AppShell() {
   useEventStream();
+  useDesktopBridge();
   usePresence();
   useThemeSync();
   const { pathname } = useLocation();

@@ -3,6 +3,7 @@ import { BrandLockup, IconButton, SpendPill, TopNavItem } from "@openfield/ui";
 import { Settings } from "lucide-react";
 import { Link, useLocation } from "react-router";
 import { useSpentToday } from "../api/hooks/usage";
+import { useIsGenerating } from "../lib/live";
 import { useSpendingPrefs } from "../settings/spending/prefs";
 
 // App / Nav: 44 tall, hairline at the bottom. Only screens that work get a link (§0.15).
@@ -19,12 +20,13 @@ export function TopNav() {
   const onSettings = pathname.startsWith("/settings");
   const spent = useSpentToday();
   const showToday = useSpendingPrefs((s) => s.showToday);
+  const generating = useIsGenerating();
 
   return (
     <header className="relative z-30 flex h-44 w-full shrink-0 items-center justify-between gap-16 bg-surface px-16">
       <div className="flex items-center gap-20">
         <Link to="/image" className="inline-flex rounded-8">
-          <BrandLockup />
+          <BrandLockup generating={generating} />
         </Link>
         <nav aria-label={t("app.name")} className="flex items-center gap-4">
           {ITEMS.map((item) => (

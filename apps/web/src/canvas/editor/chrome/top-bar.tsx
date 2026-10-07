@@ -19,6 +19,7 @@ import { type KeyboardEvent, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { duplicateCanvas } from "../../../api/hooks/canvas-doc";
 import { errorMessage } from "../../../api/raw";
+import { useIsGenerating } from "../../../lib/live";
 import { notify, notifyError } from "../../../lib/notify";
 import { RunControls } from "../../engine/run-controls";
 import type { SaveFailure, SaveStatus } from "../../store/types";
@@ -41,6 +42,7 @@ export function TopBarLeft() {
 
 function AppMenu() {
   const navigate = useNavigate();
+  const generating = useIsGenerating();
   return (
     <Menu>
       <MenuTrigger asChild>
@@ -49,7 +51,7 @@ function AppMenu() {
           aria-label={t("canvas.editor.menu.open")}
           className={cn(pill, "gap-6 pr-8 pl-11")}
         >
-          <BrandMark size={18} />
+          <BrandMark size={18} generating={generating} />
           <ChevronDown size={12} aria-hidden className="text-text-tertiary" />
         </button>
       </MenuTrigger>
