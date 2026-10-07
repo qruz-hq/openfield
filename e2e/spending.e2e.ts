@@ -93,7 +93,8 @@ test("months draw as bars under the limit line, and a month opens its weeks", as
   await page.mouse.move(box.x + box.width - 40, box.y + 150);
   await expect(page.getByText("Click to see its weeks")).toBeVisible();
   await page.mouse.click(box.x + box.width - 40, box.y + 150);
-  await expect(chartTitle(page)).toHaveText("Spent each week");
+  // A month's weeks, or its days when this month is under a week old (the first days of a month).
+  await expect(chartTitle(page)).toHaveText(/^Spent each (week|day)$/);
   await expect(datesButton(page)).not.toHaveText("Last 12 months");
 });
 

@@ -7,6 +7,7 @@ import { registerResources } from "./resources";
 import { accountTools } from "./tools/account";
 import { canvasTools } from "./tools/canvas";
 import { canvasRunTools } from "./tools/canvas-runs";
+import { canvasScriptTools } from "./tools/canvas-script";
 import { folderTools } from "./tools/folders";
 import { generateTools } from "./tools/generate";
 import { libraryTools } from "./tools/library";
@@ -26,6 +27,7 @@ export const TOOL_GROUPS: readonly ToolGroup[] = [
   folderTools,
   canvasTools,
   canvasRunTools,
+  canvasScriptTools,
   presenceTools,
   accountTools,
 ];

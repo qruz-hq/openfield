@@ -149,6 +149,7 @@ describe("the connection", () => {
     expect(names).toEqual(
       [
         "cancel_job",
+        "canvas_script",
         "create_folder",
         "delete_folder",
         "estimate",

@@ -125,12 +125,26 @@ function tidy(edit: CanvasEdit): CanvasEdit {
   return edit;
 }
 
+const CREATED_SHOWN = 24;
+
+/** New node ids by name, or for a big batch the first few: get_canvas has the rest. */
+function compactCreated(aliases: Record<string, string>) {
+  const all = Object.entries(aliases);
+  if (all.length === 0) return {};
+  if (all.length <= CREATED_SHOWN) return { created: aliases };
+  return {
+    created: Object.fromEntries(all.slice(0, CREATED_SHOWN)),
+    createdCount: all.length,
+    createdNote: "Only the first are listed; get_canvas has every node's id.",
+  };
+}
+
 /**
  * Applies edits as the agent to the canvas as it is now, and answers with what changed, and what
  * had changed since the agent last read it. With onlyIfUnchanged, a canvas that changed since is
  * left alone. A refused edit says which one, in the words `label` gives it ("edit 3", "nodes[1]").
  */
-async function applyEdits(
+export async function applyEdits(
   ctx: ToolContext,
   canvasRef: string,
   edits: CanvasEdit[],
@@ -138,6 +152,8 @@ async function applyEdits(
     graphVersion?: number | undefined;
     onlyIfUnchanged?: boolean | undefined;
     label?: (index: number) => string;
+    /** Answer with the counts and new ids only, not every changed node: skips describing the canvas. */
+    compact?: boolean;
   } = {},
 ) {
   const canvas = resolveCanvas(ctx, canvasRef);
@@ -170,6 +186,24 @@ async function applyEdits(
       );
     }
     throw error;
+  }
+  if (opts.compact) {
+    const now = getCanvas(ctx.svc.db, canvas.id);
+    if (now) saw(ctx, canvas.id, now.graphVersion, readDocument(now.graph));
+    return reply({
+      canvasId: canvas.id,
+      url: canvasUrl(ctx, canvas.id),
+      graphVersion: result.graphVersion,
+      edits: edits.length,
+      touched: result.touched.length,
+      ...(since && { since }),
+      ...compactCreated(result.aliases),
+      ...(result.versionId && {
+        versionSaved: `Saved the canvas as a version first ("${t("canvas.agents.versionLabel", { name: ctx.session.client })}"), so the person can go back.`,
+      }),
+      ...(result.notes?.length && { nudged: [...result.notes, t("canvas.agents.exactHint")] }),
+      ...(result.touched.length === 0 && { note: "Nothing needed changing." }),
+    });
   }
   const { view, doc } = await describeCanvas(ctx, canvas.id);
   saw(ctx, canvas.id, view.graphVersion, doc);

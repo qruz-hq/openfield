@@ -68,6 +68,15 @@ describe("which actions a call is", () => {
   test("tools map to their action, and a batch that removes nodes is a removal too", () => {
     expect(actionsFor("get_canvas", {})).toEqual(["read_canvases"]);
     expect(actionsFor("edit_canvas", { edits: [{ op: "add_node" }] })).toEqual(["change_canvases"]);
+    expect(actionsFor("canvas_script", { code: 'Add("prompt")' })).toEqual(["change_canvases"]);
+    expect(actionsFor("canvas_script", { code: "Remove(Nodes().map((n) => n.id))" })).toEqual([
+      "change_canvases",
+      "remove_nodes",
+    ]);
+    expect(actionsFor("canvas_script", { createCanvas: "New", code: "" })).toEqual([
+      "change_canvases",
+      "make_canvases",
+    ]);
     expect(actionsFor("edit_canvas", { edits: [{ op: "remove_nodes" }] })).toEqual([
       "change_canvases",
       "remove_nodes",

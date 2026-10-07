@@ -55,6 +55,7 @@ const TOOLS: Record<string, AgentAction> = {
   create_canvas: "make_canvases",
   duplicate_canvas: "make_canvases",
   edit_canvas: "change_canvases",
+  canvas_script: "change_canvases",
   add_nodes: "change_canvases",
   connect: "change_canvases",
   update_node: "change_canvases",
@@ -93,6 +94,18 @@ export function actionsFor(tool: string, args: Record<string, unknown>): AgentAc
     tool === "edit_canvas" &&
     Array.isArray(args.edits) &&
     args.edits.some((e) => (e as { op?: unknown }).op === "remove_nodes");
+  if (tool === "canvas_script") {
+    // A script's removals and new canvases are the same actions as their own tools'. Read from the
+    // code, and from the text of a patch, since a retry can bring them in.
+    const patched = Array.isArray(args.edits)
+      ? args.edits.map((e) => (e as { replace?: unknown }).replace)
+      : [];
+    const text = [args.code, ...patched].filter((v) => typeof v === "string").join("\n");
+    const actions: AgentAction[] = [main];
+    if (typeof args.createCanvas === "string") actions.push("make_canvases");
+    if (/\bRemove\b/.test(text)) actions.push("remove_nodes");
+    return actions;
+  }
   return removes ? [main, "remove_nodes"] : [main];
 }
 
