@@ -13,6 +13,7 @@ import { PANES } from "./panes";
 import { PrivacyPane } from "./privacy-pane";
 import { SpendingPane } from "./spending-pane";
 import { StoragePane } from "./storage-pane";
+import { UpdatesPane } from "./updates-pane";
 
 // Settings / Shell: rail, a hairline, then the pane with its header (§6.17). A pane with nothing
 // that works yet stays off the rail (§0.15); Experimental joined with the canvas file switch.
@@ -27,6 +28,7 @@ const CONTENT: Partial<Record<string, ComponentType>> = {
   agents: AgentsPane,
   privacy: PrivacyPane,
   help: HelpPane,
+  updates: UpdatesPane,
   experimental: ExperimentalPane,
 };
 

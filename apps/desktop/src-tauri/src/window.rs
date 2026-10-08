@@ -22,11 +22,13 @@ pub const MAIN: &str = "main";
 /// window keeps, and the only one that gets the web app's permissions.
 static SERVER_ORIGIN: OnceLock<String> = OnceLock::new();
 
-/// What the web app may call: report whether images are being made, and work its own title bar
-/// (move the window, minimize, maximize or restore it, know whether it is maximized, and close
-/// it, which asks first while images are being made, like the system's close). Nothing else.
-const WEB_APP_PERMISSIONS: [&str; 6] = [
+/// What the web app may call: report whether images are being made, check for and install an
+/// update (Settings > Updates), and work its own title bar (move the window, minimize, maximize or
+/// restore it, know whether it is maximized, and close it, which asks first while images are being
+/// made, like the system's close). Nothing else.
+const WEB_APP_PERMISSIONS: [&str; 7] = [
     "generating-indicator",
+    "app-updates",
     "core:window:allow-start-dragging",
     "core:window:allow-internal-toggle-maximize",
     "core:window:allow-minimize",

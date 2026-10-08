@@ -9,6 +9,8 @@
 
 mod busy_icon;
 mod lifecycle;
+#[cfg(target_os = "macos")]
+mod menu;
 mod server;
 mod updates;
 mod window;
@@ -30,6 +32,10 @@ fn main() {
         lifecycle::reopen(app);
     }));
 
+    // Adds Check for Updates… to the app menu. Elsewhere Tauri adds no menu bar, and none is wanted.
+    #[cfg(target_os = "macos")]
+    let builder = builder.menu(menu::build).on_menu_event(menu::on_event);
+
     let app = builder
         .plugin(
             tauri_plugin_window_state::Builder::default()
@@ -43,7 +49,12 @@ fn main() {
         .manage(lifecycle::Lifecycle::default())
         .manage(server::Server::default())
         .manage(busy_icon::BusyIcon::default())
-        .invoke_handler(tauri::generate_handler![busy_icon::set_generating])
+        .manage(updates::Updates::default())
+        .invoke_handler(tauri::generate_handler![
+            busy_icon::set_generating,
+            updates::check_for_update,
+            updates::install_update
+        ])
         .setup(|app| {
             let handle = app.handle().clone();
             #[cfg(target_os = "macos")]

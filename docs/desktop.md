@@ -76,6 +76,16 @@ The window has no native title bar; the web app draws its own (`apps/web/src/she
 - Empty parts of the nav and of the strip move the window, and double-clicking them maximizes it (Tauri's `data-tauri-drag-region`). The bundled splash can be dragged too.
 - The close button closes the window the same way the system's does, so it asks first while images are being made.
 
+### Updates
+
+The app looks for a newer version three ways, all through Tauri's updater and GitHub Releases (`updates.rs`):
+
+- **Once after launch**, in release builds only. If there is one, it asks: **Install and restart** or **Later**. Network trouble stays quiet.
+- **Openfield > Check for Updates…** in the macOS menu bar (`menu.rs`). Same question when there is one; otherwise it says you're up to date, or that it couldn't check. Windows and Linux have no menu bar.
+- **Settings > Updates** on every platform: the version you have, whether a newer one is out, and **Install and restart**. If images are being made, the page asks first, since they stop when the app restarts. In a browser the pane shows the version and a link to the releases, and checks nothing.
+
+Installing downloads the update, stops the server the same way quitting does, installs and restarts. A dev build checks but won't install: it isn't installed anywhere the updater could replace.
+
 ### What the page may call
 
 The page is served from `http://127.0.0.1`, so a remote capability decides what that origin may ask of the app. `window.rs` adds it once the server is ready, for the port the server bound and nothing else: another local server on another port gets no permissions, and a link to it opens in the browser rather than in the window. It allows:
@@ -83,6 +93,7 @@ The page is served from `http://127.0.0.1`, so a remote capability decides what 
 | Permission | For |
 |---|---|
 | `generating-indicator` (`set_generating`) | The busy icon and the question before quitting. |
+| `app-updates` (`check_for_update`, `install_update`) | Settings > Updates. |
 | `core:window:allow-start-dragging` | Moving the window by the nav or strip. |
 | `core:window:allow-internal-toggle-maximize` | The maximize button, and double-clicking the nav or strip. |
 | `core:window:allow-minimize` | The minimize button. |

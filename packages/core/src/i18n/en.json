@@ -266,6 +266,11 @@
   "composer": {
     "placeholder": "Describe the image you want",
     "attach": "Add images",
+    "attachUpload": "Upload images",
+    "attachLibrary": "Choose from library",
+    "references": "Reference images",
+    "referencesPickerTitle": "Choose reference images",
+    "referenceItem": "Reference image {index} of {count}",
     "dropOverlay": "Drop images to use as references",
     "referenceCount": "{count} / {max}",
     "referenceLimit": "{model} accepts up to {max, plural, one {# reference image} other {# reference images}}.",
@@ -273,6 +278,7 @@
     "referencesDropped": "{sent} of {total} references will be sent to {model}. Drag to choose which.",
     "referenceWontSend": "Won't be sent",
     "removeReference": "Remove",
+    "removeReferenceItem": "Remove reference image {index}",
     "rejectedFile": "{name} can't be used. Try a JPG, PNG, WebP or HEIC image.",
     "fileTooLarge": "{name} is too large. The limit is {size}.",
     "scrollLeft": "Scroll settings left",
@@ -407,6 +413,7 @@
       "agents": "Agents",
       "privacy": "Privacy",
       "help": "Help",
+      "updates": "Updates",
       "experimental": "Experimental"
     },
     "restartNeeded": "Takes effect after you restart Openfield.",
@@ -669,8 +676,10 @@
       "disclosure": "Openfield sends your prompt, reference images, masks and settings to the company behind the model you pick, using your key. Their terms apply. Openfield stores nothing online and sends nothing anywhere else.",
       "tracking": "Tracking",
       "noTracking": "No tracking",
-      "noTrackingHint": "Openfield never sends usage data, crash reports or update checks.",
-      "sites": "Sites Openfield connects to"
+      "noTrackingHint": "Openfield never sends usage data or crash reports.",
+      "sites": "Sites Openfield connects to",
+      "updates": "Openfield updates",
+      "updatesHint": "The desktop app asks GitHub for new versions."
     },
     "help": {
       "title": "Help",
@@ -689,6 +698,27 @@
       },
       "copyReport": "Copy report",
       "copyReportHint": "Keys are removed."
+    },
+    "updates": {
+      "title": "Updates",
+      "intro": "Which version of Openfield you have, and whether a newer one is out.",
+      "version": "Version",
+      "current": "Openfield {version}",
+      "checking": "Checking for updates.",
+      "upToDate": "You're up to date.",
+      "lastChecked": "Last checked {when}.",
+      "available": "Openfield {version} is ready to install. Openfield restarts to finish.",
+      "installing": "Downloading the update. Openfield restarts when it's done.",
+      "checkNow": "Check now",
+      "install": "Install and restart",
+      "notNow": "Not now",
+      "confirmTitle": "Install the update now?",
+      "confirmBody": "Images still being made stop first. Openfield restarts to finish.",
+      "browser": "The desktop app keeps itself up to date. If you run Openfield from its source code, get the latest version from GitHub and restart it.",
+      "whatsNew": "What's new",
+      "releaseNotes": "Release notes",
+      "releaseNotesHint": "What changed in each version.",
+      "openReleases": "Open on GitHub"
     },
     "agents": {
       "title": "Agents",
@@ -1997,6 +2027,9 @@
       "reused": "Loaded the prompt and settings.",
       "copyFailed": "Couldn't copy the image.",
       "loadFailed": "Couldn't load this image."
+    },
+    "imagePicker": {
+      "add": "{count, plural, =0 {Add} one {Add # image} other {Add # images}}"
     }
   },
   "uploads": {

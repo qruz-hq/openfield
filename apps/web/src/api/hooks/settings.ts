@@ -36,6 +36,15 @@ export function useUpdateSettings() {
   });
 }
 
+/** The running version (Settings > Updates). One version for the server, the web app and the desktop app. */
+export function useHealth() {
+  return useQuery({
+    queryKey: ["health"],
+    queryFn: () => call(api.api.health.$get()),
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+}
+
 /** Library size, free space, and whether thumbnails are on (Settings > Storage). */
 export function useStats() {
   return useQuery({

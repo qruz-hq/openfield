@@ -23,7 +23,11 @@ export interface ComposerState extends ComposerValues {
   /** Switch model with the values already carried or clamped for it. */
   switchModel: (model: ModelKey | null, values: ComposerValues, batch: number) => void;
   addReference: (assetId: string) => void;
+  /** Adds several at the end, in order, skipping ones already there. */
+  addReferences: (assetIds: readonly string[]) => void;
   removeReference: (assetId: string) => void;
+  /** Moves one to position `to`. The first is the primary reference. */
+  moveReference: (assetId: string, to: number) => void;
 }
 
 export const useComposer = create<ComposerState>()(
@@ -42,8 +46,21 @@ export const useComposer = create<ComposerState>()(
         set((state) =>
           state.references.includes(assetId) ? state : { references: [...state.references, assetId] },
         ),
+      addReferences: (assetIds) =>
+        set((state) => ({
+          references: [...state.references, ...new Set(assetIds)].filter(
+            (id, at, all) => all.indexOf(id) === at,
+          ),
+        })),
       removeReference: (assetId) =>
         set((state) => ({ references: state.references.filter((id) => id !== assetId) })),
+      moveReference: (assetId, to) =>
+        set((state) => {
+          if (!state.references.includes(assetId)) return state;
+          const rest = state.references.filter((id) => id !== assetId);
+          rest.splice(Math.max(0, Math.min(rest.length, to)), 0, assetId);
+          return { references: rest };
+        }),
     }),
     {
       name: "openfield.composer",

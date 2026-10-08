@@ -44,7 +44,7 @@ import {
   FolderPlus,
   HardDrive,
   Heart,
-  Image as ImageIcon,
+  ImagePlus,
   KeyRound,
   type LucideIcon,
   RefreshCcw,
@@ -53,7 +53,7 @@ import {
   Settings,
   X,
 } from "lucide-react";
-import { type CSSProperties, useEffect, useRef, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router";
 import { useAuthedImage } from "../api/hooks/images";
 import {
@@ -87,7 +87,7 @@ import {
 
 // Feed / Tile / {Idle, Generating, Queued, Waiting at provider, Failed}. Radius 0: the image is the
 // tile (§2.4). Idle's hover (design sZjeU, Favorited FYmuP, badge nPfg4): favourite, download,
-// recreate, add to folder and Use as reference, over a scrim, with the model caption. No cost in
+// recreate, add to folder and Use as reference in one column, over a scrim, with the model caption. No cost in
 // the caption yet - a plain asset the feed lists doesn't carry what its run was billed.
 
 export interface TileBox {
@@ -182,30 +182,29 @@ export function AssetTile({
         className="absolute inset-0 cursor-pointer focus-visible:-outline-offset-2"
       />
       {/*
-       * Feed / Tile / Hover (design sZjeU, Favorited FYmuP): a scrim, the actions column, the
-       * model caption and Use as reference. The scrim never catches a click itself (it would block
+       * Feed / Tile / Hover (design sZjeU, Favorited FYmuP): a scrim, the actions column (Use as
+       * reference last) and the model caption. The scrim never catches a click itself (it would block
        * the button above for the plain "open" click); only its own buttons do.
        */}
       <div className="pointer-events-none absolute inset-0 bg-scrim opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-        <TileActions asset={asset} actions={actions} />
-        <div className="pointer-events-none absolute inset-x-10 bottom-20 flex flex-col items-start gap-16">
-          {modelLabel ? (
-            logo ? (
+        <TileActions asset={asset} actions={actions}>
+          <IconButton
+            variant="overlay"
+            size={38}
+            icon={ImagePlus}
+            label={t("feed.tile.actions.useAsReference")}
+            onClick={() => addReference(asset.id)}
+          />
+        </TileActions>
+        {modelLabel ? (
+          <div className="pointer-events-none absolute inset-x-10 bottom-20 flex flex-col items-start">
+            {logo ? (
               <ModelCaption provider={logo} name={modelLabel} onImage />
             ) : (
               <span className="text-micro font-medium text-overlay-fg">{modelLabel}</span>
-            )
-          ) : null}
-          <Button
-            variant="primary"
-            size="s"
-            icon={ImageIcon}
-            className="pointer-events-auto"
-            onClick={() => addReference(asset.id)}
-          >
-            {t("feed.tile.actions.useAsReference")}
-          </Button>
-        </div>
+            )}
+          </div>
+        ) : null}
       </div>
     </li>
   );
@@ -214,9 +213,17 @@ export function AssetTile({
 /**
  * Feed / Tile / Hover / Actions column (design sZjeU): favourite, download, recreate and Add to
  * folder, top right. Shared by the image and video tiles - same buttons, same copy, same spot -
- * so each modality's own extras (Use as reference, the sound toggle) are the only thing that differs.
+ * so each modality's own extras (`children`, like Use as reference) are the only thing that differs.
  */
-export function TileActions({ asset, actions }: { asset: AssetListItem; actions: LibraryActions }) {
+export function TileActions({
+  asset,
+  actions,
+  children,
+}: {
+  asset: AssetListItem;
+  actions: LibraryActions;
+  children?: ReactNode;
+}) {
   const [filing, setFiling] = useState(false);
   return (
     <div className="pointer-events-auto absolute top-10 right-10 flex flex-col gap-4">
@@ -255,6 +262,7 @@ export function TileActions({ asset, actions }: { asset: AssetListItem; actions:
           label={t("feed.tile.actions.addToFolder")}
         />
       </AddToFolderPopover>
+      {children}
     </div>
   );
 }
