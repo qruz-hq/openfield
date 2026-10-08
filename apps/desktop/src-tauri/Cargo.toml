@@ -1,6 +1,6 @@
 [package]
 name = "openfield-desktop"
-version = "0.1.0"
+version = "0.1.1"
 description = "Openfield desktop app: a window around the local Openfield server."
 license = "MIT"
 repository = "https://github.com/qruz-hq/openfield"
