@@ -3,8 +3,9 @@ import { type LiveState, selectGenerating, selectInSync, useLive } from "./live"
 
 // The desktop app loads this same page from the local server. Tauri adds __TAURI_INTERNALS__ to
 // the window, and its capability lets this page call set_generating, which animates the dock or
-// taskbar icon and asks before quitting mid-run, plus the few window commands its own title bar
-// needs (WEB_APP_PERMISSIONS in apps/desktop/src-tauri/src/window.rs). A browser tab never has it, so all of
+// taskbar icon and asks before quitting mid-run, check_for_update and install_update for Settings >
+// Updates, plus the few window commands its own title bar needs (WEB_APP_PERMISSIONS in
+// apps/desktop/src-tauri/src/window.rs). A browser tab never has it, so all of
 // this does nothing there. Calling the internals directly keeps @tauri-apps/api out of the bundle.
 
 interface TauriInternals {
@@ -78,6 +79,38 @@ export function setGenerating(on: boolean): void {
     void internals.invoke("set_generating", { on }).catch(() => {});
   } catch {
     // Same: the page keeps working without the desktop side.
+  }
+}
+
+export interface UpdateStatus {
+  current: string;
+  /** The newer version, when there is one. */
+  available: string | null;
+}
+
+/** The message a failed desktop command rejected with, written for people by the app. */
+const commandError = (error: unknown): Error =>
+  new Error(typeof error === "string" ? error : error instanceof Error ? error.message : String(error));
+
+/** Asks GitHub, through the desktop app, whether a newer Openfield is out. */
+export async function checkForUpdate(): Promise<UpdateStatus> {
+  const internals = tauri();
+  if (typeof internals?.invoke !== "function") throw new Error("Not in the desktop app");
+  try {
+    return (await internals.invoke("check_for_update")) as UpdateStatus;
+  } catch (error) {
+    throw commandError(error);
+  }
+}
+
+/** Downloads and installs the update, then the app restarts. Resolves only if that didn't happen. */
+export async function installUpdate(): Promise<void> {
+  const internals = tauri();
+  if (typeof internals?.invoke !== "function") throw new Error("Not in the desktop app");
+  try {
+    await internals.invoke("install_update");
+  } catch (error) {
+    throw commandError(error);
   }
 }
 

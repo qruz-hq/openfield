@@ -1,0 +1,6 @@
+"$schema" = "../gen/schemas/permission.json"
+
+[[set]]
+identifier = "app-updates"
+description = "Lets the web app's Settings > Updates check GitHub for a newer Openfield and install it. Nothing else."
+permissions = ["allow-check-for-update", "allow-install-update"]

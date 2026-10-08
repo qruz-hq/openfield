@@ -1,6 +1,7 @@
 import type { MessageKey } from "@openfield/core";
 import {
   Bot,
+  CircleArrowUp,
   CircleHelp,
   FlaskConical,
   HardDrive,
@@ -13,7 +14,8 @@ import {
   Sun,
 } from "lucide-react";
 
-// The ten panes of Settings, in the order of §6.17, with the icons the design puts on the rail.
+// The panes of Settings, in the order of §6.17 (Updates joined with the desktop app), with the
+// icons the design puts on the rail.
 
 export interface Pane {
   slug: string;
@@ -86,6 +88,13 @@ export const PANES: readonly Pane[] = [
     label: "settings.rail.help",
     title: "settings.help.title",
     intro: "settings.help.intro",
+  },
+  {
+    slug: "updates",
+    icon: CircleArrowUp,
+    label: "settings.rail.updates",
+    title: "settings.updates.title",
+    intro: "settings.updates.intro",
   },
   {
     slug: "experimental",

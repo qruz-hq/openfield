@@ -3,12 +3,15 @@ use std::{env, fs, path::Path};
 fn main() {
     embed_generating_frames();
 
-    // set_generating is the only command the app defines. Declaring it here makes Tauri generate an
-    // `allow-set-generating` permission, which window.rs grants to the web app.
-    tauri_build::try_build(
-        tauri_build::Attributes::new()
-            .app_manifest(tauri_build::AppManifest::new().commands(&["set_generating"])),
-    )
+    // The commands the app defines. Declaring them here makes Tauri generate an `allow-<command>`
+    // permission for each, which window.rs grants to the web app through the sets in permissions/.
+    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(
+        tauri_build::AppManifest::new().commands(&[
+            "set_generating",
+            "check_for_update",
+            "install_update",
+        ]),
+    ))
     .expect("failed to run the Tauri build script");
 }
 
