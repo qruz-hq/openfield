@@ -19,9 +19,14 @@ export function placeQuery(place: Place, q: string): LibraryQuery {
   return { view: "all", q };
 }
 
-/** Picking again toggles: new, it joins at the end; already picked, it drops out. */
-export function togglePick(ids: readonly string[], id: string): string[] {
-  return ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id];
+/**
+ * Picking again toggles: new, it joins at the end; already picked, it drops out. At `max`, a new
+ * one is turned away, except with a max of 1, where it takes the only place.
+ */
+export function togglePick(ids: readonly string[], id: string, max = Number.POSITIVE_INFINITY): string[] {
+  if (ids.includes(id)) return ids.filter((x) => x !== id);
+  if (ids.length < max) return [...ids, id];
+  return max === 1 ? [id] : [...ids];
 }
 
 /** Moves one picked id to a new spot, clamped to the list. A no-op id, or nowhere to go, changes nothing. */

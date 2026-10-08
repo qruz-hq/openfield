@@ -269,8 +269,7 @@
     "attachUpload": "Upload images",
     "attachLibrary": "Choose from library",
     "references": "Reference images",
-    "referencesPickerTitle": "Choose reference images",
-    "referenceItem": "Reference image {index} of {count}",
+    "referenceItem": "Reference image {index} of {count}. Drag it, or use Alt and an arrow key, to move it.",
     "dropOverlay": "Drop images to use as references",
     "referenceCount": "{count} / {max}",
     "referenceLimit": "{model} accepts up to {max, plural, one {# reference image} other {# reference images}}.",
@@ -1614,7 +1613,7 @@
           "list": "Picked images",
           "clear": "Clear",
           "emptyTitle": "Nothing picked yet",
-          "emptyBody": "Click images to add them. They go to the node in this order.",
+          "emptyBody": "Click images to add them. They're used in this order.",
           "order": "{index, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}",
           "remove": "Remove {order}",
           "reorder": "Reorder {order}. Drag it, or use Alt and an arrow key."
@@ -2027,9 +2026,6 @@
       "reused": "Loaded the prompt and settings.",
       "copyFailed": "Couldn't copy the image.",
       "loadFailed": "Couldn't load this image."
-    },
-    "imagePicker": {
-      "add": "{count, plural, =0 {Add} one {Add # image} other {Add # images}}"
     }
   },
   "uploads": {
@@ -2082,7 +2078,6 @@
     "frameTooLarge": "This frame is too large. The limit is {size}.",
     "generating": "Videos take a minute or two.",
     "frames": {
-      "pickerTitle": "Choose a frame",
       "start": "START",
       "end": "END",
       "addImage": "Add image",

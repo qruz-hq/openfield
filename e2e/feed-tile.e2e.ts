@@ -150,7 +150,7 @@ test("Use as reference queues the image, and Generate sends it as a $subject ref
   expect((await sentAgain).postDataJSON()).not.toHaveProperty("references");
 });
 
-test("the composer's + adds references from a file and from the library, and Generate sends them in order", async ({
+test("the composer's + adds references from a file and from the library; they reorder, and Generate sends them in order", async ({
   page,
 }) => {
   const token = await sessionToken(page.request);
@@ -179,21 +179,36 @@ test("the composer's + adds references from a file and from the library, and Gen
   await (await chooser).setFiles({ name: "reference.png", mimeType: "image/png", buffer: bytes });
   await expect(strip.getByRole("listitem")).toHaveCount(1);
 
-  // From the library: the image made above.
+  // From the library, with the canvas's picker: it opens with the upload already picked.
   await page.getByRole("button", { name: "Add images" }).click();
   await page.getByRole("menuitem", { name: "Choose from library" }).click();
-  const dialog = page.getByRole("dialog", { name: "Choose reference images" });
+  const dialog = page.getByRole("dialog", { name: "Choose images" });
+  await expect(dialog.getByRole("list", { name: "Picked images" }).getByRole("listitem")).toHaveCount(1);
+  await dialog.getByRole("button", { name: /^All images/ }).click();
   await dialog.getByRole("button", { name: prompt }).click();
-  await dialog.getByRole("button", { name: "Add 1 image" }).click();
+  await dialog.getByRole("button", { name: "Add 2 images" }).click();
   await expect(strip.getByRole("listitem")).toHaveCount(2);
+  const order = () =>
+    strip.getByRole("listitem").evaluateAll((items) => items.map((li) => li.dataset.reference));
+  const [uploadedId] = await order();
+  expect(await order()).toEqual([uploadedId, libraryId]);
+
+  // Reordering: Alt and an arrow key, then a drag back.
+  await strip.getByRole("button", { name: /^Reference image 2 of 2/ }).press("Alt+ArrowLeft");
+  await expect.poll(order).toEqual([libraryId, uploadedId]);
+  const first = await strip.getByRole("listitem").first().boundingBox();
+  await page.mouse.move(first!.x + 28, first!.y + 28);
+  await page.mouse.down();
+  for (let x = 8; x <= 64; x += 8) await page.mouse.move(first!.x + 28 + x, first!.y + 28);
+  await page.mouse.up();
+  await expect.poll(order).toEqual([uploadedId, libraryId]);
 
   const field = page.getByRole("textbox", { name: "Describe the image you want" });
   await field.fill(unique("in the same light"));
   const sent = page.waitForRequest((r) => r.url().endsWith("/api/generate") && r.method() === "POST");
   await field.press("ControlOrMeta+Enter");
   const body = (await sent).postDataJSON() as { references?: { assetId: string }[] };
-  expect(body.references).toHaveLength(2);
-  expect(body.references?.[1]?.assetId).toBe(libraryId);
+  expect(body.references?.map((r) => r.assetId)).toEqual([uploadedId, libraryId]);
 
   // Removing one takes it off the next run.
   await strip.getByRole("button", { name: "Remove reference image 1" }).click();
