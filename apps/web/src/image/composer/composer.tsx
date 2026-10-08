@@ -65,7 +65,8 @@ import { useComposer } from "./store";
 // Composer / Full: 1120×146, floating 16 above the bottom, and the prompt grows it upward (§3.1).
 // Chips come from the model's manifest through resolveControl(). Controls that don't work yet
 // (Enhance, styles and characters) stay hidden rather than shown inert (§0.15). Reference images
-// come in through the +, a drop on the composer, or a paste into the prompt (§3.2).
+// sit in a row above the prompt and come in through the + after them, a drop on the composer, or
+// a paste into the prompt (§3.2).
 
 const PROMPT_MAX = 112;
 
@@ -390,27 +391,24 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
         className="relative flex min-w-0 flex-1 gap-12 rounded-24 bg-elevated p-22 inset-ring inset-ring-border transition-shadow has-[textarea:focus]:inset-ring-accent-line"
       >
         <div className="flex min-w-0 flex-1 flex-col justify-between gap-12">
-          {/* 32 tall like the design's row, whose attach button sets its height (P9NcBs); the
-              reference strip sits between the + and the prompt. */}
-          <div className="flex min-h-32 w-full items-start gap-12">
+          {/* The references and the + first, above the prompt, like a Generate node's card (iy0ZN). */}
+          <div className="flex w-full min-w-0 flex-col gap-12">
             <ComposerReferences model={picked} pending={uploads.pending} onUpload={uploads.upload} />
-            <div className="flex min-h-32 min-w-0 flex-1 items-center">
-              <textarea
-                ref={(el) => {
-                  prompt.current = el;
-                  registerPrompt(el);
-                }}
-                rows={1}
-                value={composer.prompt}
-                onChange={(event) => composer.setPrompt(event.target.value)}
-                onKeyDown={onPromptKey}
-                onPaste={onPromptPaste}
-                placeholder={t("composer.placeholder")}
-                aria-label={t("composer.placeholder")}
-                spellCheck
-                className="min-h-20 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-body leading-20 text-text-primary outline-none placeholder:text-text-tertiary focus-visible:outline-none"
-              />
-            </div>
+            <textarea
+              ref={(el) => {
+                prompt.current = el;
+                registerPrompt(el);
+              }}
+              rows={1}
+              value={composer.prompt}
+              onChange={(event) => composer.setPrompt(event.target.value)}
+              onKeyDown={onPromptKey}
+              onPaste={onPromptPaste}
+              placeholder={t("composer.placeholder")}
+              aria-label={t("composer.placeholder")}
+              spellCheck
+              className="min-h-20 w-full min-w-0 resize-none overflow-y-auto bg-transparent text-body leading-20 text-text-primary outline-none placeholder:text-text-tertiary focus-visible:outline-none"
+            />
           </div>
           <div
             role="toolbar"

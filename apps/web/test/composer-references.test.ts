@@ -1,7 +1,7 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { beforeEach, describe, expect, test } from "bun:test";
 import type { ModelListItem } from "@openfield/core";
-import { referenceLimit, referenceNote } from "../src/image/composer/references";
+import { dropIndex, makeRoomOffset, referenceLimit, referenceNote } from "../src/image/composer/references";
 import { useComposer } from "../src/image/composer/store";
 import { banana } from "./fixtures";
 
@@ -20,6 +20,12 @@ describe("the composer's references", () => {
     useComposer.getState().addReference("a");
     useComposer.getState().addReferences(["b", "a", "c", "b"]);
     expect(useComposer.getState().references).toEqual(["a", "b", "c"]);
+  });
+
+  test("setReferences replaces them in the picker's order, once each", () => {
+    useComposer.setState({ references: ["a", "b"] });
+    useComposer.getState().setReferences(["c", "a", "c"]);
+    expect(useComposer.getState().references).toEqual(["c", "a"]);
   });
 
   test("moveReference puts one at a position, clamped to the strip", () => {
@@ -46,5 +52,22 @@ describe("the composer's references", () => {
       `2 of 3 references will be sent to ${banana.displayName}. Drag to choose which.`,
     );
     expect(referenceNote(withMax(0), 1)).toBe(`${banana.displayName} doesn't take reference images`);
+  });
+
+  test("a dragged tile lands on the nearest slot, within the row", () => {
+    // 56 tiles 6 apart: a slot is 62.
+    expect(dropIndex(0, 20, 3)).toBe(0);
+    expect(dropIndex(0, 40, 3)).toBe(1);
+    expect(dropIndex(0, 500, 3)).toBe(2);
+    expect(dropIndex(2, -70, 3)).toBe(1);
+    expect(dropIndex(1, -500, 3)).toBe(0);
+  });
+
+  test("the tiles it passes slide one slot the other way, and only those", () => {
+    // Dragging the first to the third: the second and third slide left.
+    expect([0, 1, 2, 3].map((i) => makeRoomOffset(i, 0, 2))).toEqual([0, -62, -62, 0]);
+    // Dragging the fourth to the second: the second and third slide right.
+    expect([0, 1, 2, 3].map((i) => makeRoomOffset(i, 3, 1))).toEqual([0, 62, 62, 0]);
+    expect([0, 1, 2].map((i) => makeRoomOffset(i, 1, 1))).toEqual([0, 0, 0]);
   });
 });

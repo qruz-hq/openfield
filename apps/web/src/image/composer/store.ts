@@ -25,6 +25,8 @@ export interface ComposerState extends ComposerValues {
   addReference: (assetId: string) => void;
   /** Adds several at the end, in order, skipping ones already there. */
   addReferences: (assetIds: readonly string[]) => void;
+  /** Replaces them all, in this order (the library picker's Add). */
+  setReferences: (assetIds: readonly string[]) => void;
   removeReference: (assetId: string) => void;
   /** Moves one to position `to`. The first is the primary reference. */
   moveReference: (assetId: string, to: number) => void;
@@ -52,6 +54,7 @@ export const useComposer = create<ComposerState>()(
             (id, at, all) => all.indexOf(id) === at,
           ),
         })),
+      setReferences: (assetIds) => set({ references: [...new Set(assetIds)] }),
       removeReference: (assetId) =>
         set((state) => ({ references: state.references.filter((id) => id !== assetId) })),
       moveReference: (assetId, to) =>

@@ -5,7 +5,7 @@ import { type DragEvent, useRef, useState } from "react";
 import { useAuthedImage } from "../../api/hooks/images";
 import { UPLOAD_ACCEPT, uploadImage } from "../../api/hooks/uploads";
 import { errorMessage } from "../../api/raw";
-import { ImagePicker } from "../../assets/image-picker";
+import { LibraryPicker } from "../../canvas/nodes/assets/library-picker";
 import { notifyError } from "../../lib/notify";
 
 // Composer / Video / Start (End) frame (design R67TO9, lBWxa): 84 square, radius 12, elevated-2
@@ -140,11 +140,12 @@ export function FrameTile({ kind, assetId, onPick, onRemove, disabled = false }:
           </MenuContent>
         </Menu>
       )}
-      <ImagePicker
+      <LibraryPicker
         open={pickerOpen}
+        initial={assetId ? [assetId] : []}
+        max={1}
         onOpenChange={setPickerOpen}
-        title={t("video.frames.pickerTitle")}
-        onPick={([assetId]) => assetId && onPick(assetId)}
+        onPick={([picked]) => picked && onPick(picked)}
       />
     </div>
   );

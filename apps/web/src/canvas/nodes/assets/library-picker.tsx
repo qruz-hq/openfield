@@ -22,13 +22,16 @@ import { FAVOURITES_PLACE, movePick, type Place, placeQuery, togglePick } from "
 import { OrderBadge, PickerPicked } from "./picker-picked";
 import { PickerPlaces } from "./picker-places";
 
-// The library picker for the Assets node (§7.5, design q31cb): Favorites, All images and the
-// folder tree on the left; that place's library, searchable, in the middle; the pick, in order,
-// on the right. Picking again starts from what the node already has, so Change keeps what you keep.
+// The library picker (§7.5, design q31cb): Favorites, All images and the folder tree on the left;
+// that place's library, searchable, in the middle; the pick, in order, on the right. Picking again
+// starts from what's already there, so Change keeps what you keep. The canvas Assets node, the
+// image composer's references and the video composer's frames all use it.
 
 export interface LibraryPickerProps {
   open: boolean;
   initial: readonly string[];
+  /** How many can be picked. With 1, picking another image swaps it in. */
+  max?: number;
   onOpenChange: (open: boolean) => void;
   onPick: (assetIds: string[]) => void;
 }
@@ -64,7 +67,7 @@ function useAssetsByIds(ids: readonly string[]): ReadonlyMap<string, Pick<AssetL
   }, [results, ids]);
 }
 
-export function LibraryPicker({ open, initial, onOpenChange, onPick }: LibraryPickerProps) {
+export function LibraryPicker({ open, initial, max, onOpenChange, onPick }: LibraryPickerProps) {
   const [place, setPlace] = useState<Place>(FAVOURITES_PLACE);
   const [picked, setPicked] = useState<string[]>([...initial]);
   const [search, setSearch] = useState("");
@@ -92,7 +95,7 @@ export function LibraryPicker({ open, initial, onOpenChange, onPick }: LibraryPi
   const pickedAssets = useAssetsByIds(open ? picked : []);
 
   const folderName = place.kind === "folder" ? tree.data?.byId.get(place.folderId)?.folder.name : undefined;
-  const toggle = (asset: AssetListItem) => setPicked((ids) => togglePick(ids, asset.id));
+  const toggle = (asset: AssetListItem) => setPicked((ids) => togglePick(ids, asset.id, max));
 
   return (
     <Modal open={open} onOpenChange={onOpenChange}>

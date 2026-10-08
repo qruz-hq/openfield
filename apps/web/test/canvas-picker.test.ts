@@ -46,6 +46,13 @@ describe("picking", () => {
     expect(ids).toEqual(["b"]);
   });
 
+  test("at the limit a new pick is turned away, and with a limit of 1 it swaps in", () => {
+    expect(togglePick(["a", "b"], "c", 2)).toEqual(["a", "b"]);
+    expect(togglePick(["a", "b"], "b", 2)).toEqual(["a"]);
+    expect(togglePick(["a"], "b", 1)).toEqual(["b"]);
+    expect(togglePick(["a"], "a", 1)).toEqual([]);
+  });
+
   test("moving clamps to the list and does nothing for an id that isn't picked or a no-op move", () => {
     const ids = ["a", "b", "c"];
     expect(movePick(ids, "c", 0)).toEqual(["c", "a", "b"]);
