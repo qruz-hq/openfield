@@ -46,7 +46,9 @@ pub fn check_in_background(app: AppHandle) {
     });
 }
 
-/// The app menu's Check for Updates…: like the launch check, but it always answers.
+/// The app menu's Check for Updates…: like the launch check, but it always answers. Only macOS
+/// has the menu (menu.rs).
+#[cfg(target_os = "macos")]
 pub fn check_from_menu(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         match find(&app).await {
