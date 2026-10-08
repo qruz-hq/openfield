@@ -3,7 +3,8 @@ import { api, libraryRoot, makeImage, queryDb, sessionToken } from "./support";
 
 // The Image workspace feed's hover actions (design sZjeU, FYmuP, nPfg4): favourite, download,
 // recreate, add to folder and Use as reference, kept for the mouse behind a hover and reachable by
-// Tab either way (§0.15's usual rule for hover chrome).
+// Tab either way (§0.15's usual rule for hover chrome). Then the composer's own way in for
+// references: the + and its strip.
 
 test.describe.configure({ mode: "serial" });
 
@@ -147,4 +148,56 @@ test("Use as reference queues the image, and Generate sends it as a $subject ref
   const sentAgain = page.waitForRequest((r) => r.url().endsWith("/api/generate") && r.method() === "POST");
   await field.press("ControlOrMeta+Enter");
   expect((await sentAgain).postDataJSON()).not.toHaveProperty("references");
+});
+
+test("the composer's + adds references from a file and from the library, and Generate sends them in order", async ({
+  page,
+}) => {
+  const token = await sessionToken(page.request);
+  const prompt = unique("a quiet harbour");
+  const libraryId = await makeImage(page.request, token, prompt);
+  await page.goto("/image");
+  await expect(tile(page, prompt).locator("img")).toBeVisible({ timeout: 15_000 });
+  const strip = page.getByRole("list", { name: "Reference images" });
+
+  // From this computer: a small PNG drawn in the page.
+  const bytes = Buffer.from(
+    await page.evaluate(async () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = 64;
+      canvas.height = 64;
+      const g = canvas.getContext("2d")!;
+      g.fillStyle = `hsl(${Math.floor(Math.random() * 360)} 60% 50%)`;
+      g.fillRect(0, 0, 64, 64);
+      const blob = await new Promise<Blob>((resolve) => canvas.toBlob((b) => resolve(b!), "image/png"));
+      return Array.from(new Uint8Array(await blob.arrayBuffer()));
+    }),
+  );
+  await page.getByRole("button", { name: "Add images" }).click();
+  const chooser = page.waitForEvent("filechooser");
+  await page.getByRole("menuitem", { name: "Upload images" }).click();
+  await (await chooser).setFiles({ name: "reference.png", mimeType: "image/png", buffer: bytes });
+  await expect(strip.getByRole("listitem")).toHaveCount(1);
+
+  // From the library: the image made above.
+  await page.getByRole("button", { name: "Add images" }).click();
+  await page.getByRole("menuitem", { name: "Choose from library" }).click();
+  const dialog = page.getByRole("dialog", { name: "Choose reference images" });
+  await dialog.getByRole("button", { name: prompt }).click();
+  await dialog.getByRole("button", { name: "Add 1 image" }).click();
+  await expect(strip.getByRole("listitem")).toHaveCount(2);
+
+  const field = page.getByRole("textbox", { name: "Describe the image you want" });
+  await field.fill(unique("in the same light"));
+  const sent = page.waitForRequest((r) => r.url().endsWith("/api/generate") && r.method() === "POST");
+  await field.press("ControlOrMeta+Enter");
+  const body = (await sent).postDataJSON() as { references?: { assetId: string }[] };
+  expect(body.references).toHaveLength(2);
+  expect(body.references?.[1]?.assetId).toBe(libraryId);
+
+  // Removing one takes it off the next run.
+  await strip.getByRole("button", { name: "Remove reference image 1" }).click();
+  await expect(strip.getByRole("listitem")).toHaveCount(1);
+  await strip.getByRole("button", { name: "Remove reference image 1" }).click();
+  await expect(strip).toHaveCount(0);
 });

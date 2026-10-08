@@ -31,7 +31,16 @@ import {
   Scan,
   Square,
 } from "lucide-react";
-import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import {
+  type ClipboardEvent,
+  type DragEvent,
+  type KeyboardEvent,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router";
 import { announceStarted } from "../../api/events";
 import { useGenerate } from "../../api/hooks/job-sets";
@@ -50,11 +59,13 @@ import { focusPrompt, registerPrompt } from "./focus";
 import { GenerateButton, type GenerateSpeed } from "./generate-button";
 import { ModelSelect } from "./model-select";
 import { DisabledChip, OptionChip } from "./option-chip";
+import { ComposerReferences, referenceNote, useReferenceUploads } from "./references";
 import { useComposer } from "./store";
 
 // Composer / Full: 1120×146, floating 16 above the bottom, and the prompt grows it upward (§3.1).
 // Chips come from the model's manifest through resolveControl(). Controls that don't work yet
-// (attach, Enhance, styles and characters) stay hidden rather than shown inert (§0.15).
+// (Enhance, styles and characters) stay hidden rather than shown inert (§0.15). Reference images
+// come in through the +, a drop on the composer, or a paste into the prompt (§3.2).
 
 const PROMPT_MAX = 112;
 
@@ -91,6 +102,8 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
   const composer = useComposer();
   const generate = useGenerate();
   const prompt = useRef<HTMLTextAreaElement>(null);
+  const uploads = useReferenceUploads();
+  const [dropping, setDropping] = useState(false);
 
   const anyReady = models.some((m) => m.ready);
   // The picked model, else the default the server chose when the first key worked, else any ready
@@ -217,6 +230,32 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
     );
     // The prompt and every setting stay as they are, ready to run again (§3.6).
   };
+
+  // Pasted images become references; any text in the same paste still lands in the prompt.
+  const onPromptPaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = [...event.clipboardData.files];
+    if (!files.length) return;
+    if (!event.clipboardData.getData("text/plain")) event.preventDefault();
+    void uploads.upload(files);
+  };
+
+  const hasFiles = (event: DragEvent) => event.dataTransfer.types.includes("Files");
+  const onDragOver = (event: DragEvent<HTMLFormElement>) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    setDropping(true);
+  };
+  const onDragLeave = (event: DragEvent<HTMLFormElement>) => {
+    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDropping(false);
+  };
+  const onDrop = (event: DragEvent<HTMLFormElement>) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    setDropping(false);
+    void uploads.upload([...event.dataTransfer.files]);
+  };
+
+  const note = referenceNote(picked, composer.references.length);
 
   const onPromptKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -345,25 +384,33 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
           event.preventDefault();
           submit();
         }}
-        className="flex min-w-0 flex-1 gap-12 rounded-24 bg-elevated p-22 inset-ring inset-ring-border transition-shadow has-[textarea:focus]:inset-ring-accent-line"
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        onDrop={onDrop}
+        className="relative flex min-w-0 flex-1 gap-12 rounded-24 bg-elevated p-22 inset-ring inset-ring-border transition-shadow has-[textarea:focus]:inset-ring-accent-line"
       >
         <div className="flex min-w-0 flex-1 flex-col justify-between gap-12">
-          {/* 32 tall like the design's row, whose attach button sets its height (P9NcBs). */}
-          <div className="flex min-h-32 w-full items-center gap-12">
-            <textarea
-              ref={(el) => {
-                prompt.current = el;
-                registerPrompt(el);
-              }}
-              rows={1}
-              value={composer.prompt}
-              onChange={(event) => composer.setPrompt(event.target.value)}
-              onKeyDown={onPromptKey}
-              placeholder={t("composer.placeholder")}
-              aria-label={t("composer.placeholder")}
-              spellCheck
-              className="min-h-20 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-body leading-20 text-text-primary outline-none placeholder:text-text-tertiary focus-visible:outline-none"
-            />
+          {/* 32 tall like the design's row, whose attach button sets its height (P9NcBs); the
+              reference strip sits between the + and the prompt. */}
+          <div className="flex min-h-32 w-full items-start gap-12">
+            <ComposerReferences model={picked} pending={uploads.pending} onUpload={uploads.upload} />
+            <div className="flex min-h-32 min-w-0 flex-1 items-center">
+              <textarea
+                ref={(el) => {
+                  prompt.current = el;
+                  registerPrompt(el);
+                }}
+                rows={1}
+                value={composer.prompt}
+                onChange={(event) => composer.setPrompt(event.target.value)}
+                onKeyDown={onPromptKey}
+                onPaste={onPromptPaste}
+                placeholder={t("composer.placeholder")}
+                aria-label={t("composer.placeholder")}
+                spellCheck
+                className="min-h-20 min-w-0 flex-1 resize-none overflow-y-auto bg-transparent text-body leading-20 text-text-primary outline-none placeholder:text-text-tertiary focus-visible:outline-none"
+              />
+            </div>
           </div>
           <div
             role="toolbar"
@@ -385,7 +432,15 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
             onGenerate={submit}
           />
         </div>
+        {dropping ? (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-24 border-2 border-dashed border-accent bg-elevated/90 text-small font-medium text-text-primary">
+            {t("composer.dropOverlay")}
+          </div>
+        ) : null}
       </form>
+      {note ? (
+        <p className="pointer-events-none absolute -top-28 left-22 text-caption text-text-tertiary">{note}</p>
+      ) : null}
     </div>
   );
 }

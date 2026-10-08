@@ -266,6 +266,11 @@
   "composer": {
     "placeholder": "Describe the image you want",
     "attach": "Add images",
+    "attachUpload": "Upload images",
+    "attachLibrary": "Choose from library",
+    "references": "Reference images",
+    "referencesPickerTitle": "Choose reference images",
+    "referenceItem": "Reference image {index} of {count}",
     "dropOverlay": "Drop images to use as references",
     "referenceCount": "{count} / {max}",
     "referenceLimit": "{model} accepts up to {max, plural, one {# reference image} other {# reference images}}.",
@@ -273,6 +278,7 @@
     "referencesDropped": "{sent} of {total} references will be sent to {model}. Drag to choose which.",
     "referenceWontSend": "Won't be sent",
     "removeReference": "Remove",
+    "removeReferenceItem": "Remove reference image {index}",
     "rejectedFile": "{name} can't be used. Try a JPG, PNG, WebP or HEIC image.",
     "fileTooLarge": "{name} is too large. The limit is {size}.",
     "scrollLeft": "Scroll settings left",
@@ -1997,6 +2003,9 @@
       "reused": "Loaded the prompt and settings.",
       "copyFailed": "Couldn't copy the image.",
       "loadFailed": "Couldn't load this image."
+    },
+    "imagePicker": {
+      "add": "{count, plural, =0 {Add} one {Add # image} other {Add # images}}"
     }
   },
   "uploads": {
