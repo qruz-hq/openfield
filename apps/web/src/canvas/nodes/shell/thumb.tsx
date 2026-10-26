@@ -11,7 +11,7 @@ import { useAssetMissing, usePaneZoom } from "../../store/context";
 
 const screenDensity = () => (typeof window === "undefined" ? 1 : window.devicePixelRatio || 1);
 
-const thumbUrl = (assetId: string, size: ThumbSize) =>
+export const thumbUrl = (assetId: string, size: ThumbSize) =>
   `/files/thumb/${assetId}?h=${size.h}${size.dpr === 2 ? "&dpr=2" : ""}`;
 
 /** The one place canvas builds a thumbnail URL: nodes, index cards and the version history. */

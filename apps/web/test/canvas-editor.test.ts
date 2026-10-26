@@ -415,24 +415,21 @@ describe("alignment index", () => {
 });
 
 describe("level of detail", () => {
-  test("holds a little past each threshold, so zooming across it doesn't flip back and forth", () => {
+  test("holds a little past 40%, so zooming across it doesn't flip back and forth", () => {
     expect(lodForZoom(0.5)).toBe("full");
-    expect(lodForZoom(0.39)).toBe("card");
+    expect(lodForZoom(0.39)).toBe("canvas");
     expect(lodForZoom(0.39, "full")).toBe("full");
-    expect(lodForZoom(0.37, "full")).toBe("card");
-    expect(lodForZoom(0.41, "card")).toBe("card");
-    expect(lodForZoom(0.43, "card")).toBe("full");
-    expect(lodForZoom(0.195, "card")).toBe("card");
-    expect(lodForZoom(0.18, "card")).toBe("rect");
-    expect(lodForZoom(0.205, "rect")).toBe("rect");
+    expect(lodForZoom(0.37, "full")).toBe("canvas");
+    expect(lodForZoom(0.41, "canvas")).toBe("canvas");
+    expect(lodForZoom(0.43, "canvas")).toBe("full");
     // A jump goes straight to where it lands.
-    expect(lodForZoom(0.1, "full")).toBe("rect");
-    expect(lodForZoom(1, "rect")).toBe("full");
+    expect(lodForZoom(0.1, "full")).toBe("canvas");
+    expect(lodForZoom(1, "canvas")).toBe("full");
   });
 
   test("a canvas opens at the level of detail of the zoom it was saved at", () => {
     const far = { ...doc([node("a")]), viewport: { x: 0, y: 0, zoom: 0.15 } };
-    expect(createCanvasStore(detail(far)).getState().ui.lod).toBe("rect");
+    expect(createCanvasStore(detail(far)).getState().ui.lod).toBe("canvas");
     expect(createCanvasStore(detail(doc([node("a")]))).getState().ui.lod).toBe("full");
   });
 });

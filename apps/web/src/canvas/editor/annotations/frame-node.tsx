@@ -22,8 +22,11 @@ import { useEditingText } from "./editable-text";
 // collapse chevron, name, node count. Nodes inside are React Flow children (parentId), so moving
 // the frame moves them; collapsing folds it to a strip and hides them. Locked (design LFv5M), a
 // lock follows the chevron and the count says so; what's in it stays inside (flow/adapter.ts).
+// Zoomed out, the canvas layer paints the tint and the line (a tint here would sit over the
+// images in it) and the pill keeps its size on screen, scaled by the inverse zoom the layer writes
+// on the pane (--of-inv-zoom), so the title stays readable.
 
-const FrameNode = memo(function FrameNode({ id, selected }: NodeComponentProps) {
+const FrameNode = memo(function FrameNode({ id, selected, lod }: NodeComponentProps) {
   const frame = useNodeLook(id);
   const count = useCanvas((s) => selectChildCount(s, id));
   const actions = useCanvasActions();
@@ -37,16 +40,27 @@ const FrameNode = memo(function FrameNode({ id, selected }: NodeComponentProps) 
     actions.apply([{ op: "setCollapsed", id, collapsed: !collapsed }], { label: "collapse" });
   };
 
+  const far = lod === "canvas";
+
   return (
     <div className="relative size-full">
-      <div className="absolute inset-0 rounded-16 bg-elevated opacity-50" />
+      {far ? null : (
+        <>
+          <div className="absolute inset-0 rounded-16 bg-elevated opacity-50" />
+          <div
+            className={cn(
+              "absolute inset-0 rounded-16",
+              selected ? "inset-ring-2 inset-ring-accent" : "inset-ring inset-ring-border-strong",
+            )}
+          />
+        </>
+      )}
       <div
         className={cn(
-          "absolute inset-0 rounded-16",
-          selected ? "inset-ring-2 inset-ring-accent" : "inset-ring inset-ring-border-strong",
+          "absolute left-0 flex h-24 items-center gap-6 rounded-8 bg-elevated-2 px-8 inset-ring inset-ring-border",
+          far ? "of-frame-pill-far" : "-top-32 max-w-full",
         )}
-      />
-      <div className="absolute -top-32 left-0 flex h-24 max-w-full items-center gap-6 rounded-8 bg-elevated-2 px-8 inset-ring inset-ring-border">
+      >
         <button
           type="button"
           aria-label={t(collapsed ? "canvas.editor.frame.expand" : "canvas.editor.frame.collapse")}
@@ -72,8 +86,8 @@ const FrameNode = memo(function FrameNode({ id, selected }: NodeComponentProps) 
           {t(locked ? "canvas.editor.frame.countLocked" : "canvas.editor.frame.count", { count })}
         </span>
       </div>
-      {collapsed ? null : <CanvasNodeResizer selected={selected} minSize={FRAME_MIN} />}
-      <AnnotationHandles sources />
+      {collapsed || far ? null : <CanvasNodeResizer selected={selected} minSize={FRAME_MIN} />}
+      {far ? null : <AnnotationHandles sources />}
     </div>
   );
 });

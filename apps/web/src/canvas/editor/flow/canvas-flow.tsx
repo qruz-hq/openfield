@@ -10,6 +10,7 @@ import {
   type EdgeChange,
   type FinalConnectionState,
   type NodeChange,
+  type NodeMouseHandler,
   type NodePositionChange,
   type OnConnectStartParams,
   type OnNodeDrag,
@@ -37,6 +38,7 @@ import { useCanvasEngineContext } from "../../engine/engine-store";
 import { takeFitOnOpen } from "../../fit-on-open";
 import { cardMedia } from "../../nodes/generate/card-media";
 import { nodeRegistry } from "../../nodes/registry";
+import { NodeMenu } from "../../nodes/shell/node-menu";
 import {
   type CanvasOp,
   lodForZoom,
@@ -62,6 +64,7 @@ import {
   type Measured,
   sameMeasure,
 } from "./adapter";
+import { CanvasLayer } from "./canvas-layer";
 import { createEdgeRemove, EdgeRemoveButton, EdgeRemoveContext } from "./edge-remove";
 import { ConnectionLine, EdgeModeContext, edgeTypes } from "./edges";
 import { buildNodeTypes } from "./node-types";
@@ -85,6 +88,11 @@ const PRO_OPTIONS = { hideAttribution: true };
 const freeKey = (e: { metaKey: boolean; ctrlKey: boolean }) => (isMac() ? e.metaKey : e.ctrlKey);
 
 const portType = (nodeType: string, handle: string) => nodeRegistry.port(nodeType, handle)?.type;
+
+/** Zoomed out, React Flow draws no links: the canvas layer does (canvas-layer.tsx). */
+const NO_EDGES: FlowEdge[] = [];
+/** Node types without the node menu (they're not drawn by NodeShell). */
+const NO_NODE_MENU = new Set(["frame", "note", "shape", "text"]);
 
 /** A node's own text field: a Prompt's words, a note, a title being renamed. */
 const EDITABLE = "textarea, input, select, [contenteditable='true'], [contenteditable='']";
@@ -116,6 +124,8 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
   const selection = useCanvas((s) => s.selection);
   const readOnly = useReadOnly();
   const tool = useUi((ui) => ui.tool);
+  // Zoomed out, the canvas layer paints the nodes and links (canvas-layer.tsx).
+  const far = useUi((ui) => ui.lod === "canvas");
   const findHit = useEditorUi((s) => s.findHit);
 
   const measured = useRef(new Map<string, Measured>());
@@ -184,8 +194,11 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
   ]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: the edge list depends on these slices only.
   const edges = useMemo(
-    () => buildEdges({ doc, selection, readOnly, portType, definition: (type) => nodeRegistry.get(type) }),
-    [doc.edges, doc.edgeOrder, doc.nodes, selection, readOnly],
+    () =>
+      far
+        ? NO_EDGES
+        : buildEdges({ doc, selection, readOnly, portType, definition: (type) => nodeRegistry.get(type) }),
+    [doc.edges, doc.edgeOrder, doc.nodes, selection, readOnly, far],
   );
 
   // A canvas just made from a template or a file opens fitted to its nodes.
@@ -510,9 +523,12 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
 
   const onMove = useCallback(
     (_event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
-      const { ui, actions } = store.getState();
+      const { ui, actions, selection } = store.getState();
       const lod = lodForZoom(viewport.zoom, ui.lod);
-      if (lod !== ui.lod) actions.setUi({ lod });
+      if (lod === ui.lod) return;
+      actions.setUi({ lod });
+      // Zoomed out, links aren't React Flow's to select or delete, so none stays selected unseen.
+      if (lod === "canvas" && selection.edgeIds.length) actions.setSelection({ edgeIds: [] });
     },
     [store],
   );
@@ -602,6 +618,25 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
   const placing = tool === "note" || tool === "shape" || tool === "text" || tool === "frame";
   const simpleEdges = edges.length > SIMPLE_EDGES_ABOVE;
 
+  // Zoomed out, nodes draw nothing of their own (node-types.tsx), so their double-click and
+  // right-click are heard here: the settings drawer, and the node menu.
+  const onNodeDoubleClick: NodeMouseHandler<FlowNode> = useCallback(
+    (_event, node) => {
+      if (!far || !node.type || !nodeRegistry.get(node.type)?.Inspector) return;
+      store.getState().actions.openInspector(node.id);
+    },
+    [far, store],
+  );
+  const [nodeMenu, setNodeMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const onNodeContextMenu: NodeMouseHandler<FlowNode> = useCallback(
+    (event, node) => {
+      if (!far || !node.type || NO_NODE_MENU.has(node.type)) return;
+      event.preventDefault();
+      if (!readOnly) setNodeMenu({ id: node.id, x: event.clientX, y: event.clientY });
+    },
+    [far, readOnly],
+  );
+
   // Right-click on a connection: Delete (§7.6).
   const [edgeMenu, setEdgeMenu] = useState<{ id: string; x: number; y: number } | null>(null);
   const onEdgeContextMenu = useCallback(
@@ -637,6 +672,8 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
           onReconnectEnd={onReconnectEnd}
           onPaneClick={onPaneClick}
           onEdgeContextMenu={onEdgeContextMenu}
+          onNodeDoubleClick={onNodeDoubleClick}
+          onNodeContextMenu={onNodeContextMenu}
           onDoubleClick={onDoubleClick}
           onMove={onMove}
           onMoveEnd={onMoveEnd}
@@ -673,7 +710,9 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
           aria-label={t("canvas.editor.pane")}
           data-placing={placing || undefined}
         >
-          <Background variant={BackgroundVariant.Dots} gap={24} size={2} offset={1} />
+          {/* Zoomed out, the dots would be a dense pattern to repaint on every move: the pane goes plain. */}
+          {far ? null : <Background variant={BackgroundVariant.Dots} gap={24} size={2} offset={1} />}
+          <CanvasLayer />
           <PendingEdge />
           <AlignmentGuides />
           <PresenceLayer />
@@ -681,6 +720,7 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
         </ReactFlow>
       </EdgeRemoveContext.Provider>
       <EdgeMenu menu={edgeMenu} onClose={() => setEdgeMenu(null)} />
+      <FarNodeMenu menu={nodeMenu} onClose={() => setNodeMenu(null)} />
     </EdgeModeContext.Provider>
   );
 }
@@ -727,6 +767,30 @@ function EdgeMenu({
       </MenuContent>
     </Menu>,
     document.body,
+  );
+}
+
+/** The node menu for a node right-clicked zoomed out, where its own NodeShell isn't drawn. */
+function FarNodeMenu({
+  menu,
+  onClose,
+}: {
+  menu: { id: string; x: number; y: number } | null;
+  onClose: () => void;
+}) {
+  const node = useCanvas((s) => (menu ? s.doc.nodes[menu.id] : undefined));
+  const def = node ? nodeRegistry.get(node.type) : undefined;
+  if (!menu || !node || !def) return null;
+  return (
+    <NodeMenu
+      id={menu.id}
+      name={node.title?.trim() || t(def.label)}
+      at={{ x: menu.x, y: menu.y }}
+      onClose={onClose}
+      runnable={def.runnable}
+      collapsed={node.collapsed}
+      inspectable={!!def.Inspector}
+    />
   );
 }
 

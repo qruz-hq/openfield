@@ -46,6 +46,13 @@ function release(path: string) {
   }, RELEASE_AFTER_MS);
 }
 
+/** Images on screen still on their way: the zoomed-out canvas stays up over the nodes until none are. */
+export function imagesLoading(): number {
+  let count = 0;
+  for (const entry of entries.values()) if (entry.refs > 0 && !entry.url) count++;
+  return count;
+}
+
 export type ImageState = { status: "loading" } | { status: "ready"; src: string } | { status: "error" };
 
 export interface AuthedImageOptions {

@@ -44,29 +44,25 @@ export interface PersistState {
 
 export type CanvasTool = "select" | "pan" | "note" | "shape" | "text" | "frame";
 
-/** Level of detail by zoom (§7.10): full ≥ 40%, a title and thumbnail card ≥ 20%, a flat rectangle below. */
-export type LodBucket = "full" | "card" | "rect";
+/**
+ * Level of detail by zoom (§7.10): "full" draws every node as itself; "canvas", below about 40%,
+ * draws them all as plain tiles on one canvas (flow/canvas-layer.tsx), the nodes left as empty
+ * boxes that still select, drag and open.
+ */
+export type LodBucket = "full" | "canvas";
 
-const LOD_ORDER: readonly LodBucket[] = ["full", "card", "rect"];
-/** How far past a threshold, as a share of it, the zoom has to go before the level changes. */
-const LOD_BAND = 0.05;
-
-const bucket = (zoom: number, scale: number): LodBucket =>
-  zoom >= 0.4 * scale ? "full" : zoom >= 0.2 * scale ? "card" : "rect";
+/** Zooming out, the tiles take over below this; zooming in, the nodes come back above LOD_LEAVE. */
+const LOD_ENTER = 0.38;
+const LOD_LEAVE = 0.42;
 
 /**
- * The level of detail for a zoom. With the level on show, it holds until the zoom is a little past
- * the threshold (5% of it), so zooming back and forth across 40% or 20% doesn't redraw every node
- * each time.
+ * The level of detail for a zoom. The two thresholds keep a zoom that wavers around 40% from
+ * swapping every node back and forth.
  */
 export function lodForZoom(zoom: number, current?: LodBucket): LodBucket {
-  const plain = bucket(zoom, 1);
-  if (!current || current === plain) return plain;
-  // Zooming out, the thresholds sit a little lower; zooming in, a little higher.
-  const rank = LOD_ORDER.indexOf(current);
-  const finest = LOD_ORDER.indexOf(bucket(zoom, 1 - LOD_BAND));
-  const coarsest = LOD_ORDER.indexOf(bucket(zoom, 1 + LOD_BAND));
-  return rank >= finest && rank <= coarsest ? current : plain;
+  if (current === "canvas") return zoom > LOD_LEAVE ? "full" : "canvas";
+  if (current === "full") return zoom < LOD_ENTER ? "canvas" : "full";
+  return zoom < 0.4 ? "canvas" : "full";
 }
 
 /** A connection being dragged, so ports can brighten or dim while it's in flight (§7.6). */
