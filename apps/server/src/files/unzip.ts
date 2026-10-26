@@ -1,4 +1,5 @@
-import { open } from "node:fs/promises";
+import { createReadStream } from "node:fs";
+import { open, stat } from "node:fs/promises";
 import { Readable } from "node:stream";
 import { crc32, createInflateRaw } from "node:zlib";
 
@@ -169,11 +170,17 @@ export class ZipArchive {
     } finally {
       await file.close();
     }
-    const packed = Bun.file(this.path).slice(dataStart, dataStart + entry.compressedSize);
-    if (packed.size !== entry.compressedSize) throw new ZipError(`${entry.name} ends too soon`);
-    const raw = packed.stream();
+    if (dataStart + entry.compressedSize > (await stat(this.path)).size) {
+      throw new ZipError(`${entry.name} ends too soon`);
+    }
+    // A node stream, not Bun.file().slice().stream(): on Bun 1.3 (what the desktop app ships)
+    // a sliced file stream never yields its first chunk on macOS. `end` is inclusive.
+    const raw: AsyncIterable<Uint8Array> =
+      entry.compressedSize === 0
+        ? (async function* () {})()
+        : createReadStream(this.path, { start: dataStart, end: dataStart + entry.compressedSize - 1 });
     const chunks: AsyncIterable<Uint8Array> =
-      entry.method === 0 ? raw : Readable.fromWeb(raw as never).pipe(createInflateRaw());
+      entry.method === 0 ? raw : Readable.from(raw).pipe(createInflateRaw());
     return toStream(checked(entry, chunks));
   }
 
