@@ -31,8 +31,6 @@ export interface EditorUiState {
   deleteCanvasOpen: boolean;
   saveVersionOpen: boolean;
   renamingCanvas: boolean;
-  /** The last pointer position over the pane, in pane units, for paste. */
-  pointer: Point | null;
   /** Consecutive pastes of one copy step down and right. */
   paste: { key: string; at: Point; count: number } | null;
   preview: VersionPreview | null;
@@ -72,7 +70,6 @@ export const createEditorUi = (): StoreApi<EditorUiState> =>
     deleteCanvasOpen: false,
     saveVersionOpen: false,
     renamingCanvas: false,
-    pointer: null,
     paste: null,
     preview: null,
     keyboardConnect: null,
@@ -88,6 +85,13 @@ export interface EditorSession {
   canvasId: string;
   main: CanvasStore;
   ui: StoreApi<EditorUiState>;
+  /**
+   * The last pointer position over the pane, in screen pixels, for paste. Not in `ui`: it changes
+   * on every pointer move, and nothing draws from it.
+   */
+  pointer: { current: Point | null };
+  /** Puts a pan or zoom that hasn't rested yet into the store (view-settle.ts), before a save. */
+  settleView: { current: (() => void) | null };
   autosave: Autosave;
   /** The index card picture, refreshed after saves (M4-15). */
   capture: PreviewCapture;

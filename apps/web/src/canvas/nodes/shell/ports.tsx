@@ -1,4 +1,4 @@
-import { PORT_SPACING, type PortSpec, type PortType, portFlow } from "@openfield/canvas/engine/types";
+import { type PortSpec, type PortType, portFlow } from "@openfield/canvas/engine/types";
 import { wouldCreateCycle } from "@openfield/canvas/store/graph";
 import { t } from "@openfield/core";
 import { cn, Tooltip } from "@openfield/ui";
@@ -7,6 +7,7 @@ import { Film, Image, type LucideIcon, Palette, SquareDashed, Type } from "lucid
 import { memo } from "react";
 import { useCanvas } from "../../store/context";
 import type { CanvasState } from "../../store/types";
+import { railLayout } from "./rail";
 
 // Typed ports (§7.6, design pUPWt): 24 px circles centred on the node's edge, inputs on the left and
 // outputs on the right, 36 apart around the vertical middle. While a connection is dragged, ports
@@ -22,15 +23,29 @@ const ICONS: Partial<Record<PortType, LucideIcon>> = {
 
 type PortLook = "idle" | "ready" | "target" | "dimmed";
 
-/** A selected link lights the ports at both of its ends (design vaCAK). */
+/** Ports at either end of a selected data link, as "out:node:port" and "in:node:port". */
+const litPorts = new WeakMap<readonly string[], { edges: CanvasState["doc"]["edges"]; ports: Set<string> }>();
+
+/**
+ * A selected link lights the ports at both of its ends (design vaCAK). Worked out once per selection
+ * and shared by every port, so a big selection doesn't cost every port a walk over it.
+ */
 function attachedToSelected(state: CanvasState, nodeId: string, port: PortSpec): boolean {
-  for (const edgeId of state.selection.edgeIds) {
-    const edge = state.doc.edges[edgeId];
-    if (edge?.kind !== "data") continue;
-    if (port.direction === "out" && edge.source === nodeId && edge.sourceHandle === port.id) return true;
-    if (port.direction === "in" && edge.target === nodeId && edge.targetHandle === port.id) return true;
+  const { edgeIds } = state.selection;
+  if (!edgeIds.length) return false;
+  let lit = litPorts.get(edgeIds);
+  if (!lit || lit.edges !== state.doc.edges) {
+    const ports = new Set<string>();
+    for (const edgeId of edgeIds) {
+      const edge = state.doc.edges[edgeId];
+      if (edge?.kind !== "data") continue;
+      ports.add(`out:${edge.source}:${edge.sourceHandle}`);
+      ports.add(`in:${edge.target}:${edge.targetHandle}`);
+    }
+    lit = { edges: state.doc.edges, ports };
+    litPorts.set(edgeIds, lit);
   }
-  return false;
+  return lit.ports.has(`${port.direction}:${nodeId}:${port.id}`);
 }
 
 /** How a port looks while a connection is in flight. Cheap when nothing is being dragged. */
@@ -101,21 +116,6 @@ export const Port = memo(function Port({ nodeId, port, offset, off, stacked, con
     </Tooltip>
   );
 });
-
-/** Offsets from the vertical middle for a rail of `count` ports (the rail rule of railOffsets). */
-export const railOffset = (index: number, count: number): number => (index - (count - 1) / 2) * PORT_SPACING;
-
-/**
- * One rail's visible ports with their offsets from the vertical middle. A hidden port that keeps
- * its slot leaves a gap where it will go (PortSpec.keepSlot).
- */
-export function railLayout(
-  ports: readonly PortSpec[],
-  direction: PortSpec["direction"],
-): { port: PortSpec; offset: number }[] {
-  const rail = ports.filter((p) => p.direction === direction && (!p.hidden || p.keepSlot));
-  return rail.flatMap((port, i) => (port.hidden ? [] : [{ port, offset: railOffset(i, rail.length) }]));
-}
 
 export interface PortRailsProps {
   nodeId: string;

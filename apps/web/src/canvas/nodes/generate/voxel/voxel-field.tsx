@@ -4,7 +4,7 @@ import { type RefObject, useEffect, useLayoutEffect, useMemo, useRef, useState }
 import { useReducedMotion } from "../../../editor/flow/motion-state";
 import { firstLanding } from "../../../editor/flow/pulse";
 import { useCanvas, useNodeRuntime } from "../../../store/context";
-import { railLayout } from "../../shell/ports";
+import { railLayout } from "../../shell/rail";
 import { attachVoxels, CELL, type VoxelHandle, type VoxelParams } from "./renderer";
 
 // The voxel swarm over a node while it generates or waits (design wKzQJ, motion spec oQ27O): 4 px

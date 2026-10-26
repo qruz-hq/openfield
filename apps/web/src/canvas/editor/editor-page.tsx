@@ -89,6 +89,7 @@ function createSession(detail: CanvasDetail): { session: EditorSession; attach: 
     const sync = startLiveSync(session);
     const current = createAutosave(main, {
       save: (body, opts) => patchCanvas(canvasId, body, opts),
+      beforeSave: () => session.settleView.current?.(),
       onSaved: () => capture.request(),
       caughtUp: (graphVersion) => sync.caughtUp(graphVersion),
     });
@@ -122,6 +123,8 @@ function createSession(detail: CanvasDetail): { session: EditorSession; attach: 
     canvasId,
     main,
     ui,
+    pointer: { current: null },
+    settleView: { current: null },
     autosave,
     capture,
 

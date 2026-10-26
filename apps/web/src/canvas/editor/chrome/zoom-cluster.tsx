@@ -11,7 +11,7 @@ import {
   Surface,
   Tooltip,
 } from "@openfield/ui";
-import { useViewport } from "@xyflow/react";
+import { type ReactFlowState, useStore } from "@xyflow/react";
 import { Map as MapIcon, Minus, Plus, Scan, ScanSearch } from "lucide-react";
 import { useCanvasActions, useUi } from "../../store";
 import { toolKey } from "../shortcuts";
@@ -30,8 +30,11 @@ const PRESETS = [
 
 const percent = (zoom: number) => t("canvas.editor.zoom.percent", { value: Math.round(zoom * 100) });
 
+/** The zoom to the percent shown: a pan, or a zoom inside one percent, doesn't re-render the bar. */
+const selectZoom = (s: ReactFlowState) => Math.round(s.transform[2] * 100) / 100;
+
 export function ZoomCluster({ commands }: { commands: EditorCommands }) {
-  const { zoom } = useViewport();
+  const zoom = useStore(selectZoom);
   const minimapOpen = useUi((ui) => ui.minimapOpen);
   const actions = useCanvasActions();
 

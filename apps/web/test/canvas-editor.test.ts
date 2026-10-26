@@ -28,16 +28,19 @@ import {
 import {
   alignOps,
   alignToNeighbours,
+  type Box,
   distributeOps,
   dropOp,
   GROUP_PADDING,
   groupIntoFrameOps,
+  neighbourIndex,
   type SizeOf,
   ungroupOps,
 } from "../src/canvas/editor/geometry";
 import { nextInWalk, walkOrder } from "../src/canvas/editor/keyboard-nav";
 import { matchShortcut, shortcutSheet, toolKey } from "../src/canvas/editor/shortcuts";
 import { groupVersions } from "../src/canvas/editor/versions/rows";
+import { createViewSettle } from "../src/canvas/editor/view-settle";
 import { matchScore } from "../src/canvas/nodes/add-node-menu";
 import type { NodeDefinition } from "../src/canvas/nodes/registry";
 import {
@@ -48,6 +51,7 @@ import {
   emptyDocument,
   extractFragment,
   fromDocument,
+  lodForZoom,
 } from "../src/canvas/store";
 
 const CANVAS_ID = "01K6BQ8000000000000000CNVS";
@@ -188,6 +192,66 @@ describe("flow adapter", () => {
     expect(preview!.selectable).toBe(false);
   });
 
+  test("a known size goes to React Flow in whole pixels, with every handle where the DOM draws it", () => {
+    const s = slice([
+      node("g", { type: "image.generate", size: undefined }),
+      node("text", { type: "text", size: undefined }),
+    ]);
+    const generate = { type: "image.generate", size: { w: 320, h: 320 }, ports: generateSpec.ports };
+    const defs: Record<string, NodeDefinition> = {
+      ...DEFS,
+      "image.generate": generate as unknown as NodeDefinition,
+    };
+    const [card, text] = createNodeCache()(
+      inputs(s, {
+        definition: (type) => defs[type],
+        // A 3:4 image: 320 / 0.75 tall.
+        boxOf: (f) => (f.type === "image.generate" ? { w: 320, h: 320 / 0.75 } : undefined),
+      }),
+    );
+    expect(card).toMatchObject({ width: 320, height: 427, measured: { width: 320, height: 427 } });
+    const at = (id: string, type: "source" | "target") =>
+      card!.handles!.find((h) => h.id === id && h.type === type);
+    // Inputs on the left edge, 36 apart round the middle, the hidden style port keeping its slot.
+    expect(at("prompt", "target")).toMatchObject({ x: -12, y: 427 / 2 - 36 - 12, width: 24, height: 24 });
+    expect(at("input_images", "target")).toMatchObject({ x: -12, y: 427 / 2 - 12 });
+    expect(at("preset", "target")).toBeUndefined();
+    expect(at("images", "source")).toMatchObject({ x: 320 - 12, y: 427 / 2 - 12, position: "right" });
+    // The eight arrow handles: left and right 20 outside, top and bottom centred.
+    expect(card!.handles!.filter((h) => h.id?.startsWith("arrow-"))).toHaveLength(8);
+    expect(at("arrow-target-left", "target")).toMatchObject({ x: -25, y: 427 / 2 - 5 });
+    expect(at("arrow-source-right", "source")).toMatchObject({ x: 335, y: 427 / 2 - 5 });
+    expect(at("arrow-target-bottom", "target")).toMatchObject({ x: 155, y: 422 });
+    // Sized by its content: no size, no handles, so React Flow measures it.
+    expect(text!.handles).toBeUndefined();
+    expect(text!.measured).toBeUndefined();
+  });
+
+  test("a measured size within half a pixel is the same size", () => {
+    const s = slice([node("text", { type: "text", size: undefined })]);
+    const build = createNodeCache();
+    const first = build(inputs(s, { measured: new Map([["text", { width: 120, height: 40 }]]) }));
+    const second = build(inputs(s, { measured: new Map([["text", { width: 120.4, height: 39.7 }]]) }));
+    expect(second[0]).toBe(first[0]!);
+    const third = build(inputs(s, { measured: new Map([["text", { width: 121, height: 40 }]]) }));
+    expect(third[0]).not.toBe(first[0]!);
+  });
+
+  test("a drag hands React Flow the same link list, and names change only with a rename", () => {
+    const s = slice([node("a"), node("b", { position: { x: 300, y: 0 } })], [edge("e1", "a", "b")]);
+    const build = createEdgeCache();
+    const portType = () => undefined;
+    const first = build({ doc: s, selection: { nodeIds: [], edgeIds: [] }, readOnly: false, portType });
+    const moved = applyOps(s, [{ op: "moveNode", id: "b", position: { x: 310, y: 0 } }]).doc;
+    expect(build({ doc: moved, selection: { nodeIds: [], edgeIds: [] }, readOnly: false, portType })).toBe(
+      first,
+    );
+    const renamed = applyOps(moved, [{ op: "setTitle", id: "b", title: "Hero" }]).doc;
+    const third = build({ doc: renamed, selection: { nodeIds: [], edgeIds: [] }, readOnly: false, portType });
+    expect(third).not.toBe(first);
+    expect(third[0]!.ariaLabel).toContain("Hero");
+  });
+
   test("edges get their recipe, and image into mask is marked for the coercion glyph", () => {
     const s = slice(
       [node("a"), node("b")],
@@ -301,6 +365,106 @@ describe("alignment guides", () => {
     expect(near.dx).toBe(-2);
     expect(near.guides.map((g) => g.axis)).toEqual(["x", "y"]);
     expect(alignToNeighbours({ ...moving, y: 300 }, [neighbour], 4)).toEqual({ dx: 0, dy: 0, guides: [] });
+  });
+});
+
+describe("alignment index", () => {
+  /** The plain scan the index stands in for: every neighbour, every stop. */
+  function scan(moving: Box, others: Box[], threshold: number) {
+    const stops = (b: Box, axis: "x" | "y") =>
+      axis === "x" ? [b.x, b.x + b.w / 2, b.x + b.w] : [b.y, b.y + b.h / 2, b.y + b.h];
+    const snap = (axis: "x" | "y") => {
+      let best: { shift: number; at: number } | null = null;
+      for (const other of others)
+        for (const mine of stops(moving, axis))
+          for (const theirs of stops(other, axis)) {
+            const shift = theirs - mine;
+            if (Math.abs(shift) <= threshold && (!best || Math.abs(shift) < Math.abs(best.shift)))
+              best = { shift, at: theirs };
+          }
+      return best;
+    };
+    return { dx: snap("x")?.shift ?? 0, dy: snap("y")?.shift ?? 0, x: snap("x")?.at, y: snap("y")?.at };
+  }
+
+  test("lines up exactly like a scan of every neighbour, ties included", () => {
+    let seed = 7;
+    const random = () => {
+      seed = (seed * 16807) % 2147483647;
+      return seed / 2147483647;
+    };
+    // Whole and half pixels on a coarse grid, so ties and lines through several boxes come up often.
+    const box = (): Box => ({
+      x: Math.round(random() * 40) * 8,
+      y: Math.round(random() * 40) * 8,
+      w: Math.round(random() * 20 + 1) * 8,
+      h: Math.round(random() * 20 + 1) * 8,
+    });
+    for (let round = 0; round < 200; round++) {
+      const others = Array.from({ length: 30 }, box);
+      const moving = { ...box(), x: random() * 320, y: random() * 320 };
+      const index = neighbourIndex(others);
+      const got = index.align(moving, 6);
+      const want = scan(moving, others, 6);
+      expect({ dx: got.dx, dy: got.dy }).toEqual({ dx: want.dx, dy: want.dy });
+      expect(got.guides.find((g) => g.axis === "x")?.at).toBe(want.x);
+      expect(got.guides.find((g) => g.axis === "y")?.at).toBe(want.y);
+      expect(got).toEqual(alignToNeighbours(moving, others, 6));
+    }
+  });
+});
+
+describe("level of detail", () => {
+  test("holds a little past each threshold, so zooming across it doesn't flip back and forth", () => {
+    expect(lodForZoom(0.5)).toBe("full");
+    expect(lodForZoom(0.39)).toBe("card");
+    expect(lodForZoom(0.39, "full")).toBe("full");
+    expect(lodForZoom(0.37, "full")).toBe("card");
+    expect(lodForZoom(0.41, "card")).toBe("card");
+    expect(lodForZoom(0.43, "card")).toBe("full");
+    expect(lodForZoom(0.195, "card")).toBe("card");
+    expect(lodForZoom(0.18, "card")).toBe("rect");
+    expect(lodForZoom(0.205, "rect")).toBe("rect");
+    // A jump goes straight to where it lands.
+    expect(lodForZoom(0.1, "full")).toBe("rect");
+    expect(lodForZoom(1, "rect")).toBe("full");
+  });
+
+  test("a canvas opens at the level of detail of the zoom it was saved at", () => {
+    const far = { ...doc([node("a")]), viewport: { x: 0, y: 0, zoom: 0.15 } };
+    expect(createCanvasStore(detail(far)).getState().ui.lod).toBe("rect");
+    expect(createCanvasStore(detail(doc([node("a")]))).getState().ui.lod).toBe("full");
+  });
+});
+
+describe("view settle", () => {
+  test("the view goes into the store once it rests, or at once before a save", () => {
+    const store = createCanvasStore(detail(doc([node("a")])));
+    let pending: (() => void) | null = null;
+    const view = createViewSettle(store, {
+      set: (fn) => {
+        pending = fn;
+        return fn;
+      },
+      clear: () => {
+        pending = null;
+      },
+    });
+    const revision = () => store.getState().persist.viewRevision;
+    view.moved({ x: 10, y: 0, zoom: 1 });
+    view.moved({ x: 20, y: 0, zoom: 0.5 });
+    expect(revision()).toBe(0);
+    (pending as (() => void) | null)?.();
+    expect(store.getState().viewport).toEqual({ x: 20, y: 0, zoom: 0.5 });
+    expect(revision()).toBe(1);
+    view.moved({ x: 30, y: 0, zoom: 0.5 });
+    view.settle();
+    expect(store.getState().viewport.x).toBe(30);
+    // Settling again, or back where it already is, changes nothing.
+    view.settle();
+    view.moved({ x: 30, y: 0, zoom: 0.5 });
+    view.settle();
+    expect(revision()).toBe(2);
   });
 });
 
@@ -492,6 +656,8 @@ describe("autosave", () => {
     expect(h.saves).toHaveLength(0);
     await h.advance(1000);
     expect(h.saves).toHaveLength(1);
+    // Only the view moved: just the view goes, not the whole document.
+    expect(h.saves[0]).toEqual({ viewport: { x: 10, y: 0, zoom: 1 }, graphVersion: 3 });
     h.store.getState().actions.apply([{ op: "setName", name: "Spring campaign" }]);
     await h.advance(800);
     expect(h.saves[1]).toMatchObject({ name: "Spring campaign" });

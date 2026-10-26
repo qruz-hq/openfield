@@ -21,7 +21,7 @@ export function ReferenceStrip({ images }: { images: readonly (string | null)[] 
         assetId ? (
           // Positions are the model's order, so the index is a stable key.
           // biome-ignore lint/suspicious/noArrayIndexKey: the same image can be connected twice.
-          <AssetImage key={i} assetId={assetId} height={24} className="of-card-ref" />
+          <AssetImage key={i} assetId={assetId} height={24} className="of-card-ref" pane />
         ) : (
           // biome-ignore lint/suspicious/noArrayIndexKey: an image still to come has no id yet.
           <span key={i} className="of-card-ref" data-pending />

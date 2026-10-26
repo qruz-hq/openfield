@@ -4,7 +4,7 @@ import { ChevronLeft, ChevronRight, type LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAuthedImage } from "../../../api/hooks/images";
 import { useAssetMissing } from "../../store/context";
-import { AssetImage, thumbPath } from "../shell/thumb";
+import { AssetImage, useThumbPath } from "../shell/thumb";
 import { rememberImageSize } from "./card-media";
 
 // Parts of the Generate card (design A0Fi5O): the pill (aDnHY), the pager (V8qUEE), the message
@@ -146,10 +146,11 @@ export function CardImage({
   opacity: number;
 }) {
   const missing = useAssetMissing(assetId);
-  const image = useAuthedImage(missing ? null : thumbPath(assetId, height));
+  const path = useThumbPath(missing ? null : assetId, height, true);
+  const image = useAuthedImage(path, { image: assetId });
   // Not in this library (deleted, or a canvas from another computer): the usual placeholder.
   if (missing || image.status === "error")
-    return <AssetImage assetId={assetId} height={height} className="absolute inset-0" />;
+    return <AssetImage assetId={assetId} height={height} className="absolute inset-0" pane />;
   if (image.status !== "ready") return null;
   return (
     <img

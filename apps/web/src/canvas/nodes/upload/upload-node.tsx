@@ -144,7 +144,7 @@ export const UploadNode = memo(function UploadNode(props: NodeComponentProps) {
       {ids.length ? (
         <>
           <div className="group relative min-h-0 flex-1" {...dropTarget}>
-            <AssetImage assetId={ids[0]!} height={224} className="absolute inset-0" />
+            <AssetImage assetId={ids[0]!} height={224} className="absolute inset-0" pane />
             {dragging ? (
               <div className="absolute inset-0 bg-accent-soft inset-ring-2 inset-ring-accent" />
             ) : null}
@@ -180,7 +180,7 @@ export const UploadNode = memo(function UploadNode(props: NodeComponentProps) {
                     }}
                     className="nodrag block size-36 cursor-pointer overflow-hidden rounded-6 inset-ring inset-ring-border"
                   >
-                    <AssetImage assetId={assetId} height={36} className="size-full" />
+                    <AssetImage assetId={assetId} height={36} className="size-full" pane />
                   </button>
                   {readOnly ? null : (
                     <button

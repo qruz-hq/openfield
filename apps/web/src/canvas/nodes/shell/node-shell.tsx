@@ -82,6 +82,7 @@ export function NodeShell({
   id,
   selected,
   lod,
+  height,
   spec,
   title,
   collapsed,
@@ -177,7 +178,7 @@ export function NodeShell({
             />
           ) : lod === "card" ? (
             thumbs[0] ? (
-              <AssetImage assetId={thumbs[0]} height={320} className="absolute inset-0" />
+              <AssetImage assetId={thumbs[0]} height={height ?? 320} className="absolute inset-0" pane />
             ) : null
           ) : lod === "rect" ? (
             <span className="m-auto max-w-[calc(100%-24px)] truncate text-caption font-medium text-text-secondary">

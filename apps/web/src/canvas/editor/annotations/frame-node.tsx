@@ -4,7 +4,15 @@ import { cn } from "@openfield/ui";
 import { ChevronDown, ChevronRight, Frame, Lock } from "lucide-react";
 import { type KeyboardEvent, memo, useEffect, useRef, useState } from "react";
 import { defineNode, type NodeComponentProps } from "../../nodes/registry";
-import { useCanvas, useCanvasActions, useLocked, useNodeFrame, useReadOnly, useUi } from "../../store";
+import {
+  selectChildCount,
+  useCanvas,
+  useCanvasActions,
+  useLocked,
+  useNodeLook,
+  useReadOnly,
+  useUi,
+} from "../../store";
 import { AnnotationHandles } from "../annotation-handles";
 import { CanvasNodeResizer } from "../node-resizer";
 import { useEditingText } from "./editable-text";
@@ -16,12 +24,8 @@ import { useEditingText } from "./editable-text";
 // lock follows the chevron and the count says so; what's in it stays inside (flow/adapter.ts).
 
 const FrameNode = memo(function FrameNode({ id, selected }: NodeComponentProps) {
-  const frame = useNodeFrame(id);
-  const count = useCanvas((s) => {
-    let n = 0;
-    for (const child of s.doc.order) if (s.doc.nodes[child]?.parentId === id) n++;
-    return n;
-  });
+  const frame = useNodeLook(id);
+  const count = useCanvas((s) => selectChildCount(s, id));
   const actions = useCanvasActions();
   const readOnly = useReadOnly();
   const locked = useLocked(id);

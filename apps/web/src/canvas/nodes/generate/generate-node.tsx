@@ -6,9 +6,8 @@ import { resolveFor } from "@openfield/canvas/nodes/generate/settings";
 import { type GenerateParams, generateSpec } from "@openfield/canvas/nodes/generate/spec";
 import { type AspectRatio, type ModelListItem, t } from "@openfield/core";
 import { aspectLabel } from "@openfield/providers/manifest";
-import { useStoreApi } from "@xyflow/react";
 import { Image as ImageIcon } from "lucide-react";
-import { memo, useLayoutEffect, useMemo, useRef } from "react";
+import { memo, useMemo } from "react";
 import { useStore } from "zustand";
 import { useNodeAnalysis } from "../../engine/engine-store";
 import { useNodeParams, useNodeResult, useNodeRuntime } from "../../store/context";
@@ -18,6 +17,7 @@ import { type CompanyWait, useCompanyWait } from "../shell/company-wait";
 import { ImageCard } from "../shell/image-card";
 import { LinkedPrompt } from "../shell/linked-text";
 import { NodeShell } from "../shell/node-shell";
+import { useSyncPorts } from "../shell/sync-ports";
 import { useNodeBasics, useNodeDisplay, useParsedParams } from "../shell/use-node";
 import { CardImage, CardPager, CardPartial } from "./card";
 import { cardMedia, showImage } from "./card-media";
@@ -61,37 +61,6 @@ function useCardLayout(
     [frame, params, images, ctx, assetId, dims, picked, id],
   );
   return { ...layout, images };
-}
-
-/**
- * Ports sit on the card's middle, so they move whenever its box does (an aspect ratio picked in
- * the settings, a new image). React Flow's own useUpdateNodeInternals waits a frame, which leaves
- * links pointing at the old ports for that frame; this asks its store to measure the node before
- * the frame is painted. `width` and `height` are the box React Flow's wrapper has in this render,
- * so the DOM is already resized. The first box is React Flow's to measure, like every node's.
- * While a fit to the nodes waits for them all to be measured, it waits a frame like React Flow's
- * hook: measuring one node early would fit the view to that node alone.
- */
-function useSyncPorts(id: string, width: number | undefined, height: number | undefined) {
-  const flow = useStoreApi();
-  const mounted = useRef(false);
-  useLayoutEffect(() => {
-    if (!width || !height) return;
-    if (!mounted.current) {
-      mounted.current = true;
-      return;
-    }
-    const measure = () => {
-      const { domNode, updateNodeInternals } = flow.getState();
-      const nodeElement = domNode?.querySelector<HTMLDivElement>(
-        `.react-flow__node[data-id="${CSS.escape(id)}"]`,
-      );
-      if (nodeElement) updateNodeInternals(new Map([[id, { id, nodeElement, force: true }]]));
-    };
-    if (!flow.getState().fitViewQueued) return measure();
-    const frame = requestAnimationFrame(measure);
-    return () => cancelAnimationFrame(frame);
-  }, [flow, id, width, height]);
 }
 
 export const GenerateNode = memo(function GenerateNode(props: NodeComponentProps) {

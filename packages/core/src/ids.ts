@@ -62,6 +62,28 @@ export function resolveThumbRung(height: number): ThumbRung {
   return THUMB_RUNGS.find((rung) => rung >= height) ?? THUMB_RUNGS[THUMB_RUNGS.length - 1]!;
 }
 
+/** A thumbnail file: a rung, at 1x or 2x. */
+export interface ThumbSize {
+  h: ThumbRung;
+  dpr: 1 | 2;
+}
+
+/** How many pixels tall a thumbnail file is. */
+export const thumbPixels = (size: ThumbSize): number => size.h * size.dpr;
+
+/**
+ * The thumbnail for an image drawn `pixels` device pixels tall (its height × zoom × devicePixelRatio):
+ * the smallest 1x rung that covers it, and 2x only past the largest one. With `current`, the file
+ * already on show stays while it's sharp enough and at most twice too big, so a small zoom doesn't
+ * swap every image on the pane.
+ */
+export function pickThumbSize(pixels: number, current?: ThumbSize | null): ThumbSize {
+  if (current && thumbPixels(current) >= pixels && thumbPixels(current) <= pixels * 2) return current;
+  const top = THUMB_RUNGS[THUMB_RUNGS.length - 1]!;
+  if (pixels <= top) return { h: resolveThumbRung(pixels), dpr: 1 };
+  return { h: resolveThumbRung(pixels / 2), dpr: 2 };
+}
+
 /** `<sha256>@h<rung>[@2x].webp`, or `<sha256>@p1440.webp` for the detail preview. */
 export function thumbCacheKey(sha256: string, size: { h: ThumbRung; dpr?: 1 | 2 } | { p: number }): string {
   if ("p" in size) return `${sha256}@p${size.p}.webp`;

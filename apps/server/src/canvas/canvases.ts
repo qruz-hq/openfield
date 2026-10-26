@@ -249,7 +249,8 @@ export class CanvasService {
    * Autosave (§7.8). Rejected with the server's copy when another tab saved first. Snapshots the
    * new content when the newest automatic snapshot is at least five minutes old. A save that only
    * moves the view or corrects a card's measured size keeps the version (sameEdits), so it never
-   * turns an agent's or another tab's next change into a conflict.
+   * turns an agent's or another tab's next change into a conflict. A save of the view alone
+   * (`viewport`, no graph) goes into whatever version is saved, without reading the document.
    */
   save(
     id: string,
@@ -260,6 +261,14 @@ export class CanvasService {
     const result = db.transaction((tx) => {
       const row = getCanvas(tx, id);
       if (!row) return { kind: "missing" as const };
+      if (!body.graph && body.viewport && (body.name ?? row.name) === row.name) {
+        // A pan or a zoom: not an edit, so it never conflicts and the version stays. The tab keeps
+        // the version it read (not the row's), so edits it hasn't caught up with still count.
+        const graph = { ...row.graph, viewport: body.viewport };
+        const saved = saveCanvasLayout(tx, id, row.graphVersion, graph);
+        if (!saved.ok) return { kind: "conflict" as const, row: saved.current ?? row };
+        return { kind: "view" as const, row: saved.row, graph };
+      }
       const before = readDocument(row.graph);
       if (row.graphVersion !== body.graphVersion) {
         // Two tabs that both wrote the same run results into their copies aren't a conflict: the
@@ -292,6 +301,11 @@ export class CanvasService {
       return { kind: "saved" as const, row: saved.row, doc: next };
     });
     if (result.kind === "missing") throw this.#missing();
+    if (result.kind === "view") {
+      const { graph } = result;
+      this.#writeThrough(() => readDocument(graph));
+      return { ok: true, saved: { graphVersion: body.graphVersion, updatedAt: result.row.updatedAt } };
+    }
     if (result.kind === "unchanged") {
       return { ok: true, saved: { graphVersion: result.row.graphVersion, updatedAt: result.row.updatedAt } };
     }
@@ -810,12 +824,15 @@ export class CanvasService {
   }
 
   /** "Also save canvases as files" (§7.8). A failed copy is logged; the save itself stands. */
-  #writeThrough(doc: CanvasDocument): void {
+  /** `doc` can be a function, for a caller that only reads the document when there's a file to write. */
+  #writeThrough(doc: CanvasDocument | (() => CanvasDocument)): void {
     if (!this.deps.settings.get().canvasFileWriteThrough) return;
+    let read: CanvasDocument | null = null;
     try {
-      writeDocumentFile(this.deps.paths, doc);
+      read = typeof doc === "function" ? doc() : doc;
+      writeDocumentFile(this.deps.paths, read);
     } catch (error) {
-      this.deps.logger.warn("Couldn't save the canvas file", { canvasId: doc.id, error });
+      this.deps.logger.warn("Couldn't save the canvas file", { canvasId: read?.id, error });
     }
   }
 }

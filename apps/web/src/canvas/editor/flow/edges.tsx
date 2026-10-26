@@ -1,5 +1,4 @@
 import { isAnnotationHandle } from "@openfield/canvas/engine/types";
-import { t } from "@openfield/core";
 import { cn } from "@openfield/ui";
 import {
   type ConnectionLineComponentProps,
@@ -10,12 +9,13 @@ import {
   getSimpleBezierPath,
   Position,
 } from "@xyflow/react";
-import { SquareDashed, X } from "lucide-react";
+import { SquareDashed } from "lucide-react";
 import { createContext, memo, useContext, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useCompanyWait } from "../../nodes/shell/company-wait";
 import { useLinkLit } from "../../nodes/shell/linked-text";
-import { useCanvas, useCanvasActions, useReadOnly } from "../../store";
+import { useCanvas, useReadOnly } from "../../store";
 import { ANNOTATION_EDGE_TYPE, DATA_EDGE_TYPE, type FlowEdge } from "./adapter";
+import { useEdgeHovered, useEdgeRemove } from "./edge-remove";
 import { freshLinkDelay } from "./fresh-links";
 import { GroupLines } from "./group-lines";
 import { useFadeOut, useReducedMotion } from "./motion-state";
@@ -80,7 +80,6 @@ const DataEdge = memo(function DataEdge(props: EdgeProps<FlowEdge>) {
     sourcePosition,
     targetPosition,
   });
-  const actions = useCanvasActions();
   const readOnly = useReadOnly();
   const activity = useLinkActivity(target);
   // The words it carries are hovered on the card they go into (nodes/shell/linked-text.tsx).
@@ -93,22 +92,15 @@ const DataEdge = memo(function DataEdge(props: EdgeProps<FlowEdge>) {
     return () => clearTimeout(timer);
   }, [drawDelay]);
   const reduced = useReducedMotion();
-  const [hover, setHover] = useState(false);
-  const leave = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const enter = () => {
-    clearTimeout(leave.current);
-    setHover(true);
-  };
-  // A short grace period so the pointer can travel from the line onto the × button.
-  const exit = () => {
-    clearTimeout(leave.current);
-    leave.current = setTimeout(() => setHover(false), 120);
-  };
+  const hover = useEdgeHovered(id);
+  // The × shows on hover and stays while the link is the only one selected, so it can be removed
+  // either way. A box selection of many links shows none; Delete removes them.
+  const alone = useCanvas((s) => s.selection.edgeIds.length === 1);
+  const removable = (hover || (!!selected && alone)) && !readOnly;
+  const pointer = useEdgeRemove(id, removable, labelX, labelY);
 
   // Selected wins over everything: the pulse hides while the link is selected.
   const running = activity === "active" && !reduced;
-  // The × shows on hover and stays while the link is selected, so it can be removed either way.
-  const removable = (hover || selected) && !readOnly;
   const fading = useFadeOut(running, FADE_MS);
   const pulsing = running && !selected;
   const drawPulse = (pulsing || fading) && !selected;
@@ -144,7 +136,7 @@ const DataEdge = memo(function DataEdge(props: EdgeProps<FlowEdge>) {
 
   return (
     <>
-      <g onPointerEnter={enter} onPointerLeave={exit}>
+      <g {...pointer}>
         {drawPulse ? (
           <defs>
             {/* Tail to head along the pulse: $accent-clear, then $accent from 80% to the head. */}
@@ -222,32 +214,17 @@ const DataEdge = memo(function DataEdge(props: EdgeProps<FlowEdge>) {
           </>
         ) : null}
       </g>
-      {removable || data?.coerce ? (
+      {data?.coerce && !removable ? (
+        // Image into mask: the coercion glyph at the midpoint, where the × goes while it shows.
         <EdgeLabelRenderer>
           <div
             className="nodrag nopan pointer-events-auto absolute flex items-center gap-4"
             style={{ transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)` }}
-            onPointerEnter={enter}
-            onPointerLeave={exit}
+            {...pointer}
           >
-            {data?.coerce && !removable ? (
-              <span className="flex size-16 items-center justify-center rounded-full bg-elevated-2 text-text-secondary inset-ring inset-ring-border-strong">
-                <SquareDashed size={10} aria-hidden />
-              </span>
-            ) : null}
-            {removable ? (
-              <button
-                type="button"
-                aria-label={t("canvas.editor.selection.delete")}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  actions.deleteEdges([id]);
-                }}
-                className="flex size-16 cursor-pointer items-center justify-center rounded-full bg-accent text-accent-fg"
-              >
-                <X size={10} strokeWidth={2.5} aria-hidden />
-              </button>
-            ) : null}
+            <span className="flex size-16 items-center justify-center rounded-full bg-elevated-2 text-text-secondary inset-ring inset-ring-border-strong">
+              <SquareDashed size={10} aria-hidden />
+            </span>
           </div>
         </EdgeLabelRenderer>
       ) : null}

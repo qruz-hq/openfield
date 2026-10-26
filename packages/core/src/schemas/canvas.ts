@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { canvasDocumentSchema, canvasOutputSchema, localIdSchema } from "../canvas/schema";
+import {
+  canvasDocumentSchema,
+  canvasOutputSchema,
+  canvasViewportSchema,
+  localIdSchema,
+} from "../canvas/schema";
 import {
   CANVAS_BLOCK_REASONS,
   CANVAS_INPUT_TARGETS,
@@ -78,6 +83,8 @@ export const canvasDetailSchema = z.object({
 /** PATCH /api/canvases/:id. Autosave with optimistic concurrency on graphVersion. */
 export const canvasPatchBodySchema = z.object({
   graph: canvasDocumentSchema.optional(),
+  /** Where the view sits, sent alone when nothing else changed (a pan or a zoom). Ignored with `graph`. */
+  viewport: canvasViewportSchema.optional(),
   name: z.string().trim().min(1).max(200).optional(),
   graphVersion: z.int().min(1),
 });

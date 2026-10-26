@@ -22,7 +22,7 @@ import { notify } from "../../lib/notify";
 import { cardMedia, rememberImageSize } from "../nodes/generate/card-media";
 import { nodeRegistry } from "../nodes/registry";
 import { useCanvas, useCanvasStoreApi } from "../store/context";
-import { analyzeGraph } from "./analysis";
+import { analyzeGraph, geometryOnly } from "./analysis";
 import { followBoxes } from "./boxes";
 import { useEngineContextState } from "./context";
 import { activeRuns, useEngineStore } from "./engine-store";
@@ -103,7 +103,8 @@ export function CanvasEngine() {
     run();
     let busy = busyKey(busyNodes(store.getState().runtime));
     const unsubscribe = store.subscribe((state, previous) => {
-      if (state.doc !== previous.doc) return schedule();
+      // A move or resize changes nothing the analysis reads: a drag skips the pass every frame.
+      if (state.doc !== previous.doc && !geometryOnly(previous.doc, state.doc)) return schedule();
       if (state.runtime === previous.runtime) return;
       // What's running decides what Run all would send and what it costs.
       const next = busyKey(busyNodes(state.runtime));

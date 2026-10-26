@@ -22,7 +22,7 @@ export interface ResultGridProps {
 function Cell({ assetId, label, height }: { assetId: string; label: string | null; height: number }) {
   return (
     <div className="relative min-h-0 min-w-0 flex-1">
-      <AssetImage assetId={assetId} height={height} className="absolute inset-0" alt={label ?? ""} />
+      <AssetImage assetId={assetId} height={height} className="absolute inset-0" alt={label ?? ""} pane />
       {/* Top left, clear of the state band and chips along the bottom. */}
       {label ? (
         <span className="absolute top-6 left-6 max-w-[calc(100%-12px)] truncate rounded-6 bg-overlay px-6 py-2 text-micro font-medium text-overlay-fg backdrop-blur-chip">

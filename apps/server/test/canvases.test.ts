@@ -228,6 +228,30 @@ describe("canvas documents", () => {
     expect((await patch({ graph: resized, graphVersion: 3 })).graphVersion).toBe(4);
   });
 
+  test("a view saved on its own lands in the saved copy, whatever version the tab read", async () => {
+    server = await startTestServer();
+    const canvas = await newCanvas(server);
+    const graph = withNodes(canvas.graph);
+    const patch = async (body: Record<string, unknown>) =>
+      server!.json(`/api/canvases/${canvas.id}`, { method: "PATCH", body });
+    expect((await patch({ graph, graphVersion: 1 })).status).toBe(200);
+    const edited = getCanvas(server.services.db, canvas.id)!;
+
+    const view = await patch({ viewport: { x: -320, y: 40, zoom: 0.5 }, graphVersion: 2 });
+    expect(canvasPatchResponseSchema.parse(view.body)).toEqual({
+      graphVersion: 2,
+      updatedAt: edited.updatedAt,
+    });
+    expect(readSaved(canvas.id).viewport).toEqual({ x: -320, y: 40, zoom: 0.5 });
+    expect(readSaved(canvas.id).nodes.map((n) => n.id)).toEqual(["n_prompt", "n_gen"]);
+
+    // A tab still on version 1 isn't refused, and isn't told it's caught up either: it keeps its own.
+    const stale = await patch({ viewport: { x: 0, y: 0, zoom: 2 }, graphVersion: 1 });
+    expect(canvasPatchResponseSchema.parse(stale.body).graphVersion).toBe(1);
+    expect(readSaved(canvas.id).viewport).toEqual({ x: 0, y: 0, zoom: 2 });
+    expect(getCanvas(server.services.db, canvas.id)!.graphVersion).toBe(2);
+  });
+
   test("the server keeps the id and name, whatever the document says", async () => {
     server = await startTestServer();
     const canvas = await newCanvas(server, { name: "Mine" });

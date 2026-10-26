@@ -62,7 +62,7 @@ export const AssetsNode = memo(function AssetsNode(props: NodeComponentProps) {
               <div key={row[0]} className="flex min-h-0 flex-1 gap-2">
                 {row.map((assetId) => (
                   <div key={assetId} className="relative min-w-0 flex-1">
-                    <AssetImage assetId={assetId} height={112} className="absolute inset-0" />
+                    <AssetImage assetId={assetId} height={112} className="absolute inset-0" pane />
                   </div>
                 ))}
               </div>

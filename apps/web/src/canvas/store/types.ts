@@ -47,7 +47,27 @@ export type CanvasTool = "select" | "pan" | "note" | "shape" | "text" | "frame";
 /** Level of detail by zoom (§7.10): full ≥ 40%, a title and thumbnail card ≥ 20%, a flat rectangle below. */
 export type LodBucket = "full" | "card" | "rect";
 
-export const lodForZoom = (zoom: number): LodBucket => (zoom >= 0.4 ? "full" : zoom >= 0.2 ? "card" : "rect");
+const LOD_ORDER: readonly LodBucket[] = ["full", "card", "rect"];
+/** How far past a threshold, as a share of it, the zoom has to go before the level changes. */
+const LOD_BAND = 0.05;
+
+const bucket = (zoom: number, scale: number): LodBucket =>
+  zoom >= 0.4 * scale ? "full" : zoom >= 0.2 * scale ? "card" : "rect";
+
+/**
+ * The level of detail for a zoom. With the level on show, it holds until the zoom is a little past
+ * the threshold (5% of it), so zooming back and forth across 40% or 20% doesn't redraw every node
+ * each time.
+ */
+export function lodForZoom(zoom: number, current?: LodBucket): LodBucket {
+  const plain = bucket(zoom, 1);
+  if (!current || current === plain) return plain;
+  // Zooming out, the thresholds sit a little lower; zooming in, a little higher.
+  const rank = LOD_ORDER.indexOf(current);
+  const finest = LOD_ORDER.indexOf(bucket(zoom, 1 - LOD_BAND));
+  const coarsest = LOD_ORDER.indexOf(bucket(zoom, 1 + LOD_BAND));
+  return rank >= finest && rank <= coarsest ? current : plain;
+}
 
 /** A connection being dragged, so ports can brighten or dim while it's in flight (§7.6). */
 export interface PendingConnection {

@@ -20,16 +20,17 @@ import type { CanvasDetail } from "@openfield/core";
 import { createStore, type StoreApi } from "zustand/vanilla";
 import { NOOP_RUN_CONTROLLER } from "../engine/run-request";
 import { emptyHistory, pushEntry, sealTop } from "./history";
-import type {
-  ApplyOptions,
-  ApplyResult,
-  CanvasState,
-  CanvasUiState,
-  FrameDeleteMode,
-  PersistState,
-  SelectionState,
+import {
+  type ApplyOptions,
+  type ApplyResult,
+  type CanvasState,
+  type CanvasUiState,
+  type FrameDeleteMode,
+  lodForZoom,
+  NOOP_VIEW_CONTROLLER,
+  type PersistState,
+  type SelectionState,
 } from "./types";
-import { NOOP_VIEW_CONTROLLER } from "./types";
 
 // One store per open canvas. Every document change goes through actions.apply, which runs the
 // pure reducer, records undo, bumps the revision autosave watches and keeps the selection valid.
@@ -225,9 +226,12 @@ export function createCanvasStore(detail: CanvasDetail, options: CanvasStoreOpti
       return result.ok ? nodeIds : [];
     };
 
+    const loaded = loadState(detail);
     return {
-      ...loadState(detail),
-      ui: initialUi(options.readOnly ?? false),
+      ...loaded,
+      // The level of detail for the zoom it opens at, before the first render: opening zoomed out
+      // never mounts every node at full detail first.
+      ui: { ...initialUi(options.readOnly ?? false), lod: lodForZoom(loaded.viewport.zoom) },
       runController: NOOP_RUN_CONTROLLER,
       viewController: NOOP_VIEW_CONTROLLER,
       actions: {

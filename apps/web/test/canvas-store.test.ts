@@ -155,6 +155,48 @@ describe("canvas store", () => {
     expect(store.getState().doc.params.a).toEqual({ text: "lig" });
   });
 
+  test("a drag is one undo entry with one move per node, however many frames it takes", () => {
+    const store = createCanvasStore(detailOf(chain()));
+    const { actions } = store.getState();
+    const drag = { coalesce: "drag:1", coalesceMs: Number.POSITIVE_INFINITY };
+    for (let tick = 1; tick <= 60; tick++) {
+      actions.apply(
+        [
+          { op: "moveNode", id: "a", position: { x: tick, y: 0 } },
+          { op: "moveNode", id: "b", position: { x: 400 + tick, y: tick } },
+        ],
+        drag,
+      );
+    }
+    // The drop puts a into a frame: not a move, so it's added as it is, and moves after it still merge.
+    actions.apply([{ op: "addNode", node: node("f", { type: "frame", position: { x: -100, y: -100 } }) }]);
+    actions.apply([{ op: "reparent", id: "c", parentId: "f", position: { x: 10, y: 10 } }], drag);
+    actions.apply([{ op: "moveNode", id: "c", position: { x: 20, y: 20 } }], drag);
+    actions.apply([{ op: "moveNode", id: "c", position: { x: 30, y: 30 } }], drag);
+    const { past } = store.getState().history;
+    const entry = past.at(-1)!;
+    expect(entry.ops).toEqual([
+      { op: "reparent", id: "c", parentId: "f", position: { x: 10, y: 10 } },
+      { op: "moveNode", id: "c", position: { x: 30, y: 30 } },
+    ]);
+    const move = past.at(-3)!;
+    expect(move.ops).toEqual([
+      { op: "moveNode", id: "a", position: { x: 60, y: 0 } },
+      { op: "moveNode", id: "b", position: { x: 460, y: 60 } },
+    ]);
+    expect(move.inverse).toHaveLength(2);
+
+    actions.undo();
+    expect(store.getState().doc.nodes.c).toMatchObject({ parentId: null, position: { x: 800, y: 0 } });
+    actions.undo();
+    actions.undo();
+    const back = store.getState().doc.nodes;
+    expect(back.a!.position).toEqual({ x: 0, y: 0 });
+    expect(back.b!.position).toEqual({ x: 400, y: 0 });
+    actions.redo();
+    expect(store.getState().doc.nodes.b!.position).toEqual({ x: 460, y: 60 });
+  });
+
   test("a node with a run in flight can't be deleted, even by undo", () => {
     const store = createCanvasStore(detailOf(chain()));
     const { actions } = store.getState();

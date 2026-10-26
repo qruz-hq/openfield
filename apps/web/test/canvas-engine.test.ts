@@ -28,7 +28,7 @@ import {
   type CanvasNodeResult,
   freeEstimate,
 } from "@openfield/core/canvas";
-import { analyzeGraph } from "../src/canvas/engine/analysis";
+import { analyzeGraph, geometryOnly } from "../src/canvas/engine/analysis";
 import { useEngineStore } from "../src/canvas/engine/engine-store";
 import { createFollower } from "../src/canvas/engine/follow";
 import { createRunController } from "../src/canvas/engine/run-controller";
@@ -562,6 +562,44 @@ describe("speeds (§0.3)", () => {
     expect(nodeSpeed(speedCtx, [pro, banana], company)?.fallback).toBe("Standard");
     const standard = await compileBoth("standard");
     expect(nodeSpeed(standard.speedCtx, [pro, banana], company)).toBeUndefined();
+  });
+});
+
+describe("the live analysis", () => {
+  test("only a change it can read wakes it: moves and resizes skip the pass", () => {
+    const doc = chain();
+    const moved = apply(doc, { op: "moveNode", id: "g", position: { x: 40, y: 8 } });
+    expect(geometryOnly(doc, moved)).toBe(true);
+    const resized = apply(moved, {
+      op: "resizeNode",
+      id: "p",
+      size: { w: 320, h: 200 },
+      position: { x: -4, y: 0 },
+    });
+    expect(geometryOnly(moved, resized)).toBe(true);
+    expect(geometryOnly(doc, doc)).toBe(false);
+    for (const op of [
+      { op: "setParams", id: "p", patch: { text: "Harbour" } },
+      { op: "setTitle", id: "g", title: "Hero" },
+      { op: "setLocked", id: "g", locked: true },
+      { op: "setCollapsed", id: "g", collapsed: true },
+      { op: "setPresetLocks", id: "g", locks: ["size"] },
+      { op: "setResult", id: "g", result: done("x", 1) },
+      { op: "deleteEdge", id: Object.keys(doc.edges)[0]! },
+      { op: "reorderNode", id: "p", index: 2 },
+      { op: "addNode", node: node("q", "prompt") },
+      { op: "setName", name: "Renamed" },
+    ] satisfies CanvasOp[]) {
+      expect(geometryOnly(doc, apply(doc, op)), op.op).toBe(false);
+    }
+    // A move into a frame changes what holds it: that counts.
+    const framed = apply(doc, { op: "addNode", node: node("f", "frame") });
+    expect(
+      geometryOnly(
+        framed,
+        apply(framed, { op: "reparent", id: "p", parentId: "f", position: { x: 0, y: 0 } }),
+      ),
+    ).toBe(false);
   });
 });
 
