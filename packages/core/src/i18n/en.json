@@ -1228,7 +1228,7 @@
         "cantWrite": "Openfield couldn't save the file there.",
         "uploadGone": "The file took too long to arrive and was cleared. Choose it again.",
         "changed": "Your library changed while the canvas was coming in. Try again.",
-        "desktopOnly": "Saving straight into a folder works in the desktop app."
+        "desktopOnly": "Saving to or opening from a folder on this computer works in the desktop app."
       }
     },
     "editor": {
