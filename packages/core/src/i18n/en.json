@@ -799,7 +799,7 @@
           },
           "organise": {
             "label": "Organise library",
-            "about": "Bring images in and file them."
+            "about": "Bring images in, file them and export canvases."
           },
           "delete": {
             "label": "Delete things",
@@ -862,6 +862,10 @@
           "folders": {
             "label": "Make and change folders",
             "rule": "Default: allowed"
+          },
+          "export_canvases": {
+            "label": "Export canvases",
+            "rule": "Default: asks. Saves a copy of a canvas and its images on your computer."
           },
           "remove_nodes": {
             "label": "Remove nodes from canvases",
@@ -1171,8 +1175,11 @@
         "badge": "Template",
         "use": "Use template",
         "loadFailed": "Couldn't load the templates.",
-        "importLead": "Have a canvas file?",
-        "importAction": "Import it",
+        "importLead": "Have a canvas export?",
+        "importFile": "Import a file",
+        "importOr": "or",
+        "importFolder": "a folder",
+        "importFolderLabel": "Import a folder",
         "from-a-reference": {
           "name": "Start from a reference",
           "body": "Upload a photo and make new images from it."
@@ -1188,11 +1195,40 @@
       },
       "import": {
         "notCanvas": "This file isn't a canvas.",
-        "tooBig": "This file is too big to open. Canvas files can be up to {size}.",
         "node": "Node {index}: {message}",
         "connection": "Connection {index}: {message}",
         "nodeUnreadable": "Node {index} can't be read.",
         "connectionUnreadable": "Connection {index} can't be read."
+      }
+    },
+    "archive": {
+      "fileType": "Openfield canvas",
+      "export": {
+        "progress": "Exporting {name}",
+        "done": "Exported {name}",
+        "savedIn": "Saved in {folder}.",
+        "missing": "{count, plural, one {# image wasn't in your library, so it's not included.} other {# images weren't in your library, so they're not included.}}",
+        "failed": "Couldn't export the canvas.",
+        "unsaved": "Your latest changes aren't saved yet. Export again once they are."
+      },
+      "import": {
+        "progress": "Importing {name}",
+        "waiting": "Waiting for another import to finish.",
+        "done": "Imported {name}",
+        "missing": "{count, plural, one {# image was missing and shows as a placeholder.} other {# images were missing and show as placeholders.}}",
+        "failed": "Couldn't import the canvas."
+      },
+      "errors": {
+        "notArchive": "This isn't a canvas or a canvas export.",
+        "tooBig": "The canvas in this file is too big to open.",
+        "notFound": "There's nothing at {path}.",
+        "notZip": "Choose a file name ending in .zip.",
+        "noFolder": "The folder to save in isn't there anymore.",
+        "exists": "There's already a file called {name} there.",
+        "cantWrite": "Openfield couldn't save the file there.",
+        "uploadGone": "The file took too long to arrive and was cleared. Choose it again.",
+        "changed": "Your library changed while the canvas was coming in. Try again.",
+        "desktopOnly": "Saving to or opening from a folder on this computer works in the desktop app."
       }
     },
     "editor": {

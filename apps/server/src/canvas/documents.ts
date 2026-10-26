@@ -1,4 +1,4 @@
-import { specRegistry } from "@openfield/canvas";
+import { documentAssetRefs, specRegistry } from "@openfield/canvas";
 import { canonicalJson, type ModelKey, t } from "@openfield/core";
 import {
   CANVAS_SCHEMA,
@@ -98,15 +98,9 @@ export function pickCover(db: Executor, doc: CanvasDocument): string | null {
   return candidates.find((id) => live.has(id)) ?? null;
 }
 
-/** Every image a document names: the nodes' own images and what their runs made. No repeats. */
+/** Every image a document shows: the nodes' own images and what their runs made. No repeats. */
 export function documentAssetIds(doc: CanvasDocument): string[] {
-  const ids = new Set<string>();
-  for (const node of doc.nodes) {
-    const own = node.params.assetIds;
-    if (Array.isArray(own)) for (const id of own) if (typeof id === "string") ids.add(id);
-    for (const id of node.result?.assetIds ?? []) ids.add(id);
-  }
-  return [...ids];
+  return documentAssetRefs(doc).shown;
 }
 
 export function documentCounts(doc: CanvasDocument): { nodeCount: number; edgeCount: number } {

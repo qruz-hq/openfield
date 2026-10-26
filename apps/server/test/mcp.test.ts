@@ -174,6 +174,8 @@ describe("the connection", () => {
         "rename_canvas",
         "duplicate_canvas",
         "delete_canvas",
+        "export_canvas",
+        "import_canvas",
         "list_versions",
         "save_version",
         "restore_version",

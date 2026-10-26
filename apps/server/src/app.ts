@@ -1,4 +1,4 @@
-import { formatBytes, t, UPLOAD_MAX_BYTES } from "@openfield/core";
+import { CANVAS_IMPORT_CHUNK_BYTES, formatBytes, t, UPLOAD_MAX_BYTES } from "@openfield/core";
 import { Hono, type MiddlewareHandler } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import type { Env, Services } from "./context";
@@ -7,6 +7,7 @@ import { crossSiteGuard, hostGuard, responseHeaders, sessionGuard } from "./http
 import { spaHandler } from "./http/spa";
 import { agentsRoutes } from "./routes/agents";
 import { assetsRoutes } from "./routes/assets";
+import { canvasArchivesRoutes } from "./routes/canvas-archives";
 import { canvasRunsRoutes } from "./routes/canvas-runs";
 import { canvasesRoutes } from "./routes/canvases";
 import { devAgentRoutes } from "./routes/dev-agent";
@@ -45,6 +46,7 @@ const api = new Hono<Env>()
   .route("/", uploadsRoutes)
   .route("/", canvasesRoutes)
   .route("/", canvasRunsRoutes)
+  .route("/", canvasArchivesRoutes)
   .route("/", presenceRoutes)
   .route("/", agentsRoutes)
   .route("/", eventsRoutes);
@@ -55,7 +57,10 @@ const isBackendPath = (path: string) => /^\/(api|files)(\/|$)/.test(path);
 export const MAX_BODY_BYTES = 1024 * 1024;
 const CANVAS_DOCUMENT_BYTES = 8 * 1024 * 1024;
 
-/** The routes that take more: an image, a whole canvas document, a run plan or a card preview. */
+/**
+ * The routes that take more: an image, a whole canvas document, a run plan, a card preview or a
+ * piece of a canvas archive.
+ */
 export const LARGER_BODIES: { method: string; path: RegExp; maxSize: number; userMessage?: () => string }[] =
   [
     // Room for the multipart envelope around the largest image.
@@ -72,6 +77,12 @@ export const LARGER_BODIES: { method: string; path: RegExp; maxSize: number; use
     // A plan names at most every node of a document, so it fits where the document does.
     { method: "POST", path: /^\/api\/canvases\/[^/]+\/run$/, maxSize: CANVAS_DOCUMENT_BYTES },
     { method: "PUT", path: /^\/api\/canvases\/[^/]+\/preview$/, maxSize: 4 * 1024 * 1024 },
+    // One piece of a canvas archive the browser is sending up.
+    {
+      method: "PUT",
+      path: /^\/api\/canvas-imports\/uploads\/[^/]+\/files$/,
+      maxSize: CANVAS_IMPORT_CHUNK_BYTES + 64 * 1024,
+    },
   ];
 
 /**

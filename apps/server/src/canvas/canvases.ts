@@ -55,6 +55,7 @@ import {
   canvasSpend,
   type Db,
   deleteCanvas,
+  type Executor,
   getAssets,
   getCanvas,
   getCanvasVersion,
@@ -186,26 +187,63 @@ export class CanvasService {
       doc = emptyDocument(id, "", at);
       name = body.name ?? t("canvas.names.untitled");
     }
+    const created = this.#insertNew(this.deps.db, doc, { id, name, at, folderId: null });
+    this.#remember(id, created.row.graphVersion, created.doc);
+    this.#writeThrough(created.doc);
+    return toCanvasDetail(created.row, created.doc);
+  }
+
+  /**
+   * A canvas brought in from an archive, written in the caller's transaction so it lands with its
+   * images and their folder, or not at all. Its images must be in before it, for the cover.
+   * `settle` runs once the transaction has committed.
+   */
+  insertImported(
+    tx: Executor,
+    graph: CanvasDocument,
+    opts: { name: string; folderId: string | null; id?: string },
+  ): { detail: CanvasDetail; settle: () => void } {
+    const id = opts.id ?? newId();
+    const { row, doc } = this.#insertNew(tx, graph, {
+      id,
+      name: opts.name,
+      at: new Date().toISOString(),
+      folderId: opts.folderId,
+    });
+    return {
+      detail: toCanvasDetail(row, doc),
+      settle: () => {
+        this.#remember(id, row.graphVersion, doc);
+        this.#writeThrough(doc);
+      },
+    };
+  }
+
+  #insertNew(
+    db: Executor,
+    graph: CanvasDocument,
+    fields: { id: string; name: string; at: string; folderId: string | null },
+  ): { row: CanvasRow; doc: CanvasDocument } {
+    const { id, name, at, folderId } = fields;
     // A preview path from another library means nothing here.
-    doc = stamp(
-      { ...doc, meta: { ...doc.meta, previewPath: null } },
+    let doc = stamp(
+      { ...graph, meta: { ...graph.meta, previewPath: null } },
       { id, name, updatedAt: at, createdAt: at },
     );
     doc = fillModels(doc, defaultModel(this.deps.models, this.deps.settings));
-    const row = insertCanvas(this.deps.db, {
+    const row = insertCanvas(db, {
       id,
       name,
       graph: doc,
       graphVersion: 1,
       schemaVersion: CANVAS_SCHEMA_VERSION,
       nodeCount: doc.nodes.length,
-      coverAssetId: pickCover(this.deps.db, doc),
+      coverAssetId: pickCover(db, doc),
+      folderId,
       createdAt: at,
       updatedAt: at,
     });
-    this.#remember(id, row.graphVersion, doc);
-    this.#writeThrough(doc);
-    return toCanvasDetail(row, doc);
+    return { row, doc };
   }
 
   /**

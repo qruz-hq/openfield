@@ -1,9 +1,11 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { beforeAll, describe, expect, test } from "bun:test";
+import { describeIssue } from "@openfield/canvas/store/issues";
+import { remapDocument } from "@openfield/canvas/store/refs";
 import { type CanvasSummary, setFormatLocale } from "@openfield/core";
 import { CANVAS_SCHEMA, type CanvasDocument, type CanvasNode } from "@openfield/core/canvas";
 import { editedLabel } from "../src/canvas/index/edited";
-import { describeIssue, exportFileName, parseCanvasFile, remapDocument } from "../src/canvas/index/file";
+import { archiveFileName } from "../src/canvas/index/file";
 import { roundedRectPath, sketchLayout } from "../src/canvas/index/sketch";
 import { matchesQuery, sortCanvases } from "../src/canvas/index/sort";
 import { templateCopy } from "../src/canvas/index/templates";
@@ -148,7 +150,7 @@ describe("canvas files", () => {
   );
 
   test("import gives every node and connection a new id and keeps the wiring", () => {
-    const copy = parseCanvasFile(JSON.stringify(graph));
+    const copy = remapDocument(graph);
     const ids = copy.nodes.map((n) => n.id);
     expect(ids.some((id) => graph.nodes.some((n) => n.id === id))).toBe(false);
     const [frame, prompt, gen] = copy.nodes;
@@ -162,15 +164,12 @@ describe("canvas files", () => {
   });
 
   test("names the problem in a broken file", () => {
-    expect(() => parseCanvasFile("not json")).toThrow("This file isn't a canvas.");
-    expect(() => parseCanvasFile(JSON.stringify({ hello: 1 }))).toThrow("This file isn't a canvas.");
-    expect(() => parseCanvasFile(JSON.stringify({ ...graph, schema: "openfield.canvas/99" }))).toThrow(
-      "This canvas needs a newer version of Openfield.",
-    );
-    const bad = { ...graph, nodes: [graph.nodes[0], { ...graph.nodes[2], params: { batch: 9 } }] };
-    expect(() => parseCanvasFile(JSON.stringify(bad))).toThrow(
-      "Node 2: The number of images must be between 1 and 4.",
-    );
+    expect(
+      describeIssue({
+        path: ["nodes", 1, "params"],
+        message: "The number of images must be between 1 and 4.",
+      }),
+    ).toBe("Node 2: The number of images must be between 1 and 4.");
     expect(describeIssue({ path: ["edges", 0, "target"], message: "Gone." })).toBe("Connection 1: Gone.");
     // zod's own words stay out of it.
     const raw = {
@@ -183,9 +182,9 @@ describe("canvas files", () => {
   });
 
   test("export names the file after the canvas", () => {
-    expect(exportFileName("Lighthouse series")).toBe("Lighthouse series.ofcanvas.json");
-    expect(exportFileName('A/B: "test"?')).toBe("A B test.ofcanvas.json");
-    expect(exportFileName("  ")).toBe("Untitled.ofcanvas.json");
+    expect(archiveFileName("Lighthouse series")).toBe("Lighthouse series.ofcanvas.zip");
+    expect(archiveFileName('A/B: "test"?')).toBe("A B test.ofcanvas.zip");
+    expect(archiveFileName("  ")).toBe("Untitled.ofcanvas.zip");
   });
 });
 

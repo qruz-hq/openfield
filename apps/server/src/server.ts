@@ -14,6 +14,7 @@ import { createFakeFetch, type FetchLike, type Provider, providersFor } from "@o
 // The app's version lives in the root package.json; the desktop app reads the same one.
 import pkg from "../../../package.json";
 import { createApp } from "./app";
+import { CanvasArchiveService } from "./canvas/archive-jobs";
 import { CanvasService } from "./canvas/canvases";
 import { serverEngineContext } from "./canvas/engine-context";
 import { CanvasRunService } from "./canvas/runs";
@@ -268,6 +269,18 @@ async function boot(
     saveAgentVersion: (canvasId, actor) => canvases.saveAgentVersion(canvasId, actor),
   });
   const presence = new PresenceService(events);
+  const archives = new CanvasArchiveService({
+    db,
+    paths,
+    ingest,
+    thumbs,
+    events,
+    logger,
+    settings,
+    canvases,
+    engineContext,
+    version: pkg.version,
+  });
   canvasRuns.start();
   undo.push(() => canvasRuns.stop());
   const resumedRuns = await canvasRuns.recover();
@@ -292,6 +305,7 @@ async function boot(
     version: pkg.version,
     port,
     dev,
+    desktop: isDesktop(env),
     token: mintSessionToken(),
     paths,
     config,
@@ -312,6 +326,7 @@ async function boot(
     runner,
     canvases,
     canvasRuns,
+    archives,
     presence,
     fake,
     agents,
@@ -332,6 +347,8 @@ async function boot(
     // Canvas runs stop moving on first, so the drain sends nothing new. Calls it lets finish are
     // saved as usual, and the next start's recovery brings their nodes up to date.
     canvasRuns.stop();
+    // Exports and imports under way stop and clean up after themselves while the library is open.
+    await archives.stop();
     mcp.stop();
     events.close();
     const report = await runner.stop(drain);

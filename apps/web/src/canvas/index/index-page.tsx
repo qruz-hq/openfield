@@ -18,27 +18,25 @@ import { ArrowUpDown, Check, RotateCw, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import {
-  fetchCanvas,
   useCanvases,
   useCreateCanvas,
   useDeleteCanvas,
   useDuplicateCanvas,
   useRenameCanvas,
 } from "../../api/hooks/canvases";
-import { errorMessage } from "../../api/raw";
-import { notify, notifyError } from "../../lib/notify";
+import { notify } from "../../lib/notify";
+import { exportCanvas, type ImportSource, importCanvas } from "../archive-flow";
 import { fitOnOpen } from "../fit-on-open";
 import { CanvasCard, type CardActions, canvasPath } from "./canvas-card";
 import { useMinuteClock } from "./edited";
 import { IndexEmptyState } from "./empty-state";
-import { downloadCanvasFile, readCanvasFile } from "./file";
 import { NewCanvasCard } from "./new-canvas-card";
 import { CANVAS_SORTS, matchesQuery, SORT_LABELS, sortCanvases, useCanvasSort } from "./sort";
 import { TemplatesGrid } from "./templates";
 
 // Canvas index (§7.3; design KkAp5, empty O5bcdk, templates MF9Sm). /canvas lists canvases;
-// /canvas?tab=templates shows the templates. New canvas, a template and an imported file all make
-// a canvas and open it.
+// /canvas?tab=templates shows the templates. New canvas, a template and an import all make a canvas
+// and open it.
 
 type IndexTab = "all" | "templates";
 
@@ -94,12 +92,7 @@ export function CanvasIndexPage() {
       { onSuccess: (detail) => openFitted(detail.id), onSettled: () => setPendingTemplate(null) },
     );
   };
-  const importFile = async (file: File) => {
-    const graph = await readCanvasFile(file);
-    const name = graph.name.trim().slice(0, 200);
-    const detail = await create.mutateAsync({ graph, ...(name && { name }) });
-    openFitted(detail.id);
-  };
+  const importFrom = (source: ImportSource) => void importCanvas(source, openFitted);
 
   const actions: CardActions = {
     open,
@@ -113,11 +106,7 @@ export function CanvasIndexPage() {
             action: { label: t("canvas.index.card.openCopy"), onClick: () => open(copy.id) },
           }),
       }),
-    exportFile: (id) =>
-      void fetchCanvas(id).then(
-        (detail) => downloadCanvasFile(detail.graph, detail.name),
-        (error) => notifyError(errorMessage(error)),
-      ),
+    exportFile: (summary) => void exportCanvas({ canvasId: summary.id, name: summary.name }),
     remove: async (summary: CanvasSummary) => {
       await remove.mutateAsync(summary.id);
     },
@@ -218,7 +207,7 @@ export function CanvasIndexPage() {
                 query={templateQuery}
                 pending={pendingTemplate}
                 onUse={fromTemplate}
-                onImport={importFile}
+                onImport={importFrom}
               />
             </TabsContent>
           </Tabs>

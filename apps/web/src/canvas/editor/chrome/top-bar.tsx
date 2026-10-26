@@ -22,7 +22,9 @@ import { errorMessage } from "../../../api/raw";
 import { useIsGenerating } from "../../../lib/live";
 import { notify, notifyError } from "../../../lib/notify";
 import { WindowControls } from "../../../shell/window-chrome";
+import { exportCanvas } from "../../archive-flow";
 import { RunControls } from "../../engine/run-controls";
+import { CanvasFileError } from "../../index/file";
 import type { SaveFailure, SaveStatus } from "../../store/types";
 import { useEditorUi, useMain, useSession } from "../session";
 import { SpendPill } from "./spend-pill";
@@ -95,16 +97,19 @@ function NamePill() {
     }
   };
 
-  const exportFile = () => {
-    const { document } = session.main.getState().actions.snapshot();
-    const blob = new Blob([JSON.stringify(document, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = window.document.createElement("a");
-    a.href = url;
-    a.download = `${(name.trim() || t("canvas.names.untitled")).replace(/[\\/:*?"<>|]+/g, "-")}.ofcanvas.json`;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  };
+  // The export is the server's copy with its images, so the last changes are saved first.
+  const exportFile = () =>
+    void exportCanvas({
+      canvasId: session.canvasId,
+      name,
+      prepare: async () => {
+        await session.autosave.flush();
+        const { persist } = session.main.getState();
+        if (persist.savedRevision !== persist.revision)
+          throw new CanvasFileError(t("canvas.archive.export.unsaved"));
+        return persist.graphVersion;
+      },
+    });
 
   if (renaming && !previewing) return <NameInput initial={name} />;
 

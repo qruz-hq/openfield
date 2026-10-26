@@ -29,6 +29,7 @@ const VERBS: Record<AgentAction, string> = {
   import_images: "bring an image into your library",
   file_images: "favourite or file images",
   folders: "make or change folders",
+  export_canvases: "save a canvas as a file on your computer",
   remove_nodes: "remove nodes from a canvas",
   trash_images: "move images to the Trash",
   delete_folders: "delete a folder",
@@ -76,6 +77,8 @@ const TOOLS: Record<string, AgentAction> = {
   delete_nodes: "remove_nodes",
   delete_folder: "delete_folders",
   delete_canvas: "delete_canvases",
+  export_canvas: "export_canvases",
+  import_canvas: "make_canvases",
 };
 
 /** The actions a call counts as. A batch of edits that removes nodes is a removal too. */
@@ -88,6 +91,11 @@ export function actionsFor(tool: string, args: Record<string, unknown>): AgentAc
     if (args.trash === true) actions.push("trash_images");
     return actions;
   }
+  if (tool === "import_canvas") {
+    // Waiting on an import already under way does neither again.
+    return args.job === undefined ? ["make_canvases", "import_images"] : ["read_canvases"];
+  }
+  if (tool === "export_canvas" && args.job !== undefined) return ["read_canvases"];
   const main = TOOLS[tool];
   if (!main) return [];
   const removes =

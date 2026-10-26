@@ -1,6 +1,7 @@
 export * from "./agents";
 export * from "./asset";
 export * from "./canvas";
+export * from "./canvas-archive";
 export * from "./common";
 export * from "./cost";
 export * from "./errors";

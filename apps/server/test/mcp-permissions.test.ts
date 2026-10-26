@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { ElicitRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -88,6 +91,11 @@ describe("which actions a call is", () => {
     ]);
     expect(actionsFor("update_assets", { restore: true })).toEqual(["file_images"]);
     expect(actionsFor("delete_canvas", {})).toEqual(["delete_canvases"]);
+    // Importing makes a canvas and brings images in; waiting on one already started is a read.
+    expect(actionsFor("import_canvas", { path: "/a.zip" })).toEqual(["make_canvases", "import_images"]);
+    expect(actionsFor("import_canvas", { job: "x" })).toEqual(["read_canvases"]);
+    expect(actionsFor("export_canvas", { canvas: "x" })).toEqual(["export_canvases"]);
+    expect(actionsFor("export_canvas", { job: "x" })).toEqual(["read_canvases"]);
   });
 
   test("the setting takes only known actions and Allow, Ask or Default", async () => {
@@ -201,6 +209,29 @@ describe("Allow and Default", () => {
     expect((await call(c, "delete_canvas", { canvas: canvasId })).isError).toBe(true);
     await permissions(s, { delete_canvases: "allow" });
     expect((await call(c, "delete_canvas", { canvas: canvasId })).isError).toBe(false);
+  });
+
+  test("exporting a canvas asks by default, since it writes a file on the computer", async () => {
+    const s = await ready();
+    const c = await plainApp(s);
+    const { canvasId } = await canvasWithNote(c);
+    const dir = mkdtempSync(join(tmpdir(), "openfield-export-"));
+    try {
+      const path = join(dir, "board.ofcanvas.zip");
+      const refused = await call(c, "export_canvas", { canvas: canvasId, path });
+      expect(refused.isError).toBe(true);
+      expect(refused.text).toContain("save a canvas as a file on your computer");
+      expect(existsSync(path)).toBe(false);
+      expect((await call(c, "export_canvas", { canvas: canvasId, path, confirm: true })).isError).toBe(false);
+      expect(existsSync(path)).toBe(true);
+      // Importing counts as bringing images in, so it asks when that's set to Ask.
+      await permissions(s, { import_images: "ask" });
+      expect((await call(c, "import_canvas", { path })).text).toContain(
+        "before an agent can bring an image into your library",
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   test("trash set to Ask stops a trash, but not a favourite", async () => {

@@ -1,9 +1,9 @@
 import type { EdgeRelation, FileState } from "@openfield/core/constants";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 import type { Executor } from "../client";
-import type { AssetRow } from "../rows";
+import type { AssetEdgeRow, AssetRow } from "../rows";
 import { assetEdges, assets } from "../schema";
-import { nowIso } from "./_util";
+import { chunked, nowIso } from "./_util";
 
 // Reference edges and the few lineage reads the server's Info tab and boot checks need.
 
@@ -39,6 +39,18 @@ export function referencesOf(db: Executor, childAssetId: string): AssetRow[] {
     .orderBy(asc(assetEdges.ordinal))
     .all()
     .map((r) => r.asset);
+}
+
+/** Every link into these images (what each was made from or given), for a canvas archive. */
+export function edgesInto(db: Executor, childAssetIds: readonly string[]): AssetEdgeRow[] {
+  return chunked([...new Set(childAssetIds)]).flatMap((part) =>
+    db
+      .select()
+      .from(assetEdges)
+      .where(inArray(assetEdges.childAssetId, part))
+      .orderBy(asc(assetEdges.childAssetId), asc(assetEdges.relation), asc(assetEdges.ordinal))
+      .all(),
+  );
 }
 
 /** Live images made directly from this one. */

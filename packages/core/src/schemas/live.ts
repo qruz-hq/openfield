@@ -74,6 +74,8 @@ export const navigateTargetSchema = z.discriminatedUnion("kind", [
     id: ulidSchema,
     /** Selected and brought into view once the canvas is open. */
     nodeIds: z.array(localIdSchema).max(CANVAS_MAX_NODES).optional(),
+    /** Opens fitted to its nodes, not at the view it was saved with: a canvas just imported. */
+    fit: z.literal(true).optional(),
   }),
   z.object({ kind: z.literal("asset"), id: ulidSchema }),
   /** An app path, such as /assets or /settings/spending. */

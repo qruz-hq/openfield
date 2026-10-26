@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { SseEventType } from "../constants";
 import { assetListItemSchema } from "./asset";
 import { canvasRunStateSchema } from "./canvas";
+import { canvasArchiveJobSchema } from "./canvas-archive";
 import {
   jobSetStateSchema,
   modelKeySchema,
@@ -110,6 +111,8 @@ export const sseEventSchema = z.discriminatedUnion("event", [
   frame("agent.activity", agentActivitySchema),
   /** For the tab with this id only. */
   frame("ui.navigate", uiNavigateSchema),
+  /** At most 10 a second per job while it runs, and once when it ends. */
+  frame("canvas_archive.updated", canvasArchiveJobSchema),
 ]);
 
 export type SseEvent = z.infer<typeof sseEventSchema>;

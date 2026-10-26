@@ -513,6 +513,21 @@ export const CANVAS_PREVIEW_MAX_NODES = 150;
 export const CANVAS_AUTO_VERSIONS_KEPT = 50;
 /** Minimum gap between automatic snapshots (§7.8). */
 export const CANVAS_AUTO_VERSION_MS = 5 * 60_000;
+
+// Canvas archives (§7.8): one <name>.ofcanvas.zip with the document, a manifest and every image
+// it shows, so a canvas moves to another library whole.
+export const CANVAS_ARCHIVE_FORMAT = "openfield.canvas-archive/1";
+export const CANVAS_ARCHIVE_EXTENSION = ".ofcanvas.zip";
+/**
+ * A browser import goes up in pieces of at most this size, so no request holds a whole archive and
+ * each piece that lands moves the progress bar.
+ */
+export const CANVAS_IMPORT_CHUNK_BYTES = 32 * 1024 * 1024;
+export const CANVAS_ARCHIVE_JOB_KINDS = ["export", "import"] as const;
+export type CanvasArchiveJobKind = (typeof CANVAS_ARCHIVE_JOB_KINDS)[number];
+/** waiting: another import is still being added to the library; imports go one at a time. */
+export const CANVAS_ARCHIVE_JOB_STATES = ["waiting", "running", "done", "failed", "canceled"] as const;
+export type CanvasArchiveJobState = (typeof CANVAS_ARCHIVE_JOB_STATES)[number];
 /**
  * Largest reference image POST /api/uploads takes: the smallest limit a launch model sets on a
  * reference (Google's 20 MB, §3.2), so every upload can go to every model.
@@ -545,6 +560,8 @@ export const SSE_EVENT_TYPES = [
   "agent.activity",
   /** Asks one tab to open a canvas or an image. */
   "ui.navigate",
+  /** A canvas export or import moved on, finished or stopped: the whole job, like canvas_run.updated. */
+  "canvas_archive.updated",
 ] as const;
 export type SseEventType = (typeof SSE_EVENT_TYPES)[number];
 
