@@ -108,6 +108,7 @@ New nodes go where they fit at the size they show: an image card at its aspect r
 | `run_canvas`, `get_run`, `stop_run` | Run all of a canvas, one node, a node and what follows it, or a selection; follow the run; stop it or one node. Goes through the same limits as `generate_image`. |
 | `list_versions`, `save_version`, `restore_version` | Versions. Restoring saves what's there first, and open tabs show the restore live. |
 | `rename_canvas`, `duplicate_canvas`, `delete_canvas` | Tidy up. Deleting a canvas keeps its images in the library. |
+| `export_canvas`, `import_canvas` | Move a canvas whole, with every image it shows, as one `.ofcanvas.zip` file. An import takes the zip, the folder it unzips to, or a `.ofcanvas.json`; images already in the library are used, new ones go into a folder named after the canvas, and nothing counts as spend. |
 | `list_node_types` | Every node type, its ports and settings. |
 | `get_active_canvas`, `show` | What you have open and selected; open a canvas, image or page in your tab. |
 
@@ -139,7 +140,7 @@ Agents can't change settings, keys, their own limits or what they're allowed to 
 
 - **Allow**: the agent goes ahead without asking.
 - **Ask**: Openfield checks with you every time. Apps that can show a prompt (MCP elicitation, as in Claude Code and Cursor) ask you there, with the price for anything that spends. In apps that can't, the agent has to ask you in its chat and say you agreed.
-- **Default**: Openfield's own rule, shown under each action. Most actions are allowed. Making images and running canvases ask above your amount (below). Deleting folders and canvases asks.
+- **Default**: Openfield's own rule, shown under each action. Most actions are allowed. Making images and running canvases ask above your amount (below). Deleting folders and canvases asks, and so does exporting a canvas, since it saves a file on your computer.
 
 A group's switch sets every action in it; when they differ it shows none picked. Whatever you choose, the daily limit still applies.
 

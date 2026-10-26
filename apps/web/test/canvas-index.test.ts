@@ -1,9 +1,10 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { beforeAll, describe, expect, test } from "bun:test";
+import { remapDocument } from "@openfield/canvas/store/refs";
 import { type CanvasSummary, setFormatLocale } from "@openfield/core";
 import { CANVAS_SCHEMA, type CanvasDocument, type CanvasNode } from "@openfield/core/canvas";
 import { editedLabel } from "../src/canvas/index/edited";
-import { describeIssue, exportFileName, parseCanvasFile, remapDocument } from "../src/canvas/index/file";
+import { describeIssue, exportFileName, parseCanvasFile } from "../src/canvas/index/file";
 import { roundedRectPath, sketchLayout } from "../src/canvas/index/sketch";
 import { matchesQuery, sortCanvases } from "../src/canvas/index/sort";
 import { templateCopy } from "../src/canvas/index/templates";

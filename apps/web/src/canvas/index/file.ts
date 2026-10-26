@@ -1,4 +1,5 @@
-import { newEdgeId, newNodeId } from "@openfield/canvas/store/graph";
+import { describeIssue, hasIssues } from "@openfield/canvas/store/issues";
+import { remapDocument } from "@openfield/canvas/store/refs";
 import { formatBytes, t } from "@openfield/core";
 import { type CanvasDocument, CanvasVersionError, migrateCanvasDocument } from "@openfield/core/canvas";
 
@@ -9,63 +10,14 @@ import { type CanvasDocument, CanvasVersionError, migrateCanvasDocument } from "
 /** Just under the server's cap on a canvas save, and a round number to show. */
 export const IMPORT_MAX_BYTES = 8_000_000;
 
+export { describeIssue };
+
 /** Import failed; the message is ready to show. */
 export class CanvasFileError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "CanvasFileError";
   }
-}
-
-interface Issue {
-  /** zod's kind of problem. Only "custom" ones (the document's own checks) carry our words. */
-  code?: string;
-  path: readonly PropertyKey[];
-  message: string;
-}
-
-const hasIssues = (error: unknown): error is { issues: Issue[] } =>
-  typeof error === "object" && error !== null && Array.isArray((error as { issues?: unknown }).issues);
-
-/**
- * "Node 3: …" for the first problem, so the person can find it in the file. zod's own wording
- * ("Too big: expected number to be <=4") never reaches them: without words of ours, it says which
- * node can't be read.
- */
-export function describeIssue(issue: Issue): string {
-  const [list, index] = issue.path;
-  const message = !issue.code || issue.code === "custom" ? issue.message : null;
-  if (typeof index === "number") {
-    const at = index + 1;
-    if (list === "nodes")
-      return message
-        ? t("canvas.index.import.node", { index: at, message })
-        : t("canvas.index.import.nodeUnreadable", { index: at });
-    if (list === "edges")
-      return message
-        ? t("canvas.index.import.connection", { index: at, message })
-        : t("canvas.index.import.connectionUnreadable", { index: at });
-  }
-  return message ?? t("canvas.index.import.notCanvas");
-}
-
-/** Fresh node and connection ids throughout; results, params and frames are kept. */
-export function remapDocument(doc: CanvasDocument): CanvasDocument {
-  const ids = new Map(doc.nodes.map((node) => [node.id, newNodeId()]));
-  return {
-    ...doc,
-    nodes: doc.nodes.map((node) => ({
-      ...node,
-      id: ids.get(node.id)!,
-      parentId: node.parentId === null ? null : (ids.get(node.parentId) ?? null),
-    })),
-    edges: doc.edges.map((edge) => ({
-      ...edge,
-      id: newEdgeId(),
-      source: ids.get(edge.source) ?? edge.source,
-      target: ids.get(edge.target) ?? edge.target,
-    })),
-  };
 }
 
 /** A file's text, ready for POST /api/canvases. Throws CanvasFileError with the reason. */

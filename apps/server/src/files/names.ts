@@ -1,3 +1,4 @@
+import { CANVAS_ARCHIVE_EXTENSION } from "@openfield/core";
 import type { AssetRow } from "@openfield/db";
 
 // File names for what leaves the library (§2.5, §4.4). Stored files are named by id; a person
@@ -15,7 +16,8 @@ const EXTENSIONS: Record<string, string> = {
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
-const extensionOf = (mime: string) => EXTENSIONS[mime] ?? (mime.split("/")[1]?.replace(/\W+/g, "") || "bin");
+export const extensionOf = (mime: string) =>
+  EXTENSIONS[mime] ?? (mime.split("/")[1]?.replace(/\W+/g, "") || "bin");
 /** The ULID's random tail: enough to tell two images from the same minute apart. */
 const shortId = (id: string) => id.slice(-6).toLowerCase();
 const day = (at: Date) => `${at.getFullYear()}${pad(at.getMonth() + 1)}${pad(at.getDate())}`;
@@ -39,6 +41,18 @@ export function zipName(count: number, at = new Date()): string {
   return `openfield-${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}-${count}.zip`;
 }
 
-/** An attachment header browsers and the web app's own parser both read. Names here are ASCII. */
+/** "Lighthouse series.ofcanvas.zip", minus characters file systems refuse (as the web app's export). */
+export function archiveFileName(name: string, fallback: string): string {
+  const safe = name
+    .replace(/[\\/:*?"<>|\p{Cc}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return `${safe || fallback}${CANVAS_ARCHIVE_EXTENSION}`;
+}
+
+/**
+ * An attachment header browsers and the web app's own parser both read. A header carries only
+ * Latin-1, so a name with other letters (a canvas's) goes in full in filename* and plain in filename.
+ */
 export const attachment = (name: string) =>
-  `attachment; filename="${name}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+  `attachment; filename="${name.replace(/[^\x20-\x7e]|["\\]/g, "_")}"; filename*=UTF-8''${encodeURIComponent(name)}`;

@@ -5,6 +5,7 @@ import type { AgentSession, ToolContext } from "./kit";
 import { withPermissions } from "./permissions";
 import { registerResources } from "./resources";
 import { accountTools } from "./tools/account";
+import { archiveTools } from "./tools/archive";
 import { canvasTools } from "./tools/canvas";
 import { canvasRunTools } from "./tools/canvas-runs";
 import { canvasScriptTools } from "./tools/canvas-script";
@@ -26,6 +27,7 @@ export const TOOL_GROUPS: readonly ToolGroup[] = [
   libraryTools,
   folderTools,
   canvasTools,
+  archiveTools,
   canvasRunTools,
   canvasScriptTools,
   presenceTools,

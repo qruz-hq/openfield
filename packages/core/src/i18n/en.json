@@ -799,7 +799,7 @@
           },
           "organise": {
             "label": "Organise library",
-            "about": "Bring images in and file them."
+            "about": "Bring images in, file them and export canvases."
           },
           "delete": {
             "label": "Delete things",
@@ -862,6 +862,10 @@
           "folders": {
             "label": "Make and change folders",
             "rule": "Default: allowed"
+          },
+          "export_canvases": {
+            "label": "Export canvases",
+            "rule": "Default: asks. Saves a copy of a canvas and its images on your computer."
           },
           "remove_nodes": {
             "label": "Remove nodes from canvases",
@@ -1193,6 +1197,20 @@
         "connection": "Connection {index}: {message}",
         "nodeUnreadable": "Node {index} can't be read.",
         "connectionUnreadable": "Connection {index} can't be read."
+      }
+    },
+    "archive": {
+      "errors": {
+        "notArchive": "This isn't a canvas or a canvas export.",
+        "tooBig": "The canvas in this file is too big to open.",
+        "notFound": "There's nothing at {path}.",
+        "notZip": "Choose a file name ending in .zip.",
+        "noFolder": "The folder to save in isn't there anymore.",
+        "exists": "There's already a file called {name} there.",
+        "cantWrite": "Openfield couldn't save the file there.",
+        "uploadGone": "The file took too long to arrive and was cleared. Choose it again.",
+        "changed": "Your library changed while the canvas was coming in. Try again.",
+        "desktopOnly": "Saving straight into a folder works in the desktop app."
       }
     },
     "editor": {

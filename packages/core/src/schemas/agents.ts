@@ -88,6 +88,7 @@ export const AGENT_ACTION_IDS = [
   "import_images",
   "file_images",
   "folders",
+  "export_canvases",
   "remove_nodes",
   "trash_images",
   "delete_folders",
@@ -111,6 +112,8 @@ export const AGENT_ACTIONS: Record<AgentAction, { group: AgentActionGroup; rule:
   import_images: { group: "organise", rule: "allow" },
   file_images: { group: "organise", rule: "allow" },
   folders: { group: "organise", rule: "allow" },
+  // Writes a file anywhere on the computer, so it checks first.
+  export_canvases: { group: "organise", rule: "ask" },
   remove_nodes: { group: "delete", rule: "allow" },
   trash_images: { group: "delete", rule: "allow" },
   delete_folders: { group: "delete", rule: "ask" },

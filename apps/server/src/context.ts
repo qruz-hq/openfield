@@ -1,5 +1,6 @@
 import type { Db } from "@openfield/db";
 import type { Provider } from "@openfield/providers/server";
+import type { CanvasArchiveService } from "./canvas/archive-jobs";
 import type { CanvasService } from "./canvas/canvases";
 import type { CanvasRunService } from "./canvas/runs";
 import type { ConfigStore } from "./config/config-file";
@@ -25,6 +26,8 @@ export interface Services {
   version: string;
   port: number;
   dev: boolean;
+  /** Run by the desktop app (OPENFIELD_DESKTOP=1), whose own dialogs can name paths on this computer. */
+  desktop: boolean;
   token: string;
   paths: HomePaths;
   config: ConfigStore;
@@ -49,6 +52,8 @@ export interface Services {
   runner: Runner;
   canvases: CanvasService;
   canvasRuns: CanvasRunService;
+  /** Canvas exports and imports, as jobs (§7.8). */
+  archives: CanvasArchiveService;
   /** Where each open tab is, for agents and ui.navigate (§7.11). */
   presence: PresenceService;
   /** OPENFIELD_FAKE_PROVIDERS=1: fake models, and the test-only routes that act as an agent. */
