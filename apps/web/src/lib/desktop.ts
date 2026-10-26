@@ -4,9 +4,10 @@ import { type LiveState, selectGenerating, selectInSync, useLive } from "./live"
 // The desktop app loads this same page from the local server. Tauri adds __TAURI_INTERNALS__ to
 // the window, and its capability lets this page call set_generating, which animates the dock or
 // taskbar icon and asks before quitting mid-run, check_for_update and install_update for Settings >
-// Updates, plus the few window commands its own title bar needs (WEB_APP_PERMISSIONS in
-// apps/desktop/src-tauri/src/window.rs). A browser tab never has it, so all of
-// this does nothing there. Calling the internals directly keeps @tauri-apps/api out of the bundle.
+// Updates, the few window commands its own title bar needs, and the system's save and open dialogs
+// for canvas exports and imports (WEB_APP_PERMISSIONS in apps/desktop/src-tauri/src/window.rs). A
+// browser tab never has it, so all of this does nothing there. Calling the internals directly keeps
+// @tauri-apps/api out of the bundle.
 
 interface TauriInternals {
   invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
@@ -109,6 +110,54 @@ export async function installUpdate(): Promise<void> {
   if (typeof internals?.invoke !== "function") throw new Error("Not in the desktop app");
   try {
     await internals.invoke("install_update");
+  } catch (error) {
+    throw commandError(error);
+  }
+}
+
+export interface DialogFilter {
+  name: string;
+  /** Without the dot: ["zip"]. */
+  extensions: string[];
+}
+
+/** The path a dialog answered with: a string, or null when the person closed it. */
+const chosenPath = (value: unknown): string | null => (typeof value === "string" && value ? value : null);
+
+/**
+ * The system's save dialog (tauri-plugin-dialog's save). It asks before replacing a file that's
+ * there. Resolves with the absolute path picked, or null when closed. Throws outside the app.
+ */
+export async function saveDialog(options: {
+  title?: string;
+  /** A file name, or a full path, to start from. */
+  defaultPath?: string;
+  filters?: DialogFilter[];
+}): Promise<string | null> {
+  const internals = tauri();
+  if (typeof internals?.invoke !== "function") throw new Error("Not in the desktop app");
+  try {
+    return chosenPath(await internals.invoke("plugin:dialog|save", { options }));
+  } catch (error) {
+    throw commandError(error);
+  }
+}
+
+/**
+ * The system's open dialog for one file, or one folder with `directory`: the dialog can't offer
+ * both at once. Resolves with the absolute path picked, or null when closed. Throws outside the app.
+ */
+export async function openDialog(options: {
+  title?: string;
+  directory?: boolean;
+  filters?: DialogFilter[];
+}): Promise<string | null> {
+  const internals = tauri();
+  if (typeof internals?.invoke !== "function") throw new Error("Not in the desktop app");
+  try {
+    return chosenPath(
+      await internals.invoke("plugin:dialog|open", { options: { ...options, multiple: false } }),
+    );
   } catch (error) {
     throw commandError(error);
   }

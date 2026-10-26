@@ -1,17 +1,19 @@
 import { type CanvasTemplate, hasMessage, type MessageKey, t } from "@openfield/core";
 import { Badge, Banner, Button, EmptyStateInline } from "@openfield/ui";
 import { RotateCw, Search } from "lucide-react";
-import { type ChangeEvent, useMemo, useRef, useState } from "react";
+import { type ChangeEvent, useEffect, useMemo, useRef } from "react";
 import { useCanvasTemplates } from "../../api/hooks/canvases";
-import { ApiError, errorMessage } from "../../api/raw";
+import { errorMessage } from "../../api/raw";
+import { isDesktop, openDialog } from "../../lib/desktop";
 import { notifyError } from "../../lib/notify";
-import { CanvasFileError } from "./file";
+import { archiveFilter, type ImportSource } from "../archive-flow";
+import { CanvasFileError, importSelection } from "./file";
 import { GraphSketch } from "./graph-sketch";
 import { matchesQuery } from "./sort";
 
 // Canvas · Templates (MF9Sm): the same grid, each card a sketch badged Template with Use template,
-// then "Have a canvas file? Import it". Bundled templates take their words from the catalogue;
-// ones a person saved show their own name.
+// then "Have a canvas export? Import a file or a folder". Bundled templates take their words from
+// the catalogue; ones a person saved show their own name.
 
 /** Bundled templates in the design's order; anything else follows, by name. */
 const BUNDLED_ORDER = ["from-a-reference", "edit-an-image", "storyboard", "compare-two-styles"];
@@ -50,7 +52,7 @@ export function TemplatesGrid({
   /** The template being created from, if any. */
   pending: string | null;
   onUse: (templateId: string) => void;
-  onImport: (file: File) => Promise<void>;
+  onImport: (source: ImportSource) => void;
 }) {
   const templates = useCanvasTemplates();
   const visible = useMemo(() => {
@@ -139,41 +141,69 @@ function TemplateCard({
   );
 }
 
-/** CZxse: "Have a canvas file? Import it". Reads a .ofcanvas.json and opens it as a new canvas. */
-function ImportLine({ onImport }: { onImport: (file: File) => Promise<void> }) {
-  const input = useRef<HTMLInputElement>(null);
-  const [busy, setBusy] = useState(false);
+/**
+ * CZxse: "Have a canvas export? Import a file or a folder". A file is a .ofcanvas.zip (or an older
+ * .ofcanvas.json); a folder is one a zip was unzipped to. Neither a browser's file input nor the
+ * desktop app's open dialog picks a file and a folder at once, hence two links.
+ */
+function ImportLine({ onImport }: { onImport: (source: ImportSource) => void }) {
+  const fileInput = useRef<HTMLInputElement>(null);
+  const folderInput = useRef<HTMLInputElement>(null);
 
-  const onChange = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.currentTarget.files?.[0];
+  // React has no prop for it.
+  useEffect(() => {
+    if (folderInput.current) folderInput.current.webkitdirectory = true;
+  }, []);
+
+  const choose = async (directory: boolean) => {
+    if (!isDesktop()) return (directory ? folderInput : fileInput).current?.click();
+    try {
+      const path = await openDialog({
+        directory,
+        ...(!directory && { filters: [{ ...archiveFilter(), extensions: ["zip", "json"] }] }),
+      });
+      if (path) onImport({ kind: "path", path });
+    } catch (error) {
+      notifyError(errorMessage(error));
+    }
+  };
+
+  const onChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const files = [...(event.currentTarget.files ?? [])];
     // Clear it, so picking the same file again still fires.
     event.currentTarget.value = "";
-    if (!file) return;
-    setBusy(true);
+    if (!files.length) return;
     try {
-      await onImport(file);
+      onImport({ kind: "upload", selection: importSelection(files) });
     } catch (error) {
-      // A refused create has already said why.
-      if (error instanceof CanvasFileError) notifyError(error.message);
-      else if (!(error instanceof ApiError)) notifyError(errorMessage(error));
-    } finally {
-      setBusy(false);
+      notifyError(error instanceof CanvasFileError ? error.message : errorMessage(error));
     }
   };
 
   return (
     <div className="flex items-center gap-6">
       <span className="text-caption text-text-tertiary">{t("canvas.index.templates.importLead")}</span>
+      <Button variant="link" size="s" onClick={() => void choose(false)} className="text-text-secondary">
+        {t("canvas.index.templates.importFile")}
+      </Button>
+      <span className="text-caption text-text-tertiary">{t("canvas.index.templates.importOr")}</span>
       <Button
         variant="link"
         size="s"
-        disabled={busy}
-        onClick={() => input.current?.click()}
+        onClick={() => void choose(true)}
+        aria-label={t("canvas.index.templates.importFolderLabel")}
         className="text-text-secondary"
       >
-        {t("canvas.index.templates.importAction")}
+        {t("canvas.index.templates.importFolder")}
       </Button>
-      <input ref={input} type="file" accept=".json,application/json" hidden onChange={onChange} />
+      <input
+        ref={fileInput}
+        type="file"
+        accept=".zip,.json,application/zip,application/json"
+        hidden
+        onChange={onChange}
+      />
+      <input ref={folderInput} type="file" hidden onChange={onChange} />
     </div>
   );
 }

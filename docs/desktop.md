@@ -99,8 +99,10 @@ The page is served from `http://127.0.0.1`, so a remote capability decides what 
 | `core:window:allow-minimize` | The minimize button. |
 | `core:window:allow-is-maximized` | Showing maximize or restore. |
 | `core:window:allow-close` | The close button. |
+| `dialog:allow-save` | Choosing where a canvas export goes. The server writes the file there. |
+| `dialog:allow-open` | Choosing a canvas export (a file or a folder) to import. The server reads it. |
 
-Nothing else: no events, no files, no shell.
+Nothing else: no events, no file access of its own, no shell.
 
 ### Agents (MCP)
 

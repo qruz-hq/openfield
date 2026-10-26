@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Outlet, useLocation, useNavigate } from "react-router";
 import { Toaster } from "sonner";
 import { useEventStream } from "../api/events";
+import { fitOnOpen } from "../canvas/fit-on-open";
 import { useDesktopBridge } from "../lib/desktop";
 import { useLive } from "../lib/live";
 import { pathFor, useNavigateRequest, usePresence } from "../lib/presence";
@@ -36,6 +37,8 @@ export function AppShell() {
   useEffect(() => {
     if (!navigateTo) return;
     useNavigateRequest.getState().done();
+    // A canvas an agent just imported opens fitted to its nodes, not at the view it was saved with.
+    if (navigateTo.kind === "canvas" && navigateTo.fit) fitOnOpen(navigateTo.id);
     navigate(pathFor(navigateTo));
   }, [navigateTo, navigate]);
 

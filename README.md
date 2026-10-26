@@ -198,7 +198,7 @@ Canvas is where you build image and video flows you can run again. Open **Canvas
 - Nodes whose settings and inputs haven't changed are skipped, so running again costs nothing. Change a prompt and only the nodes after it run again.
 - **Lock** a node from its menu to keep its results and stop it being deleted. You can still move it. Locking a frame locks what's inside.
 - Each canvas shows what it has cost beside what you've spent today everywhere.
-- Every image a canvas makes also shows in the Image feed. Canvases save as you work, keep a version history, and export as `.ofcanvas.json` files. A run keeps going if you close the tab or restart Openfield, and anything a restart cuts off follows the rules in [Restarts](#restarts).
+- Every image a canvas makes also shows in the Image feed. Canvases save as you work, keep a version history, and export as one `.ofcanvas.zip` with every image they show. Import that zip, the folder it unzips to, or an older `.ofcanvas.json` from the Templates tab; images the library already has are used as they are. A run keeps going if you close the tab or restart Openfield, and anything a restart cuts off follows the rules in [Restarts](#restarts).
 
 Press `?` in a canvas to see every shortcut.
 

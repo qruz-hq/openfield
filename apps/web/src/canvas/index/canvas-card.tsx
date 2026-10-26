@@ -27,7 +27,7 @@ export interface CardActions {
   openVersions: (id: string) => void;
   rename: (summary: CanvasSummary, name: string) => void;
   duplicate: (id: string) => void;
-  exportFile: (id: string) => void;
+  exportFile: (summary: CanvasSummary) => void;
   remove: (summary: CanvasSummary) => Promise<void>;
 }
 
@@ -125,7 +125,7 @@ export function CanvasCard({
             >
               {t("canvas.index.card.duplicate")}
             </MenuItem>
-            <MenuItem icon={Download} onSelect={() => actions.exportFile(summary.id)}>
+            <MenuItem icon={Download} onSelect={() => actions.exportFile(summary)}>
               {t("canvas.index.card.export")}
             </MenuItem>
             <MenuItem icon={History} onSelect={() => actions.openVersions(summary.id)}>

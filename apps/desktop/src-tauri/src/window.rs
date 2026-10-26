@@ -23,10 +23,11 @@ pub const MAIN: &str = "main";
 static SERVER_ORIGIN: OnceLock<String> = OnceLock::new();
 
 /// What the web app may call: report whether images are being made, check for and install an
-/// update (Settings > Updates), and work its own title bar (move the window, minimize, maximize or
+/// update (Settings > Updates), work its own title bar (move the window, minimize, maximize or
 /// restore it, know whether it is maximized, and close it, which asks first while images are being
-/// made, like the system's close). Nothing else.
-const WEB_APP_PERMISSIONS: [&str; 7] = [
+/// made, like the system's close), and show the system's save and open dialogs, so exporting and
+/// importing a canvas hands the server a path the person picked. Nothing else.
+const WEB_APP_PERMISSIONS: [&str; 9] = [
     "generating-indicator",
     "app-updates",
     "core:window:allow-start-dragging",
@@ -34,6 +35,8 @@ const WEB_APP_PERMISSIONS: [&str; 7] = [
     "core:window:allow-minimize",
     "core:window:allow-is-maximized",
     "core:window:allow-close",
+    "dialog:allow-save",
+    "dialog:allow-open",
 ];
 
 /// The traffic lights' inset, in points. `x` is the close button's left edge; for `y`, measured on
