@@ -13,7 +13,7 @@ import { EditableText, useEditingText } from "./editable-text";
 // 210×126 rectangle on $elevated-2 with a 1 px $border-strong line, radius 8, and a centred
 // 14/500 label. Only rectangles for now; `shape` is saved so more can follow.
 
-const ShapeNode = memo(function ShapeNode({ id, selected, lod }: NodeComponentProps) {
+const ShapeNode = memo(function ShapeNode({ id, selected }: NodeComponentProps) {
   const params = useNodeParams(id);
   const text = typeof params?.text === "string" ? params.text : "";
   const { start, editing } = useEditingText(id);
@@ -26,7 +26,7 @@ const ShapeNode = memo(function ShapeNode({ id, selected, lod }: NodeComponentPr
         selected ? "inset-ring-2 inset-ring-accent" : "inset-ring inset-ring-border-strong",
       )}
     >
-      {lod === "rect" || (!text && !editing) ? null : (
+      {!text && !editing ? null : (
         <div className="min-w-0 max-w-full">
           <EditableText
             id={id}

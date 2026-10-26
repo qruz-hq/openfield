@@ -65,37 +65,103 @@ export function alignToNeighbours(
   others: readonly Box[],
   threshold: number,
 ): { dx: number; dy: number; guides: Guide[] } {
-  const snap = (axis: "x" | "y") => {
-    let best: { shift: number; at: number } | null = null;
-    for (const other of others) {
-      for (const mine of stops(moving, axis)) {
-        for (const theirs of stops(other, axis)) {
-          const shift = theirs - mine;
-          if (Math.abs(shift) <= threshold && (!best || Math.abs(shift) < Math.abs(best.shift))) {
-            best = { shift, at: theirs };
-          }
+  return neighbourIndex(others).align(moving, threshold);
+}
+
+/** One edge or centre of a neighbour, on one axis. */
+interface Stop {
+  value: number;
+  /** The neighbour, and which of its three stops: ties go to the earlier, like a plain scan. */
+  box: number;
+  at: number;
+}
+
+/** The first stop at or past `value`. */
+function lowerBound(stops: readonly Stop[], value: number): number {
+  let lo = 0;
+  let hi = stops.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (stops[mid]!.value < value) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+export interface NeighbourIndex {
+  /** alignToNeighbours against these neighbours, looking only at stops near the moving box's. */
+  align(moving: Box, threshold: number): { dx: number; dy: number; guides: Guide[] };
+}
+
+/**
+ * The neighbours' edges and centres, sorted once. A drag builds it when it starts and asks it every
+ * frame, which then costs a few lookups however many nodes the canvas has.
+ */
+export function neighbourIndex(others: readonly Box[]): NeighbourIndex {
+  const sorted = (axis: "x" | "y") =>
+    others
+      .flatMap((box, i) => stops(box, axis).map((value, at): Stop => ({ value, box: i, at })))
+      .sort((a, b) => a.value - b.value);
+  const byAxis = { x: sorted("x"), y: sorted("y") };
+
+  const snap = (moving: Box, axis: "x" | "y", threshold: number) => {
+    const list = byAxis[axis];
+    let best: { shift: number; at: number; order: number } | null = null;
+    const own = stops(moving, axis);
+    for (let m = 0; m < own.length; m++) {
+      const mine = own[m]!;
+      for (let i = lowerBound(list, mine - threshold); i < list.length; i++) {
+        const theirs = list[i]!;
+        const shift = theirs.value - mine;
+        if (shift > threshold) break;
+        // A plain scan goes neighbour by neighbour, then mine, then theirs: the same order breaks ties.
+        const order = (theirs.box * 3 + m) * 3 + theirs.at;
+        const distance = Math.abs(shift);
+        if (
+          !best ||
+          distance < Math.abs(best.shift) ||
+          (distance === Math.abs(best.shift) && order < best.order)
+        ) {
+          best = { shift, at: theirs.value, order };
         }
       }
     }
     return best;
   };
-  const x = snap("x");
-  const y = snap("y");
-  const dx = x?.shift ?? 0;
-  const dy = y?.shift ?? 0;
-  const placed = { ...moving, x: moving.x + dx, y: moving.y + dy };
-  const guides: Guide[] = [];
-  for (const [axis, hit] of [
-    ["x", x],
-    ["y", y],
-  ] as const) {
-    if (!hit) continue;
-    // The line runs through every box that sits on it, the moving one included.
-    const on = [placed, ...others].filter((b) => stops(b, axis).some((v) => Math.abs(v - hit.at) < 0.5));
-    const along = axis === "x" ? on.flatMap((b) => [b.y, b.y + b.h]) : on.flatMap((b) => [b.x, b.x + b.w]);
-    guides.push({ axis, at: hit.at, from: Math.min(...along), to: Math.max(...along) });
-  }
-  return { dx, dy, guides };
+
+  /** Neighbours with an edge or centre on the line at `at`. */
+  const onLine = (axis: "x" | "y", at: number): Box[] => {
+    const list = byAxis[axis];
+    const seen = new Set<number>();
+    for (let i = lowerBound(list, at - 0.5); i < list.length && list[i]!.value < at + 0.5; i++) {
+      if (Math.abs(list[i]!.value - at) < 0.5) seen.add(list[i]!.box);
+    }
+    return [...seen].map((i) => others[i]!);
+  };
+
+  return {
+    align(moving, threshold) {
+      const x = snap(moving, "x", threshold);
+      const y = snap(moving, "y", threshold);
+      const dx = x?.shift ?? 0;
+      const dy = y?.shift ?? 0;
+      const placed = { ...moving, x: moving.x + dx, y: moving.y + dy };
+      const guides: Guide[] = [];
+      for (const [axis, hit] of [
+        ["x", x],
+        ["y", y],
+      ] as const) {
+        if (!hit) continue;
+        // The line runs through every box that sits on it, the moving one included.
+        const mine = stops(placed, axis).some((v) => Math.abs(v - hit.at) < 0.5) ? [placed] : [];
+        const on = [...mine, ...onLine(axis, hit.at)];
+        const along =
+          axis === "x" ? on.flatMap((b) => [b.y, b.y + b.h]) : on.flatMap((b) => [b.x, b.x + b.w]);
+        guides.push({ axis, at: hit.at, from: Math.min(...along), to: Math.max(...along) });
+      }
+      return { dx, dy, guides };
+    },
+  };
 }
 
 /** Selected ids without the ones already inside another selected frame, which move with it. */

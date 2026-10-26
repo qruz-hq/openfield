@@ -14,7 +14,7 @@ import type { AddMenuState } from "../store/types";
 import { markOpenPicker, OPENS_AT_ONCE } from "./picker-intent";
 import { type NodeDefinition, nodeRegistry } from "./registry";
 import { nodeWrapper } from "./shell/focus";
-import { railLayout } from "./shell/ports";
+import { railLayout } from "./shell/rail";
 
 // Canvas / Add node menu (design CnYWZ, 320 wide): search, then References, Image and Utilities.
 // Opened at a point (double-click, A, the + tool) it adds the node there. Opened by dropping a

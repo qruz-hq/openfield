@@ -4,11 +4,12 @@ import type { SaveFailure } from "../store/types";
 
 // Autosave (§7.8): 800 ms after the last change, at least every 10 s while changes keep coming,
 // and at once on blur, hide, route change and reload. Pans and zooms ride along with the next save
-// or go out after 2 s of quiet; the server keeps the version for those, as for an image card's
-// measured size, so they never stand in the way of an agent's edits. One PATCH at a time; a 409 hands the server's copy to the banner and
-// stops saving until the person picks Reload or Keep mine; a lost connection or a server hiccup
-// retries with backoff. A refusal that waiting won't fix (the canvas was deleted, it's too big)
-// says so and waits for the next change instead.
+// or go out on their own, as just the view, after 2 s of quiet; the server keeps the version for
+// those, as for an image card's measured size, so they never stand in the way of an agent's edits.
+// One PATCH at a time; a 409 hands the server's copy to the banner and stops saving until the
+// person picks Reload or Keep mine; a lost connection or a server hiccup retries with backoff. A
+// refusal that waiting won't fix (the canvas was deleted, it's too big) says so and waits for the
+// next change instead.
 
 export const SAVE_DEBOUNCE_MS = 800;
 export const SAVE_MAX_WAIT_MS = 10_000;
@@ -31,6 +32,8 @@ export interface AutosaveDeps {
    * (§7.11), so the same save can go again on top of them instead of raising the conflict banner.
    */
   caughtUp?(graphVersion: number): Promise<boolean>;
+  /** Called before each save reads the store, e.g. to put a view that hasn't rested yet in it. */
+  beforeSave?(): void;
   /** Called after a successful save, e.g. to refresh the canvas preview. */
   onSaved?(): void;
   now?: () => number;
@@ -96,14 +99,17 @@ export function createAutosave(store: CanvasStore, deps: AutosaveDeps): Autosave
 
   const run = async (keepalive: boolean): Promise<void> => {
     if (disposed) return;
+    deps.beforeSave?.();
     const state = store.getState();
     if (state.persist.status === "conflict" || state.ui.readOnly || refused()) return;
     if (!docDirty() && !viewDirty()) return;
-    const snap = state.actions.snapshot();
+    const { persist, viewport } = state;
+    const snap = { revision: persist.revision, viewRevision: persist.viewRevision };
     const name = state.doc.name.trim();
     const body: CanvasPatchBody = {
-      graph: snap.document,
-      graphVersion: snap.graphVersion,
+      // Only the view moved: just the view goes, not the whole document.
+      ...(docDirty() ? { graph: state.actions.snapshot().document } : { viewport }),
+      graphVersion: persist.graphVersion,
       ...(name && name !== savedName && { name }),
     };
     dirtySince = null;

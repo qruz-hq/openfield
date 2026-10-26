@@ -1,7 +1,7 @@
 import { roundToCents, sumEstimates } from "@openfield/canvas/engine/cost";
 import { type MessageKey, t } from "@openfield/core";
 import { Button, Divider, IconButton, Surface, Tooltip } from "@openfield/ui";
-import { type ReactFlowState, useStore } from "@xyflow/react";
+import { type ReactFlowState, useStoreApi } from "@xyflow/react";
 import {
   AlignCenterHorizontal,
   AlignCenterVertical,
@@ -17,8 +17,7 @@ import {
   Play,
   Trash2,
 } from "lucide-react";
-import { type ReactElement, useCallback } from "react";
-import { shallow } from "zustand/shallow";
+import { type ReactElement, useLayoutEffect, useRef } from "react";
 import { tightCost } from "../../../lib/cost";
 import { windowTopInset } from "../../../lib/desktop";
 import { useEngineStore } from "../../engine/engine-store";
@@ -47,6 +46,31 @@ const ALIGN: { how: Alignment; label: MessageKey; icon: LucideIcon }[] = [
   { how: "bottom", label: "canvas.editor.selection.alignBottom", icon: AlignEndHorizontal },
 ];
 
+/** The selection's box on the canvas, in pane units. */
+interface PaneBox {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+}
+
+function selectionBox(s: ReactFlowState, ids: readonly string[]): PaneBox | null {
+  let x1 = Number.POSITIVE_INFINITY;
+  let y1 = Number.POSITIVE_INFINITY;
+  let x2 = Number.NEGATIVE_INFINITY;
+  let y2 = Number.NEGATIVE_INFINITY;
+  for (const id of ids) {
+    const node = s.nodeLookup.get(id);
+    if (!node || node.hidden) continue;
+    const { x, y } = node.internals.positionAbsolute;
+    x1 = Math.min(x1, x);
+    y1 = Math.min(y1, y);
+    x2 = Math.max(x2, x + (node.measured.width ?? 0));
+    y2 = Math.max(y2, y + (node.measured.height ?? 0));
+  }
+  return Number.isFinite(x1) ? { x1, y1, x2, y2 } : null;
+}
+
 export function ContextToolbar({ commands }: { commands: EditorCommands }) {
   const ids = useCanvas((s) => s.selection.nodeIds);
   const runnable = useCanvas((s) =>
@@ -64,43 +88,39 @@ export function ContextToolbar({ commands }: { commands: EditorCommands }) {
     return estimates.length ? tightCost(sumEstimates(estimates)) : undefined;
   });
 
-  const selectBox = useCallback(
-    (s: ReactFlowState) => {
-      let x1 = Number.POSITIVE_INFINITY;
-      let y1 = Number.POSITIVE_INFINITY;
-      let x2 = Number.NEGATIVE_INFINITY;
-      let y2 = Number.NEGATIVE_INFINITY;
-      for (const id of ids) {
-        const node = s.nodeLookup.get(id);
-        if (!node || node.hidden) continue;
-        const { x, y } = node.internals.positionAbsolute;
-        x1 = Math.min(x1, x);
-        y1 = Math.min(y1, y);
-        x2 = Math.max(x2, x + (node.measured.width ?? 0));
-        y2 = Math.max(y2, y + (node.measured.height ?? 0));
+  // Follows the selection as the view moves, written straight to the element: a pan re-renders
+  // nothing, and the selection's box is only worked out again when nodes change.
+  const flow = useStoreApi();
+  const anchor = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    let nodes: unknown = null;
+    let box: PaneBox | null = null;
+    const place = (s: ReactFlowState) => {
+      const el = anchor.current;
+      if (!el) return;
+      if (s.nodes !== nodes) {
+        nodes = s.nodes;
+        box = selectionBox(s, ids);
       }
-      if (!Number.isFinite(x1)) return null;
+      if (!box) {
+        el.style.display = "none";
+        return;
+      }
       const [tx, ty, zoom] = s.transform;
-      return {
-        left: x1 * zoom + tx,
-        right: x2 * zoom + tx,
-        top: (y1 - LABEL_BAND) * zoom + ty,
-        paneWidth: s.width,
-      };
-    },
-    [ids],
-  );
-  const box = useStore(selectBox, shallow);
+      const centre = ((box.x1 + box.x2) / 2) * zoom + tx;
+      const top = Math.max(MIN_TOP + windowTopInset(), (box.y1 - LABEL_BAND) * zoom + ty - GAP - BAR_HEIGHT);
+      el.style.display = "";
+      el.style.left = `${Math.min(Math.max(centre, 0), s.width)}px`;
+      el.style.top = `${top}px`;
+    };
+    place(flow.getState());
+    return flow.subscribe(place);
+  }, [flow, ids]);
 
-  if (ids.length < 2 || !box) return null;
-  const centre = (box.left + box.right) / 2;
-  const top = Math.max(MIN_TOP + windowTopInset(), box.top - GAP - BAR_HEIGHT);
+  if (ids.length < 2) return null;
 
   return (
-    <div
-      className="pointer-events-none absolute z-10 flex w-0 justify-center"
-      style={{ left: Math.min(Math.max(centre, 0), box.paneWidth), top }}
-    >
+    <div ref={anchor} className="pointer-events-none absolute z-10 flex w-0 justify-center">
       <Surface
         variant="floating-bar"
         role="toolbar"

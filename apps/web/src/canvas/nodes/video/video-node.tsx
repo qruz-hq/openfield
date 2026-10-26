@@ -4,9 +4,8 @@ import type { NodeDisplay } from "@openfield/canvas/engine/types";
 import { type CardLayout, cardLayout } from "@openfield/canvas/nodes/generate/card-size";
 import { type VideoParams, videoModelKeyOf, videoSpec } from "@openfield/canvas/nodes/video/spec";
 import { type AspectRatio, type ModelListItem, t } from "@openfield/core";
-import { useStoreApi } from "@xyflow/react";
 import { Film } from "lucide-react";
-import { memo, useLayoutEffect, useMemo, useRef } from "react";
+import { memo, useMemo } from "react";
 import { useStore } from "zustand";
 import { useNodeAnalysis } from "../../engine/engine-store";
 import { useNodeParams, useNodeResult, useNodeRuntime } from "../../store/context";
@@ -19,6 +18,7 @@ import { type CompanyWait, useCompanyWait } from "../shell/company-wait";
 import { ImageCard } from "../shell/image-card";
 import { LinkedPrompt } from "../shell/linked-text";
 import { NodeShell } from "../shell/node-shell";
+import { useSyncPorts } from "../shell/sync-ports";
 import { useNodeBasics, useNodeDisplay, useParsedParams } from "../shell/use-node";
 import { DurationPill, useAssetDuration } from "./duration";
 
@@ -56,29 +56,6 @@ function useCardLayout(
     [frame, params, images, ctx, assetId, dims, picked, id],
   );
   return { ...layout, images };
-}
-
-/** See generate-node.tsx's useSyncPorts: keeps the port handles on the card's edge as its box moves. */
-function useSyncPorts(id: string, width: number | undefined, height: number | undefined) {
-  const flow = useStoreApi();
-  const mounted = useRef(false);
-  useLayoutEffect(() => {
-    if (!width || !height) return;
-    if (!mounted.current) {
-      mounted.current = true;
-      return;
-    }
-    const measure = () => {
-      const { domNode, updateNodeInternals } = flow.getState();
-      const nodeElement = domNode?.querySelector<HTMLDivElement>(
-        `.react-flow__node[data-id="${CSS.escape(id)}"]`,
-      );
-      if (nodeElement) updateNodeInternals(new Map([[id, { id, nodeElement, force: true }]]));
-    };
-    if (!flow.getState().fitViewQueued) return measure();
-    const frame = requestAnimationFrame(measure);
-    return () => cancelAnimationFrame(frame);
-  }, [flow, id, width, height]);
 }
 
 export const VideoNode = memo(function VideoNode(props: NodeComponentProps) {

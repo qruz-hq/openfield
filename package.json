@@ -22,6 +22,8 @@
     "e2e": "playwright test",
     "check:bundle": "bun run scripts/check-bundle.ts",
     "seed:usage": "bun run scripts/seed-usage.ts",
+    "seed:canvas": "bun run scripts/seed-canvas.ts",
+    "bench:canvas": "bun run e2e/perf/bench-canvas.ts",
     "desktop": "bun run desktop:sidecar && bun run --cwd apps/desktop tauri dev",
     "desktop:build": "bun run desktop:sidecar && bun run --cwd apps/desktop tauri build",
     "desktop:icons": "bun run scripts/desktop-icons.ts",

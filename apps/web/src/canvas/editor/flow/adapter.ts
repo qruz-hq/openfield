@@ -5,6 +5,7 @@ import type { CoordinateExtent, Edge, Node } from "@xyflow/react";
 import type { NodeDefinition } from "../../nodes/registry";
 import { type DocSlice, isLocked, type NodeFrame, parentsFirst, type Size } from "../../store";
 import type { CanvasTool, SelectionState } from "../../store/types";
+import { nodeHandles } from "./handles";
 
 // The store's document, as React Flow's nodes and edges. Our store stays the source of truth: React
 // Flow only renders and reports gestures back. Objects are cached per node and edge and reused while
@@ -45,6 +46,12 @@ export interface FlowNodeInputs {
   definition(type: string): NodeDefinition | undefined;
   /** The box of a node that follows what it shows (NodeDefinition.box), over its saved size. */
   boxOf?(frame: NodeFrame): Size | undefined;
+  /**
+   * Changes whenever boxOf can answer differently for the same node (the engine context, the image
+   * sizes the browser knows). While it holds, a node whose size, params and result are unchanged
+   * keeps its box without asking again.
+   */
+  boxKey?: unknown;
 }
 
 /** What screen readers call a node: its title, else its type's name. */
@@ -65,7 +72,8 @@ export function insideCollapsed(doc: DocSlice, id: string): boolean {
 
 /**
  * The box React Flow gets for a node: the box it follows (an image card's), its saved size, the
- * type's default, then nothing (measured).
+ * type's default, then nothing (measured). In whole pixels, like the browser measures them: an image
+ * card's 426.67 would read back as 427 and have React Flow measure the node again on every change.
  */
 export function flowSize(
   frame: NodeFrame,
@@ -77,11 +85,15 @@ export function flowSize(
   if (frame.collapsed) {
     // Frames fold to a strip; data nodes draw their own 56-tall card at their width, and a node
     // that follows its image folds to the type's own width.
-    if (frame.type === FRAME_NODE_TYPE) return { width: size.w, height: FRAME_COLLAPSED_HEIGHT };
-    return { width: box && def?.size ? def.size.w : size.w };
+    if (frame.type === FRAME_NODE_TYPE) return { width: Math.round(size.w), height: FRAME_COLLAPSED_HEIGHT };
+    return { width: Math.round(box && def?.size ? def.size.w : size.w) };
   }
-  return { width: size.w, height: size.h };
+  return { width: Math.round(size.w), height: Math.round(size.h) };
 }
+
+/** Sizes the browser measured within half a pixel of each other are the same size. */
+export const sameMeasure = (a: Measured | undefined, b: Measured | undefined): boolean =>
+  a === b || (!!a && !!b && Math.abs(a.width - b.width) < 0.5 && Math.abs(a.height - b.height) < 0.5);
 
 /** Builds FlowNodeInputs.boxOf for a document: each node type's own box rule, where it has one. */
 export function boxesFor(
@@ -116,6 +128,8 @@ interface NodeEntry {
   frame: NodeFrame;
   def: NodeDefinition | undefined;
   box: Size | undefined;
+  /** What the box was worked out from (boxOf), so an unchanged node skips it. */
+  boxFrom: { size: Size | undefined; params: unknown; result: unknown; key: unknown };
   selected: boolean;
   hidden: boolean;
   interactive: boolean;
@@ -137,10 +151,26 @@ export function createNodeCache() {
     for (const id of parentsFirst(doc)) {
       const frame = doc.nodes[id]!;
       const def = inputs.definition(frame.type);
+      const old = cache.get(id);
+      const boxFrom = {
+        size: frame.size,
+        params: doc.params[id],
+        result: doc.results[id],
+        key: inputs.boxKey,
+      };
+      // A move or a selection change doesn't change what a card shows: keep its box (cardLayout).
+      const keepBox =
+        !!old &&
+        old.def === def &&
+        old.boxFrom.size === boxFrom.size &&
+        old.boxFrom.params === boxFrom.params &&
+        old.boxFrom.result === boxFrom.result &&
+        old.boxFrom.key === boxFrom.key;
       const entry = {
         frame,
         def,
-        box: inputs.boxOf?.(frame),
+        box: keepBox ? old.box : inputs.boxOf?.(frame),
+        boxFrom,
         selected: selected.has(id),
         hidden: insideCollapsed(doc, id),
         interactive,
@@ -158,7 +188,6 @@ export function createNodeCache() {
           { w: own.width ?? entry.measured?.width ?? 0, h: own.height ?? entry.measured?.height ?? 0 },
         );
       }
-      const old = cache.get(id);
       const same =
         old &&
         old.frame === entry.frame &&
@@ -170,8 +199,7 @@ export function createNodeCache() {
         old.interactive === entry.interactive &&
         old.hit === entry.hit &&
         sameExtent(old.confined, entry.confined) &&
-        old.measured?.width === entry.measured?.width &&
-        old.measured?.height === entry.measured?.height;
+        sameMeasure(old.measured, entry.measured);
       const node = same ? old.node : toFlowNode(entry);
       next.set(id, { ...entry, node });
       out.push(node);
@@ -185,12 +213,10 @@ function toFlowNode(e: Omit<NodeEntry, "node">): FlowNode {
   const { frame, def } = e;
   const isFrame = frame.type === FRAME_NODE_TYPE;
   const size = flowSize(frame, def, e.box);
-  // A box the node follows is exact: edges and fit-to-content use it at once, not after React Flow
-  // measures the resized element a frame later.
-  const measured =
-    e.box && size.width !== undefined && size.height !== undefined
-      ? { width: size.width, height: size.height }
-      : e.measured;
+  // A size we know is exact: edges and fit-to-content use it at once, and React Flow never has to
+  // measure the node. Only nodes sized by their content (text, a collapsed card) are measured.
+  const known = size.width !== undefined && size.height !== undefined;
+  const measured = known ? { width: size.width!, height: size.height! } : e.measured;
   return {
     id: frame.id,
     type: def ? def.type : UNKNOWN_NODE_TYPE,
@@ -200,6 +226,10 @@ function toFlowNode(e: Omit<NodeEntry, "node">): FlowNode {
     data: EMPTY_DATA,
     ...size,
     ...(measured && { measured: { width: measured.width, height: measured.height } }),
+    // Where its ports and arrow handles are, from the same box, so links reach a node React Flow
+    // hasn't measured or mounted. A type this build doesn't know draws its handles from its links.
+    ...(known &&
+      def && { handles: nodeHandles(def.ports ?? [], size.width!, size.height!, frame.collapsed) }),
     selected: e.selected,
     hidden: e.hidden,
     draggable: e.interactive,
@@ -230,34 +260,49 @@ interface EdgeEntry {
   selected: boolean;
   readOnly: boolean;
   coerce: boolean;
+  /** The two ends the name was made from: a move leaves them as they were. */
+  ends: readonly [NodeEnd, NodeEnd];
   /** "Prompt to Generate". */
   name: string;
   flow: FlowEdge;
 }
 
+type NodeEnd = Pick<NodeFrame, "title" | "type">;
+
+const sameEnd = (a: NodeEnd, b: NodeEnd) => a.title === b.title && a.type === b.type;
+
 export function createEdgeCache() {
   let cache = new Map<string, EdgeEntry>();
+  let last: FlowEdge[] = [];
   return function build(inputs: FlowEdgeInputs): FlowEdge[] {
     const { doc, selection, readOnly } = inputs;
     const selected = new Set(selection.edgeIds);
     const next = new Map<string, EdgeEntry>();
     const out: FlowEdge[] = [];
+    let changed = false;
     for (const id of doc.edgeOrder) {
       const edge = doc.edges[id];
       if (!edge) continue;
       const source = doc.nodes[edge.source];
       const target = doc.nodes[edge.target];
       if (!source || !target) continue;
-      const coerce =
-        edge.kind === "data" &&
-        inputs.portType(source.type, edge.sourceHandle) === "image" &&
-        inputs.portType(target.type, edge.targetHandle) === "mask";
-      const name = t("canvas.editor.a11y.connectionName", {
-        from: nodeName(source, inputs.definition?.(source.type)),
-        to: nodeName(target, inputs.definition?.(target.type)),
-      });
-      const entry = { edge, selected: selected.has(id), readOnly, coerce, name };
       const old = cache.get(id);
+      const coerce =
+        old?.edge === edge
+          ? old.coerce
+          : edge.kind === "data" &&
+            inputs.portType(source.type, edge.sourceHandle) === "image" &&
+            inputs.portType(target.type, edge.targetHandle) === "mask";
+      // Names go through the app's words, so they're only made again when an end is renamed.
+      const named = old && sameEnd(old.ends[0], source) && sameEnd(old.ends[1], target);
+      const name = named
+        ? old.name
+        : t("canvas.editor.a11y.connectionName", {
+            from: nodeName(source, inputs.definition?.(source.type)),
+            to: nodeName(target, inputs.definition?.(target.type)),
+          });
+      const ends = named ? old.ends : ([source, target] as const);
+      const entry = { edge, selected: selected.has(id), readOnly, coerce, ends, name };
       const same =
         old &&
         old.edge === entry.edge &&
@@ -266,10 +311,14 @@ export function createEdgeCache() {
         old.coerce === entry.coerce &&
         old.name === entry.name;
       const flow = same ? old.flow : toFlowEdge(entry);
+      if (flow !== last[out.length]) changed = true;
       next.set(id, { ...entry, flow });
       out.push(flow);
     }
     cache = next;
+    // Nothing changed (a drag moves nodes, not links): the same list, so React Flow skips it.
+    if (!changed && out.length === last.length) return last;
+    last = out;
     return out;
   };
 }

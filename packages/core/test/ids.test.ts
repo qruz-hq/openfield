@@ -12,9 +12,11 @@ import {
   newId,
   parseCanvasSource,
   parseModelKey,
+  pickThumbSize,
   resolveThumbRung,
   safeParseModelKey,
   thumbCacheKey,
+  thumbPixels,
   ulidTime,
 } from "../src/ids";
 
@@ -86,6 +88,29 @@ describe("addresses", () => {
     expect(thumbCacheKey("3f9c", { p: 1440 })).toBe("3f9c@p1440.webp");
     expect(assetThumbUrl("A1", { h: 300, dpr: 2 })).toBe("/files/thumb/A1?h=360&dpr=2");
     expect(assetThumbUrl("A1", "preview")).toBe("/files/thumb/A1?p=1440");
+  });
+
+  test("the thumbnail follows the drawn size, and 2x only past the largest rung", () => {
+    // A 427 tall card at 100% on a 2x screen: 854 device pixels, so 456 at 2x.
+    expect(pickThumbSize(427 * 1 * 2)).toEqual({ h: 456, dpr: 2 });
+    // The same card at 40%: 342 device pixels, one 1x rung.
+    expect(pickThumbSize(427 * 0.4 * 2)).toEqual({ h: 360, dpr: 1 });
+    // Small things never ask for 2x.
+    expect(pickThumbSize(24 * 2)).toEqual({ h: 200, dpr: 1 });
+    expect(pickThumbSize(640)).toEqual({ h: 640, dpr: 1 });
+    expect(pickThumbSize(641)).toEqual({ h: 360, dpr: 2 });
+    expect(pickThumbSize(5000)).toEqual({ h: 640, dpr: 2 });
+    expect(thumbPixels({ h: 456, dpr: 2 })).toBe(912);
+  });
+
+  test("the thumbnail on show stays while it is sharp enough and not twice too big", () => {
+    const shown = { h: 456, dpr: 2 } as const;
+    expect(pickThumbSize(800, shown)).toBe(shown);
+    expect(pickThumbSize(456, shown)).toBe(shown);
+    // Zoomed out further: more than twice too big, so a smaller file.
+    expect(pickThumbSize(400, shown)).toEqual({ h: 456, dpr: 1 });
+    // Zoomed in past it: a bigger one at once.
+    expect(pickThumbSize(1000, shown)).toEqual({ h: 640, dpr: 2 });
   });
 
   test("cursors round-trip and reject junk", () => {

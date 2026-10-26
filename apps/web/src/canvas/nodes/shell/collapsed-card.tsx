@@ -76,7 +76,7 @@ export function CollapsedCard({ id, name, meta, status, thumbs }: CollapsedCardP
       {thumbs.length ? (
         <div className="flex shrink-0 gap-4">
           {thumbs.slice(0, 3).map((assetId) => (
-            <AssetImage key={assetId} assetId={assetId} height={32} className="size-32 rounded-6" />
+            <AssetImage key={assetId} assetId={assetId} height={32} className="size-32 rounded-6" pane />
           ))}
         </div>
       ) : null}

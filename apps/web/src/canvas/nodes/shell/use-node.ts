@@ -1,16 +1,16 @@
 import { deriveDisplay, visibleBlocker } from "@openfield/canvas/engine/display";
 import type { EngineContext, NodeDisplay } from "@openfield/canvas/engine/types";
 import type { NodeSpec } from "@openfield/canvas/nodes/registry";
-import type { NodeFrame } from "@openfield/canvas/store/ops";
 import { useCallback, useMemo } from "react";
 import { useCanvasEngineContext, useNodeAnalysis } from "../../engine/engine-store";
 import type { RunRequest } from "../../engine/run-request";
 import {
+  type NodeLook,
   useCanvasActions,
   useCanvasStoreApi,
   useLocked,
   useNodeFingerprint,
-  useNodeFrame,
+  useNodeLook,
   useNodeParams,
   useNodeResult,
   useNodeRuntime,
@@ -67,9 +67,12 @@ export function useRunNode(id: string) {
   );
 }
 
-/** The frame and engine context every node component starts from. Null for a node already gone. */
-export function useNodeBasics(id: string): { frame: NodeFrame; ctx: EngineContext } | null {
-  const frame = useNodeFrame(id);
+/**
+ * The frame and engine context every node component starts from. Null for a node already gone. The
+ * frame leaves out the position, so a drag doesn't re-render the node (useNodeLook).
+ */
+export function useNodeBasics(id: string): { frame: NodeLook; ctx: EngineContext } | null {
+  const frame = useNodeLook(id);
   const ctx = useCanvasEngineContext();
   return frame ? { frame, ctx } : null;
 }

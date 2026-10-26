@@ -197,3 +197,37 @@ export function analyzeGraph(
     Object.entries(nodes).every(([id, n]) => previous.nodes[id] === n);
   return unchanged ? previous : { nodes, runnable, estimate, pending, jobs };
 }
+
+/** Frame fields that only place a node: the analysis never reads them. */
+const GEOMETRY = new Set(["position", "size"]);
+
+/**
+ * True when `next` only moved or resized nodes of `prev`, so the analysis can't have changed. A drag
+ * changes the document every frame; this keeps the full pass (fingerprints, evaluate, analyse) for
+ * changes that can matter. Every other slice is compared by identity, which applyOps keeps for
+ * slices an op doesn't touch.
+ */
+export function geometryOnly(prev: DocSlice, next: DocSlice): boolean {
+  if (
+    prev.nodes === next.nodes ||
+    prev.order !== next.order ||
+    prev.params !== next.params ||
+    prev.results !== next.results ||
+    prev.edges !== next.edges ||
+    prev.edgeOrder !== next.edgeOrder ||
+    prev.name !== next.name
+  ) {
+    return false;
+  }
+  for (const id of next.order) {
+    const a = prev.nodes[id];
+    const b = next.nodes[id];
+    if (a === b) continue;
+    if (!a || !b) return false;
+    const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+    for (const key of keys) {
+      if (!GEOMETRY.has(key) && a[key as keyof typeof a] !== b[key as keyof typeof b]) return false;
+    }
+  }
+  return true;
+}

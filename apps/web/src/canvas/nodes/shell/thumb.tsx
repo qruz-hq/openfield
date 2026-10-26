@@ -1,18 +1,36 @@
-import { resolveThumbRung, t } from "@openfield/core";
+import { pickThumbSize, type ThumbSize, t } from "@openfield/core";
 import { cn } from "@openfield/ui";
 import { ImageOff } from "lucide-react";
+import { useRef } from "react";
 import { useAuthedImage } from "../../../api/hooks/images";
-import { useAssetMissing } from "../../store/context";
+import { useAssetMissing, usePaneZoom } from "../../store/context";
 
-// A library image at the size it's drawn: the smallest thumbnail rung at least as tall as the box,
-// doubled on high-density screens (§7.10). /files needs the session header, so it loads through
-// useAuthedImage like the feed.
+// A library image at the size it's drawn: the smallest thumbnail rung that covers the box in device
+// pixels, so its zoom on the pane and the screen's density both count (§7.10). /files needs the
+// session header, so it loads through useAuthedImage like the feed.
+
+const screenDensity = () => (typeof window === "undefined" ? 1 : window.devicePixelRatio || 1);
+
+export const thumbUrl = (assetId: string, size: ThumbSize) =>
+  `/files/thumb/${assetId}?h=${size.h}${size.dpr === 2 ? "&dpr=2" : ""}`;
 
 /** The one place canvas builds a thumbnail URL: nodes, index cards and the version history. */
-export function thumbPath(assetId: string, height: number): string {
-  const params = new URLSearchParams({ h: String(resolveThumbRung(height)) });
-  if (typeof window !== "undefined" && window.devicePixelRatio > 1) params.set("dpr", "2");
-  return `/files/thumb/${assetId}?${params}`;
+export function thumbPath(assetId: string, height: number, zoom = 1): string {
+  return thumbUrl(assetId, pickThumbSize(height * zoom * screenDensity()));
+}
+
+/**
+ * thumbPath for an image on the pane (`pane`) or in the chrome. On the pane it follows the zoom the
+ * view settled at, and keeps the file it shows while that stays sharp and not much too big
+ * (pickThumbSize), so a pan or a small zoom never swaps images.
+ */
+export function useThumbPath(assetId: string | null, height: number, pane: boolean): string | null {
+  const zoom = usePaneZoom(pane);
+  const shown = useRef<ThumbSize | null>(null);
+  if (!assetId) return null;
+  // The same inputs give the same size, so this stays pure across repeated renders.
+  shown.current = pickThumbSize(height * zoom * screenDensity(), shown.current);
+  return thumbUrl(assetId, shown.current);
 }
 
 export function AssetImage({
@@ -20,15 +38,19 @@ export function AssetImage({
   height,
   className,
   alt = "",
+  pane = false,
 }: {
   assetId: string;
   /** How tall it's drawn, in pane pixels. Picks the thumbnail size. */
   height: number;
   className?: string;
   alt?: string;
+  /** Drawn on the pane, inside a node: the zoom counts too. */
+  pane?: boolean;
 }) {
   const missing = useAssetMissing(assetId);
-  const image = useAuthedImage(missing ? null : thumbPath(assetId, height));
+  const path = useThumbPath(missing ? null : assetId, height, pane);
+  const image = useAuthedImage(path, { image: assetId });
   if (missing || image.status === "error") return <MissingImage height={height} className={className} />;
   return (
     <span className={cn("block overflow-hidden bg-surface", className)}>

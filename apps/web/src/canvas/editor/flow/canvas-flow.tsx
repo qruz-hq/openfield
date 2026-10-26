@@ -10,8 +10,10 @@ import {
   type EdgeChange,
   type FinalConnectionState,
   type NodeChange,
+  type NodeMouseHandler,
   type NodePositionChange,
   type OnConnectStartParams,
+  type OnNodeDrag,
   ReactFlow,
   SelectionMode,
   useStore as useFlowStore,
@@ -36,6 +38,7 @@ import { useCanvasEngineContext } from "../../engine/engine-store";
 import { takeFitOnOpen } from "../../fit-on-open";
 import { cardMedia } from "../../nodes/generate/card-media";
 import { nodeRegistry } from "../../nodes/registry";
+import { NodeMenu } from "../../nodes/shell/node-menu";
 import {
   type CanvasOp,
   lodForZoom,
@@ -46,11 +49,12 @@ import {
   useUi,
 } from "../../store";
 import { NOOP_VIEW_CONTROLLER } from "../../store/types";
-import { alignToNeighbours, type Box, unionBox } from "../geometry";
+import { type Box, type Guide, type NeighbourIndex, neighbourIndex, unionBox } from "../geometry";
 import { PresenceLayer } from "../presence-layer";
 import { useEditorUi, useSession } from "../session";
 import { isMac } from "../shortcuts";
 import { useEditorCommands } from "../use-commands";
+import { createViewSettle } from "../view-settle";
 import {
   boxesFor,
   createEdgeCache,
@@ -58,11 +62,14 @@ import {
   type FlowEdge,
   type FlowNode,
   type Measured,
+  sameMeasure,
 } from "./adapter";
+import { CanvasLayer } from "./canvas-layer";
+import { createEdgeRemove, EdgeRemoveButton, EdgeRemoveContext } from "./edge-remove";
 import { ConnectionLine, EdgeModeContext, edgeTypes } from "./edges";
 import { buildNodeTypes } from "./node-types";
 import { PendingEdge } from "./pending-edge";
-import { createViewController, FIT_PADDING, nodeRect } from "./view-controller";
+import { createViewController, FIT_PADDING } from "./view-controller";
 
 // The pane: React Flow wired to the canvas store. Our store is the source of truth; React Flow
 // renders it and reports gestures, which come back here as ops (§7.8, §7.11).
@@ -74,10 +81,18 @@ const MAX_ZOOM = 4;
 const SIMPLE_EDGES_ABOVE = 300;
 /** Alignment guides catch an edge or centre within this many screen pixels (§7.9). */
 const GUIDE_PX = 4;
+/** Pane units; a stable array, since React Flow copies every changed prop into its store. */
+const SNAP_GRID: [number, number] = [8, 8];
+const PRO_OPTIONS = { hideAttribution: true };
 /** Held while dragging: no grid, no guides. ⌥ is taken by duplicate-drag. */
 const freeKey = (e: { metaKey: boolean; ctrlKey: boolean }) => (isMac() ? e.metaKey : e.ctrlKey);
 
 const portType = (nodeType: string, handle: string) => nodeRegistry.port(nodeType, handle)?.type;
+
+/** Zoomed out, React Flow draws no links: the canvas layer does (canvas-layer.tsx). */
+const NO_EDGES: FlowEdge[] = [];
+/** Node types without the node menu (they're not drawn by NodeShell). */
+const NO_NODE_MENU = new Set(["frame", "note", "shape", "text"]);
 
 /** A node's own text field: a Prompt's words, a note, a title being renamed. */
 const EDITABLE = "textarea, input, select, [contenteditable='true'], [contenteditable='']";
@@ -102,12 +117,15 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
   const store = useCanvasStoreApi();
   const session = useSession();
   const rf = useReactFlow<FlowNode, FlowEdge>();
+  const flow = useStoreApi<FlowNode, FlowEdge>();
   const commands = useEditorCommands();
 
   const doc = useCanvas((s) => s.doc);
   const selection = useCanvas((s) => s.selection);
   const readOnly = useReadOnly();
   const tool = useUi((ui) => ui.tool);
+  // Zoomed out, the canvas layer paints the nodes and links (canvas-layer.tsx).
+  const far = useUi((ui) => ui.lod === "canvas");
   const findHit = useEditorUi((s) => s.findHit);
 
   const measured = useRef(new Map<string, Measured>());
@@ -142,7 +160,10 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
   // Image cards take the shape of the image they show: its size and the pager feed their box.
   const ctx = useCanvasEngineContext();
   const media = useZustand(cardMedia);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: measureTick stands for the measured map; media feeds boxesFor through the store.
+  // A new key whenever a card's box can come out differently for the same node.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: media feeds boxesFor through the store.
+  const boxKey = useMemo(() => ({}), [ctx, media]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: measureTick stands for the measured map; boxKey for what feeds boxesFor.
   const nodes = useMemo(() => {
     // Forget sizes of nodes that are gone, so a re-added id gets measured afresh.
     for (const id of measured.current.keys()) if (!doc.nodes[id]) measured.current.delete(id);
@@ -156,6 +177,7 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
       findHit,
       definition,
       boxOf: boxesFor(doc, definition, ctx),
+      boxKey,
     });
   }, [
     doc.nodes,
@@ -168,12 +190,15 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
     findHit,
     measureTick,
     ctx,
-    media,
+    boxKey,
   ]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: the edge list depends on these slices only.
   const edges = useMemo(
-    () => buildEdges({ doc, selection, readOnly, portType, definition: (type) => nodeRegistry.get(type) }),
-    [doc.edges, doc.edgeOrder, doc.nodes, selection, readOnly],
+    () =>
+      far
+        ? NO_EDGES
+        : buildEdges({ doc, selection, readOnly, portType, definition: (type) => nodeRegistry.get(type) }),
+    [doc.edges, doc.edgeOrder, doc.nodes, selection, readOnly, far],
   );
 
   // A canvas just made from a template or a file opens fitted to its nodes.
@@ -188,41 +213,62 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
     return () => actions.installViewController(NOOP_VIEW_CONTROLLER);
   }, [rf, store]);
 
+  /**
+   * What a drag lines up with: every other node's box, read once when the drag starts moving (after
+   * an ⌥-drag's copies are in), since none of them moves while it lasts.
+   */
+  const neighbours = useRef<{ gesture: string; index: NeighbourIndex } | null>(null);
+
   /** Lines dragged nodes up with their neighbours (§7.9): shifts the moves and draws the guides. */
   const alignDrag = useCallback(
     (drags: NodePositionChange[]) => {
-      const moving = new Set(drags.map((c) => c.id));
+      const { nodeLookup } = flow.getState();
       const absolute = (id: string, position: { x: number; y: number }) => {
-        const parentId = rf.getInternalNode(id)?.parentId;
-        const parent = parentId ? rf.getInternalNode(parentId)?.internals.positionAbsolute : undefined;
+        const parentId = nodeLookup.get(id)?.parentId;
+        const parent = parentId ? nodeLookup.get(parentId)?.internals.positionAbsolute : undefined;
         return parent ? { x: parent.x + position.x, y: parent.y + position.y } : position;
       };
       const boxes = drags.flatMap((c): Box[] => {
-        const node = rf.getInternalNode(c.id);
+        const node = nodeLookup.get(c.id);
         if (!node || !c.position) return [];
         const at = absolute(c.id, c.position);
         return [{ x: at.x, y: at.y, w: node.measured.width ?? 0, h: node.measured.height ?? 0 }];
       });
       const moved = unionBox(boxes);
       if (!moved) return;
-      const insideMoving = (id: string) => {
-        for (let at = rf.getInternalNode(id)?.parentId; at; at = rf.getInternalNode(at)?.parentId) {
-          if (moving.has(at)) return true;
+      const key = gesture.current ?? "nudge";
+      if (neighbours.current?.gesture !== key) {
+        const moving = new Set(drags.map((c) => c.id));
+        const insideMoving = (id: string) => {
+          for (let at = nodeLookup.get(id)?.parentId; at; at = nodeLookup.get(at)?.parentId) {
+            if (moving.has(at)) return true;
+          }
+          return false;
+        };
+        const others: Box[] = [];
+        for (const node of nodeLookup.values()) {
+          if (moving.has(node.id) || node.hidden || insideMoving(node.id)) continue;
+          const { x, y } = node.internals.positionAbsolute;
+          others.push({
+            x,
+            y,
+            w: node.measured.width ?? node.width ?? 0,
+            h: node.measured.height ?? node.height ?? 0,
+          });
         }
-        return false;
-      };
-      const others = rf.getNodes().flatMap((n) => {
-        if (moving.has(n.id) || n.hidden || insideMoving(n.id)) return [];
-        const rect = nodeRect(rf, n.id);
-        return rect ? [rect] : [];
-      });
-      const { dx, dy, guides } = alignToNeighbours(moved, others, GUIDE_PX / rf.getZoom());
+        neighbours.current = { gesture: key, index: neighbourIndex(others) };
+      }
+      const { dx, dy, guides } = neighbours.current.index.align(
+        moved,
+        GUIDE_PX / flow.getState().transform[2],
+      );
       if (dx || dy) {
         for (const c of drags) if (c.position) c.position = { x: c.position.x + dx, y: c.position.y + dy };
       }
-      session.ui.setState({ guides });
+      // Most frames draw the same guides (often none): the editor's chrome only hears of a change.
+      if (!sameGuides(session.ui.getState().guides, guides)) session.ui.setState({ guides });
     },
-    [rf, session],
+    [flow, session],
   );
 
   const onNodesChange = useCallback(
@@ -242,8 +288,11 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
       for (const change of changes) {
         if (change.type === "dimensions" && change.dimensions) {
           const { width, height } = change.dimensions;
-          measured.current.set(change.id, { width, height });
-          remeasured = true;
+          // Within half a pixel of what's known is the same size: no rebuild for it.
+          if (!sameMeasure(measured.current.get(change.id), { width, height })) {
+            measured.current.set(change.id, { width, height });
+            remeasured = true;
+          }
           if (change.resizing !== undefined) {
             resizes.set(change.id, { w: Math.round(width), h: Math.round(height) });
             if (change.resizing === false) resizeEnded = true;
@@ -328,7 +377,8 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
     (_event: unknown, dragged: FlowNode[]) => {
       const key = gesture.current;
       gesture.current = null;
-      session.ui.setState({ guides: [] });
+      neighbours.current = null;
+      if (session.ui.getState().guides.length) session.ui.setState({ guides: [] });
       commands.dropIntoFrames(
         dragged.map((n) => n.id),
         key,
@@ -473,23 +523,31 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
 
   const onMove = useCallback(
     (_event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
-      const { ui, actions } = store.getState();
-      const lod = lodForZoom(viewport.zoom);
-      if (lod !== ui.lod) actions.setUi({ lod });
+      const { ui, actions, selection } = store.getState();
+      const lod = lodForZoom(viewport.zoom, ui.lod);
+      if (lod === ui.lod) return;
+      actions.setUi({ lod });
+      // Zoomed out, links aren't React Flow's to select or delete, so none stays selected unseen.
+      if (lod === "canvas" && selection.edgeIds.length) actions.setSelection({ edgeIds: [] });
     },
     [store],
   );
 
+  // The view goes into the store once it rests (view-settle.ts); a save, or the pane going, takes it
+  // at once. Only the canvas's own store saves; a version preview just keeps its view.
+  const view = useMemo(() => createViewSettle(store), [store]);
+  useEffect(() => {
+    const main = store === session.main;
+    if (main) session.settleView.current = view.settle;
+    return () => {
+      view.settle();
+      if (main && session.settleView.current === view.settle) session.settleView.current = null;
+    };
+  }, [session, store, view]);
   const onMoveEnd = useCallback(
-    (_event: MouseEvent | TouchEvent | null, viewport: Viewport) => {
-      const { viewport: saved, actions } = store.getState();
-      if (saved.x === viewport.x && saved.y === viewport.y && saved.zoom === viewport.zoom) return;
-      actions.setViewport({ x: viewport.x, y: viewport.y, zoom: viewport.zoom });
-    },
-    [store],
+    (_event: MouseEvent | TouchEvent | null, viewport: Viewport) => view.moved(viewport),
+    [view],
   );
-
-  const flow = useStoreApi<FlowNode, FlowEdge>();
 
   /**
    * ⇧ or ⌘ (Ctrl) and a click on a node adds it to the selection or takes it out, whatever has the
@@ -519,7 +577,8 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
   );
   const onPointerMove = useCallback(
     (event: ReactPointerEvent) => {
-      session.ui.setState({ pointer: { x: event.clientX, y: event.clientY } });
+      // Kept for paste, outside the editor's store: nothing redraws on a pointer move.
+      session.pointer.current = { x: event.clientX, y: event.clientY };
       // While a link is dragged, the card under it (off its ports) shows where a drop would go. Near
       // a port React Flow snaps to that port and lights it itself.
       const { ui, actions } = store.getState();
@@ -533,15 +592,50 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
     },
     [flow, session, store],
   );
-  const onPointerLeave = useCallback(() => session.ui.setState({ pointer: null }), [session]);
+  const onPointerLeave = useCallback(() => {
+    session.pointer.current = null;
+  }, [session]);
 
-  // A fresh canvas starts at its saved zoom level of detail.
+  // A fresh pane starts at its saved zoom's level of detail. The store opens at it already; this is
+  // for a pane started over on a reloaded document.
   useEffect(() => {
-    store.getState().actions.setUi({ lod: lodForZoom(initialViewport.zoom) });
+    const { ui, actions } = store.getState();
+    const lod = lodForZoom(initialViewport.zoom, ui.lod);
+    if (lod !== ui.lod) actions.setUi({ lod });
   }, [initialViewport, store]);
+
+  const onNodeDragStart: OnNodeDrag<FlowNode> = useCallback(
+    (event, _node, dragged) => onDragStart(event, dragged),
+    [onDragStart],
+  );
+  const onNodeDragStop: OnNodeDrag<FlowNode> = useCallback(
+    (event, _node, dragged) => onDragStop(event, dragged),
+    [onDragStop],
+  );
+  const ariaLabelConfig = useMemo(ariaLabels, []);
+  const [edgeRemove] = useState(createEdgeRemove);
 
   const placing = tool === "note" || tool === "shape" || tool === "text" || tool === "frame";
   const simpleEdges = edges.length > SIMPLE_EDGES_ABOVE;
+
+  // Zoomed out, nodes draw nothing of their own (node-types.tsx), so their double-click and
+  // right-click are heard here: the settings drawer, and the node menu.
+  const onNodeDoubleClick: NodeMouseHandler<FlowNode> = useCallback(
+    (_event, node) => {
+      if (!far || !node.type || !nodeRegistry.get(node.type)?.Inspector) return;
+      store.getState().actions.openInspector(node.id);
+    },
+    [far, store],
+  );
+  const [nodeMenu, setNodeMenu] = useState<{ id: string; x: number; y: number } | null>(null);
+  const onNodeContextMenu: NodeMouseHandler<FlowNode> = useCallback(
+    (event, node) => {
+      if (!far || !node.type || NO_NODE_MENU.has(node.type)) return;
+      event.preventDefault();
+      if (!readOnly) setNodeMenu({ id: node.id, x: event.clientX, y: event.clientY });
+    },
+    [far, readOnly],
+  );
 
   // Right-click on a connection: Delete (§7.6).
   const [edgeMenu, setEdgeMenu] = useState<{ id: string; x: number; y: number } | null>(null);
@@ -557,71 +651,84 @@ export function CanvasFlow({ className }: CanvasFlowProps) {
 
   return (
     <EdgeModeContext.Provider value={simpleEdges}>
-      <ReactFlow<FlowNode, FlowEdge>
-        className={cn(className)}
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={NODE_TYPES}
-        edgeTypes={edgeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onNodeDragStart={(e, _n, dragged) => onDragStart(e, dragged)}
-        onNodeDragStop={(e, _n, dragged) => onDragStop(e, dragged)}
-        onSelectionDragStart={onDragStart}
-        onSelectionDragStop={onDragStop}
-        isValidConnection={isValidConnection}
-        onConnectStart={onConnectStart}
-        onConnect={onConnect}
-        onConnectEnd={onConnectEnd}
-        onReconnect={onReconnect}
-        onReconnectEnd={onReconnectEnd}
-        onPaneClick={onPaneClick}
-        onEdgeContextMenu={onEdgeContextMenu}
-        onDoubleClick={onDoubleClick}
-        onMove={onMove}
-        onMoveEnd={onMoveEnd}
-        onPointerMove={onPointerMove}
-        onPointerLeave={onPointerLeave}
-        onMouseDownCapture={onMouseDownCapture}
-        connectionLineComponent={ConnectionLine}
-        connectionRadius={40}
-        defaultViewport={initialViewport}
-        minZoom={MIN_ZOOM}
-        maxZoom={MAX_ZOOM}
-        selectionOnDrag={tool === "select" && !readOnly}
-        selectionMode={SelectionMode.Partial}
-        panOnDrag={tool === "pan" ? true : [1, 2]}
-        panOnScroll
-        zoomOnPinch
-        zoomActivationKeyCode={isMac() ? "Meta" : "Control"}
-        panActivationKeyCode="Space"
-        multiSelectionKeyCode={["Shift", isMac() ? "Meta" : "Control"]}
-        deleteKeyCode={null}
-        zoomOnDoubleClick={false}
-        elevateNodesOnSelect={false}
-        // Links stay under the nodes when selected too, so they never cover a port's circle; the ×
-        // lives in the label layer above the nodes (editor.css).
-        elevateEdgesOnSelect={false}
-        snapToGrid={snap}
-        snapGrid={[8, 8]}
-        onlyRenderVisibleElements
-        nodesDraggable={!readOnly}
-        nodesConnectable={!readOnly}
-        edgesReconnectable={!readOnly}
-        proOptions={{ hideAttribution: true }}
-        ariaLabelConfig={ariaLabels()}
-        aria-label={t("canvas.editor.pane")}
-        data-placing={placing || undefined}
-      >
-        <Background variant={BackgroundVariant.Dots} gap={24} size={2} offset={1} />
-        <PendingEdge />
-        <AlignmentGuides />
-        <PresenceLayer />
-      </ReactFlow>
+      <EdgeRemoveContext.Provider value={edgeRemove}>
+        <ReactFlow<FlowNode, FlowEdge>
+          className={cn(className)}
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={NODE_TYPES}
+          edgeTypes={edgeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onNodeDragStart={onNodeDragStart}
+          onNodeDragStop={onNodeDragStop}
+          onSelectionDragStart={onDragStart}
+          onSelectionDragStop={onDragStop}
+          isValidConnection={isValidConnection}
+          onConnectStart={onConnectStart}
+          onConnect={onConnect}
+          onConnectEnd={onConnectEnd}
+          onReconnect={onReconnect}
+          onReconnectEnd={onReconnectEnd}
+          onPaneClick={onPaneClick}
+          onEdgeContextMenu={onEdgeContextMenu}
+          onNodeDoubleClick={onNodeDoubleClick}
+          onNodeContextMenu={onNodeContextMenu}
+          onDoubleClick={onDoubleClick}
+          onMove={onMove}
+          onMoveEnd={onMoveEnd}
+          onPointerMove={onPointerMove}
+          onPointerLeave={onPointerLeave}
+          onMouseDownCapture={onMouseDownCapture}
+          connectionLineComponent={ConnectionLine}
+          connectionRadius={40}
+          defaultViewport={initialViewport}
+          minZoom={MIN_ZOOM}
+          maxZoom={MAX_ZOOM}
+          selectionOnDrag={tool === "select" && !readOnly}
+          selectionMode={SelectionMode.Partial}
+          panOnDrag={tool === "pan" ? true : [1, 2]}
+          panOnScroll
+          zoomOnPinch
+          zoomActivationKeyCode={isMac() ? "Meta" : "Control"}
+          panActivationKeyCode="Space"
+          multiSelectionKeyCode={["Shift", isMac() ? "Meta" : "Control"]}
+          deleteKeyCode={null}
+          zoomOnDoubleClick={false}
+          elevateNodesOnSelect={false}
+          // Links stay under the nodes when selected too, so they never cover a port's circle; the ×
+          // lives in the label layer above the nodes (editor.css).
+          elevateEdgesOnSelect={false}
+          snapToGrid={snap}
+          snapGrid={SNAP_GRID}
+          onlyRenderVisibleElements
+          nodesDraggable={!readOnly}
+          nodesConnectable={!readOnly}
+          edgesReconnectable={!readOnly}
+          proOptions={PRO_OPTIONS}
+          ariaLabelConfig={ariaLabelConfig}
+          aria-label={t("canvas.editor.pane")}
+          data-placing={placing || undefined}
+        >
+          {/* Zoomed out, the dots would be a dense pattern to repaint on every move: the pane goes plain. */}
+          {far ? null : <Background variant={BackgroundVariant.Dots} gap={24} size={2} offset={1} />}
+          <CanvasLayer />
+          <PendingEdge />
+          <AlignmentGuides />
+          <PresenceLayer />
+          <EdgeRemoveButton remove={edgeRemove} />
+        </ReactFlow>
+      </EdgeRemoveContext.Provider>
       <EdgeMenu menu={edgeMenu} onClose={() => setEdgeMenu(null)} />
+      <FarNodeMenu menu={nodeMenu} onClose={() => setNodeMenu(null)} />
     </EdgeModeContext.Provider>
   );
 }
+
+/** Guides that draw the same lines. */
+const sameGuides = (a: readonly Guide[], b: readonly Guide[]) =>
+  a.length === b.length &&
+  a.every((g, i) => g.axis === b[i]!.axis && g.at === b[i]!.at && g.from === b[i]!.from && g.to === b[i]!.to);
 
 /** React Flow's screen reader words, in the app's copy and describing the keys this editor uses. */
 const ariaLabels = (): Partial<AriaLabelConfig> => ({
@@ -660,6 +767,30 @@ function EdgeMenu({
       </MenuContent>
     </Menu>,
     document.body,
+  );
+}
+
+/** The node menu for a node right-clicked zoomed out, where its own NodeShell isn't drawn. */
+function FarNodeMenu({
+  menu,
+  onClose,
+}: {
+  menu: { id: string; x: number; y: number } | null;
+  onClose: () => void;
+}) {
+  const node = useCanvas((s) => (menu ? s.doc.nodes[menu.id] : undefined));
+  const def = node ? nodeRegistry.get(node.type) : undefined;
+  if (!menu || !node || !def) return null;
+  return (
+    <NodeMenu
+      id={menu.id}
+      name={node.title?.trim() || t(def.label)}
+      at={{ x: menu.x, y: menu.y }}
+      onClose={onClose}
+      runnable={def.runnable}
+      collapsed={node.collapsed}
+      inspectable={!!def.Inspector}
+    />
   );
 }
 

@@ -5,7 +5,7 @@ import { cn } from "@openfield/ui";
 import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { CircleHelp } from "lucide-react";
 import { memo } from "react";
-import { useCanvasShallow, useNodeFrame } from "../../store";
+import { useCanvasShallow, useNodeLook } from "../../store";
 import { AnnotationHandles } from "../annotation-handles";
 
 // A node whose type this build doesn't know: saved by a newer Openfield, or one whose feature isn't
@@ -13,7 +13,7 @@ import { AnnotationHandles } from "../annotation-handles";
 // handle for every connection that touches it so those still show.
 
 export const UnknownNode = memo(function UnknownNode({ id, selected, height }: NodeProps) {
-  const frame = useNodeFrame(id);
+  const frame = useNodeLook(id);
   const handles = useCanvasShallow((s) => {
     const out: string[] = [];
     for (const edgeId of s.doc.edgeOrder) {

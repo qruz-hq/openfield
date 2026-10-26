@@ -2,7 +2,7 @@ import type { NodeRuntime } from "@openfield/canvas/engine/types";
 import { isLocked, lockedBy } from "@openfield/canvas/store/graph";
 import type { NodeFrame, NodeParams } from "@openfield/canvas/store/ops";
 import type { CanvasNodeResult } from "@openfield/core/canvas";
-import { createContext, type ReactNode, useContext } from "react";
+import { createContext, type ReactNode, useContext, useRef } from "react";
 import { useStore } from "zustand";
 import { useShallow } from "zustand/react/shallow";
 import type { CanvasStore } from "./store";
@@ -37,6 +37,33 @@ export function useCanvasShallow<T>(selector: (state: CanvasState) => T): T {
 export const useCanvasActions = (): CanvasActions => useCanvas((s) => s.actions);
 
 export const useNodeFrame = (id: string): NodeFrame | undefined => useCanvas((s) => s.doc.nodes[id]);
+
+/** A node's frame apart from where it sits: what drawing a node needs. */
+export type NodeLook = Omit<NodeFrame, "position">;
+
+/** Same apart from position: a frame that only moved. */
+function sameLook(a: NodeFrame, b: NodeFrame): boolean {
+  for (const key in a) {
+    if (key !== "position" && a[key as keyof NodeFrame] !== b[key as keyof NodeFrame]) return false;
+  }
+  for (const key in b) if (!(key in a)) return false;
+  return true;
+}
+
+/**
+ * The node's frame for drawing it. A move keeps the object it had, so dragging a node doesn't
+ * re-render what's inside it. Read the position from the store when you need it.
+ */
+export function useNodeLook(id: string): NodeLook | undefined {
+  const last = useRef<NodeFrame | undefined>(undefined);
+  return useCanvas((s) => {
+    const frame = s.doc.nodes[id];
+    const before = last.current;
+    if (frame && before && frame !== before && sameLook(before, frame)) return before;
+    last.current = frame;
+    return frame;
+  });
+}
 export const useNodeParams = (id: string): NodeParams | undefined => useCanvas((s) => s.doc.params[id]);
 export const useNodeResult = (id: string): CanvasNodeResult | null =>
   useCanvas((s) => s.doc.results[id] ?? null);
@@ -51,6 +78,17 @@ export const useLocked = (id: string): boolean => useCanvas((s) => isLocked(s.do
 
 const NO_MISSING: ReadonlySet<string> = new Set();
 const noStore = { getState: () => null, getInitialState: () => null, subscribe: () => () => {} };
+
+/**
+ * The zoom the pane last settled at, for sizing what a node draws (thumbnails). It changes when a
+ * pan or zoom ends, never during one. 1 off the pane (`pane` false) or outside a canvas.
+ */
+export function usePaneZoom(pane = true): number {
+  const store = useContext(CanvasStoreContext);
+  return useStore((store ?? noStore) as CanvasStore, (s: CanvasState | null) =>
+    pane && s ? s.viewport.zoom : 1,
+  );
+}
 
 /** True when this image isn't in the library. Works outside a canvas too (then always false). */
 export function useAssetMissing(assetId: string): boolean {

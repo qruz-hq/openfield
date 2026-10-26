@@ -100,7 +100,7 @@ export function createCommands(
   };
 
   const pointerOnPane = (): Point | null => {
-    const pointer = session.ui.getState().pointer;
+    const pointer = session.pointer.current;
     const box = paneRect();
     if (!pointer || !box) return null;
     const inside =

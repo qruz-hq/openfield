@@ -20,13 +20,13 @@ import { NodeLabel } from "./node-label";
 import { NodeMenu } from "./node-menu";
 import { PortRails } from "./ports";
 import { NodeRing } from "./ring";
-import { AssetImage } from "./thumb";
 import "../nodes.css";
 
 // NodeShell (§7.2 node chrome): what every data node shares. The label above the frame, the frame
 // with its selection outline, typed port rails, resize handles, the arrow handles, the right-click
-// menu, the collapsed card and the far-zoom levels of detail. Nodes draw only their body. An image
-// card (Generate, design Y5jjx) draws its own frame too: the shell adds the outline outside it.
+// menu and the collapsed card. Nodes draw only their body. An image card (Generate, design Y5jjx)
+// draws its own frame too: the shell adds the outline outside it. Zoomed out, none of this draws:
+// the canvas layer does (editor/flow/canvas-layer.tsx).
 
 /** The node menu for a card's own menu button (design ZufQH). */
 export interface CardMenu {
@@ -60,7 +60,7 @@ export interface NodeShellProps extends NodeComponentProps {
   collapsedMeta: ReactNode;
   /** The collapsed card's state line (running, blocked, changed…), for nodes that run. */
   collapsedStatus?: ReactNode;
-  /** Images for the collapsed card and the far-zoom card. */
+  /** Images for the collapsed card. */
   thumbs: readonly string[];
   /** Classes for the frame (padding; width and a minimum height for nodes sized by their content). */
   frameClassName?: string;
@@ -81,7 +81,6 @@ const isControl = (target: EventTarget | null) =>
 export function NodeShell({
   id,
   selected,
-  lod,
   spec,
   title,
   collapsed,
@@ -105,7 +104,7 @@ export function NodeShell({
     const box = anchor.getBoundingClientRect();
     setMenuAt({ x: box.right, y: box.bottom + MENU_GAP, align: "end" });
   };
-  const card = variant === "card" && !collapsed && lod === "full";
+  const card = variant === "card" && !collapsed;
   const dropTarget = useCanvas((s) => s.ui.connectOver?.nodeId === id && s.ui.connectOver.portId !== null);
   // Its words are hovered on a card they go into: a 2 px $accent-line ring outside it (design iVTlK).
   const sourceLit = useSourceLit(id);
@@ -151,9 +150,7 @@ export function NodeShell({
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
     >
-      {lod === "rect" ? null : (
-        <NodeLabel id={id} title={title} fallback={t(spec.label)} changed={changed} fanOut={fanOut} />
-      )}
+      <NodeLabel id={id} title={title} fallback={t(spec.label)} changed={changed} fanOut={fanOut} />
       {card ? (
         <NodeMenuContext.Provider value={{ open: openMenu, isOpen: menuAt !== null }}>
           {children}
@@ -161,8 +158,7 @@ export function NodeShell({
       ) : (
         <div
           className={cn(
-            "relative flex size-full flex-col overflow-hidden rounded-14",
-            lod === "rect" ? "bg-elevated-2" : "bg-elevated",
+            "relative flex size-full flex-col overflow-hidden rounded-14 bg-elevated",
             !collapsed && frameClassName,
             collapsed && contentSized && "w-320",
           )}
@@ -175,14 +171,6 @@ export function NodeShell({
               status={collapsedStatus}
               thumbs={thumbs}
             />
-          ) : lod === "card" ? (
-            thumbs[0] ? (
-              <AssetImage assetId={thumbs[0]} height={320} className="absolute inset-0" />
-            ) : null
-          ) : lod === "rect" ? (
-            <span className="m-auto max-w-[calc(100%-24px)] truncate text-caption font-medium text-text-secondary">
-              {name}
-            </span>
           ) : (
             children
           )}

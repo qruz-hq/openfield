@@ -49,13 +49,7 @@ export function pushEntry(
   const past = [...history.past];
   const top = past[past.length - 1];
   if (opts.coalesce && top?.coalesce === opts.coalesce && now - top.at <= top.windowMs) {
-    // The newest inverse runs first, then the older one.
-    past[past.length - 1] = {
-      ...top,
-      ops: [...top.ops, ...ops],
-      inverse: [...inverse, ...top.inverse],
-      at: now,
-    };
+    past[past.length - 1] = { ...top, ...mergeOps(top, ops, inverse), at: now };
   } else {
     past.push({
       label: opts.label,
@@ -68,6 +62,45 @@ export function pushEntry(
     if (past.length > HISTORY_LIMIT) past.splice(0, past.length - HISTORY_LIMIT);
   }
   return { past, future: opts.keepRedo ? history.future : [] };
+}
+
+/**
+ * Grows a coalescing entry by one change. The newest inverse runs first, then the older one. A drag
+ * sends a moveNode per node every frame: each replaces that node's earlier move at the end of the
+ * entry and the first inverse stays, so the entry holds one move per node however long the drag.
+ */
+function mergeOps(
+  top: HistoryEntry,
+  ops: CanvasOp[],
+  inverse: CanvasOp[],
+): Pick<HistoryEntry, "ops" | "inverse"> {
+  if (!ops.every((op) => op.op === "moveNode")) {
+    return { ops: [...top.ops, ...ops], inverse: [...inverse, ...top.inverse] };
+  }
+  // A move only sets a position, so inside the run of moves that ends the entry a node's later move
+  // replaces its earlier one, and the run's oldest inverse alone puts the node back.
+  const tail = new Map<string, number>();
+  for (let i = top.ops.length - 1; i >= 0; i--) {
+    const op = top.ops[i]!;
+    if (op.op !== "moveNode") break;
+    if (!tail.has(op.id)) tail.set(op.id, i);
+  }
+  const undone = new Set<string>();
+  for (const op of top.inverse) {
+    if (op.op !== "moveNode") break;
+    undone.add(op.id);
+  }
+  const merged = [...top.ops];
+  for (const op of ops) {
+    if (op.op !== "moveNode") continue;
+    const at = tail.get(op.id);
+    if (at === undefined) {
+      tail.set(op.id, merged.length);
+      merged.push(op);
+    } else merged[at] = op;
+  }
+  const fresh = inverse.filter((op) => op.op !== "moveNode" || !undone.has(op.id));
+  return { ops: merged, inverse: fresh.length ? [...fresh, ...top.inverse] : top.inverse };
 }
 
 /** Stops the top entry from merging with the next change, e.g. when a drag ends. */

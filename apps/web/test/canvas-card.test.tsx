@@ -39,7 +39,7 @@ import {
 import { cardView } from "../src/canvas/nodes/generate/card-state";
 import type { NodeDefinition } from "../src/canvas/nodes/registry";
 import { companyWaitOf } from "../src/canvas/nodes/shell/company-wait";
-import { railLayout } from "../src/canvas/nodes/shell/ports";
+import { railLayout } from "../src/canvas/nodes/shell/rail";
 import { NodeRing, ringLook } from "../src/canvas/nodes/shell/ring";
 import {
   type CanvasStore,
@@ -215,9 +215,12 @@ describe("card size", () => {
     const first = build(inputs());
     expect(first[0]).toMatchObject({ width: 320, height: 180, measured: { width: 320, height: 180 } });
     expect(first[1]).toMatchObject({ width: 240, height: 240 });
-    // An aspect change is a new box: that node alone gets a new object.
+    // Nothing that feeds the box changed: it isn't asked again.
     boxed = { w: 270, h: 480 };
-    const second = build(inputs());
+    expect(build(inputs())[0]).toBe(first[0]!);
+    // An aspect change (the image's size arriving, say) comes with a new box key: that node alone
+    // gets a new object.
+    const second = build(inputs({ boxKey: {} }));
     expect(second[0]).not.toBe(first[0]!);
     expect(second[0]).toMatchObject({ width: 270, height: 480 });
     expect(second[1]).toBe(first[1]!);

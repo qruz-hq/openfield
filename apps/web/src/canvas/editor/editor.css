@@ -73,6 +73,35 @@
   border-radius: 16px;
 }
 
+/* The zoomed-out canvas (flow/canvas-layer.tsx): between the pane and the nodes, and over the nodes
+   for a moment after zooming back in, until their images have loaded. */
+.of-canvas-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 3;
+  pointer-events: none;
+}
+
+.of-canvas-layer[data-mode="off"] {
+  display: none;
+}
+
+.of-canvas-layer[data-mode="over"] {
+  z-index: 5;
+  transition: opacity 150ms ease-out;
+}
+
+/* Zoomed out (flow/canvas-layer.tsx), a frame's title pill keeps its size on screen: 8 px above the
+   frame and at most as wide as the frame looks. The layer writes both zoom variables on the pane. */
+.of-frame-pill-far {
+  bottom: 100%;
+  max-width: calc(100% * var(--of-zoom, 1));
+  transform-origin: 0 100%;
+  transform: translateY(calc(-8px * var(--of-inv-zoom, 1))) scale(var(--of-inv-zoom, 1));
+}
+
 /* Pan tool and Space: the whole pane grabs, nodes included. */
 .of-canvas.of-tool-pan .react-flow__node {
   pointer-events: none;
