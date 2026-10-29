@@ -85,6 +85,28 @@ export const STANDING_BLOCKERS: ReadonlySet<NodeBlocker["kind"]> = new Set([
   "loop",
 ]);
 
+/** An edit's models, in the two groups its picker lists (§0.9). Each keeps the order it came in. */
+export interface EditModels {
+  /** "Change only what you paint": the model takes the mask itself. Listed first. */
+  masked: ModelListItem[];
+  /**
+   * "Redraw the whole image": the model can only change all of it, so Openfield puts back what's
+   * outside the mask afterwards, unless the person turns that off.
+   */
+  whole: ModelListItem[];
+}
+
+/** Image models that can edit, those that take a mask first. Models that can't edit aren't listed. */
+export function modelsForEdit(models: readonly ModelListItem[]): EditModels {
+  const out: EditModels = { masked: [], whole: [] };
+  for (const m of models) {
+    if (modalityOf(m) !== "image") continue;
+    if (m.capabilities.ops.inpaint) out.masked.push(m);
+    else if (m.capabilities.ops.imageEdit) out.whole.push(m);
+  }
+  return out;
+}
+
 /**
  * Models that can do what a node needs (§7.8 "Pick another model"): take its reference images.
  * The node's own model stays listed so the picker can show it, fitting or not.
