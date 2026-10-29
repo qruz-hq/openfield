@@ -136,6 +136,11 @@ export const assetDetailResponseSchema = z.object({
   params: z.record(z.string(), z.unknown()).nullable(),
   references: z.array(assetSchema),
   lineage: z.object({ ancestors: z.array(assetSchema), children: z.array(assetSchema) }),
+  /**
+   * The mask a masked edit used (§0.9), to show it and to edit again with it. Null when there's
+   * none. Still answers once the mask is in the Trash.
+   */
+  mask: assetSchema.nullable(),
   folders: z.array(folderSchema),
   isFavourite: z.boolean(),
 });

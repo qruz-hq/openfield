@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import {
+  assetDetailResponseSchema,
   type CostEstimate,
   errorEnvelopeSchema,
   jobSetAcceptedSchema,
@@ -7,7 +8,7 @@ import {
   type UploadResponse,
   uploadResponseSchema,
 } from "@openfield/core";
-import { getJobSet } from "@openfield/db";
+import { assetsForJobSets, getJobSet } from "@openfield/db";
 import sharp from "sharp";
 import { completed, saveKey, startTestServer, type TestServer } from "./helpers";
 
@@ -260,5 +261,32 @@ describe("POST /api/edit", () => {
     const run = jobSetAcceptedSchema.parse((await edit({ model: NANO_BANANA, ...asked })).body);
     expect(run.jobSet.costEstimateUsd).toBe(priced.body.max);
     await completed(server, run.jobSet.id);
+  });
+});
+
+describe("the edited image's detail", () => {
+  test("names the mask it was made with, even once the mask is in the Trash", async () => {
+    server = await ready();
+    const base = await upload(await photo(640, 480));
+    const maskId = await mask(base.id, 640, 480);
+    const run = jobSetAcceptedSchema.parse(
+      (await edit({ base: { assetId: base.id, role: "base" }, mask: { assetId: maskId } })).body,
+    );
+    await completed(server, run.jobSet.id);
+    const [made] = assetsForJobSets(server.services.db, [run.jobSet.id]);
+    const detail = async (id: string) =>
+      assetDetailResponseSchema.parse((await server!.json(`/api/assets/${id}`)).body);
+
+    const edited = await detail(made!.id);
+    expect(edited.asset.maskAssetId).toBe(maskId);
+    expect(edited.mask).toMatchObject({ id: maskId, kind: "mask", parentAssetId: base.id, width: 640 });
+    expect(edited.lineage.ancestors.map((a) => a.id)).toEqual([base.id]);
+    expect((await detail(base.id)).mask).toBeNull();
+
+    expect((await server.json(`/api/assets/${maskId}`, { method: "DELETE" })).status).toBe(200);
+    const later = await detail(made!.id);
+    expect(later.mask?.id).toBe(maskId);
+    expect(later.mask?.deletedAt).not.toBeNull();
+    expect(later.mask?.fileUrl).toBe(`/files/asset/${maskId}?trash=1`);
   });
 });
