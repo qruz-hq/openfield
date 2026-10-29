@@ -118,9 +118,9 @@ Canvases are also resources, `openfield://canvas/<id>`.
 
 | Tool | Does |
 |---|---|
-| `list_models` | The models, what each can do, its sizes and qualities, and its price per image at the speed you chose. |
-| `estimate` | What a request would cost, without making anything. |
-| `generate_image` | Makes images, or edits one. References and the image to edit can be a library image, a file on this computer or a web address. |
+| `list_models` | The models, what each can do, its sizes and qualities, and its price per image at the speed you chose. `masks` says whether a model takes a mask itself. |
+| `estimate` | What a request would cost, without making anything. For an edit it also says what will change. |
+| `generate_image` | Makes images, or edits one, all of it or only the area in a mask. References, the image to edit and its mask can be a library image, a file on this computer or a web address. |
 | `recreate` | Runs an earlier request again, exactly as it was sent. |
 | `get_job`, `wait_for`, `cancel_job` | Check, wait for or stop a run. |
 | `search_assets`, `get_asset`, `view_asset` | Find images in the library and look at them, with their prompt, settings and the images they came from. |
@@ -133,6 +133,18 @@ Canvases are also resources, `openfield://canvas/<id>`.
 Images come back with a small preview the agent can look at, the file's path on disk, and a link that opens the image in Openfield. Library images are also resources, `openfield://asset/<id>`, for apps that let you attach them.
 
 Agents can't change settings, keys, their own limits or what they're allowed to do, and can't delete images for good.
+
+### Editing part of an image
+
+`generate_image` with `edit: { image, mask }` changes only the area in the mask. The mask is the image's exact size and transparent where it should change; an image with no transparency works too, white where it should change and black where it stays. It's saved as a mask of that image, the way the editor saves one, so it never shows in the library, and the edit asks for the image's own size unless the agent sets one.
+
+Once the model is done, Openfield puts the original back everywhere outside the mask, so those pixels stay exactly as they were. Three settings tune this:
+
+- `composite` (default on): put the original back outside the mask. Off keeps the model's whole result.
+- `expandPx` (default 4): grow the area to change by this many pixels first.
+- `featherPx` (default 8): blend the edit into the original over this many more pixels.
+
+A model that can't take a mask, such as Nano Banana, edits the whole image, and the original is still put back outside the mask. The reply says so (`edit.wholeImage` and its note), and each image says whether the original was kept (`keptOutsideMask`). With the `regionalFallback` setting off, these models refuse a mask instead.
 
 ## What agents may do
 

@@ -5,6 +5,8 @@ import { z } from "zod";
 import { priceOf } from "../guard";
 import { guarded, reply, type ToolContext } from "../kit";
 import { buildRequest, imageRequestFields } from "../request";
+import { editOf } from "../runs";
+import { modelName } from "./generate";
 
 // Which models there are, what each can do and what it costs.
 
@@ -23,7 +25,8 @@ export function modelTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "List models",
       description:
-        "The image models Openfield has, with what each can do, its sizes and qualities, and its price per image at the speed the person chose. Only models marked ready can run; the others need a key in Openfield's settings.",
+        "The image models Openfield has, with what each can do, its sizes and qualities, and its price per image at the speed the person chose. Only models marked ready can run; the others need a key in Openfield's settings. " +
+        "masks says whether a model takes a mask itself. One that can edit but doesn't still accepts a mask: it edits the whole image, then Openfield puts back everything outside the mask.",
       inputSchema: {
         readyOnly: z.boolean().optional().describe("Only models that can run now. Default false."),
       },
@@ -44,16 +47,18 @@ export function modelTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "Estimate a price",
       description:
-        "What generate_image would cost for these settings, without making anything. Reference images are brought into the library to check them.",
+        "What generate_image would cost for these settings, without making anything. Reference images are brought into the library to check them, and a mask is saved for its image. For an edit it also says what will change.",
       inputSchema: imageRequestFields,
       annotations: { readOnlyHint: true, openWorldHint: false },
     },
     guarded(ctx, "estimate", async (args) => {
       const request = await buildRequest(ctx, args);
       const quote = await ctx.svc.runner.quote(request);
+      const edit = editOf(quote.request, modelName(ctx, request.model));
       return reply({
         model: request.model,
         count: request.batch,
+        ...(edit && { op: quote.request.op, edit }),
         speed: quote.request.speed,
         price: priceOf(quote.estimate),
       });
@@ -75,6 +80,7 @@ function describeModel(ctx: ToolContext, m: ModelListItem, isDefault: boolean) {
     ...(!m.enabled ? { note: "Turned off in Settings > Models." } : !m.ready ? { note: "Needs a key." } : {}),
     ...(isDefault && { default: true }),
     can: OPS.filter(([op]) => caps.ops[op]).map(([, words]) => words),
+    masks: caps.ops.inpaint,
     size:
       caps.size.mode === "aspect"
         ? { aspects: caps.size.ratios, default: caps.size.default }

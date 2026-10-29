@@ -4,11 +4,12 @@ import { join } from "node:path";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { type CallToolResult, CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { AGENT_KEY_PREFIX, agentsStatusSchema } from "@openfield/core";
-import { getJobSet, listJobSets } from "@openfield/db";
+import { getAsset, getJobSet, listJobSets } from "@openfield/db";
 import sharp from "sharp";
 import { Bridge, notRunning } from "../src/mcp/stdio";
 import { gatedFetch, saveKey, startTestServer, TEST_KEY, type TestServer } from "./helpers";
 import { appFetch, call, connectAgent, turnOnAgents } from "./mcp-helpers";
+import { keptOutside, quarterMask, texture } from "./pixels";
 
 // Agent apps at /mcp (docs/agents.md), driven with the MCP SDK's own client, against a real server
 // with fake companies: who gets in, what each tool does, and the spending limits.
@@ -351,6 +352,152 @@ describe("making images", () => {
     expect(models.find((m) => m.name === "Nano Banana Pro")?.price).toBe("About $0.13");
     const byName = await call(c, "estimate", { prompt: "x", model: "Nano Banana 2" });
     expect(byName.json.model).toBe("google:gemini-3.1-flash-image");
+  });
+});
+
+describe("editing part of an image", () => {
+  const OPENAI = "openai:gpt-image-2";
+
+  async function withOpenAI(s: TestServer) {
+    const res = await s.json("/api/settings/keys/openai", {
+      method: "PUT",
+      body: { apiKey: "sk-test-0123456789abcdefghijklmnop" },
+    });
+    expect(res.status).toBe(200);
+  }
+
+  /** A textured photo and a mask for its top-left quarter, as files an agent would pass. */
+  async function files(s: TestServer, width = 640, height = 480) {
+    const image = join(s.home, "tmp", "photo.png");
+    const mask = join(s.home, "tmp", "mask.png");
+    writeFileSync(image, await texture(width, height));
+    writeFileSync(mask, await quarterMask(width, height));
+    return { image, mask };
+  }
+
+  type Made = { assetId: string; file: string; width: number; height: number; keptOutsideMask?: boolean };
+  const imagesOf = (json: Record<string, unknown>) => json.images as unknown as Made[];
+  const editOf = (json: Record<string, unknown>) => json.edit as unknown as { image: string; mask: string };
+
+  test("a mask from a file is saved as a mask, and only its area changes", async () => {
+    const { server: s, client: c } = await ready();
+    await withOpenAI(s);
+    const { image, mask } = await files(s);
+    const made = await call(c, "generate_image", {
+      prompt: "a red door",
+      model: OPENAI,
+      edit: { image, mask },
+    });
+    expect(made.isError).toBe(false);
+    expect(made.json).toMatchObject({
+      status: "succeeded",
+      op: "inpaint",
+      edit: {
+        composite: true,
+        expandPx: 4,
+        featherPx: 8,
+        note: "Only the masked area changes: Openfield puts back the original everywhere else.",
+      },
+    });
+    const edit = editOf(made.json);
+    expect(made.json.edit).not.toHaveProperty("wholeImage");
+    expect(getAsset(s.services.db, edit.mask)).toMatchObject({
+      kind: "mask",
+      parentAssetId: edit.image,
+      width: 640,
+      height: 480,
+    });
+    const [result] = imagesOf(made.json);
+    expect(result).toMatchObject({ width: 640, height: 480, keptOutsideMask: true });
+    const base = s.services.ingest.fileOf(getAsset(s.services.db, edit.image)!.path);
+    const kept = await keptOutside(base, result!.file, 12);
+    expect(kept).toMatchObject({ sameShape: true, outside: 0 });
+    expect(kept.inside).toBeGreaterThan(kept.quarter * 0.9);
+
+    // Masks stay out of the library, and the same mask again is the one already saved.
+    const found = (await call(c, "search_assets", {})).json.images as unknown as { assetId: string }[];
+    expect(found.map((i) => i.assetId)).toContain(result!.assetId);
+    expect(found.map((i) => i.assetId)).not.toContain(edit.mask);
+    const again = await call(c, "estimate", { prompt: "a red door", model: OPENAI, edit: { image, mask } });
+    expect(again.json).toMatchObject({ op: "inpaint", edit: { image: edit.image, mask: edit.mask } });
+    const details = await call(c, "get_asset", { assetId: result!.assetId, preview: false });
+    expect(details.json).toMatchObject({ mask: edit.mask, keptOutsideMask: true });
+  });
+
+  test("a model without a mask input edits the whole image, keeps the rest, and says so", async () => {
+    const { server: s, client: c } = await ready();
+    // An edit keeps its image's shape, whatever the person's default.
+    await s.json("/api/settings", { method: "PATCH", body: { defaultAspect: "1:1" } });
+    const { image, mask } = await files(s);
+    const made = await call(c, "generate_image", {
+      prompt: "a red door",
+      edit: { image, mask, expandPx: 12, featherPx: 0 },
+    });
+    expect(made.json).toMatchObject({
+      status: "succeeded",
+      op: "edit",
+      modelName: "Nano Banana Pro",
+      edit: { wholeImage: true, composite: true, expandPx: 12, featherPx: 0 },
+    });
+    expect((made.json.edit as unknown as { note: string }).note).toBe(
+      "Nano Banana Pro can't take a mask, so it edits the whole image. Openfield then puts back everything outside the mask, so only the masked area changes.",
+    );
+    const run = getJobSet(s.services.db, made.json.runId as unknown as string)!;
+    expect(run.requestJson).toMatchObject({ size: { aspect: "4:3" } });
+    const [result] = imagesOf(made.json);
+    expect(result).toMatchObject({ width: 640, height: 480, keptOutsideMask: true });
+    const base = s.services.ingest.fileOf(getAsset(s.services.db, editOf(made.json).image)!.path);
+    expect(await keptOutside(base, result!.file, 12)).toMatchObject({ sameShape: true, outside: 0 });
+
+    // Composite off keeps the model's whole result, and says it did.
+    const raw = await call(c, "generate_image", {
+      prompt: "a red door",
+      edit: { image, mask, composite: false },
+    });
+    expect(imagesOf(raw.json)[0]).toMatchObject({
+      keptOutsideMask: false,
+      why: "Composite was off, so this is the model's whole result.",
+    });
+    expect((raw.json.edit as unknown as { note: string }).note).toContain("all of it may change");
+    expect(getJobSet(s.services.db, raw.json.runId as unknown as string)!.requestJson.mask).toMatchObject({
+      composite: false,
+      expandPx: 4,
+      featherPx: 8,
+    });
+  });
+
+  test("list_models says which models take a mask themselves", async () => {
+    const { server: s, client: c } = await ready();
+    await withOpenAI(s);
+    const models = (await call(c, "list_models", { readyOnly: true })).json.models as unknown as {
+      key: string;
+      masks: boolean;
+    }[];
+    expect(models.find((m) => m.key === OPENAI)?.masks).toBe(true);
+    expect(models.find((m) => m.key === "google:gemini-3-pro-image")?.masks).toBe(false);
+  });
+
+  test("a mask that can't be used is refused before anything is made", async () => {
+    const { server: s, client: c } = await ready();
+    const { image } = await files(s);
+    const small = join(s.home, "tmp", "small-mask.png");
+    writeFileSync(small, await quarterMask(320, 240));
+    const wrongSize = await call(c, "generate_image", { prompt: "x", edit: { image, mask: small } });
+    expect(wrongSize.isError).toBe(true);
+    expect(wrongSize.text).toBe(
+      "This mask is 320 × 240 and the image is 640 × 480. Draw the mask over the image itself, then try again. " +
+        "A mask is the image's exact size and transparent where the image should change. In a mask with no transparency, white changes and black stays.",
+    );
+    const blank = join(s.home, "tmp", "blank-mask.png");
+    await sharp({ create: { width: 640, height: 480, channels: 4, background: "#000000ff" } })
+      .png()
+      .toFile(blank);
+    expect((await call(c, "generate_image", { prompt: "x", edit: { image, mask: blank } })).text).toContain(
+      "Paint the area to change first.",
+    );
+    const noMask = await call(c, "generate_image", { prompt: "x", edit: { image, featherPx: 4 } });
+    expect(noMask.text).toBe("composite, expandPx and featherPx only apply to an edit with a mask.");
+    expect(listJobSets(s.services.db, { status: "all" }).items).toHaveLength(0);
   });
 });
 

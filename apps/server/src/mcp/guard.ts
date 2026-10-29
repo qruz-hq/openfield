@@ -68,29 +68,31 @@ export async function approveSpend(
   extra: Extra,
   estimate: CostEstimate,
   req: SpendRequest,
-  opts: { mode: SpendMode; what: string },
+  opts: { mode: SpendMode; what: string; note?: string | undefined },
 ): Promise<{ stop: CallToolResult } | { confirmCost: number | undefined }> {
   if (req.dryRun || !needsConfirmCost(ctx, estimate, opts.mode)) return { confirmCost: req.confirmCost };
   const price =
     estimate.confidence === "unknown"
       ? "at a price Openfield can't work out"
       : `for ${formatCost(estimate).toLowerCase()}`;
+  const note = opts.note ? ` ${opts.note}` : "";
   const answer = await askPerson(
     ctx,
     extra,
-    `${ctx.session.client} wants to ${opts.what} ${price}. Allow it?`,
+    `${ctx.session.client} wants to ${opts.what} ${price}.${note} Allow it?`,
   );
   if (answer === "yes") return { confirmCost: estimate.max };
   if (answer === "no") return { stop: saidNo(ctx) };
   return { confirmCost: req.confirmCost };
 }
 
-/** Null to go ahead, or what to answer instead. */
+/** Null to go ahead, or what to answer instead. `about` is added to a dryRun's answer. */
 export function checkSpend(
   ctx: ToolContext,
   estimate: CostEstimate,
   req: SpendRequest,
   mode: SpendMode = "spend",
+  about: Record<string, unknown> = {},
 ): CallToolResult | null {
   const settings = ctx.svc.settings.get();
   const askAbove = settings.agentAskAboveUsd;
@@ -103,6 +105,7 @@ export function checkSpend(
   if (req.dryRun) {
     return reply({
       dryRun: true,
+      ...about,
       price: priceOf(estimate),
       needsConfirmCost: needsOk,
       spentTodayUsd: today.usd,

@@ -3,7 +3,9 @@ import {
   BATCH_MAX,
   GENERATE_PROMPT_MAX,
   type GenerateRequest,
+  MASK_COMPOSITE_DEFAULTS,
   type ModelKey,
+  maskInputSchema,
   NEGATIVE_PROMPT_MAX,
   newId,
   RESOLUTION_TIERS,
@@ -11,7 +13,7 @@ import {
 } from "@openfield/core";
 import { z } from "zod";
 import { Refusal, type ToolContext } from "./kit";
-import { IMAGE_REF_HINT, resolveImage } from "./refs";
+import { IMAGE_REF_HINT, MASK_RULE, resolveImage, resolveMask } from "./refs";
 
 // What an agent asks for when it makes or edits an image, and the request the runner gets for it.
 // The runner's own checks (normalize) still decide what each model can do.
@@ -32,7 +34,7 @@ export const imageRequestFields = {
     .enum(ASPECT_RATIOS)
     .optional()
     .describe(
-      'Aspect ratio, such as "1:1", "3:4" or "16:9". Default: the person\'s default, else the model\'s.',
+      'Aspect ratio, such as "1:1", "3:4" or "16:9". Default: the person\'s default, else the model\'s. An edit keeps its image\'s own shape unless you set one.',
     ),
   size: z
     .object({ width: z.int().min(64).max(16_384), height: z.int().min(64).max(16_384) })
@@ -64,8 +66,20 @@ export const imageRequestFields = {
         .string()
         .optional()
         .describe(
-          "Optional: a PNG the same size as the image, transparent where it should change. Only models that can inpaint take one.",
+          `Optional: the area to change, so everything else stays exactly as it is. A saved mask's id, or an image to save as one: ${IMAGE_REF_HINT.toLowerCase()} ${MASK_RULE} A model that can't take a mask itself (masks: false in list_models) edits the whole image, and Openfield then puts back everything outside the mask.`,
         ),
+      composite: z
+        .boolean()
+        .optional()
+        .describe(
+          "With a mask: put the original back everywhere outside the mask once the model is done, so only that area changes. Default true. False keeps the model's whole result.",
+        ),
+      expandPx: maskInputSchema.shape.expandPx.describe(
+        `With a mask: grow the area to change by this many pixels before the original is put back. Default ${MASK_COMPOSITE_DEFAULTS.expandPx}.`,
+      ),
+      featherPx: maskInputSchema.shape.featherPx.describe(
+        `With a mask: blend the edit into the original over this many pixels past the grown area. Default ${MASK_COMPOSITE_DEFAULTS.featherPx}.`,
+      ),
     })
     .optional()
     .describe("Change an existing image instead of making a new one. The prompt says what to change."),
@@ -111,11 +125,19 @@ export function pickModel(ctx: ToolContext, requested: string | undefined): Mode
 export async function buildRequest(ctx: ToolContext, args: ImageRequestArgs): Promise<GenerateRequest> {
   const settings = ctx.svc.settings.get();
   const model = pickModel(ctx, args.model);
+  const { edit } = args;
+  if (
+    edit &&
+    !edit.mask &&
+    (edit.composite !== undefined || edit.expandPx !== undefined || edit.featherPx !== undefined)
+  )
+    throw new Refusal("composite, expandPx and featherPx only apply to an edit with a mask.");
   const references = [];
   for (const ref of args.references ?? []) references.push(await resolveImage(ctx, ref));
-  const base = args.edit ? await resolveImage(ctx, args.edit.image) : undefined;
-  const mask = args.edit?.mask ? await resolveImage(ctx, args.edit.mask) : undefined;
-  const aspect = args.aspect ?? settings.defaultAspect;
+  const base = edit ? await resolveImage(ctx, edit.image) : undefined;
+  const mask = base && edit?.mask ? await resolveMask(ctx, edit.mask, base) : undefined;
+  // An edit left to its own shape asks for its image's size, so a mask lines up with the result.
+  const aspect = args.aspect ?? (base ? undefined : settings.defaultAspect);
   const size: SizeSpec = args.size
     ? { kind: "pixels", width: args.size.width, height: args.size.height }
     : aspect && aspect !== "auto"
@@ -136,7 +158,15 @@ export async function buildRequest(ctx: ToolContext, args: ImageRequestArgs): Pr
       references: references.map((r) => ({ assetId: r.id, role: "subject" as const })),
     }),
     ...(base && { base: { assetId: base.id, role: "base" as const } }),
-    ...(mask && { mask: { assetId: mask.id } }),
+    ...(mask &&
+      edit && {
+        mask: {
+          assetId: mask.id,
+          ...(edit.composite !== undefined && { composite: edit.composite }),
+          ...(edit.expandPx !== undefined && { expandPx: edit.expandPx }),
+          ...(edit.featherPx !== undefined && { featherPx: edit.featherPx }),
+        },
+      }),
     source: "api",
   };
 }
