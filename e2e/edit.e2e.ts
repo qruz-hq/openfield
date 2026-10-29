@@ -941,6 +941,12 @@ test("while it runs the form rests and Stop stops it; a run that fails keeps the
   await generateIn(page).click();
   const failed = page.getByText("Couldn't make this edit. Your mask is still here.");
   await expect(failed).toBeVisible({ timeout: 20_000 });
+  // On one line, centred over the image's area left of the panel (design WWx6tU4fem).
+  const toast = page.locator("[data-sonner-toast]").filter({ has: failed });
+  const toastBox = (await toast.boundingBox())!;
+  const viewport = page.viewportSize()!;
+  expect(toastBox.x + toastBox.width / 2).toBeCloseTo((viewport.width - 360) / 2, 0);
+  expect((await failed.boundingBox())!.height).toBeLessThan(20);
   expect(await tintAt(page, 0.45, 0.45)).toBe(255);
   await expect(generateIn(page)).toHaveText(/^Generate/);
   const again = page.waitForRequest((r) => r.url().endsWith("/api/edit") && r.method() === "POST");

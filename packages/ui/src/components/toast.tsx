@@ -14,8 +14,9 @@ const TONE: Record<ToastTone, { icon: LucideIcon; className: string }> = {
   progress: { icon: Loader, className: "text-text-secondary motion-safe:animate-spin" },
 };
 
+// Hugs its words on one line, as every toast in the design does; only the window's edge wraps it.
 const toastShell =
-  "relative flex w-max max-w-420 items-center gap-12 overflow-hidden rounded-12 bg-elevated py-10 pr-10 pl-14 inset-ring inset-ring-border shadow-popover";
+  "relative flex w-max max-w-[calc(100vw-32px)] items-center gap-12 overflow-hidden rounded-12 bg-elevated py-10 pr-10 pl-14 inset-ring inset-ring-border shadow-popover";
 
 export interface ToastProps extends Omit<ComponentProps<"div">, "children" | "title"> {
   tone?: ToastTone;
