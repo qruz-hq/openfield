@@ -6,7 +6,7 @@ import type { CardLayout } from "@openfield/canvas/nodes/generate/card-size";
 import { t } from "@openfield/core";
 import { Button } from "@openfield/ui";
 import { Brush, Image as ImageIcon } from "lucide-react";
-import { memo, useEffect, useMemo } from "react";
+import { memo, useMemo } from "react";
 import { useStore } from "zustand";
 import { useNodeAnalysis } from "../../engine/engine-store";
 import { useCanvasActions, useNodeResult, useNodeRuntime, useReadOnly } from "../../store/context";
@@ -20,7 +20,7 @@ import { NodeShell } from "../shell/node-shell";
 import { useSyncPorts } from "../shell/sync-ports";
 import { useNodeBasics, useNodeDisplay, useParsedParams } from "../shell/use-node";
 import { soleBase } from "./base";
-import { editLayout, showBase } from "./card-media";
+import { editLayout } from "./card-media";
 import { editCardView } from "./card-state";
 
 // Canvas / Node / Image edit (design nRuORN2ZyA): the Generate card's frame, bars and states, showing
@@ -42,9 +42,8 @@ export const EditNode = memo(function EditNode(props: NodeComponentProps) {
   const display = useNodeDisplay(id);
   const frame = basics?.frame;
   const own = result?.assetIds ?? NO_IMAGES;
-  // Before it makes anything, the card shows the first image coming in and takes its shape.
-  const incoming = analysis?.baseImages[0] ?? null;
-  useEffect(() => showBase(id, own.length ? null : incoming), [id, own.length, incoming]);
+  // Before it makes anything, the card shows the first image coming in and takes its shape: the
+  // engine keeps that in cardMedia.bases for every Edit node (syncBases).
   const layout = useEditLayout(id, frame ?? { id }, own);
   useSyncPorts(id, props.width, props.height);
 

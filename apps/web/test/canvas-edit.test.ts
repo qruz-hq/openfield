@@ -9,7 +9,7 @@ import type { ModelListItem } from "@openfield/core";
 import type { CanvasEdge, CanvasNode, CanvasNodeResult } from "@openfield/core/canvas";
 import { analyzeGraph } from "../src/canvas/engine/analysis";
 import { soleBase } from "../src/canvas/nodes/edit/base";
-import { editLayout, editRest } from "../src/canvas/nodes/edit/card-media";
+import { basesOf, editLayout, editRest, syncBases } from "../src/canvas/nodes/edit/card-media";
 import { editCardView } from "../src/canvas/nodes/edit/card-state";
 import { editableOutput, planEditFrom } from "../src/canvas/nodes/edit/edit-from";
 import { cardMedia } from "../src/canvas/nodes/generate/card-media";
@@ -215,6 +215,26 @@ describe("the Edit card's box", () => {
       h: 240,
       assetId: OTHER,
     });
+  });
+
+  test("every Edit card's incoming image comes from the analysis, drawn or not", async () => {
+    let doc = docOf(
+      [
+        node("u", "image.upload", { assetIds: [PHOTO] }),
+        node("x", "image.edit", editParams),
+        node("y", "image.edit", editParams),
+        node("z", "image.edit", editParams),
+      ],
+      [edge("u", "images", "x", "image"), edge("u", "images", "y", "image")],
+    );
+    doc = applyOps(doc, [{ op: "setResult", id: "y", result: done([OTHER]) }]).doc;
+    const fingerprints = await resolveFingerprints(planFingerprints(doc, registry, ctx), new Map());
+    const analysis = analyzeGraph(doc, registry, ctx, fingerprints);
+    // y shows what it made, z has nothing coming in, and the upload isn't an Edit node.
+    expect(basesOf(doc, analysis)).toEqual({ x: PHOTO });
+    cardMedia.setState({ bases: { x: OTHER, gone: PHOTO } });
+    syncBases(doc, analysis);
+    expect(cardMedia.getState().bases).toEqual({ x: PHOTO });
   });
 
   test("its saved size follows only its own first image", () => {

@@ -20,6 +20,7 @@ import { useSettings } from "../../api/hooks/settings";
 import { fetchSpentThisMonth } from "../../api/hooks/usage";
 import { useLive } from "../../lib/live";
 import { notify } from "../../lib/notify";
+import { syncBases } from "../nodes/edit/card-media";
 import { cardMedia, rememberImageSize } from "../nodes/generate/card-media";
 import { nodeRegistry } from "../nodes/registry";
 import { useCanvas, useCanvasStoreApi } from "../store/context";
@@ -77,9 +78,16 @@ export function CanvasEngine() {
     const analyse = (fingerprints: Readonly<Record<string, string>>) => {
       const { doc, runtime } = store.getState();
       const engine = useEngineStore.getState();
-      engine.setAnalysis(
-        analyzeGraph(doc, nodeRegistry, ctx, fingerprints, engine.analysis, busyNodes(runtime)),
+      const analysis = analyzeGraph(
+        doc,
+        nodeRegistry,
+        ctx,
+        fingerprints,
+        engine.analysis,
+        busyNodes(runtime),
       );
+      engine.setAnalysis(analysis);
+      syncBases(doc, analysis);
     };
     const run = () => {
       frame = 0;
