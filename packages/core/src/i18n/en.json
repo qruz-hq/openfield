@@ -2024,6 +2024,10 @@
     "detail": {
       "label": "Image details",
       "labelVideo": "Video details",
+      "tabs": {
+        "info": "Info",
+        "edit": "Edit"
+      },
       "previous": "Previous image",
       "previousVideo": "Previous video",
       "next": "Next image",
@@ -2094,6 +2098,41 @@
     "cantOpen": "Openfield can't open images on this computer, so it can't save this mask."
   },
   "edit": {
+    "tools": {
+      "label": "Mask tools",
+      "pan": "Pan",
+      "brush": "Brush",
+      "eraser": "Eraser",
+      "lasso": "Lasso",
+      "rectangle": "Rectangle",
+      "invert": "Invert",
+      "clear": "Clear the mask",
+      "undo": "Undo",
+      "redo": "Redo"
+    },
+    "options": {
+      "brush": "Brush options",
+      "shape": "Shape options",
+      "size": "Size",
+      "hardness": "Hardness",
+      "mask": "Mask",
+      "px": "{value} px",
+      "percent": "{value}%",
+      "lassoHint": "Drag to draw, or click to add points. Double-click to close.",
+      "rectangleHint": "Drag to draw a box."
+    },
+    "zoom": {
+      "label": "Zoom",
+      "out": "Zoom out",
+      "in": "Zoom in",
+      "percent": "{value}%"
+    },
+    "leave": {
+      "title": "Leave this edit?",
+      "body": "Your mask and prompt will be lost.",
+      "keep": "Keep editing",
+      "confirm": "Leave"
+    },
     "generate": {
       "paintFirst": "Paint over the part you want to change.",
       "describeFirst": "Describe the change."

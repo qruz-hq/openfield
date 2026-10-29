@@ -2,6 +2,7 @@ import { type AssetListItem, DETAIL_PREVIEW_EDGE } from "@openfield/core";
 import { cn } from "@openfield/ui";
 import {
   type PointerEvent,
+  type ReactNode,
   type Ref,
   type RefObject,
   useEffect,
@@ -19,6 +20,17 @@ import { BACKDROP_RUNG, thumbAt } from "./format";
 
 /** Space around the image in the media area (design x7y6U: a 704-tall image in 900). */
 export const MEDIA_INSET = 98;
+
+/** Space around the image, side by side. */
+export interface MediaInset {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+const INSET: MediaInset = { top: MEDIA_INSET, right: MEDIA_INSET, bottom: MEDIA_INSET, left: MEDIA_INSET };
+const EDGE_TO_EDGE: MediaInset = { top: 0, right: 0, bottom: 0, left: 0 };
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 16;
 const STEP = 1.5;
@@ -39,6 +51,16 @@ interface MediaProps {
   expanded: boolean;
   label: string;
   onZoomedChange: (zoomed: boolean) => void;
+  /** Screen px per image px, as it changes: the Edit tab's zoom control and brush. */
+  onZoomChange?: (zoom: number) => void;
+  /** Space around the image, in place of the panelled or expanded default. */
+  inset?: MediaInset;
+  /** A drag pans at any zoom, not only once zoomed in: the Edit tab's Pan tool. */
+  panAnywhere?: boolean;
+  /** Drawn over the image, inside its zoomed and panned box: the Edit tab's mask. */
+  layer?: ReactNode;
+  /** Over the whole media area, above the image: what takes the Edit tab's strokes. */
+  children?: ReactNode;
   ref?: Ref<MediaHandle>;
 }
 
@@ -66,7 +88,18 @@ function useBoxSize(ref: RefObject<HTMLElement | null>) {
   return size;
 }
 
-export function Media({ item, expanded, label, onZoomedChange, ref }: MediaProps) {
+export function Media({
+  item,
+  expanded,
+  label,
+  onZoomedChange,
+  onZoomChange,
+  inset = expanded ? EDGE_TO_EDGE : INSET,
+  panAnywhere = false,
+  layer,
+  children,
+  ref,
+}: MediaProps) {
   const area = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const { width: boxW, height: boxH } = useBoxSize(box);
@@ -82,10 +115,13 @@ export function Media({ item, expanded, label, onZoomedChange, ref }: MediaProps
   const zoomed = view.zoom !== null && Math.abs(scale - 1) > 0.001;
 
   useEffect(() => onZoomedChange(zoomed), [zoomed, onZoomedChange]);
+  useEffect(() => {
+    if (zoom > 0) onZoomChange?.(zoom);
+  }, [zoom, onZoomChange]);
 
-  // Changing between the panelled and expanded layouts starts from the fit again.
+  // Changing layouts (panelled, expanded, the Edit tab's) starts from the fit again.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only the layout change resets it.
-  useEffect(() => setView(FIT), [expanded]);
+  useEffect(() => setView(FIT), [expanded, inset]);
 
   const clampOffset = (x: number, y: number, z: number) => {
     const w = naturalW * z;
@@ -127,7 +163,7 @@ export function Media({ item, expanded, label, onZoomedChange, ref }: MediaProps
       const px = event.clientX - rect.left - rect.width / 2;
       const py = event.clientY - rect.top - rect.height / 2;
       zoomTo(zoom * Math.exp(-event.deltaY * 0.01), px, py);
-    } else if (zoomed) {
+    } else if (zoomed || panAnywhere) {
       event.preventDefault();
       setView((current) => ({
         ...current,
@@ -144,7 +180,7 @@ export function Media({ item, expanded, label, onZoomedChange, ref }: MediaProps
   }, []);
 
   const onPointerDown = (event: PointerEvent) => {
-    if (!zoomed || event.button !== 0) return;
+    if (!(zoomed || panAnywhere) || event.button !== 0) return;
     drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragging(true);
@@ -190,9 +226,9 @@ export function Media({ item, expanded, label, onZoomedChange, ref }: MediaProps
       onPointerCancel={onPointerUp}
       className={cn(
         "absolute inset-0 touch-none select-none",
-        zoomed && (dragging ? "cursor-grabbing" : "cursor-grab"),
+        (zoomed || panAnywhere) && (dragging ? "cursor-grabbing" : "cursor-grab"),
       )}
-      style={{ padding: expanded ? 0 : MEDIA_INSET }}
+      style={{ padding: `${inset.top}px ${inset.right}px ${inset.bottom}px ${inset.left}px` }}
     >
       <div ref={box} className="relative size-full">
         {fitZoom > 0 ? (
@@ -217,9 +253,11 @@ export function Media({ item, expanded, label, onZoomedChange, ref }: MediaProps
                 />
               ) : null,
             )}
+            {layer}
           </div>
         ) : null}
       </div>
+      {children}
     </div>
   );
 }

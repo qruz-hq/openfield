@@ -26,6 +26,10 @@ import {
   ProviderLogo,
   SectionLabel,
   Surface,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Tooltip,
 } from "@openfield/ui";
 import {
@@ -48,9 +52,11 @@ import { useAuthedImage } from "../api/hooks/images";
 import { useSpeedName } from "../api/hooks/provider-settings";
 import { AddToFolderPopover } from "../assets/add-to-folder";
 import { logoFor } from "../lib/provider";
+import type { DetailTab } from "./use-detail";
 
 // Detail / Panel / Assets and / Trash (design sb8P2, JSKpv): header, PROMPT, DETAILS, a spacer,
-// then the footer at the bottom. No tabs until Edit and History ship (§4.0).
+// then the footer at the bottom. An image in the library also gets the Info and Edit tabs under the
+// header (design oH7EH35br4, Detail / Tabs / Info / Two tabs); History waits for its own work.
 
 export interface DetailActions {
   /** Recreate's estimate, "~$0.04", when the price is known. */
@@ -105,6 +111,11 @@ interface DetailPanelProps {
   actions: DetailActions;
   /** Out of sight while the image is expanded, keeping its state for when it comes back. */
   hidden?: boolean;
+  /**
+   * The Info and Edit tabs, and what Edit shows. Left out for what can't be edited here (a video,
+   * an image in the trash), which keeps the panel as it was, with no tabs.
+   */
+  tabs?: { tab: DetailTab; onTabChange: (tab: DetailTab) => void; edit: ReactNode } | undefined;
 }
 
 export function DetailPanel({
@@ -125,23 +136,22 @@ export function DetailPanel({
   onOpenReference,
   actions,
   hidden = false,
+  tabs,
 }: DetailPanelProps) {
-  return (
-    <Surface
-      variant="panel"
-      hidden={hidden}
-      className="absolute top-8 right-8 bottom-8 mac-window:top-36 other-window:top-52"
-    >
-      {/* Detail / Panel header */}
-      <div className="flex w-full shrink-0 items-center justify-between gap-12">
-        <div className="flex min-w-0 flex-col gap-2">
-          <span className="truncate text-body-strong text-text-primary">{title}</span>
-          <span className="truncate text-caption text-text-tertiary">{caption}</span>
-        </div>
-        <ModalClose asChild>
-          <IconButton variant="round" size={30} icon={X} label={t("assets.detail.close")} />
-        </ModalClose>
+  const header = (
+    // Detail / Panel header
+    <div className="flex w-full shrink-0 items-center justify-between gap-12">
+      <div className="flex min-w-0 flex-col gap-2">
+        <span className="truncate text-body-strong text-text-primary">{title}</span>
+        <span className="truncate text-caption text-text-tertiary">{caption}</span>
       </div>
+      <ModalClose asChild>
+        <IconButton variant="round" size={30} icon={X} label={t("assets.detail.close")} />
+      </ModalClose>
+    </div>
+  );
+  const info = (
+    <>
       {/* The blocks scroll when an open prompt is long, so the footer stays put. */}
       <div className="flex min-h-0 w-full flex-1 flex-col gap-12 overflow-y-auto">
         <PromptSection
@@ -168,7 +178,37 @@ export function DetailPanel({
         ) : null}
       </div>
       {trashed ? <TrashActions actions={actions} /> : <LibraryActions id={id} actions={actions} />}
-    </Surface>
+    </>
+  );
+  const panelClass = "absolute top-8 right-8 bottom-8 mac-window:top-36 other-window:top-52";
+
+  if (!tabs) {
+    return (
+      <Surface variant="panel" hidden={hidden} className={panelClass}>
+        {header}
+        {info}
+      </Surface>
+    );
+  }
+  // Each tab's body fills the rest of the panel's column, as the blocks after the tabs would.
+  const body = "flex min-h-0 w-full flex-1 flex-col gap-12 focus-visible:outline-none";
+  return (
+    <Tabs asChild value={tabs.tab} onValueChange={(value) => tabs.onTabChange(value as DetailTab)}>
+      <Surface variant="panel" hidden={hidden} className={panelClass}>
+        {header}
+        {/* Detail / Tabs / Info and / Edit, Two tabs */}
+        <TabsList variant="segmented" className="shrink-0">
+          <TabsTrigger value="info">{t("assets.detail.tabs.info")}</TabsTrigger>
+          <TabsTrigger value="edit">{t("assets.detail.tabs.edit")}</TabsTrigger>
+        </TabsList>
+        <TabsContent value="info" className={body}>
+          {info}
+        </TabsContent>
+        <TabsContent value="edit" className={body}>
+          {tabs.edit}
+        </TabsContent>
+      </Surface>
+    </Tabs>
   );
 }
 

@@ -37,6 +37,7 @@ const suites: { name: string; testMatch: string; env?: Record<string, string> }[
   { name: "assets", testMatch: "assets.e2e.ts" },
   { name: "video", testMatch: "video.e2e.ts" },
   { name: "feed-tile", testMatch: "feed-tile.e2e.ts" },
+  { name: "edit", testMatch: "edit.e2e.ts" },
   { name: "spending", testMatch: "spending.e2e.ts" },
   { name: "openai", testMatch: "openai.e2e.ts" },
   { name: "higgsfield", testMatch: "higgsfield.e2e.ts" },

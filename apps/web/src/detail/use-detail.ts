@@ -4,8 +4,24 @@ import { create } from "zustand";
 
 // Which image the detail view shows. It rides in ?asset=<id> through replaceState, so a reload
 // reopens the same image in the same list and closing never adds a history entry (§4.0, §4.5).
+// The Edit tab rides beside it as &tab=edit; Info is the default and leaves no trace.
 
 export const DETAIL_PARAM = "asset";
+export const TAB_PARAM = "tab";
+
+export type DetailTab = "info" | "edit";
+
+const tabOf = (value: string | null): DetailTab => (value === "edit" ? "edit" : "info");
+
+/** The search params with `id` shown on `tab`, or with neither when `id` is null. */
+function withDetail(prev: URLSearchParams, id: string | null, tab: DetailTab = "info"): URLSearchParams {
+  const next = new URLSearchParams(prev);
+  if (id) next.set(DETAIL_PARAM, id);
+  else next.delete(DETAIL_PARAM);
+  if (id && tab === "edit") next.set(TAB_PARAM, tab);
+  else next.delete(TAB_PARAM);
+  return next;
+}
 
 /**
  * The attribute a list puts on the element that opens an image (the tile's or card's button). The
@@ -42,17 +58,20 @@ export const useIsLastViewed = (assetId: string) => useLastViewedStore((s) => s.
 export function useDetail() {
   const [params, setParams] = useSearchParams();
   const assetId = params.get(DETAIL_PARAM);
+  const tab = tabOf(params.get(TAB_PARAM));
+  /** Shows `id` on its Info tab, or on `tab`; null closes the view. */
   const show = useCallback(
-    (id: string | null) =>
-      setParams(
-        (prev) => {
-          const next = new URLSearchParams(prev);
-          if (id) next.set(DETAIL_PARAM, id);
-          else next.delete(DETAIL_PARAM);
-          return next;
-        },
-        { replace: true, preventScrollReset: true },
-      ),
+    (id: string | null, tab?: DetailTab) =>
+      setParams((prev) => withDetail(prev, id, tab), { replace: true, preventScrollReset: true }),
+    [setParams],
+  );
+  /** Switches the open image's tab. */
+  const setTab = useCallback(
+    (next: DetailTab) =>
+      setParams((prev) => withDetail(prev, prev.get(DETAIL_PARAM), next), {
+        replace: true,
+        preventScrollReset: true,
+      }),
     [setParams],
   );
   const open = useCallback(
@@ -67,7 +86,7 @@ export function useDetail() {
     if (assetId) useLastViewedStore.getState().set(assetId);
     show(null);
   }, [assetId, show]);
-  return { assetId, open, show, close };
+  return { assetId, tab, open, show, setTab, close };
 }
 
 /**
@@ -77,10 +96,9 @@ export function useDetail() {
 export function useOpenDetail() {
   const navigate = useNavigate();
   return useCallback(
-    (id: string) => {
+    (id: string, tab: DetailTab = "info") => {
       useLastViewedStore.getState().set(null);
-      const params = new URLSearchParams(window.location.search);
-      params.set(DETAIL_PARAM, id);
+      const params = withDetail(new URLSearchParams(window.location.search), id, tab);
       navigate({ search: `?${params}` }, { replace: true, preventScrollReset: true });
     },
     [navigate],
