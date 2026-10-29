@@ -24,7 +24,6 @@ import {
   clearCanceledHandles,
   createJobSet,
   type Db,
-  getAssets,
   getJob,
   getJobSet,
   getJobSetByIdempotencyKey,
@@ -62,6 +61,7 @@ import type { ProviderSettingsService } from "../services/provider-settings";
 import { asksForPrice, type RemotePrices } from "../services/remote-prices";
 import type { SettingsService } from "../services/settings";
 import { asProviderError, BatchWatcher, refused, untilAborted } from "./batches";
+import { checkEditInputs, inputImageSizes, withEditSize } from "./edit-inputs";
 import { batchAction, callsFor, eachFromSet, finalReason, Outcomes } from "./outcomes";
 import { type CallContexts, noWrites } from "./provider-fetch";
 import {
@@ -295,12 +295,18 @@ export class Runner {
     return { estimate: asked ?? this.#estimate(manifest, result.request), request: result.request };
   }
 
-  /** The model, company and settings checks, then normalize (§0.3). Throws what the caller shows. */
-  async #prepare(body: GenerateRequest) {
-    const manifest = this.deps.models.get(body.model);
+  /**
+   * The model, company and settings checks, an edit's images, then normalize (§0.3). Throws what
+   * the caller shows.
+   */
+  async #prepare(asked: GenerateRequest) {
+    const manifest = this.deps.models.get(asked.model);
     if (!manifest)
-      throw new ApiFailure(400, "bad_request", `Unknown model ${body.model}`, { field: "model" });
+      throw new ApiFailure(400, "bad_request", `Unknown model ${asked.model}`, { field: "model" });
     this.#requireEnabled(manifest.providerId);
+    // A base or mask that can't be used is refused now, not after the job set is made.
+    const base = await checkEditInputs(this.deps, asked);
+    const body = withEditSize(manifest, asked, base);
     // The company's settings are resolved for this model and frozen onto the run (§0.3).
     const result = await normalize(manifest, body, {
       jobSetId: newId(),
@@ -389,15 +395,8 @@ export class Runner {
 
   /** The local estimate, with the images the request sends in priced at their own sizes. */
   #estimate(manifest: ModelManifest, request: NormalizedRequest): CostEstimate {
-    const ids = [
-      ...(request.base ? [request.base.assetId] : []),
-      ...(request.references ?? []).map((r) => r.assetId),
-    ];
-    const sizes = new Map(
-      getAssets(this.deps.db, ids).map((a) => [a.id, { width: a.width, height: a.height }]),
-    );
-    const known = ids.flatMap((id) => sizes.get(id) ?? []);
-    return estimate(manifest, { ...request, ...(known.length === ids.length && { inputImageSizes: known }) });
+    const sizes = inputImageSizes(this.deps.db, request);
+    return estimate(manifest, { ...request, ...(sizes && { inputImageSizes: sizes }) });
   }
 
   #insert(

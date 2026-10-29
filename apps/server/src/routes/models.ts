@@ -9,10 +9,12 @@ import {
   modelsListQuerySchema,
   modelsRefreshBodySchema,
 } from "@openfield/core";
+import { getAsset } from "@openfield/db";
 import { estimate, pricedOp, resolveProviderSettings } from "@openfield/providers/manifest";
 import { Hono } from "hono";
 import type { Env } from "../context";
 import { notFound, onInvalid } from "../http/errors";
+import { inputImageSizes, withEditSize } from "../runner/edit-inputs";
 import { asksForPrice } from "../services/remote-prices";
 
 export const modelsRoutes = new Hono<Env>()
@@ -46,14 +48,19 @@ export const modelsRoutes = new Hono<Env>()
       const svc = c.var.svc;
       const manifest = svc.models.get(`${providerId}:${modelId}`);
       if (!manifest) return notFound(c, "That model");
-      const body = c.req.valid("json");
+      const asked = c.req.valid("json");
+      // An edit is priced at the size the run will ask for, with its base at its own size, as the
+      // runner prices it. A base that isn't in the library is priced as any size could be.
+      const base = asked.base && asked.op !== "generate" ? getAsset(svc.db, asked.base.assetId) : undefined;
+      const body = withEditSize(manifest, asked, base);
       // No answer (no key, a failure, a price with no amount) falls through to "Cost unknown".
-      const asked = asksForPrice(manifest) ? await svc.prices.estimateFor(manifest, body) : null;
-      if (asked) return c.json(asked satisfies CostEstimate, 200);
+      const answered = asksForPrice(manifest) ? await svc.prices.estimateFor(manifest, body) : null;
+      if (answered) return c.json(answered satisfies CostEstimate, 200);
       const { schema, stored } = svc.providerSettings.forRun(providerId);
       const { speed } = resolveProviderSettings(schema, stored, manifest, pricedOp(body.op));
       const size =
         body.size?.kind === "pixels" ? { width: body.size.width, height: body.size.height } : undefined;
+      const sizes = inputImageSizes(svc.db, body);
       const cost = estimate(manifest, {
         op: body.op,
         batch: body.batch,
@@ -66,6 +73,7 @@ export const modelsRoutes = new Hono<Env>()
         ...(body.size?.kind === "auto" && { size: { aspect: "auto" as const } }),
         ...(body.video && { video: body.video }),
         inputImages: (body.references?.length ?? 0) + (body.base ? 1 : 0),
+        ...(sizes && { inputImageSizes: sizes }),
       });
       return c.json(cost satisfies CostEstimate, 200);
     },

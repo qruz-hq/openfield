@@ -34,6 +34,7 @@ export type Contracts = [
   Assert<Same<InferResponseType<Api["assets"]["$get"], 200>, AssetsListResponse>>,
   Assert<Same<InferResponseType<Api["job-sets"]["$get"], 200>, JobSetsListResponse>>,
   Assert<Same<InferResponseType<Api["generate"]["$post"], 202>, JobSetAccepted>>,
+  Assert<Same<InferResponseType<Api["edit"]["$post"], 202>, JobSetAccepted>>,
   Assert<Same<InferResponseType<Api["usage"]["$get"], 200>, UsageResponse>>,
   Assert<Same<InferResponseType<Api["providers"][":id"]["settings"]["$get"], 200>, ProviderSettingsResponse>>,
   Assert<
@@ -42,6 +43,6 @@ export type Contracts = [
 ];
 
 test("route types line up with core schemas (checked by tsc)", () => {
-  const checked: Contracts["length"] = 11;
-  expect(checked).toBe(11);
+  const checked: Contracts["length"] = 12;
+  expect(checked).toBe(12);
 });
