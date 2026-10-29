@@ -1796,6 +1796,8 @@
       "lockedFrame": "{frame} is locked, so nothing new can go in it. Only the person can unlock it.",
       "lockOnlyPerson": "Only the person can lock {node}.",
       "missingAsset": "There's no image {id} in your library.",
+      "notMask": "{id} isn't a saved mask. Give an Edit node its mask with set_node_mask.",
+      "maskFor": "Mask {id} wasn't painted on the image in maskFor. Give an Edit node its mask with set_node_mask, which sets both.",
       "invalid": "That would leave the canvas broken. {reason}",
       "nudged": "Nudged {node} {shift} to clear {others}.",
       "nudge": {

@@ -325,5 +325,34 @@ describe("a painted mask the library doesn't have", () => {
     expect(detail.missingAssetIds).toEqual([mask]);
     const dry = await server.services.canvasRuns.runScope(canvasId, { scope: "all", dryRun: true });
     expect(dry.nodes).toEqual([expect.objectContaining({ nodeId: edit, jobs: 0, blocked: "missing_asset" })]);
+    // The node is still the person's to move, change and connect: only what an edit gives it is checked.
+    const other = await upload(await texture(640, 480));
+    expect(() =>
+      server!.services.canvases.edit(
+        canvasId,
+        [
+          { op: "move_node", id: edit, position: { x: 600, y: 40 } },
+          { op: "update_node", id: edit, params: { prompt: "a green door" } },
+          { op: "add_node", as: "u2", type: "image.upload", params: { assetIds: [other] } },
+          { op: "connect", source: "u2", target: edit, targetHandle: "input_images" },
+        ],
+        tab,
+      ),
+    ).not.toThrow();
+  });
+});
+
+describe("a mask given by hand", () => {
+  test("has to be a mask painted on the image maskFor names", async () => {
+    server = await ready();
+    const { canvasId, base, edit } = await editCanvas();
+    const other = await upload(await image("png", { width: 640, height: 480 }));
+    const elsewhere = await paint(other, 640, 480);
+    const give = (params: Record<string, unknown>) => () =>
+      server!.services.canvases.edit(canvasId, [{ op: "update_node", id: edit, params }], tab);
+    expect(give({ maskAssetId: elsewhere, maskFor: base })).toThrow(`${elsewhere} wasn't painted on ${base}`);
+    expect(give({ maskAssetId: other, maskFor: base })).toThrow(`${other} isn't a mask`);
+    // One painted on that image, with it named, is taken.
+    expect(give({ maskAssetId: await paint(base, 640, 480), maskFor: base })).not.toThrow();
   });
 });
