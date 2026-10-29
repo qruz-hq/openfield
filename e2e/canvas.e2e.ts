@@ -1317,9 +1317,24 @@ test("Edit on an image node adds a wired Edit node, and its mask is painted in a
   await expect(edit).toHaveClass(/selected/);
   const settings = page.getByRole("complementary", { name: "Edit" });
   await expect(settings.getByText("Not painted yet. Paint it to run.")).toBeVisible();
-  // It waits for a mask: Paint mask covers the card, and Run waits.
+  // It waits for a mask: Paint mask covers the card, and Run waits. Selected, no bar shows over the
+  // cover (YyIfrxsFFt): no pill, no node menu.
   await expect(edit.getByText("Paint where the image should change.")).toBeVisible();
   await expect(settings.getByRole("button", { name: /^Run/ })).toBeDisabled();
+  await expect(edit.getByRole("button", { name: "Node menu" })).toBeHidden();
+  // Its references input draws the Images icon (BDnK6).
+  await expect(
+    edit.locator('.react-flow__handle[data-handleid="input_images"] svg.lucide-images'),
+  ).toHaveCount(1);
+
+  // Opened and closed from the keyboard, the window hands focus back to Paint.
+  const paintButton = settings.getByRole("button", { name: "Paint", exact: true });
+  await paintButton.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Paint the mask" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog", { name: "Paint the mask" })).toBeHidden();
+  await expect(paintButton).toBeFocused();
 
   // Paint a stroke, then Save mask.
   await edit.getByRole("button", { name: "Paint mask" }).click();
@@ -1336,6 +1351,8 @@ test("Edit on an image node adds a wired Edit node, and its mask is painted in a
   await expect(window).toBeHidden();
   await expect(settings.getByText("Painted on the input image")).toBeVisible();
   await expect(edit.getByText("Paint where the image should change.")).toBeHidden();
+  // The Paint mask it was opened from went with the cover, so focus goes to the node itself.
+  await expect(edit).toBeFocused();
 
   // Saved as a mask for that very image, and the node reads it through its image input.
   await page.waitForTimeout(SETTLE_MS);
