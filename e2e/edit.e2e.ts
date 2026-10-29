@@ -383,6 +383,29 @@ test("Generate runs the painted edit at its price, and the new image comes from 
   // Open shows the original.
   await info.getByRole("button", { name: "Open", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`\\?asset=${id}$`));
+
+  // Edit the original with this mask: the original on Edit, with the mask painted in and the words.
+  await page.goto(`/assets?asset=${shown}`);
+  await info.getByRole("button", { name: "Edit the original with this mask" }).click();
+  await expect(page).toHaveURL(new RegExp(`\\?asset=${id}&tab=edit$`));
+  await expect(
+    page.getByText("Your mask and prompt are back. Change anything, then Generate."),
+  ).toBeVisible();
+  await expect.poll(() => tintAt(page, 0.45, 0.45)).toBe(255);
+  expect(await tintAt(page, 0.1, 0.9)).toBe(0);
+  await expect(panel.getByRole("textbox", { name: "What to change" })).toHaveValue(
+    "Make the berries pale and dried",
+  );
+  await expect(panel.getByRole("slider", { name: "Feather" })).toHaveAttribute("aria-valuenow", "8");
+
+  // The mask is already saved, so Generate sends it by its id.
+  resaved = false;
+  const reopened = page.waitForRequest((r) => r.url().endsWith("/api/edit") && r.method() === "POST");
+  await generate.click();
+  expect(((await reopened).postDataJSON() as { mask: { assetId: string } }).mask.assetId).toBe(
+    saved.asset.id,
+  );
+  expect(resaved).toBe(false);
 });
 
 /** The Difference view's mark at a point given as fractions of the image: 0 where nothing changed. */

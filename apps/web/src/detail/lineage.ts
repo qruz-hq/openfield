@@ -4,13 +4,16 @@ import {
   type CompositeSettings,
   compositeSettingsOf,
   editOpParamsSchema,
+  type ModelKey,
   maskInputSchema,
   t,
 } from "@openfield/core";
+import type { ComposerValues } from "@openfield/providers/manifest";
+import { frozenSettings } from "./format";
 
 // Where an edited image came from (§0.9, design Detail / Section / Edited from): the original, the
-// mask it was painted with and what happened outside it, the references and the words. Pure, so
-// it's unit tested.
+// mask it was painted with and what happened outside it, the references and the words, and what
+// opening that edit again puts back (design Q6PqHq5KHS). Pure, so it's unit tested.
 
 export interface EditedFrom {
   /** The image it was edited from, or null once that's left the library. */
@@ -80,4 +83,37 @@ export function maskNote(asset: Pick<Asset, "opParams" | "params">, modelName: s
   if (fallback === "whole_image" && modelName)
     return t("assets.detail.editedFrom.wholeImage", { model: modelName });
   return t("assets.detail.editedFrom.settings", { feather: composite.featherPx, expand: composite.expandPx });
+}
+
+/** Everything "Edit the original with this mask" puts back on the Edit tab. */
+export interface Reopened {
+  original: Asset;
+  mask: Asset;
+  prompt: string;
+  /** Undefined when the request doesn't say: the Edit tab picks as it would. */
+  model: ModelKey | undefined;
+  /** Resolution and quality. The aspect follows the original anyway. */
+  values: ComposerValues;
+  batch: number;
+  composite: CompositeSettings;
+  references: string[];
+}
+
+/** What the edit that made this image asked for, to ask again on its original. */
+export function reopenedEdit(detail: AssetDetailResponse, from: EditedFrom, prompt: string): Reopened | null {
+  if (!from.original || !from.mask) return null;
+  const frozen = frozenSettings(detail.asset.params ?? detail.params);
+  return {
+    original: from.original,
+    mask: from.mask,
+    prompt,
+    model: frozen.model,
+    values: {
+      ...(frozen.resolution && { resolution: frozen.resolution }),
+      ...(frozen.quality && { quality: frozen.quality }),
+    },
+    batch: detail.jobSet?.batchSize ?? 1,
+    composite: askedComposite(detail.asset),
+    references: from.references.map((r) => r.id),
+  };
 }

@@ -19,7 +19,7 @@ import {
   Spinner,
 } from "@openfield/ui";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Maximize, Minimize, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Brush, ChevronLeft, ChevronRight, Maximize, Minimize, X, ZoomIn, ZoomOut } from "lucide-react";
 import {
   type KeyboardEvent,
   type ReactNode,
@@ -58,6 +58,7 @@ import { type DetailActions, DetailPanel, type RunSpeedInfo } from "./detail-pan
 import { ImageMedia, type ImageMediaHandle } from "./edit/edit-media";
 import { EditPanel } from "./edit/edit-panel";
 import { editKey } from "./edit/keys";
+import { reopenEdit } from "./edit/reopen";
 import { useEditRunner } from "./edit/runner";
 import { cancelLeave, confirmLeave, DEFAULT_TOOL, leaveEdit, useEditSession } from "./edit/session";
 import {
@@ -69,7 +70,7 @@ import {
   thumbAt,
   titleOf,
 } from "./format";
-import { editedFrom } from "./lineage";
+import { editedFrom, reopenedEdit } from "./lineage";
 import {
   afterLeaving,
   type Nav,
@@ -135,7 +136,7 @@ type Confirm = "delete" | "purge" | "leave";
 interface ContentProps extends DetailViewProps {
   id: string;
   tab: DetailTab;
-  show: (id: string | null) => void;
+  show: (id: string | null, tab?: DetailTab) => void;
   setTab: (tab: DetailTab) => void;
   close: () => void;
 }
@@ -356,6 +357,8 @@ function DetailContent({
   const from = data && !isVideo ? editedFrom(data, modelName) : null;
   const deletedAt = item.deletedAt ?? data?.asset.deletedAt ?? null;
   const trashed = query.view === "trash" || deletedAt !== null;
+  // What "Edit the original with this mask" asks for again. Not from the Trash, where nothing edits.
+  const reopened = data && from && !trashed ? reopenedEdit(data, from, prompt) : null;
   // Only an image in the library can be edited; a link to anything else on Edit shows Info.
   const editable = !isVideo && !trashed;
   const editing = editable && tab === "edit";
@@ -673,7 +676,28 @@ function DetailContent({
         }
         actions={actions}
         hidden={expanded}
-        editedFrom={from ? { from } : undefined}
+        editedFrom={
+          from
+            ? {
+                from,
+                // The original on Edit, with this image's mask, words and settings back (design
+                // Q6PqHq5KHS). It asks first when the edit open here has work in it.
+                onEditAgain: reopened
+                  ? () =>
+                      leaveEdit(
+                        () =>
+                          void reopenEdit(reopened).then((painted) => {
+                            seen.current.set(reopened.original.id, listItemOf(reopened.original));
+                            setPending(null);
+                            show(reopened.original.id, "edit");
+                            if (painted) notify(t("edit.reopen.back"), { icon: Brush });
+                            else notifyError(t("edit.reopen.maskFailed"));
+                          }),
+                      )
+                  : undefined,
+              }
+            : undefined
+        }
         tabs={
           editable
             ? {

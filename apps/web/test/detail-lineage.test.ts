@@ -1,11 +1,11 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
 import type { Asset, AssetDetailResponse, EditOpParams } from "@openfield/core";
-import { askedComposite, editedFrom, maskNote } from "../src/detail/lineage";
+import { askedComposite, editedFrom, maskNote, reopenedEdit } from "../src/detail/lineage";
 import { asset, at } from "./fixtures";
 
 // Where an edited image came from: the Info tab's Edited from block (design Detail / Section /
-// Edited from and its three variants).
+// Edited from and its three variants), and what editing the original again puts back.
 
 function full(extra: Partial<Asset> = {}): Asset {
   const item = asset(at(10));
@@ -141,5 +141,48 @@ describe("askedComposite", () => {
       featherPx: 8,
       expandPx: 4,
     });
+  });
+});
+
+describe("reopenedEdit", () => {
+  test("puts back the words, model, sizes, count, references and Keep the rest that made it", () => {
+    const reference = full();
+    const data = detail(
+      {
+        params: {
+          model: "openai:gpt-image-2.5",
+          resolution: "1K",
+          quality: "medium",
+          mask: { assetId: mask.id, composite: true, featherPx: 8, expandPx: 4 },
+        },
+        opParams: record({}),
+      },
+      { references: [reference] },
+    );
+    const from = editedFrom(data, "Flare")!;
+    const jobSet = { batchSize: 2 } as AssetDetailResponse["jobSet"];
+    const plan = reopenedEdit({ ...data, jobSet }, from, "Make these berries pale and dried.");
+    expect(plan).toEqual({
+      original,
+      mask,
+      prompt: "Make these berries pale and dried.",
+      model: "openai:gpt-image-2.5",
+      values: { resolution: "1K", quality: "medium" },
+      batch: 2,
+      composite: { composite: true, featherPx: 8, expandPx: 4 },
+      references: [reference.id],
+    });
+  });
+
+  test("leaves out what the request didn't say, and needs both the original and the mask", () => {
+    const data = detail({ params: null });
+    const plan = reopenedEdit(data, editedFrom(data, undefined)!, "Pale");
+    expect(plan?.model).toBeUndefined();
+    expect(plan?.values).toEqual({});
+    expect(plan?.batch).toBe(1);
+    const gone = detail({}, { lineage: { ancestors: [], children: [] } });
+    expect(reopenedEdit(gone, editedFrom(gone, undefined)!, "Pale")).toBeNull();
+    const unmasked = detail({ maskAssetId: null }, { mask: null });
+    expect(reopenedEdit(unmasked, editedFrom(unmasked, undefined)!, "Pale")).toBeNull();
   });
 });

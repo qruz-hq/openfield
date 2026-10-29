@@ -2113,6 +2113,10 @@
     "cantOpen": "Openfield can't open images on this computer, so it can't save this mask."
   },
   "edit": {
+    "reopen": {
+      "back": "Your mask and prompt are back. Change anything, then Generate.",
+      "maskFailed": "Couldn't load the mask. Your prompt is back, so paint the area to change again."
+    },
     "tools": {
       "label": "Mask tools",
       "pan": "Pan",
