@@ -630,11 +630,10 @@ test("from a feed tile: a box and a stroke, the words, the price, and the new im
   await expect(made.locator("img")).toBeVisible();
   await expect(view.getByRole("radiogroup", { name: "Compare" })).toBeVisible();
 
-  // Leaving asks first, as the mask and the words are still here; then it's in the feed.
+  // The mask and the words went into the new image, so leaving doesn't ask; then it's in the feed.
   await page.keyboard.press("Escape");
-  const leave = page.getByRole("alertdialog", { name: "Leave this edit?" });
-  await leave.getByRole("button", { name: "Leave", exact: true }).click();
   await expect(view).toHaveCount(0);
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
   await expect(page).toHaveURL(/\/image$/);
   await expect(tile(page, words).locator("img")).toBeVisible({ timeout: 15_000 });
 

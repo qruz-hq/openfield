@@ -715,15 +715,12 @@ function DetailContent({
                     runner={runner}
                     // Open new image: the result on Info. It asks first only when the edit has
                     // moved on since the run, as the run's mask and prompt are in the library.
-                    onOpen={(assetId) => {
-                      const open = () => {
+                    onOpen={(assetId) =>
+                      leaveEdit(() => {
                         setPending(null);
                         show(assetId);
-                      };
-                      if (!runner.settled()) return leaveEdit(open);
-                      useEditSession.getState().end();
-                      open();
-                    }}
+                      })
+                    }
                   />
                 ),
               }

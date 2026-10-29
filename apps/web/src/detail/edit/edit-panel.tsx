@@ -104,6 +104,7 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
       featherPx: session.featherPx,
     };
     const words = session.prompt;
+    const references = session.references;
     const estimate = state.estimate;
     runner.submit(estimate, async () => {
       const { maskVersion, savedMask } = useEditSession.getState();
@@ -133,6 +134,7 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
         prompt: words,
         maskVersion,
         composite: settled.composite,
+        references,
         estimate,
       };
     });

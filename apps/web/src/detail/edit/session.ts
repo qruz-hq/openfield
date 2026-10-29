@@ -43,6 +43,13 @@ export interface MaskState {
 
 const NO_MASK: MaskState = { empty: true, changes: false, canUndo: false, canRedo: false };
 
+/** What the last run that saved new images was made from. */
+export interface KeptEdit {
+  maskVersion: number;
+  prompt: string;
+  references: readonly string[];
+}
+
 export interface EditSessionState extends ReferenceSlice {
   /** The image being edited, or null when no edit is open. */
   assetId: string | null;
@@ -76,6 +83,11 @@ export interface EditSessionState extends ReferenceSlice {
    */
   savedMask: { version: number; assetId: string } | null;
   /**
+   * The mask, words and references the last run saved new images from. While the edit still
+   * matches them, they're in the library, so leaving loses nothing.
+   */
+  kept: KeptEdit | null;
+  /**
    * Set while "Leave this edit?" is asked: what leaving does once the person agrees. Every way out
    * of an edit with a mask or a prompt goes through leaveEdit, which sets it.
    */
@@ -99,6 +111,7 @@ export interface EditSessionState extends ReferenceSlice {
   setTurned: (turned: boolean) => void;
   /** Remembers the mask saved for the current `maskVersion`. */
   setSavedMask: (assetId: string, version: number) => void;
+  setKept: (kept: KeptEdit) => void;
   /** Runs one change on the mask: a stroke's step, a shape, undo. `change` returns what it redrew. */
   changeMask: (change: (editor: MaskEditor) => Rect | null) => Rect | null;
   undo: () => void;
@@ -146,6 +159,7 @@ const FRESH = {
   expandPx: MASK_COMPOSITE_DEFAULTS.expandPx,
   turned: false,
   savedMask: null,
+  kept: null,
   leaving: null,
 } satisfies Partial<EditSessionState>;
 
@@ -208,6 +222,7 @@ export const useEditSession = create<EditSessionState>()((set, get) => {
     setExpandPx: (px) => set({ expandPx: clampPx(px) }),
     setTurned: (turned) => set({ turned }),
     setSavedMask: (assetId, version) => set({ savedMask: { assetId, version } }),
+    setKept: (kept) => set({ kept }),
     changeMask,
     undo: () => void changeMask((editor) => editor.undo()),
     redo: () => void changeMask((editor) => editor.redo()),
@@ -216,10 +231,22 @@ export const useEditSession = create<EditSessionState>()((set, get) => {
   };
 });
 
-/** Something would be lost by leaving: a painted mask, a prompt or a reference. */
+const sameIds = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((id, i) => id === b[i]);
+
+/**
+ * Something would be lost by leaving: a painted mask, a prompt or a reference that no run has saved
+ * new images from yet.
+ */
 export function editHasWork(state: EditSessionState = useEditSession.getState()): boolean {
-  return (
-    state.assetId !== null && (!state.mask.empty || state.prompt.trim() !== "" || state.references.length > 0)
+  if (state.assetId === null) return false;
+  if (state.mask.empty && state.prompt.trim() === "" && state.references.length === 0) return false;
+  const { kept } = state;
+  return !(
+    kept &&
+    kept.maskVersion === state.maskVersion &&
+    kept.prompt === state.prompt &&
+    sameIds(kept.references, state.references)
   );
 }
 

@@ -240,6 +240,31 @@ describe("the edit session", () => {
     expect(editHasWork()).toBe(true);
   });
 
+  test("once a run has saved new images from the edit as it is, leaving doesn't ask", () => {
+    let left = 0;
+    const session = () => useEditSession.getState();
+    session().start("a", 64, 64);
+    session().changeMask((editor) =>
+      editor.apply({ type: "rect", mode: "paint", from: { x: 4, y: 4 }, to: { x: 20, y: 12 } }),
+    );
+    session().setPrompt("pale berries");
+    session().setReferences(["ref-1"]);
+    session().setKept({ maskVersion: session().maskVersion, prompt: "pale berries", references: ["ref-1"] });
+    expect(editHasWork()).toBe(false);
+    leaveEdit(() => left++);
+    expect(left).toBe(1);
+
+    // Anything changed since asks again.
+    session().setPrompt("paler berries");
+    expect(editHasWork()).toBe(true);
+    session().setPrompt("pale berries");
+    session().setReferences([]);
+    expect(editHasWork()).toBe(true);
+    session().setReferences(["ref-1"]);
+    session().undo();
+    expect(editHasWork()).toBe(true);
+  });
+
   test("leaving asks only when a mask, a prompt or a reference would be lost", () => {
     let left = 0;
     const leave = () => left++;

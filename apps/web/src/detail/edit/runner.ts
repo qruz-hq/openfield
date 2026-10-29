@@ -24,6 +24,8 @@ export interface EditRequest {
   prompt: string;
   /** Keep the rest of the image was asked for. */
   composite: boolean;
+  /** The edit's references when it was asked for, to tell whether the edit has moved on since. */
+  references: readonly string[];
   /** What Generate showed, for the spending limit. */
   estimate: CostEstimate | undefined;
 }
@@ -55,11 +57,6 @@ export interface EditRunner {
   reset: () => void;
   /** The spending limit's dialog, for the view to render. */
   dialog: ReactNode;
-  /**
-   * The last run made new images from the mask and prompt as they are now, so leaving loses
-   * nothing that isn't in the library.
-   */
-  settled: () => boolean;
 }
 
 export function useEditRunner(): EditRunner {
@@ -152,6 +149,18 @@ export function useEditRunner(): EditRunner {
   );
   const outcome = useMemo(() => runOutcome(run), [run]);
 
+  // New images from the mask, words and references as they were asked for: those are in the
+  // library now, so leaving the edit as it is loses nothing.
+  useEffect(() => {
+    const request = last.current;
+    if (outcome.kind !== "saved" || !request) return;
+    useEditSession.getState().setKept({
+      maskVersion: request.maskVersion,
+      prompt: request.prompt,
+      references: request.references,
+    });
+  }, [outcome.kind]);
+
   // None of it worked: say so once, with Try again (design WWx6tU4fem).
   const told = useRef<string | null>(null);
   useEffect(() => {
@@ -197,15 +206,5 @@ export function useEditRunner(): EditRunner {
     stop,
     reset,
     dialog: guard.dialog,
-    settled: () => {
-      const request = last.current;
-      const { maskVersion, prompt } = useEditSession.getState();
-      return (
-        outcome.kind === "saved" &&
-        request !== null &&
-        request.maskVersion === maskVersion &&
-        request.prompt === prompt
-      );
-    },
   };
 }
