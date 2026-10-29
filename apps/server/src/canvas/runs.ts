@@ -458,7 +458,8 @@ export class CanvasRunService {
         item.calls.flatMap((call) => {
           const manifest = this.deps.models.get(call.model);
           if (!manifest || !asksForPrice(manifest)) return [];
-          const { model: _model, label: _label, ...body } = call;
+          // A mask is never priced, and no model priced per request takes one.
+          const { model: _model, label: _label, mask: _mask, ...body } = call;
           const ask = prices.estimateFor(manifest, { ...body, seed: body.seed ?? null });
           return [Promise.race([ask, late]).then((cost) => void asked.set(call, cost))];
         }),
@@ -770,14 +771,15 @@ export class CanvasRunService {
       const startFrame = bound.find((b) => b.input.to === "start_frame");
       const endFrame = bound.find((b) => b.input.to === "end_frame");
       item.calls.forEach((call, callIndex) => {
-        const { label: _label, seed, video, ...settings } = call;
+        const { label: _label, seed, video, mask: composite, ...settings } = call;
         const request: GenerateRequest = {
           ...settings,
           idempotencyKey: newId(),
           ...(seed !== null && seed !== undefined && { seed }),
           ...(references.length && { references }),
           ...(base && { base: { assetId: base.assetId, role: base.input.role ?? "base" } }),
-          ...(mask && { mask: { assetId: mask.assetId } }),
+          // The keep-the-rest settings go with the mask; without them the server's defaults apply.
+          ...(mask && { mask: { ...composite, assetId: mask.assetId } }),
           ...((video || startFrame) && {
             video: {
               ...video,
