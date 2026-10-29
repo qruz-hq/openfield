@@ -198,6 +198,31 @@ describe("prices", () => {
     expect(batch.max).toBeCloseTo(standard.max / 2, 4);
   });
 
+  test("an exact size is priced by the tokens it comes to, whatever tier it's labelled", () => {
+    const at = (width: number, height: number, quality?: string) =>
+      estimate(gpt2, { batch: 1, size: { width, height }, resolution: "1K", ...(quality && { quality }) });
+    // 3840×2160 at medium is 3,336 tokens, about $0.10, never the 1K range of $0.03 to $0.06.
+    const large = at(3840, 2160, "medium");
+    expect(large.min).toBeCloseTo((outputTokens(48, 3840, 2160) * 30) / 1e6, 6);
+    expect(large.max).toBe(large.min);
+    expect(large.min).toBeGreaterThan(0.1);
+    // A size the table already has costs the same either way.
+    const row = estimate(gpt2, { batch: 1, size: { aspect: "16:9" }, resolution: "1K", quality: "medium" });
+    expect(at(1088, 608, "medium").max).toBe(row.max);
+    // "auto" quality could be any of them.
+    const any = at(3840, 2160, "auto");
+    expect(any.min).toBeCloseTo((outputTokens(16, 3840, 2160) * 30) / 1e6, 6);
+    expect(any.max).toBeCloseTo((outputTokens(96, 3840, 2160) * 30) / 1e6, 6);
+    // Batch at half.
+    const batch = estimate(gpt2, {
+      batch: 1,
+      size: { width: 3840, height: 2160 },
+      quality: "medium",
+      speed: "batch",
+    });
+    expect(batch.max).toBeCloseTo(large.max / 2, 6);
+  });
+
   test("an image sent in costs its patches at $8 per 1M, read once for the whole batch", () => {
     // The measured gpt-image-2 counts the rule reproduces.
     const tokens = (width: number, height: number) =>

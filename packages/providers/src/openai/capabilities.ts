@@ -76,19 +76,8 @@ export function openAiSize(ratio: AspectRatio, tier: ResolutionTier): PixelSize 
   return size;
 }
 
-/**
- * Output tokens for one image, from OpenAI's own calculator in the image generation guide: the
- * quality sets a base, the long side gets it and the short side gets it scaled by the shape
- * (rounded half to even), and the product scales with the pixel count.
- */
-export function outputTokens(base: number, width: number, height: number): number {
-  const long = Math.max(width, height);
-  const short = Math.min(width, height);
-  const s = base / (long / short);
-  const floor = Math.floor(s);
-  const scaled = s - floor === 0.5 ? floor + (floor % 2) : Math.round(s);
-  return Math.ceil((base * scaled * (2e6 + width * height)) / 4e6);
-}
+/** Output tokens for one image, from OpenAI's own calculator (core holds it, so estimates share it). */
+export { outputTokensFor as outputTokens } from "@openfield/core";
 
 /** Token bases per quality, from the calculator. The 2.5 models add Extra high and Max. */
 export const TOKEN_BASES = {

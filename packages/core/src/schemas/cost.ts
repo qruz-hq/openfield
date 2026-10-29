@@ -64,6 +64,11 @@ export const priceModelSchema = z.discriminatedUnion("kind", [
     outputTokenTable: z.array(
       z.strictObject({ quality: z.string().min(1), size: z.string().min(1), tokens: z.int().nonnegative() }),
     ),
+    /**
+     * Per quality, the base of OpenAI's output token calculator, so an exact pixel size the table
+     * has no row for (an edit sent at its image's own size) is priced as it's sent.
+     */
+    outputTokenBases: z.record(z.string().min(1), z.int().positive()).optional(),
   }),
   z.strictObject({ kind: z.literal("per_second"), ...priced, perSecond: z.number().nonnegative() }),
   /**
@@ -117,6 +122,20 @@ export const usageUnitsSchema = z.object({
   /** Seconds of video billed. */
   seconds: z.number().nonnegative().optional(),
 });
+
+/**
+ * Output tokens for one image of exactly this size, by OpenAI's calculator in its image generation
+ * guide, from a quality's base (`outputTokenBases`): the long side gets the base and the short side
+ * gets it scaled by the shape (rounded half to even), and the product scales with the pixel count.
+ */
+export function outputTokensFor(base: number, width: number, height: number): number {
+  const long = Math.max(width, height);
+  const short = Math.min(width, height);
+  const s = base / (long / short);
+  const floor = Math.floor(s);
+  const scaled = s - floor === 0.5 ? floor + (floor % 2) : Math.round(s);
+  return Math.ceil((base * scaled * (2e6 + width * height)) / 4e6);
+}
 
 export type PerImagePrice = z.infer<typeof perImagePriceSchema>;
 export type PriceModel = z.infer<typeof priceModelSchema>;
