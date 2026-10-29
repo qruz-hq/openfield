@@ -8,7 +8,7 @@ OpenAI's Image API, with its current image models under their own names.
 | GPT Image 2.5 Flare | `gpt-image-2.5-flare` | auto + 12 | 1K, 1.5K, 2K, 4K | low, medium, high, xhigh, max, auto | no |
 | GPT Image 2 | `gpt-image-2` | auto + 12 | 1K, 1.5K, 2K, 4K | low, medium, high, auto | yes |
 
-Checked on 2026-09-27 against OpenAI's [models](https://developers.openai.com/api/docs/models/all), each model's page, the [image generation guide](https://developers.openai.com/api/docs/guides/image-generation), the Image API reference, the [pricing page](https://developers.openai.com/api/docs/pricing), the [batch guide](https://developers.openai.com/api/docs/guides/batch) and the error code and rate limit guides, plus the official `openai-node` SDK where the docs are thin. **Not yet run against the live API**: nobody had a key when this was written. Run `OPENFIELD_CONFORMANCE=live bun test packages/providers/conformance` with `OPENFIELD_OPENAI_API_KEY` set before relying on it, and record real fixtures.
+Checked on 2026-09-27 against OpenAI's [models](https://developers.openai.com/api/docs/models/all), each model's page, the [image generation guide](https://developers.openai.com/api/docs/guides/image-generation), the Image API reference, the [pricing page](https://developers.openai.com/api/docs/pricing), the [batch guide](https://developers.openai.com/api/docs/guides/batch) and the error code and rate limit guides, plus the official `openai-node` SDK where the docs are thin. **Mostly not run against the live API**: nobody had a key when this was written; the one live check so far is below. Run `OPENFIELD_CONFORMANCE=live bun test packages/providers/conformance` with `OPENFIELD_OPENAI_API_KEY` set before relying on it, and record real fixtures.
 
 The older image models (`gpt-image-1`, `gpt-image-1-mini`, `gpt-image-1.5`, `chatgpt-image-latest`) are deprecated and shut down by December 1, 2026, so they're left out of the catalog. Discovery doesn't recognise them either.
 
@@ -100,12 +100,20 @@ The Responses API's background mode could resume by id, and its image tool takes
 
 A key OpenAI echoes back in a message (`sk-proj-****…`) is replaced before it's stored.
 
+## Checked live
+
+One masked edit on 2026-10-29 (`gpt-image-2.5-flare`, 1024x1024, Low quality, $0.0142), recorded in `__fixtures__/mask-edit-live.json`:
+
+- **Mask polarity:** the transparent area is what changes. Openfield's mask goes out unchanged.
+- **Size:** a 1024x1024 base came back at 1024x1024.
+- **Billing:** `usage` came back (1,053 input and 196 output tokens), and the cost matched the estimate for one input image, so the mask isn't billed as a second image.
+- **Outside the mask:** the model redrew the whole scene. The mean drift was 9.9/255, 8.5% of pixels moved by more than 28/255, and a table edge moved about 95 px. Openfield's composite (on by default) puts the original back there.
+
 ## Still unverified
 
 - The exact 403 text for organization verification (it comes from community reports; any 403 mentioning verification gets the verify message).
-- Whether `usage` comes back for every model: the schema text still says "gpt-image-1 only", but the reference examples show it for `gpt-image-2.5-flare`. Without it, a run is priced from the estimate.
+- Whether `usage` comes back for every model. It did for a `gpt-image-2.5-flare` edit (above); without it, a run is priced from the estimate.
 - The JSON form of `/v1/images/edits` inside a batch (above).
-- Mask polarity: OpenAI documents transparent as the area to change, and conformance 21 checks the mask goes out unchanged after the base, but a live check is still pending. It should also say what size comes back for an edit and whether the mask is billed as an input image.
 - `input_fidelity` on the 2.5 models. It's never sent: `gpt-image-2` doesn't allow it.
 - Streaming and partial images: each model page says streaming isn't supported, while the reference shows streaming examples. Not declared until a live check settles it.
 - The organization id and project headers: not needed with a project key; add a setting if someone needs them.

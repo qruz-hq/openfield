@@ -1,0 +1,49 @@
+{
+  "recorded": "2026-10-29",
+  "note": "Recorded from one real call through Openfield (POST /api/masks then POST /api/edit, composite off). Image bytes are not stored; the numbers come from decoding them.",
+  "request": {
+    "method": "POST",
+    "path": "/v1/images/edits",
+    "model": "gpt-image-2.5-flare",
+    "form": ["model", "prompt", "n", "size", "quality", "output_format", "image[]", "mask"],
+    "size": "1024x1024",
+    "quality": "low",
+    "prompt": "A single bright red apple sitting in the middle of the frame.",
+    "base": {
+      "width": 1024,
+      "height": 1024,
+      "format": "png",
+      "content": "a soft gradient wall over a grey table, table edge at y=760"
+    },
+    "mask": {
+      "width": 1024,
+      "height": 1024,
+      "format": "png",
+      "colorType": "rgba",
+      "transparent": { "x": 320, "y": 320, "w": 384, "h": 384 }
+    }
+  },
+  "response": {
+    "status": 200,
+    "image": { "width": 1024, "height": 1024, "format": "png" },
+    "usage": { "input_tokens": 1053, "output_tokens": 196 },
+    "costUsd": 0.014217,
+    "estimateUsd": 0.014152,
+    "latencyMs": 9302
+  },
+  "observed": {
+    "insideMask": {
+      "meanDiff": 99.5,
+      "redShare": 0.533,
+      "content": "a red apple, centred in the transparent square"
+    },
+    "outsideMask": {
+      "margin": 16,
+      "meanDiff": 9.91,
+      "maxDiff": 174,
+      "shareOver28": 0.085,
+      "content": "the whole scene was redrawn; the table edge moved from y=760 to about y=665"
+    },
+    "polarity": "transparent (alpha 0) is the area that changes"
+  }
+}
