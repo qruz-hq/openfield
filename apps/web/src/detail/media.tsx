@@ -283,9 +283,18 @@ export type LayeredImage = Pick<AssetListItem, "id" | "thumbUrl" | "fileUrl" | "
 /**
  * An image's pixels at `zoom` (screen px per image px): the backdrop's rung first (it's already on
  * its way, so the image paints in one frame), the 1440 preview over it, and the original only once
- * the preview runs out of pixels at this zoom.
+ * the preview runs out of pixels at this zoom. `stretch` fills a box of another shape edge to edge
+ * rather than cropping to it.
  */
-export function ImageLayers({ item, zoom }: { item: LayeredImage; zoom: number }) {
+export function ImageLayers({
+  item,
+  zoom,
+  stretch = false,
+}: {
+  item: LayeredImage;
+  zoom: number;
+  stretch?: boolean;
+}) {
   const previewZoom = Math.min(1, DETAIL_PREVIEW_EDGE / Math.max(item.width, item.height));
   const needOriginal = zoom * (window.devicePixelRatio || 1) > previewZoom + 0.001;
   const thumb = useAuthedImage(thumbAt(item, { h: BACKDROP_RUNG }));
@@ -301,7 +310,7 @@ export function ImageLayers({ item, zoom }: { item: LayeredImage; zoom: number }
         alt=""
         draggable={false}
         decoding="async"
-        className="absolute inset-0 size-full object-cover"
+        className={cn("absolute inset-0 size-full", stretch ? "object-fill" : "object-cover")}
       />
     ) : null,
   );

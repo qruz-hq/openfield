@@ -54,8 +54,8 @@ export function CompareSwitch({
 
 /**
  * A new image as ImageLayers draws one, from its id alone (thumbAt builds the URLs from it). It has
- * the original's shape, as an edit keeps it, and its size when the rest was kept, so the original's
- * size stands in for working out when to load the file.
+ * the original's size when the rest was kept, and about its shape otherwise, so the original's size
+ * stands in for working out when to load the file.
  */
 function resultImage(assetId: string, original: AssetListItem): LayeredImage {
   return {
@@ -69,7 +69,9 @@ function resultImage(assetId: string, original: AssetListItem): LayeredImage {
 
 /**
  * After: the new image over the original, inside the image's zoomed box, cut away left of the
- * handle so the original shows there.
+ * handle so the original shows there. A model that came back at a slightly other shape (its nearest
+ * ratio) is stretched to the box, as Difference and the server's composite read it, so both views
+ * line up with the original.
  */
 export function AfterLayer({
   item,
@@ -84,7 +86,7 @@ export function AfterLayer({
 }) {
   return (
     <div data-compare-after className="absolute inset-0" style={{ clipPath: `inset(0 0 0 ${split * 100}%)` }}>
-      <ImageLayers item={resultImage(resultId, item)} zoom={zoom} />
+      <ImageLayers item={resultImage(resultId, item)} zoom={zoom} stretch />
     </div>
   );
 }
