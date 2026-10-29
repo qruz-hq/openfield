@@ -284,6 +284,40 @@ describe("edits", () => {
     expect(cost.min).toBeLessThan(cost.max);
   });
 
+  test("references whose sizes are all known are priced at them, as the run records it", () => {
+    const sizes = [
+      { width: 1024, height: 1024 },
+      { width: 512, height: 768 },
+    ];
+    const cost = estimateRun(flareEdit, flareTwo, "", "standard", {
+      edit: masked,
+      inputImages: 2,
+      referenceSizes: sizes,
+    });
+    expect(cost).toEqual(
+      estimate(flareEdit, {
+        op: "inpaint",
+        batch: 2,
+        resolution: "1K",
+        quality: "medium",
+        size: { width: 768, height: 1024 },
+        speed: "standard",
+        prompt: "",
+        inputImages: 3,
+        base: { assetId: BASE, role: "base" },
+        inputImageSizes: [{ width: 1152, height: 1536 }, ...sizes],
+      }),
+    );
+    expect(cost.min).toBe(cost.max);
+    // While one is still unknown, the references stay a range.
+    const partly = estimateRun(flareEdit, flareTwo, "", "standard", {
+      edit: masked,
+      inputImages: 2,
+      referenceSizes: sizes.slice(0, 1),
+    });
+    expect(partly.min).toBeLessThan(partly.max);
+  });
+
   test("Nano Banana is priced by the base's shape at the tier picked", () => {
     const at1K = estimateRun(banana, bananaTwo, "", "standard", { edit: masked });
     expect(costParts(at1K)).toMatchObject({ amount: "$0.27" });

@@ -188,6 +188,11 @@ export interface EditPlan {
 export type PriceExtras = Pick<PriceAsk, "enhancePrompt" | "providerOptions" | "negativePrompt"> & {
   /** Images the run sends in besides an edit's base, which `edit` counts: its references. */
   inputImages?: number;
+  /**
+   * The references' pixel sizes, in order. Once there's one for each, an edit prices them at their
+   * own sizes, as the run does; until then, as any size could be.
+   */
+  referenceSizes?: readonly PixelSize[];
   /** Set for an edit: priced at the size it asks for, with its base read at the base's own size. */
   edit?: EditPlan;
 };
@@ -252,6 +257,8 @@ export function estimateRun(
         ? { aspect: spec.kind === "aspect" ? spec.ratio : ("auto" as const) }
         : expectedSize(model.capabilities, resolved);
   const inputImages = (extras.inputImages ?? 0) + (edit ? 1 : 0);
+  const referenceSizes =
+    extras.referenceSizes?.length === (extras.inputImages ?? 0) ? extras.referenceSizes : [];
   return estimate(model, {
     op,
     batch: resolved.batch,
@@ -261,8 +268,13 @@ export function estimateRun(
     prompt,
     speed,
     ...(inputImages && { inputImages }),
-    // The base goes first, and its size is known: the references after it are priced as any could be.
-    ...(edit && base && { base, inputImageSizes: [{ width: edit.base.width, height: edit.base.height }] }),
+    // The base goes first, and its size is known. The references after it are priced at theirs once
+    // all of them are known, else as any size could be.
+    ...(edit &&
+      base && {
+        base,
+        inputImageSizes: [{ width: edit.base.width, height: edit.base.height }, ...referenceSizes],
+      }),
   });
 }
 
@@ -401,15 +413,21 @@ export function editState(input: {
   edit: EditPlan;
   /** Reference images sent besides the base. */
   references?: number;
+  /** Their pixel sizes, in order, as far as they're known. */
+  referenceSizes?: readonly PixelSize[];
   speed?: SpeedId;
   askPrice?: AskPrice;
 }): GenerateState {
-  const { anyReady, prompt, resolved, edit, references, speed, askPrice } = input;
+  const { anyReady, prompt, resolved, edit, references, referenceSizes, speed, askPrice } = input;
   const model = input.model && editsImages(input.model.capabilities) ? input.model : undefined;
   if (!model)
     return anyReady ? { kind: "blocked", reason: t("composer.generate.noModel") } : { kind: "no-key" };
   if (!model.ready) return { kind: "needs-key", model };
-  const extras: PriceExtras = { edit, ...(references && { inputImages: references }) };
+  const extras: PriceExtras = {
+    edit,
+    ...(references && { inputImages: references }),
+    ...(referenceSizes && { referenceSizes }),
+  };
   const asked = resolved ? estimateRun(model, resolved, prompt, speed, extras, askPrice) : undefined;
   const cost = isPricePending(asked) ? undefined : asked;
   if (!edit.masked) return { kind: "blocked", reason: t("edit.generate.paintFirst"), estimate: cost };

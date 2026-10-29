@@ -1,4 +1,4 @@
-import { type AssetListItem, newId, t } from "@openfield/core";
+import { type AssetListItem, newId, type PixelSize, t } from "@openfield/core";
 import {
   type EditBase,
   type EditPlan,
@@ -9,9 +9,11 @@ import {
   resolveValues,
 } from "@openfield/providers/manifest";
 import { Button, cn, Divider, Spinner, Tooltip } from "@openfield/ui";
+import { useQueries } from "@tanstack/react-query";
 import { ArrowUpRight, CircleAlert, CircleCheck, Smartphone, Sparkles, Square } from "lucide-react";
 import { useState } from "react";
 import { useProviders } from "../../api/hooks/keys";
+import { assetDetailQuery } from "../../api/hooks/library";
 import { useModels } from "../../api/hooks/models";
 import { useRunSpeed } from "../../api/hooks/provider-settings";
 import { useSettings } from "../../api/hooks/settings";
@@ -67,6 +69,14 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   const run = model ? runSpeedFor(model, editOpFor(model.capabilities, masked)) : undefined;
   const speed = run?.speed ?? "standard";
   const refs = model ? referenceInputsFor(model.capabilities, references) : [];
+  // The references' sizes from their details, so their price is the one the run records.
+  const referenceSizes = useQueries({
+    queries: refs.map((ref) => assetDetailQuery(ref.assetId)),
+    combine: (results) =>
+      results.flatMap((r): PixelSize[] =>
+        r.data ? [{ width: r.data.asset.width, height: r.data.asset.height }] : [],
+      ),
+  });
   const state = editState({
     model,
     anyReady: models.some((m) => m.ready),
@@ -74,6 +84,7 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
     resolved,
     edit: plan,
     references: refs.length,
+    referenceSizes,
     speed,
     askPrice: askedPrice,
   });
