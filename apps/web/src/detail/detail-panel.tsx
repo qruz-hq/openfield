@@ -230,11 +230,12 @@ export function DetailPanel({
           <TabsTrigger value="info">{t("assets.detail.tabs.info")}</TabsTrigger>
           <TabsTrigger value="edit">{t("assets.detail.tabs.edit")}</TabsTrigger>
         </TabsList>
-        <TabsContent value="info" className={body}>
+        {/* Not tab stops of their own: Tab goes from the tabs straight to the first control. */}
+        <TabsContent value="info" tabIndex={-1} className={body}>
           {info}
         </TabsContent>
         {/* Edit's settings scroll when the window is too short for them, footer and all. */}
-        <TabsContent value="edit" className={cn(body, "overflow-y-auto")}>
+        <TabsContent value="edit" tabIndex={-1} className={cn(body, "overflow-y-auto")}>
           {tabs.edit}
         </TabsContent>
       </Surface>
