@@ -493,7 +493,7 @@ describe("editing part of an image", () => {
 
   test("a mask that can't be used is refused before anything is made", async () => {
     const { server: s, client: c } = await ready();
-    const { image } = await files(s);
+    const { image, mask } = await files(s);
     const small = join(s.home, "tmp", "small-mask.png");
     writeFileSync(small, await quarterMask(320, 240));
     const wrongSize = await call(c, "generate_image", { prompt: "x", edit: { image, mask: small } });
@@ -511,6 +511,12 @@ describe("editing part of an image", () => {
     );
     const noMask = await call(c, "generate_image", { prompt: "x", edit: { image, featherPx: 4 } });
     expect(noMask.text).toBe("composite, expandPx and featherPx only apply to an edit with a mask.");
+    // A mask's id, as replies hand it out, is a mask and never an image.
+    const priced = await call(c, "estimate", { prompt: "x", edit: { image, mask } });
+    const maskId = (priced.json.edit as unknown as { mask: string }).mask;
+    const asRef = await call(c, "generate_image", { prompt: "x", references: [maskId] });
+    expect(asRef.isError).toBe(true);
+    expect(asRef.text).toBe(`${maskId} is a mask, not an image. Pass it as an edit's mask.`);
     expect(listJobSets(s.services.db, { status: "all" }).items).toHaveLength(0);
   });
 });

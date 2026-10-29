@@ -270,6 +270,37 @@ describe("POST /api/edit", () => {
     await completed(server, openai.jobSet.id);
   });
 
+  test("a saved mask can't be sent as a reference image", async () => {
+    server = await ready();
+    const base = await upload(await photo(640, 480));
+    const maskId = await mask(base.id, 640, 480);
+    const res = await server.json("/api/generate", {
+      method: "POST",
+      body: {
+        idempotencyKey: newId(),
+        model: NANO_BANANA,
+        op: "generate",
+        prompt: "a red door",
+        size: { kind: "auto" },
+        batch: 1,
+        source: "composer",
+        references: [{ assetId: maskId, role: "subject" }],
+      },
+    });
+    expect(res.status).toBe(400);
+    expect(errorEnvelopeSchema.parse(res.body).error).toMatchObject({
+      field: "references",
+      userMessage: "This is a mask, not an image. Choose an image instead.",
+    });
+    const asEditRef = await edit({
+      base: { assetId: base.id, role: "base" },
+      mask: { assetId: maskId },
+      references: [{ assetId: maskId, role: "style" }],
+    });
+    expect(errorEnvelopeSchema.parse(asEditRef.body).error.field).toBe("references");
+    expect(jobSets()).toBe(0);
+  });
+
   test("the estimate route prices an edit as the run does, its base at its own size", async () => {
     server = await ready();
     // Small enough that OpenAI counts it as fewer input tokens than an image of unknown size.

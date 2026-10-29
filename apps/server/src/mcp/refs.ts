@@ -30,6 +30,9 @@ export async function resolveImage(ctx: ToolContext, ref: string): Promise<Asset
     if (!row) throw new Refusal(`There's no image with the id ${value} in the library.`);
     // Agents' tools work on images; a video can't be a reference or an edit's base.
     if (row.modality === "video") throw new Refusal(`${value} is a video, not an image.`);
+    // A mask only says what an edit changes; it goes in an edit's `mask`, never as an image.
+    if (row.kind === "mask")
+      throw new Refusal(`${value} is a mask, not an image. Pass it as an edit's mask.`);
     return row;
   }
   return upload(ctx, await fileAt(value));

@@ -87,6 +87,25 @@ export function checkInputBytes(
   }
 }
 
+/**
+ * A saved mask only says what an edit changes. Sent as a reference or a video frame it would be
+ * billed as an image and show the model nothing but black and transparency, so it's refused.
+ */
+export function refuseMaskInputs(db: Db, req: Pick<GenerateRequest, "references" | "video">): void {
+  const inputs = [
+    ...(req.references ?? []).map((r) => ({ id: r.assetId, field: "references" })),
+    ...(req.video?.startFrame ? [{ id: req.video.startFrame.assetId, field: "video.startFrame" }] : []),
+    ...(req.video?.endFrame ? [{ id: req.video.endFrame.assetId, field: "video.endFrame" }] : []),
+  ];
+  for (const { id, field } of inputs) {
+    if (getAsset(db, id, { includeDeleted: true })?.kind !== "mask") continue;
+    throw new ApiFailure(400, "bad_request", `${id} is a mask, not an image`, {
+      field,
+      userMessage: t("masks.maskAsImage"),
+    });
+  }
+}
+
 interface Sizable {
   op: Op;
   size?: SizeSpec;

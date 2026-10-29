@@ -62,7 +62,13 @@ import type { ProviderSettingsService } from "../services/provider-settings";
 import { asksForPrice, type RemotePrices } from "../services/remote-prices";
 import type { SettingsService } from "../services/settings";
 import { asProviderError, BatchWatcher, refused, untilAborted } from "./batches";
-import { checkEditInputs, checkInputBytes, inputImageSizes, withEditSize } from "./edit-inputs";
+import {
+  checkEditInputs,
+  checkInputBytes,
+  inputImageSizes,
+  refuseMaskInputs,
+  withEditSize,
+} from "./edit-inputs";
 import { batchAction, callsFor, eachFromSet, finalReason, Outcomes } from "./outcomes";
 import { type CallContexts, noWrites } from "./provider-fetch";
 import {
@@ -307,6 +313,7 @@ export class Runner {
     this.#requireEnabled(manifest.providerId);
     // A base or mask that can't be used is refused now, not after the job set is made.
     const base = await checkEditInputs(this.deps, asked);
+    refuseMaskInputs(this.deps.db, asked);
     checkInputBytes(this.deps.db, manifest, asked);
     const body = withEditSize(manifest, asked, base);
     // The company's settings are resolved for this model and frozen onto the run (§0.3).
