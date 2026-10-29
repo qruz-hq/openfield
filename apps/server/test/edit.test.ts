@@ -188,6 +188,30 @@ describe("POST /api/edit", () => {
     expect(jobSets()).toBe(0);
   });
 
+  test("with approximate area edits turned off, a model without a mask input is refused", async () => {
+    server = await ready();
+    const patched = await server.json("/api/settings", {
+      method: "PATCH",
+      body: { regionalFallback: false },
+    });
+    expect(patched.status).toBe(200);
+    const base = await upload(await photo(640, 480));
+    const maskId = await mask(base.id, 640, 480);
+    const asked = { base: { assetId: base.id, role: "base" }, mask: { assetId: maskId } };
+    const res = await edit({ model: NANO_BANANA, op: "edit", ...asked });
+    expect(res.status).toBe(400);
+    expect(errorEnvelopeSchema.parse(res.body).error).toMatchObject({
+      code: "capability_unsupported",
+      field: "mask",
+      userMessage:
+        "Nano Banana 2 can only edit the whole image. Choose another model, or allow approximate area edits in Settings.",
+    });
+    expect(jobSets()).toBe(0);
+    // A model that takes the mask itself is unaffected.
+    const inpaint = jobSetAcceptedSchema.parse((await edit(asked)).body);
+    await completed(server, inpaint.jobSet.id);
+  });
+
   test("a photo saved on its side can't be edited with a mask yet", async () => {
     server = await ready();
     const upright = await upload(await photo(640, 480, "jpeg"));
