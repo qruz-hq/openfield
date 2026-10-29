@@ -12,7 +12,12 @@ let loading: Promise<Sharp> | undefined;
 
 /** Rejects when sharp can't load on this computer; callers fall back without it. */
 export function loadSharp(): Promise<Sharp> {
-  loading ??= import("sharp").then((mod) => mod.default);
+  loading ??= import("sharp").then((mod) => {
+    // libvips keeps recently read files open by default. On Windows an open file can't be
+    // deleted, so a file the server reads and then discards would stay behind.
+    mod.default.cache({ files: 0 });
+    return mod.default;
+  });
   return loading;
 }
 

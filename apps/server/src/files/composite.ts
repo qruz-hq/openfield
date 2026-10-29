@@ -106,7 +106,16 @@ export async function compositeEdit(
       bytes: kept.bytes,
     });
   }
-  ingest.discard(staged);
+  try {
+    ingest.discard(staged);
+  } catch (err) {
+    // A file that won't delete (Windows holds files a reader still has open) is a leftover, not
+    // a failed run: the composite is made and the job still has to land.
+    logger.warn("Couldn't delete the model's own file after the composite", {
+      jobId: call.jobId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
   return { staged: kept, edit: record(true, made.resizedFrom && { resizedFrom: made.resizedFrom }) };
 }
 

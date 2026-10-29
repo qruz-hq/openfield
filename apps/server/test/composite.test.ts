@@ -5,6 +5,7 @@ import sharp from "sharp";
 import { compositeEdit, withProfile } from "../src/files/composite";
 import type { StagedFile } from "../src/files/ingest";
 import { saveMask } from "../src/files/mask";
+import { loadSharp } from "../src/files/sharp";
 import { saveUpload } from "../src/files/upload";
 import { startTestServer, type TestServer } from "./helpers";
 
@@ -381,6 +382,31 @@ describe("compositeEdit", () => {
       edit: { composite: { applied: false, expandPx: 4, featherPx: 8, reason: "failed" } },
     });
     expect(existsSync(fileOf(result))).toBe(true);
+  });
+
+  test("a model's file that won't delete doesn't stop the composite", async () => {
+    const base = await rgbNoise(320, 240);
+    const hole = { x: 10, y: 10, w: 50, h: 50 };
+    const { call } = await masked(base, hole);
+    const ingest = server.services.ingest;
+    // As Windows refuses to delete a file something still has open.
+    const stuck = new Proxy(ingest, {
+      get(target, key) {
+        if (key === "discard")
+          return () => {
+            throw Object.assign(new Error("EBUSY: resource busy or locked"), { code: "EBUSY" });
+          };
+        const value = Reflect.get(target, key, target);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    const result = await stage(await gradientPng(320, 240, 8));
+    const out = await compositeEdit({ ...server.services, ingest: stuck }, call(), result);
+    expect(out?.edit.composite.applied).toBe(true);
+    expect(out!.staged.path).not.toBe(result.path);
+    await expectKept(base, fileOf(out!.staged), hole, 12);
+    // And sharp holds no file open once it has read it, so discarding usually works there too.
+    expect((await loadSharp()).cache().files.max).toBe(0);
   });
 
   test("leaves anything but a masked image edit alone", async () => {
