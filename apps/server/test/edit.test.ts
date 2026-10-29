@@ -520,7 +520,8 @@ describe("a masked edit's result", () => {
     const maskId = await mask(base.id, base.width, base.height);
     const asked = { base: { assetId: base.id, role: "base" }, mask: { assetId: maskId, ...composite } };
     const run = jobSetAcceptedSchema.parse((await edit({ ...asked, ...overrides })).body);
-    expect((await completed(server!, run.jobSet.id)).status).toBe("succeeded");
+    // Up to 4096 × 4096, decoding and compositing takes several seconds on a CI runner.
+    expect((await completed(server!, run.jobSet.id, 45_000)).status).toBe("succeeded");
     const [made] = assetsForJobSets(server!.services.db, [run.jobSet.id]);
     return { maskId, made: made!, request: getJobSet(server!.services.db, run.jobSet.id)!.requestJson };
   }
