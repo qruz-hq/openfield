@@ -74,12 +74,14 @@ export function EditInspector({ nodeId }: { nodeId: string }) {
         value={params.prompt}
         onChange={(prompt) => setParams({ prompt }, "prompt")}
         references={!!model?.capabilities.references.supported}
-        // With words coming in, its own add to them, as on Generate.
+        // Words typed before a Prompt node was linked still go after its words, until cleared.
         placeholder={t(
           analysis?.upstreamText ? "canvas.nodes.generate.promptPlaceholder" : "edit.prompt.placeholder",
         )}
         fieldLabel={t("edit.prompt.label")}
         fromLabel={t("canvas.nodes.edit.fromPrompt", { name: promptFrom ?? "" })}
+        thumbSize={56}
+        addToLinked={false}
       />
       <ModelField
         models={ctx.models}

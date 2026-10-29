@@ -3,19 +3,20 @@ import { incomingEdges, newEdgeId, newNodeId } from "@openfield/canvas/store/gra
 import { t } from "@openfield/core";
 import { cn, IconButton, MiniChip } from "@openfield/ui";
 import { Link, Plus } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { UPLOAD_ACCEPT, uploadImages } from "../../../api/hooks/uploads";
 import { errorMessage } from "../../../api/raw";
 import { notifyError } from "../../../lib/notify";
 import { useNodeAnalysis } from "../../engine/engine-store";
 import { useCanvasStoreApi, useLocked, useNodeFrame, useReadOnly } from "../../store/context";
-import { ReferenceOrder } from "../generate/reference-order";
+import { ReferenceOrder, type ReferenceThumbSize } from "../generate/reference-order";
 import { LOCKED_DIM } from "./inspector-parts";
 import { LinkedPrompt } from "./linked-text";
 
 // The prompt card of a node's settings (design AWQzm, iy0ZN; Edit's MZI3JqbHJr): the reference
 // images coming in and the + that adds one, the whole prompt coming in from a Prompt node, the
-// node's own words, and the chip that leads to that Prompt node. Generate and Edit share it.
+// node's own words, and the chip that leads to that Prompt node. Generate and Edit share it; Edit's
+// thumbnails are 56, and its words come from the Prompt node alone while one is linked.
 
 /** Where a reference added from here goes: to the left of the node, like the design's graphs. */
 const REFERENCE_GAP = 80;
@@ -32,6 +33,13 @@ export interface PromptCardProps {
   fieldLabel: string;
   /** The chip under the words coming in ("From the Prompt node"). */
   fromLabel: string;
+  /** The reference thumbnails' side. */
+  thumbSize?: ReferenceThumbSize;
+  /**
+   * The node's own words can be added to those coming in (Generate). Off, a linked prompt stands
+   * alone (Edit, MZI3JqbHJr): the field shows only while it still holds words typed before.
+   */
+  addToLinked?: boolean;
 }
 
 export function PromptCard({
@@ -42,6 +50,8 @@ export function PromptCard({
   placeholder,
   fieldLabel,
   fromLabel,
+  thumbSize = 32,
+  addToLinked = true,
 }: PromptCardProps) {
   const frame = useNodeFrame(nodeId);
   const analysis = useNodeAnalysis(nodeId);
@@ -50,6 +60,9 @@ export function PromptCard({
   const locked = useLocked(nodeId);
   const files = useRef<HTMLInputElement>(null);
   const upstream = analysis?.upstreamText ?? "";
+  // Cleared while linked, the field stays until it loses focus, so it doesn't vanish mid-edit.
+  const [editing, setEditing] = useState(false);
+  const field = !upstream || addToLinked || value !== "" || editing;
 
   const focusPromptNode = () => {
     const state = store.getState();
@@ -113,7 +126,7 @@ export function PromptCard({
       />
       {/* The references come in first, then the + that adds one (design iy0ZN). */}
       <div className="flex flex-wrap items-center gap-6">
-        <ReferenceOrder nodeId={nodeId} />
+        <ReferenceOrder nodeId={nodeId} size={thumbSize} />
         <IconButton
           variant="secondary"
           size={32}
@@ -131,17 +144,21 @@ export function PromptCard({
           <LinkedPrompt parts={analysis?.upstreamParts ?? []} own="" />
         </p>
       ) : null}
-      <textarea
-        value={value}
-        readOnly={readOnly || locked}
-        rows={2}
-        // Locked, nothing can be added, so nothing asks for it.
-        placeholder={locked ? undefined : placeholder}
-        aria-label={fieldLabel}
-        onChange={(event) => onChange(event.target.value)}
-        onKeyDown={(event) => event.stopPropagation()}
-        className="field-sizing-content max-h-200 min-h-20 w-full resize-none bg-transparent text-small leading-[1.5] text-text-primary outline-none placeholder:text-text-tertiary"
-      />
+      {field ? (
+        <textarea
+          value={value}
+          readOnly={readOnly || locked}
+          rows={2}
+          // Locked, nothing can be added, so nothing asks for it.
+          placeholder={locked ? undefined : placeholder}
+          aria-label={fieldLabel}
+          onChange={(event) => onChange(event.target.value)}
+          onFocus={() => setEditing(true)}
+          onBlur={() => setEditing(false)}
+          onKeyDown={(event) => event.stopPropagation()}
+          className="field-sizing-content max-h-200 min-h-20 w-full resize-none bg-transparent text-small leading-[1.5] text-text-primary outline-none placeholder:text-text-tertiary"
+        />
+      ) : null}
       {upstream ? (
         <MiniChip icon={Link} label={fromLabel} onClick={focusPromptNode} className="self-start" />
       ) : null}
