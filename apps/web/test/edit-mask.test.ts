@@ -211,6 +211,45 @@ describe("strokes", () => {
     ).toBeNull();
   });
 
+  test("matches a brute-force distance to the path, pixel for pixel, on random strokes", () => {
+    // Worked out independently of the rasteriser: each pixel's centre against every segment of the
+    // path, closest point clamped to the segment. ±1 allows for float rounding at the fade's edge.
+    const distance = (p: Point, a: Point, b: Point) => {
+      const dx = b.x - a.x;
+      const dy = b.y - a.y;
+      const length2 = dx * dx + dy * dy;
+      const t = length2 === 0 ? 0 : Math.min(1, Math.max(0, ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2));
+      return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+    };
+    const W = 120;
+    const H = 90;
+    const next = random(91);
+    for (let round = 0; round < 30; round++) {
+      const mode = round % 3 === 2 ? "erase" : "paint";
+      const tip = brush(1 + next() * 60, next() * 100, mode);
+      const points = Array.from({ length: 2 + Math.floor(next() * 5) }, () => ({
+        x: next() * (W + 40) - 20,
+        y: next() * (H + 40) - 20,
+      }));
+      const mask = createMask(W, H);
+      if (mode === "erase") mask.data.fill(255);
+      applyMaskOp(mask, { type: "stroke", brush: tip, points });
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          let d = Number.POSITIVE_INFINITY;
+          for (let i = 1; i < points.length; i++) {
+            d = Math.min(d, distance(centre(x, y), points[i - 1]!, points[i]!));
+          }
+          const coverage = Math.round(255 * brushCoverage(d, tip));
+          const expected = mode === "erase" ? 255 - coverage : coverage;
+          if (Math.abs(value(mask, x, y) - expected) > 1) {
+            throw new Error(`round ${round}: pixel ${x},${y} is ${value(mask, x, y)}, expected ${expected}`);
+          }
+        }
+      }
+    }
+  });
+
   test("a point that isn't a number is ignored rather than breaking the stroke", () => {
     const editor = new MaskEditor(60, 20);
     editor.beginStroke(brush(6, 100), centre(5, 10));
