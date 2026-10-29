@@ -11,6 +11,7 @@ export type {
   ModelKey,
   ModelManifest,
   PerImagePrice,
+  PixelRules,
   PixelSize,
   PriceModel,
   ProviderSettingsSchema,
@@ -72,7 +73,15 @@ export {
   resolveControl,
   visibleControls,
 } from "./manifest/resolve-control";
-export { nearestRatio, placeholderSize, ratioValue, resolveSize } from "./manifest/size";
+export {
+  editSizeFor,
+  fitPixels,
+  fitsPixelRules,
+  nearestRatio,
+  placeholderSize,
+  ratioValue,
+  resolveSize,
+} from "./manifest/size";
 export {
   offeredSpeeds,
   pricedOp,

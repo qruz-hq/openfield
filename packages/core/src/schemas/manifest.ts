@@ -87,12 +87,27 @@ export const extraSchemaSchema = z.strictObject({
   required: z.array(z.string()).optional(),
 });
 
+/** Exact pixel sizes a model takes besides its ratios, by its own rules (OpenAI's custom sizes). */
+const pixelRulesSchema = z.strictObject({
+  multipleOf: z.int().positive(),
+  maxEdge: z.int().positive(),
+  /** The long edge over the short one, at most. */
+  maxRatio: z.number().min(1),
+  minPixels: z.int().positive(),
+  maxPixels: z.int().positive(),
+});
+
 const sizeCapabilitySchema = z.discriminatedUnion("mode", [
   z
     .strictObject({
       mode: z.literal("aspect"),
       ratios: z.array(aspectRatioSchema).min(1),
       default: aspectRatioSchema,
+      /**
+       * Set when the model also takes exact sizes. A request in pixels then keeps them, snapped to
+       * the rules if it must be; without rules it becomes the nearest ratio.
+       */
+      pixels: pixelRulesSchema.optional(),
     })
     .refine((s) => s.ratios.includes(s.default), {
       message: "default must be one of ratios",
@@ -407,6 +422,7 @@ export type QualityLevel = z.infer<typeof qualityLevelSchema>;
 export type ExtraField = z.infer<typeof extraFieldSchema>;
 export type ExtraSchema = z.infer<typeof extraSchemaSchema>;
 export type SizeCapability = z.infer<typeof sizeCapabilitySchema>;
+export type PixelRules = z.infer<typeof pixelRulesSchema>;
 export type VideoCapability = z.infer<typeof videoCapabilitySchema>;
 export type Capabilities = z.infer<typeof capabilitiesSchema>;
 export type ModelManifest = z.infer<typeof modelManifestSchema>;

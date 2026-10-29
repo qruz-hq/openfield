@@ -23,7 +23,7 @@ import {
   type VideoResolution,
 } from "@openfield/core";
 import { resolveProviderSettings } from "./manifest/provider-settings";
-import { nearestRatio, placeholderSize, resolveSize } from "./manifest/size";
+import { fitPixels, nearestRatio, placeholderSize, resolveSize } from "./manifest/size";
 import { plannedVideoSize, type ResolvedVideo, resolveVideo, videoSize } from "./manifest/video";
 import { ProviderError } from "./types";
 
@@ -420,6 +420,12 @@ function resolveRequestSize(
       if (size.ratios.includes(spec.ratio) && !blocked) return { aspect: spec.ratio };
       onUnsupported();
       return { aspect: size.default };
+    }
+    // Pixels on a model that also takes exact sizes: kept, or snapped to its rules.
+    if (size.pixels) {
+      const fitted = fitPixels(spec.width, spec.height, size.pixels);
+      if (fitted.width !== spec.width || fitted.height !== spec.height) onUnsupported();
+      return fitted;
     }
     // Pixels on an aspect-only model: keep the shape, let the model pick the pixels.
     const nearest = nearestRatio(spec.width, spec.height, size.ratios);

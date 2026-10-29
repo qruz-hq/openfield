@@ -3,7 +3,8 @@ import type { Capabilities, ModelManifest } from "@openfield/core";
 import { GOOGLE_MODELS } from "../src/google/models";
 import { estimate } from "../src/manifest/estimate";
 import { isCoreControl, resolveControl, visibleControls } from "../src/manifest/resolve-control";
-import { nearestRatio, placeholderSize, resolveSize } from "../src/manifest/size";
+import { editSizeFor, fitPixels, nearestRatio, placeholderSize, resolveSize } from "../src/manifest/size";
+import { normalize } from "../src/normalize";
 
 const byId = (id: string) => GOOGLE_MODELS.find((m) => m.modelId === id)!;
 const pro = byId("gemini-3-pro-image");
@@ -43,6 +44,100 @@ describe("resolveSize", () => {
       width: 640,
       height: 480,
     });
+  });
+});
+
+describe("editSizeFor", () => {
+  const rules = { multipleOf: 16, maxEdge: 3840, maxRatio: 3, minPixels: 655_360, maxPixels: 8_294_400 };
+
+  test("an aspect-only model gets the base's nearest shape, at the tier that covers it", () => {
+    const tiers = pro.capabilities.resolution!.tiers;
+    expect(editSizeFor(pro, { width: 1920, height: 1080 })).toEqual({
+      size: { kind: "aspect", ratio: "16:9" },
+      resolution: tiers.includes("2K") ? "2K" : tiers.at(-1),
+    });
+    expect(editSizeFor(pro, { width: 1000, height: 1000 }).resolution).toBe("1K");
+    expect(editSizeFor(pro, { width: 9000, height: 9000 }).resolution).toBe(tiers.at(-1));
+  });
+
+  test("an exact-size model gets the base's own pixels, or the closest it takes", () => {
+    const exact = withCaps(pro, {
+      size: { ...pro.capabilities.size, pixels: rules } as Capabilities["size"],
+    });
+    expect(editSizeFor(exact, { width: 2048, height: 1152 }).size).toEqual({
+      kind: "pixels",
+      width: 2048,
+      height: 1152,
+    });
+    expect(fitPixels(1920, 1080, rules)).toEqual({ width: 1920, height: 1088 });
+    expect(fitPixels(4096, 4096, rules)).toEqual({ width: 2880, height: 2880 });
+  });
+
+  test("enum and free sizes pick the nearest listed shape, or the base's shape on the grid", () => {
+    const listed = withCaps(pro, {
+      size: {
+        mode: "enum",
+        sizes: [
+          { width: 1024, height: 1024 },
+          { width: 1536, height: 1024 },
+          { width: 2400, height: 1600 },
+          { width: 1024, height: 1536 },
+        ],
+        default: { width: 1024, height: 1024 },
+        allowAuto: false,
+      },
+    });
+    // Two sizes have the base's shape; the one nearer its pixel count wins.
+    expect(editSizeFor(listed, { width: 3000, height: 2000 }).size).toEqual({
+      kind: "pixels",
+      width: 2400,
+      height: 1600,
+    });
+    const free = withCaps(pro, {
+      size: {
+        mode: "free",
+        minEdge: 256,
+        maxEdge: 2048,
+        multipleOf: 64,
+        default: { width: 1024, height: 1024 },
+      },
+    });
+    expect(editSizeFor(free, { width: 4000, height: 3000 }).size).toEqual({
+      kind: "pixels",
+      width: 2048,
+      height: 1536,
+    });
+    expect(editSizeFor(free, { width: 100, height: 50 }).size).toEqual({
+      kind: "pixels",
+      width: 512,
+      height: 256,
+    });
+  });
+
+  test("normalize keeps a size the rules take, and snaps one they don't with a note", async () => {
+    const exact = withCaps(pro, {
+      size: { ...pro.capabilities.size, pixels: rules } as Capabilities["size"],
+    });
+    const run = (width: number, height: number) =>
+      normalize(
+        exact,
+        {
+          idempotencyKey: "01JABCDEFGHJKMNPQRSTVWXYZ0",
+          model: exact.key,
+          op: "generate",
+          prompt: "A field",
+          size: { kind: "pixels", width, height },
+          batch: 1,
+          source: "api",
+        },
+        { jobSetId: "01JABCDEFGHJKMNPQRSTVWXYZ1" },
+      );
+    const kept = await run(1920, 1088);
+    expect(kept.request.size).toEqual({ width: 1920, height: 1088 });
+    expect(kept.diagnostics).toEqual([]);
+    const snapped = await run(1920, 1080);
+    expect(snapped.request.size).toEqual({ width: 1920, height: 1088 });
+    expect(snapped.diagnostics.map((d) => [d.field, d.level])).toEqual([["size", "warning"]]);
   });
 });
 

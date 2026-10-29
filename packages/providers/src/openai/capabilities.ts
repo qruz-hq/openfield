@@ -141,7 +141,8 @@ export function openAiCapabilities(opts: OpenAiCapabilityOptions): Capabilities 
       weights: false,
       strengthMode: "none",
     },
-    size: { mode: "aspect", ratios: RATIOS, default: "1:1" },
+    // Exact sizes too, so an edit can ask for its base's own size and line up with its mask.
+    size: { mode: "aspect", ratios: RATIOS, default: "1:1", pixels: SIZE_RULES },
     resolution: { tiers: TIERS, default: "1K" },
     quality: { levels: opts.quality, default: "medium" },
     // n goes up to 10; the composer's cap is 4. OpenAI returns exactly n images or an error.

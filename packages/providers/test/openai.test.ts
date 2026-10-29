@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { type NormalizedRequest, newId } from "@openfield/core";
+import { type GenerateRequest, type NormalizedRequest, newId } from "@openfield/core";
 import { estimate, inputImageTokens } from "../src/manifest/estimate";
+import { editSizeFor, fitsPixelRules } from "../src/manifest/size";
+import { normalize } from "../src/normalize";
 import { createOpenAiProvider } from "../src/openai";
 import {
   MASK_MAX_BYTES,
@@ -104,6 +106,64 @@ describe("sizes", () => {
     expect(openAiSize("1:1", "4K")).toEqual({ width: 2880, height: 2880 });
     expect(openAiSize("16:9", "4K")).toEqual({ width: 3840, height: 2160 });
     expect(openAiSize("auto", "2K")).toBe("auto");
+  });
+
+  test("an edit asks for its base's own size when OpenAI takes it, else the nearest it does", () => {
+    const sized = (width: number, height: number) => editSizeFor(flare, { width, height });
+    expect(sized(1024, 1024)).toEqual({
+      size: { kind: "pixels", width: 1024, height: 1024 },
+      resolution: "1K",
+    });
+    expect(sized(3840, 2160)).toEqual({
+      size: { kind: "pixels", width: 3840, height: 2160 },
+      resolution: "4K",
+    });
+    // 1080 isn't a multiple of 16; a Gemini 4K square is over the pixel ceiling; 512² under the floor.
+    expect(sized(1920, 1080)).toEqual({
+      size: { kind: "pixels", width: 1920, height: 1088 },
+      resolution: "2K",
+    });
+    expect(sized(4096, 4096)).toEqual({
+      size: { kind: "pixels", width: 2880, height: 2880 },
+      resolution: "4K",
+    });
+    expect(sized(512, 512)).toEqual({ size: { kind: "pixels", width: 816, height: 816 }, resolution: "1K" });
+    // Wider than 3:1 can't keep its shape.
+    const wide = sized(4000, 1000).size;
+    expect(wide).toMatchObject({ kind: "pixels" });
+    if (wide.kind === "pixels") expect(wide.width / wide.height).toBe(3);
+    for (const [w, h] of [
+      [1920, 1080],
+      [1000, 700],
+      [333, 2000],
+      [7000, 5000],
+      [4096, 4096],
+      [4000, 1000],
+      [64, 64],
+    ]) {
+      const size = sized(w!, h!).size;
+      if (size.kind !== "pixels") throw new Error("Expected pixels");
+      expect(fitsPixelRules(size.width, size.height, SIZE_RULES), `${w}×${h}`).toBe(true);
+    }
+  });
+
+  test("a size in pixels is kept when OpenAI takes it, and refused when it doesn't", async () => {
+    const req = (width: number, height: number): GenerateRequest => ({
+      idempotencyKey: newId(),
+      model: flare.key,
+      op: "generate",
+      prompt: "A lighthouse",
+      size: { kind: "pixels", width, height },
+      batch: 1,
+      source: "api",
+    });
+    const kept = await normalize(flare, req(1920, 1088), { jobSetId: newId() });
+    expect(kept.request.size).toEqual({ width: 1920, height: 1088 });
+    expect(kept.diagnostics).toEqual([]);
+    expect(toImageFields(flare, kept.request).size).toBe("1920x1088");
+    // OpenAI's manifest stops a run it can't send as asked, rather than quietly changing it.
+    const refused = await normalize(flare, req(1920, 1080), { jobSetId: newId() });
+    expect(refused.error).toMatchObject({ code: "unsupported_param", field: "size" });
   });
 });
 

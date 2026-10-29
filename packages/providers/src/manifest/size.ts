@@ -1,9 +1,12 @@
 import {
   type AspectRatio,
   type Capabilities,
+  type ModelManifest,
+  type PixelRules,
   type PixelSize,
   RESOLUTION_TIER_PX,
   type ResolutionTier,
+  type SizeSpec,
 } from "@openfield/core";
 
 // Size resolution (§6.5 step 3). Pure, shared by normalize(), adapters and the composer.
@@ -76,4 +79,119 @@ export function placeholderSize(
   if ("width" in size) return { width: size.width, height: size.height };
   const resolvedTier = tier ?? caps.resolution?.default ?? "1K";
   return resolveSize(size.aspect, resolvedTier);
+}
+
+/** Whether a model with these rules takes exactly this size. */
+export function fitsPixelRules(width: number, height: number, rules: PixelRules): boolean {
+  const long = Math.max(width, height);
+  const short = Math.min(width, height);
+  return (
+    width % rules.multipleOf === 0 &&
+    height % rules.multipleOf === 0 &&
+    long <= rules.maxEdge &&
+    long / short <= rules.maxRatio &&
+    width * height >= rules.minPixels &&
+    width * height <= rules.maxPixels
+  );
+}
+
+/**
+ * The size a model with these rules takes that's closest to `width` × `height`: the size itself
+ * when it's allowed, else the same shape (no wider than the rules allow), grown or shrunk into the
+ * pixel limits and snapped to the grid, changing either edge as little as it can. Ties go to the
+ * larger size, so an edit is scaled down to fit back, not up.
+ */
+export function fitPixels(width: number, height: number, rules: PixelRules): PixelSize {
+  if (fitsPixelRules(width, height, rules)) return { width, height };
+  const m = rules.multipleOf;
+  const shape = Math.min(rules.maxRatio, Math.max(1 / rules.maxRatio, width / height));
+  const area = Math.min(rules.maxPixels, Math.max(rules.minPixels, width * height));
+  let targetW = Math.sqrt(area * shape);
+  let targetH = Math.sqrt(area / shape);
+  const over = Math.max(targetW, targetH) / rules.maxEdge;
+  if (over > 1) {
+    targetW /= over;
+    targetH /= over;
+  }
+  const cols = Math.round(targetW / m);
+  const rows = Math.round(targetH / m);
+  // The legal grid sizes nearby. A wider search only matters for odd rules.
+  for (let span = 2; span <= 64; span *= 2) {
+    let best: PixelSize | undefined;
+    let bestCost = Number.POSITIVE_INFINITY;
+    for (let dc = -span; dc <= span; dc++) {
+      for (let dr = -span; dr <= span; dr++) {
+        const w = (cols + dc) * m;
+        const h = (rows + dr) * m;
+        if (w <= 0 || h <= 0 || !fitsPixelRules(w, h, rules)) continue;
+        const cost = Math.max(Math.abs(Math.log(w / targetW)), Math.abs(Math.log(h / targetH)));
+        const tie = Math.abs(cost - bestCost) < 1e-12;
+        if ((cost < bestCost && !tie) || (tie && best && w * h > best.width * best.height)) {
+          best = { width: w, height: h };
+          bestCost = cost;
+        }
+      }
+    }
+    if (best) return best;
+  }
+  throw new RangeError(`No size fits these rules near ${width}×${height}`);
+}
+
+/**
+ * What an edit of an image this size asks a model for, so the result lines up with the base and
+ * its mask: the base's own pixels where the model takes exact sizes, else its nearest shape. The
+ * tier is the smallest that covers the base's long edge, so the edited area isn't scaled up.
+ */
+export function editSizeFor(
+  manifest: Pick<ModelManifest, "capabilities">,
+  base: PixelSize,
+): { size: SizeSpec; resolution?: ResolutionTier } {
+  const caps = manifest.capabilities;
+  const resolution =
+    caps.resolution && coveringTier(caps.resolution.tiers, Math.max(base.width, base.height));
+  const tier = resolution ? { resolution } : {};
+  const size = caps.size;
+  if (size.mode === "aspect") {
+    if (size.pixels)
+      return { size: { kind: "pixels", ...fitPixels(base.width, base.height, size.pixels) }, ...tier };
+    const blocked = caps.partial?.aspect?.unavailable ?? [];
+    const ratio = nearestRatio(
+      base.width,
+      base.height,
+      size.ratios.filter((r) => !blocked.includes(r)),
+    );
+    return { size: ratio ? { kind: "aspect", ratio } : { kind: "auto" }, ...tier };
+  }
+  if (size.mode === "enum") {
+    // The listed size nearest in shape, then in pixel count.
+    const target = Math.log(base.width / base.height);
+    const area = Math.log(base.width * base.height);
+    const scored = size.sizes.map((s) => ({
+      s,
+      shape: Math.abs(Math.log(s.width / s.height) - target),
+      area: Math.abs(Math.log(s.width * s.height) - area),
+    }));
+    scored.sort((a, b) => a.shape - b.shape || a.area - b.area);
+    const hit = scored[0]!.s;
+    return { size: { kind: "pixels", width: hit.width, height: hit.height }, ...tier };
+  }
+  // Free size: the base's shape, scaled into the edges the model takes and snapped to its grid.
+  const scale = Math.min(1, size.maxEdge / Math.max(base.width, base.height));
+  const grow = Math.max(1, size.minEdge / Math.min(base.width * scale, base.height * scale));
+  const snap = (edge: number) =>
+    Math.min(size.maxEdge, Math.max(size.minEdge, Math.round(edge / size.multipleOf) * size.multipleOf));
+  return {
+    size: {
+      kind: "pixels",
+      width: snap(base.width * scale * grow),
+      height: snap(base.height * scale * grow),
+    },
+    ...tier,
+  };
+}
+
+/** The smallest tier at least `edge` pixels long, else the largest. */
+function coveringTier(tiers: readonly ResolutionTier[], edge: number): ResolutionTier | undefined {
+  const sorted = [...tiers].sort((a, b) => RESOLUTION_TIER_PX[a] - RESOLUTION_TIER_PX[b]);
+  return sorted.find((t) => RESOLUTION_TIER_PX[t] >= edge) ?? sorted.at(-1);
 }
