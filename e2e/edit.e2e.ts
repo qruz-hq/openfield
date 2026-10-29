@@ -299,6 +299,35 @@ test("on Edit the view's own keys stay quiet, and Esc drops the tool before it a
 
 const xy = (p: { x: number; y: number }) => [p.x, p.y] as const;
 
+test("Add a key in the model picker asks before it leaves a painted edit", async ({ page }) => {
+  const token = await sessionToken(page.request);
+  // Only Google's key, so OpenAI's models are listed with Add a key (design 3eiWurzdNj).
+  await page.request.delete("/api/settings/keys/openai", { headers: { [SESSION_HEADER]: token } });
+  const id = await makeImage(page.request, token, unique("figs"));
+  await page.goto(`/assets?asset=${id}&tab=edit`);
+  await expect(toolbar(page)).toBeVisible();
+  await paintAndDescribe(page, "Dried figs");
+  const panel = panelOf(page);
+  const addKey = async () => {
+    await panel.getByRole("button", { name: "Model" }).click();
+    await page.getByRole("option", { name: /GPT Image 2\.5 Sunburst/ }).click();
+  };
+
+  // Keep editing keeps the mask and the words.
+  await addKey();
+  const leave = page.getByRole("alertdialog", { name: "Leave this edit?" });
+  await expect(leave).toBeVisible();
+  await leave.getByRole("button", { name: "Keep editing" }).click();
+  await expect(page).toHaveURL(new RegExp(`\\?asset=${id}&tab=edit$`));
+  expect(await tintAt(page, 0.45, 0.45)).toBe(255);
+  await expect(panel.getByRole("textbox", { name: "What to change" })).toHaveValue("Dried figs");
+
+  // Leave goes where the key goes.
+  await addKey();
+  await leave.getByRole("button", { name: "Leave", exact: true }).click();
+  await expect(page).toHaveURL(/\/settings\/api-keys$/);
+});
+
 const panelOf = (page: Page) => detail(page).getByRole("tabpanel", { name: "Edit" });
 const generateIn = (page: Page) => panelOf(page).getByRole("button", { name: /^Generate/ });
 

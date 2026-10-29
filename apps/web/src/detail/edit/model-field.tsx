@@ -23,7 +23,7 @@ import { speedFallbackHint, tightCost } from "../../lib/cost";
 import { focusSelected, Listbox } from "../../lib/listbox";
 import { companyName, logoFor } from "../../lib/provider";
 import { askedPrice, isPricePending } from "../../lib/remote-price";
-import { useEditSession } from "./session";
+import { leaveEdit, useEditSession } from "./session";
 
 // Image edit / Model field and Model picker (design klZQahlnqa, LEObnHCnKu): the Form / Field /
 // Select look, opening the composer's picker to the left of the panel. Models that take a mask come
@@ -100,7 +100,8 @@ function ModelPicker({
   const pick = (model: ModelListItem) => {
     setOpen(false);
     // A model whose company has no key leads to where the key goes, as in the composer (§3.4.1).
-    if (!model.ready) navigate("/settings/api-keys", { state: { focusKey: true } });
+    // That leaves the edit, so it asks first when a mask or a prompt would be lost.
+    if (!model.ready) leaveEdit(() => navigate("/settings/api-keys", { state: { focusKey: true } }));
     else useEditSession.getState().setModel(model.key);
   };
 
