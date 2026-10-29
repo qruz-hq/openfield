@@ -6,7 +6,7 @@ import { useCancelJobSet } from "../../api/hooks/job-sets";
 import { assetDetailQuery } from "../../api/hooks/library";
 import { errorMessage } from "../../api/raw";
 import { notify, notifyError } from "../../lib/notify";
-import { type ResultSlot, type RunOutcome, resultSlots, runOutcome } from "./plan";
+import { comparedResult, type ResultSlot, type RunOutcome, resultSlots, runOutcome } from "./plan";
 import { useEditSession } from "./session";
 
 // The Edit tab's runs, held by the detail view so a run carries on while the person looks at Info
@@ -39,6 +39,8 @@ export interface EditRunner {
    */
   shown: string | null | undefined;
   show: (assetId: string | null) => void;
+  /** The new image the media area compares with the original; null while it paints. */
+  compared: string | null;
   generate: (request: EditRequest) => void;
   retry: () => void;
   stop: () => void;
@@ -137,13 +139,15 @@ export function useEditRunner(): EditRunner {
     if (runId) cancel(runId, { onError: (error) => notifyError(errorMessage(error)) });
   }, [runId, cancel]);
 
+  const shown = picked === undefined ? done[0] : picked;
   return {
     slots,
     outcome,
     busy: starting || outcome.kind === "working",
     notKept,
-    shown: picked === undefined ? done[0] : picked,
+    shown,
     show: setPicked,
+    compared: comparedResult(outcome, shown),
     generate,
     retry,
     stop,

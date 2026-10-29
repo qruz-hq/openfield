@@ -147,6 +147,11 @@ export function TileStatusPill({ status, className, children, ...props }: TileSt
   );
 }
 
+/** Pill / Media label: "Before" and "After" over an image, with the tile status pills' look. */
+export function MediaLabelPill({ className, ...props }: ComponentProps<"span">) {
+  return <span className={cn(pillBase, "bg-status-fill px-10 py-5 text-overlay-fg", className)} {...props} />;
+}
+
 /** Pill / Tile status / Cancel: a button, red on hover. */
 export function TileCancelPill({ className, children, type = "button", ...props }: ComponentProps<"button">) {
   return (

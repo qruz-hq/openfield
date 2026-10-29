@@ -2,6 +2,16 @@ import type { AssetListItem } from "@openfield/core";
 import { type Ref, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { Media, type MediaHandle, type MediaInset } from "../media";
 import { BrushOptions, EditToolbar, ShapeOptions, ZoomControl } from "./chrome";
+import {
+  AfterLayer,
+  type CompareMode,
+  CompareSwitch,
+  DifferenceLayer,
+  DifferenceLegend,
+  EditMaskButton,
+  SPLIT_START,
+  SplitPins,
+} from "./compare";
 import { usePaintSurface, useSpaceHeld } from "./paint-surface";
 import { GeneratingLabel, ResultsStrip } from "./results";
 import type { EditRunner } from "./runner";
@@ -10,7 +20,8 @@ import { useTurnedPhoto } from "./turned";
 
 // An image in the detail view, on either tab. On Info it's Media as it always was. On Edit the same
 // Media (so zoom and the loaded pixels carry over) takes the mask's layer and the pointer, with the
-// toolbar, the tool's options and the zoom control floating over the media area.
+// toolbar, the tool's options and the zoom control floating over the media area. Once a run has
+// saved new images, the one picked is compared with the original instead (compare.tsx).
 
 /**
  * The Edit tab's room around the image (design f90S4YuAoH: a 680 tall image at 58 from the top of
@@ -41,9 +52,13 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
   const tool = useEditSession((s) => s.tool);
   const spaceHeld = useSpaceHeld(editing);
   const turned = useTurnedPhoto(item, editing);
+  // A new image picked in the results strip: Before and after, or Difference, in place of the mask.
+  const compared = editing ? runner.compared : null;
+  const [mode, setMode] = useState<CompareMode>("split");
+  const [split, setSplit] = useState(SPLIT_START);
   // While a run goes, and on a photo that can't take a mask, the mask stays as it is.
   const resting = runner.busy || turned;
-  const panning = editing && (tool === "pan" || spaceHeld || resting);
+  const panning = editing && !compared && (tool === "pan" || spaceHeld || resting);
   const paint = usePaintSurface({
     width: item.width,
     height: item.height,
@@ -79,12 +94,43 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
         onZoomChange={setZoom}
         inset={editing ? EDIT_INSET : undefined}
         panAnywhere={panning}
-        layer={editing && !turned ? paint.layer : null}
-        pinned={editing && runner.busy ? <GeneratingLabel /> : null}
+        layer={
+          compared ? (
+            mode === "split" ? (
+              <AfterLayer item={item} resultId={compared} split={split} zoom={zoom} />
+            ) : (
+              <DifferenceLayer item={item} resultId={compared} />
+            )
+          ) : editing && !turned ? (
+            paint.layer
+          ) : null
+        }
+        pinned={
+          compared ? (
+            mode === "split" ? (
+              (frame) => <SplitPins frame={frame} split={split} onSplitChange={setSplit} />
+            ) : (
+              <DifferenceLegend />
+            )
+          ) : editing && runner.busy ? (
+            <GeneratingLabel />
+          ) : null
+        }
       >
-        {editing && !resting ? paint.input : null}
+        {editing && !resting && !compared ? paint.input : null}
       </Media>
-      {editing ? (
+      {compared ? (
+        <>
+          <CompareSwitch mode={mode} onModeChange={setMode} />
+          <ResultsStrip originalId={item.id} slots={runner.slots} shown={runner.shown} onShow={runner.show} />
+          <ZoomControl
+            zoom={zoom}
+            onZoomIn={() => media.current?.zoomIn()}
+            onZoomOut={() => media.current?.zoomOut()}
+          />
+          <EditMaskButton onClick={() => runner.show(null)} />
+        </>
+      ) : editing ? (
         <>
           <ZoomControl
             zoom={zoom}

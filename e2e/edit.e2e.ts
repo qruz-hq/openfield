@@ -4,7 +4,8 @@ import { api, FAKE_KEY, makeImage, SESSION_HEADER, sessionToken } from "./suppor
 // The detail view's Edit tab (§4.6, design "Image edit"): paint a mask over an image with the
 // brush, eraser, lasso and rectangle, undo and redo it, and never lose it without asking. Then run
 // the edit on the fake models: its price on Generate, the monthly limit, the new image linked to
-// the image and its mask, a run that fails, and a phone photo that can't take a mask.
+// the image and its mask, comparing it with the original, a run that fails, and a phone photo that
+// can't take a mask.
 
 let runs = 0;
 const unique = (name: string) => `${name} ${Date.now().toString(36)}${runs++}`;
@@ -302,6 +303,81 @@ test("Generate runs the painted edit at its price, and the new image comes from 
     `/api/assets/${shown}`,
   );
   expect(detailOf.asset).toMatchObject({ parentAssetId: id, maskAssetId: saved.asset.id, op: "inpaint" });
+});
+
+/** The Difference view's mark at a point given as fractions of the image: 0 where nothing changed. */
+async function changeAt(page: Page, fx: number, fy: number): Promise<number> {
+  return page
+    .locator("[data-difference][data-ready]")
+    .evaluate(
+      (canvas: HTMLCanvasElement, [x, y]) =>
+        canvas
+          .getContext("2d")!
+          .getImageData(Math.floor(canvas.width * x!), Math.floor(canvas.height * y!), 1, 1).data[3]!,
+      [fx, fy],
+    );
+}
+
+test("the new image is compared with the original, before and after or by what changed", async ({ page }) => {
+  const { id } = await editable(page, unique("dried berries"));
+  const view = detail(page);
+  await paintAndDescribe(page, "Pale, dried berries");
+  await generateIn(page).click();
+  await expect(panelOf(page).getByText(/^Saved as 1 new image/)).toBeVisible({ timeout: 20_000 });
+
+  // Before and after takes the toolbar's place, with the handle where the design has it.
+  const compare = view.getByRole("radiogroup", { name: "Compare" });
+  await expect(compare.getByRole("radio", { name: "Before and after" })).toBeChecked();
+  await expect(toolbar(page)).toHaveCount(0);
+  await expect(view.getByText("Before", { exact: true })).toBeVisible();
+  await expect(view.getByText("After", { exact: true })).toBeVisible();
+  const handle = view.getByRole("slider", { name: "Drag to compare" });
+  await expect(handle).toHaveAttribute("aria-valuenow", "53");
+  const after = page.locator("[data-compare-after]");
+  await expect(after).toHaveAttribute("style", /inset\(0px 0px 0px 52\.94/);
+
+  // Dragged left it shows more of the new image; the image under it doesn't pan.
+  const image = (await after.boundingBox())!;
+  const knob = (await handle.boundingBox())!;
+  await drag(
+    page,
+    { x: knob.x + knob.width / 2, y: knob.y + knob.height / 2 },
+    { x: knob.x + knob.width / 2 - image.width * 0.2, y: knob.y + knob.height / 2 },
+  );
+  await expect(handle).toHaveAttribute("aria-valuenow", "33");
+  expect((await after.boundingBox())!.x).toBeCloseTo(image.x, 0);
+
+  // The arrows move it rather than stepping to another image, and the tools' keys rest.
+  await handle.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("Shift+ArrowRight");
+  await expect(handle).toHaveAttribute("aria-valuenow", "44");
+  await expect(page).toHaveURL(new RegExp(`\\?asset=${id}&tab=edit$`));
+  await page.keyboard.press("e");
+  await expect(toolbar(page)).toHaveCount(0);
+
+  // Difference: worked out in a worker, marking the painted box and nothing outside it.
+  await compare.getByRole("radio", { name: "Difference" }).click();
+  await expect(view.getByText("Changed", { exact: true })).toBeVisible();
+  await expect(view.getByText("Same as the original", { exact: true })).toBeVisible();
+  await expect.poll(() => changeAt(page, 0.45, 0.45)).toBeGreaterThan(0);
+  expect(await changeAt(page, 0.1, 0.9)).toBe(0);
+  expect(await changeAt(page, 0.9, 0.1)).toBe(0);
+  expect(page.workers().some((worker) => worker.url().includes("difference"))).toBe(true);
+
+  // Edit the mask goes back to painting the original, with the mask and the box still in hand.
+  await view.getByRole("button", { name: "Edit the mask" }).click();
+  await expect(tool(page, "Rectangle")).toHaveAttribute("aria-pressed", "true");
+  await expect(compare).toHaveCount(0);
+  const strip = view.getByRole("group", { name: "New images" });
+  await expect(strip.getByRole("button", { name: "Original" })).toHaveAttribute("aria-pressed", "true");
+  expect(await tintAt(page, 0.45, 0.45)).toBe(255);
+
+  // Picking the new image compares again, as it was left; picking the original paints again.
+  await strip.getByRole("button", { name: "New image 1" }).click();
+  await expect(compare.getByRole("radio", { name: "Difference" })).toBeChecked();
+  await strip.getByRole("button", { name: "Original" }).click();
+  await expect(toolbar(page)).toBeVisible();
 });
 
 test("a whole-image model says so, Keep the rest can be turned off, and the monthly limit asks first", async ({

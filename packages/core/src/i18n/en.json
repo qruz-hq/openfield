@@ -2190,6 +2190,17 @@
     "status": {
       "generating": "Generating"
     },
+    "compare": {
+      "label": "Compare",
+      "split": "Before and after",
+      "difference": "Difference",
+      "before": "Before",
+      "after": "After",
+      "handle": "Drag to compare",
+      "changed": "Changed",
+      "same": "Same as the original",
+      "editMask": "Edit the mask"
+    },
     "turned": {
       "title": "This photo can't be edited yet",
       "body": "Your phone saved it sideways, so what you paint wouldn't line up with the photo.",

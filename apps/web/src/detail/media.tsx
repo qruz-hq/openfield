@@ -59,11 +59,21 @@ interface MediaProps {
   panAnywhere?: boolean;
   /** Drawn over the image, inside its zoomed and panned box: the Edit tab's mask. */
   layer?: ReactNode;
-  /** Over the image where it sits at fit, unzoomed: labels on its corners (Generating). */
-  pinned?: ReactNode;
+  /**
+   * Unscaled, over the part of the image that's on screen as it's zoomed and panned: labels on its
+   * corners (Generating, Before and After). A function is told where the whole image is.
+   */
+  pinned?: ReactNode | ((frame: PinnedFrame) => ReactNode);
   /** Over the whole media area, above the image: what takes the Edit tab's strokes. */
   children?: ReactNode;
   ref?: Ref<MediaHandle>;
+}
+
+/** Where `pinned` sits: the part of the image on screen, and the whole image from its top left. */
+export interface PinnedFrame {
+  width: number;
+  height: number;
+  image: { left: number; top: number; width: number; height: number };
 }
 
 interface View {
@@ -75,7 +85,8 @@ interface View {
 
 const FIT: View = { zoom: null, x: 0, y: 0 };
 
-function useBoxSize(ref: RefObject<HTMLElement | null>) {
+/** An element's laid-out size, before any transform, as it changes. */
+export function useBoxSize(ref: RefObject<HTMLElement | null>) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   useLayoutEffect(() => {
     const el = ref.current;
@@ -205,18 +216,23 @@ export function Media({
     setDragging(false);
   };
 
-  // The original only once the preview runs out of pixels at this zoom.
-  const previewZoom = Math.min(1, DETAIL_PREVIEW_EDGE / Math.max(naturalW, naturalH));
-  const needOriginal = zoom * (window.devicePixelRatio || 1) > previewZoom + 0.001;
-
-  // The backdrop's rung first: it's already on its way, so the image paints in one frame.
-  const thumb = useAuthedImage(thumbAt(item, { h: BACKDROP_RUNG }));
-  const preview = useAuthedImage(thumbAt(item, "preview"));
-  const original = useAuthedImage(needOriginal ? item.fileUrl : null);
-  const layers = [thumb, preview, needOriginal ? original : null];
-
   const fitW = naturalW * fitZoom;
   const fitH = naturalH * fitZoom;
+
+  // The image on screen, and the part of it inside the box, which is where `pinned` goes.
+  const shownW = naturalW * zoom;
+  const shownH = naturalH * zoom;
+  const imageLeft = (boxW - shownW) / 2 + view.x;
+  const imageTop = (boxH - shownH) / 2 + view.y;
+  const visibleLeft = Math.max(0, imageLeft);
+  const visibleTop = Math.max(0, imageTop);
+  const visibleW = Math.min(boxW, imageLeft + shownW) - visibleLeft;
+  const visibleH = Math.min(boxH, imageTop + shownH) - visibleTop;
+  const frame: PinnedFrame = {
+    width: visibleW,
+    height: visibleH,
+    image: { left: imageLeft - visibleLeft, top: imageTop - visibleTop, width: shownW, height: shownH },
+  };
 
   return (
     <div
@@ -243,32 +259,50 @@ export function Media({
               transform: `translate(-50%, -50%) translate(${view.x}px, ${view.y}px) scale(${scale})`,
             }}
           >
-            {layers.map((layer, i) =>
-              layer?.status === "ready" ? (
-                <img
-                  // biome-ignore lint/suspicious/noArrayIndexKey: the layers are fixed and ordered.
-                  key={i}
-                  src={layer.src}
-                  alt=""
-                  draggable={false}
-                  decoding="async"
-                  className="absolute inset-0 size-full object-cover"
-                />
-              ) : null,
-            )}
+            <ImageLayers item={item} zoom={zoom} />
             {layer}
           </div>
         ) : null}
-        {pinned && fitZoom > 0 ? (
+        {pinned && fitZoom > 0 && visibleW > 0 && visibleH > 0 ? (
           <div
-            className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
-            style={{ width: fitW, height: fitH }}
+            className="pointer-events-none absolute"
+            style={{ left: visibleLeft, top: visibleTop, width: visibleW, height: visibleH }}
           >
-            {pinned}
+            {typeof pinned === "function" ? pinned(frame) : pinned}
           </div>
         ) : null}
       </div>
       {children}
     </div>
+  );
+}
+
+/** What ImageLayers needs of an image. */
+export type LayeredImage = Pick<AssetListItem, "id" | "thumbUrl" | "fileUrl" | "width" | "height">;
+
+/**
+ * An image's pixels at `zoom` (screen px per image px): the backdrop's rung first (it's already on
+ * its way, so the image paints in one frame), the 1440 preview over it, and the original only once
+ * the preview runs out of pixels at this zoom.
+ */
+export function ImageLayers({ item, zoom }: { item: LayeredImage; zoom: number }) {
+  const previewZoom = Math.min(1, DETAIL_PREVIEW_EDGE / Math.max(item.width, item.height));
+  const needOriginal = zoom * (window.devicePixelRatio || 1) > previewZoom + 0.001;
+  const thumb = useAuthedImage(thumbAt(item, { h: BACKDROP_RUNG }));
+  const preview = useAuthedImage(thumbAt(item, "preview"));
+  const original = useAuthedImage(needOriginal ? item.fileUrl : null);
+  const layers = [thumb, preview, needOriginal ? original : null];
+  return layers.map((layer, i) =>
+    layer?.status === "ready" ? (
+      <img
+        // biome-ignore lint/suspicious/noArrayIndexKey: the layers are fixed and ordered.
+        key={i}
+        src={layer.src}
+        alt=""
+        draggable={false}
+        decoding="async"
+        className="absolute inset-0 size-full object-cover"
+      />
+    ) : null,
   );
 }

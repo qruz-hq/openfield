@@ -177,14 +177,15 @@ function DetailContent({
   const runner = useEditRunner();
   const { reset: resetRunner } = runner;
 
-  // Generate gives way to Stop and back, and the form goes out of reach while a run goes. Focus on
-  // any of them would fall to the page, out of reach of the view's keys, so it comes back here.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when a run starts or ends.
+  // Generate gives way to Stop and back, the form goes out of reach while a run goes, and Edit the
+  // mask gives way to the toolbar. Focus on any of them would fall to the page, out of reach of the
+  // view's keys, so it comes back here.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when a run starts or ends, or the compare opens or closes.
   useEffect(() => {
     const active = document.activeElement;
     if (!active || active === document.body || active.closest("[inert]"))
       content.current?.focus({ preventScroll: true });
-  }, [runner.busy]);
+  }, [runner.busy, runner.compared]);
 
   // An edit lasts while its image is open: stepping to another image or closing the view drops it,
   // and lets its run go on in the feed. Both ask first (leaveEdit) when there's a mask or a prompt
@@ -502,9 +503,10 @@ function DetailContent({
     const edit = editing ? editKey(event) : null;
     if (edit) {
       const session = useEditSession.getState();
-      // While a run goes the mask and its tools rest, as the toolbar shows: their keys do nothing.
+      // While a run goes the mask and its tools rest, as the toolbar shows, and while a new image is
+      // compared there's no toolbar: their keys do nothing.
       if (edit.kind === "download") actions.onDownload();
-      else if (!runner.busy) {
+      else if (!runner.busy && !runner.compared) {
         if (edit.kind === "tool") session.setTool(edit.tool);
         else if (edit.kind === "undo") session.undo();
         else if (edit.kind === "redo") session.redo();
@@ -569,7 +571,7 @@ function DetailContent({
       // On the Edit tab Esc first drops what's being drawn, then puts the brush back in hand. Then it
       // leaves the expanded image, then the view (§4.5), asking first if an edit would be lost.
       onEscape={() => {
-        if (editing) {
+        if (editing && !runner.compared) {
           if (media.current?.cancel()) return true;
           const session = useEditSession.getState();
           if (session.tool !== DEFAULT_TOOL) {

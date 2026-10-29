@@ -2,7 +2,14 @@
 import { describe, expect, test } from "bun:test";
 import type { ModelListItem } from "@openfield/core";
 import { isTurnedOrientation, jpegOrientation } from "../src/detail/edit/exif";
-import { aspectText, pickEditModel, resultSlots, runOutcome, savedNote } from "../src/detail/edit/plan";
+import {
+  aspectText,
+  comparedResult,
+  pickEditModel,
+  resultSlots,
+  runOutcome,
+  savedNote,
+} from "../src/detail/edit/plan";
 import { useEditSession } from "../src/detail/edit/session";
 import { at, banana, flare, flareEdit, jobSet, lite, pro } from "./fixtures";
 
@@ -88,6 +95,16 @@ describe("what a run came to", () => {
     const stopped = withAssets(["canceled", "canceled"]);
     stopped.jobSet.status = "canceled";
     expect(runOutcome(stopped)).toEqual({ kind: "stopped" });
+  });
+
+  test("a new image picked is compared with the original; the original picked goes back to painting", () => {
+    const saved = { kind: "saved", saved: 2, failed: 0 } as const;
+    expect(comparedResult(saved, "01K6BQ80000000000000ASSET0")).toBe("01K6BQ80000000000000ASSET0");
+    expect(comparedResult(saved, null)).toBeNull();
+    expect(comparedResult(saved, undefined)).toBeNull();
+    // While it runs the mask stays in view, even with an image already in.
+    expect(comparedResult({ kind: "working", count: 2 }, "01K6BQ80000000000000ASSET0")).toBeNull();
+    expect(comparedResult({ kind: "failed" }, undefined)).toBeNull();
   });
 
   test("the saved note in the design's words", () => {

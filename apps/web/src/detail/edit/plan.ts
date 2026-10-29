@@ -100,6 +100,15 @@ export function runOutcome(run: JobSetWithJobs | undefined): RunOutcome {
     : { kind: "failed" };
 }
 
+/**
+ * The new image the media area compares with the original (design iz4IfLpdHl), or null while it
+ * paints: once a run has saved images and one of them is picked. Picking the original, or Edit the
+ * mask, goes back to painting.
+ */
+export function comparedResult(outcome: RunOutcome, shown: string | null | undefined): string | null {
+  return outcome.kind === "saved" && typeof shown === "string" ? shown : null;
+}
+
 export interface SavedNote {
   /** The check, or the alert in the danger colour when something didn't go as asked. */
   tone: "done" | "warning";
