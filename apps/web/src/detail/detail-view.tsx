@@ -82,6 +82,7 @@ import {
   closeDetailView,
   type DetailTab,
   findDetailTarget,
+  PANEL_GUTTER,
   registerDetailCloser,
   useDetail,
 } from "./use-detail";
@@ -123,8 +124,6 @@ export function DetailView(props: DetailViewProps) {
 }
 
 const UNDO_MS = 8000;
-/** The panel's column: 352 wide, 8 from the window's edge (design x7y6U). */
-const PANEL_GUTTER = 360;
 /** How far the blurred copy reaches past the media area (1320×1060 at −120,−80). */
 const BACKDROP_BLEED_X = 120;
 const BACKDROP_BLEED_Y = 80;

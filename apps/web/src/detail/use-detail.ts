@@ -7,6 +7,9 @@ import { create } from "zustand";
 // The Edit tab rides beside it as &tab=edit; Info is the default and leaves no trace.
 
 export const DETAIL_PARAM = "asset";
+
+/** The panel's column, right of the image's area: 352 wide, 8 from the window's edge (design x7y6U). */
+export const PANEL_GUTTER = 360;
 export const TAB_PARAM = "tab";
 
 export type DetailTab = "info" | "edit";
