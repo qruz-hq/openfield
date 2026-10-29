@@ -3,7 +3,7 @@ import { nodeTitle } from "@openfield/canvas/engine/describe";
 import { type EditParams, editModelKeyOf, editSpec, maskFitsBase } from "@openfield/canvas/nodes/edit/spec";
 import { resolveFor } from "@openfield/canvas/nodes/generate/settings";
 import { incomingEdges } from "@openfield/canvas/store/graph";
-import { assetFileUrl, t } from "@openfield/core";
+import { assetThumbUrl, t } from "@openfield/core";
 import { type ComposerValues, type EditBase, editOpFor } from "@openfield/providers/manifest";
 import { Button, cn, Divider } from "@openfield/ui";
 import { Brush } from "lucide-react";
@@ -20,7 +20,6 @@ import { useModelSwitch } from "../generate/controls";
 import { nodeRegistry } from "../registry";
 import { InspectorRun, LOCKED_DIM } from "../shell/inspector-parts";
 import { PromptCard } from "../shell/prompt-card";
-import { AssetImage } from "../shell/thumb";
 import { useNodeDisplay, useParsedParams, useRunNode, useSetParams } from "../shell/use-node";
 import { soleBase, usePaintBase } from "./base";
 
@@ -166,18 +165,18 @@ function MaskCard({ nodeId, params }: { nodeId: string; params: EditParams }) {
         ? t("canvas.nodes.edit.maskPainted")
         : t("canvas.nodes.edit.maskNone");
   const linkedImage = analysis?.maskImages.find((image) => image !== null) ?? null;
+  // A thumbnail of the mask is plenty for 40 px: the full file can be tens of megapixels.
+  const maskOf = (id: string | null) => (id ? assetThumbUrl(id, { h: 200 }) : null);
 
   return (
     <div className={cn("flex w-full items-center gap-12 rounded-14 bg-surface p-12", locked && LOCKED_DIM)}>
+      {/* The mask over the image either way (Mask input, AnNJFnZm94, keeps the painted thumb). */}
       {linked ? (
-        <div className="relative size-40 shrink-0 overflow-hidden rounded-8 bg-elevated-2">
-          {linkedImage ? <AssetImage assetId={linkedImage} height={40} className="absolute inset-0" /> : null}
-          <span className="pointer-events-none absolute inset-0 rounded-8 inset-ring inset-ring-border" />
-        </div>
+        <MaskThumb imageId={base} maskUrl={maskOf(linkedImage)} wired className="size-40" />
       ) : (
         <MaskThumb
           imageId={stale ? params.maskFor! : (base ?? params.maskFor ?? null)}
-          maskUrl={painted ? assetFileUrl(painted) : null}
+          maskUrl={maskOf(painted)}
           className="size-40"
         />
       )}
