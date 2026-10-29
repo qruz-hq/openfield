@@ -4,8 +4,9 @@
 //
 // The layer stores coverage, one byte per pixel: 0 keeps the pixel, 255 hands it to the model, and
 // values in between are a soft brush edge. Export flips that into Openfield's canonical mask,
-// alpha = 255 - coverage with RGB 0. One byte a pixel also keeps undo snapshots a quarter of an
-// RGBA copy: 8.3MB at 3840x2160, 16.8MB at 4096x4096.
+// alpha = 255 - coverage with RGB 0. One byte a pixel keeps the layer a quarter of an RGBA copy:
+// 8.3MB at 3840x2160, 16.8MB at 4096x4096. Undo holds one more copy, and for older snapshots only
+// what changed, packed (MaskEditor).
 
 /** Image pixels, continuous: pixel (i, j) covers [i, i + 1) × [j, j + 1), so its centre is i + 0.5. */
 export interface Point {
@@ -541,31 +542,204 @@ export function overlayRgba(
   return out;
 }
 
+/** Shorter runs stay in the stretch around them: a run record costs a header and a byte. */
+const MIN_RUN = 8;
+/** Shorter stretches of small steps go as plain bytes, which cost no more. */
+const MIN_STEPS = 8;
+const RUN = 0;
+const BYTES = 1;
+const STEPS = 2;
+
+/**
+ * Packs a layer for an undo snapshot. A mask is mostly long runs of 0 and 255, with soft brush
+ * edges between them that change by a few levels a pixel, so at 4K this is usually a few hundred KB
+ * to a few MB instead of 8-17MB. Each record is a varint header, count × 4 + kind, then: a run's one
+ * byte; that many plain bytes; or that many steps of -8..7 from the byte before, two to a byte.
+ * Null when packing wouldn't come out smaller than the layer, as for noise.
+ */
+export function packMask(data: Uint8Array): Uint8Array | null {
+  const n = data.length;
+  const { words: view } = words(data);
+  let out = new Uint8Array(Math.min(n, 4096));
+  let o = 0;
+  /** Makes room for `extra` more bytes, or says no once the packing would be the layer's size. */
+  const room = (extra: number) => {
+    if (o + extra >= n) return false;
+    if (o + extra > out.length) {
+      const grown = new Uint8Array(Math.min(n, Math.max(out.length * 2, o + extra)));
+      grown.set(out.subarray(0, o));
+      out = grown;
+    }
+    return true;
+  };
+  const header = (count: number, kind: number) => {
+    let value = count * 4 + kind;
+    while (value >= 128) {
+      out[o++] = (value % 128) | 128;
+      value = Math.floor(value / 128);
+    }
+    out[o++] = value;
+  };
+  const bytes = (from: number, to: number) => {
+    if (from === to) return true;
+    if (!room(to - from + 6)) return false;
+    header(to - from, BYTES);
+    out.set(data.subarray(from, to), o);
+    o += to - from;
+    return true;
+  };
+  /** What isn't a run: small steps where they go on long enough, plain bytes around them. */
+  const stretch = (from: number, to: number) => {
+    let plain = from;
+    let k = from;
+    while (k < to) {
+      let previous = k > 0 ? data[k - 1]! : 0;
+      let m = k;
+      while (m < to) {
+        const step = data[m]! - previous;
+        if (step < -8 || step > 7) break;
+        previous = data[m]!;
+        m++;
+      }
+      if (m - k < MIN_STEPS) {
+        k = m + 1;
+        continue;
+      }
+      if (!bytes(plain, k) || !room(((m - k + 1) >> 1) + 6)) return false;
+      header(m - k, STEPS);
+      for (let i = k; i < m; i += 2) {
+        const low = (data[i]! - (i > 0 ? data[i - 1]! : 0)) & 15;
+        const high = i + 1 < m ? (data[i + 1]! - data[i]!) & 15 : 0;
+        out[o++] = low | (high << 4);
+      }
+      plain = k = m;
+    }
+    return bytes(plain, to);
+  };
+
+  let start = 0;
+  let i = 0;
+  while (i < n) {
+    const value = data[i]!;
+    let j = i + 1;
+    while (j < n && data[j] === value) {
+      j++;
+      // Whole words at a time once aligned, through the long runs.
+      if ((j & 3) === 0) {
+        const word = Math.imul(value, 0x01010101) >>> 0;
+        while (j + 4 <= n && view[j >> 2] === word) j += 4;
+      }
+    }
+    if (j - i >= MIN_RUN) {
+      if (!stretch(start, i) || !room(7)) return null;
+      header(j - i, RUN);
+      out[o++] = value;
+      start = j;
+    }
+    i = j;
+  }
+  if (!stretch(start, n)) return null;
+  return out.slice(0, o);
+}
+
+/** Unpacks what packMask made into `into`, which must be the layer's size. */
+export function unpackMask(packed: Uint8Array, into: Uint8Array): void {
+  decode(packed, into, false);
+}
+
+/** Writes what packMask packed into `into`, or XORs it in, which is how an undo diff is taken back. */
+function decode(packed: Uint8Array, into: Uint8Array, xor: boolean): void {
+  let p = 0;
+  let o = 0;
+  // The byte before, which a stretch of steps starts from.
+  let last = 0;
+  while (p < packed.length) {
+    let header = 0;
+    let scale = 1;
+    let byte: number;
+    do {
+      byte = packed[p++]!;
+      header += (byte & 127) * scale;
+      scale *= 128;
+    } while (byte & 128);
+    const kind = header % 4;
+    const count = Math.floor(header / 4);
+    if (o + count > into.length) break;
+    if (kind === RUN) {
+      last = packed[p++]!;
+      if (!xor) into.fill(last, o, o + count);
+      else if (last !== 0) for (let i = o; i < o + count; i++) into[i]! ^= last;
+    } else if (kind === BYTES) {
+      if (!xor) into.set(packed.subarray(p, p + count), o);
+      else for (let k = 0; k < count; k++) into[o + k]! ^= packed[p + k]!;
+      p += count;
+      last = packed[p - 1]!;
+    } else {
+      for (let k = 0; k < count; k++) {
+        const nibble = k & 1 ? packed[p + (k >> 1)]! >> 4 : packed[p + (k >> 1)]! & 15;
+        last = (last + (nibble ^ 8) - 8) & 255;
+        if (xor) into[o + k]! ^= last;
+        else into[o + k] = last;
+      }
+      p += (count + 1) >> 1;
+    }
+    o += count;
+  }
+  if (o !== into.length) throw new RangeError("That snapshot is for a different size of mask");
+}
+
+/** `into` ^= `from`, a word at a time when both are aligned. */
+function xorBytes(into: Uint8Array, from: Uint8Array): void {
+  const a = words(into);
+  const b = words(from);
+  let i = 0;
+  if (a.words.length === b.words.length) {
+    for (let k = 0; k < a.words.length; k++) a.words[k]! ^= b.words[k]!;
+    i = a.tail;
+  }
+  for (; i < into.length; i++) into[i]! ^= from[i]!;
+}
+
 export interface MaskEditorOptions {
   /** Coverage to start from, width × height bytes: reopening an edit with the mask it used. */
   initial?: Uint8Array;
-  /** Steps between snapshots. Two snapshots back keep at least 50 steps undoable (§4.6). */
+  /** Steps between snapshots, at most. */
   checkpointSteps?: number;
   /**
    * Also snapshot once replaying the steps since the last one would visit this many pixels. The
    * default, 32M, replays in about 35-80ms on a recent laptop: four passes over 3840x2160.
    */
   checkpointPixels?: number;
-  /** Snapshots held at once, the oldest included; each is width × height bytes. At least 2. */
-  maxSnapshots?: number;
+  /**
+   * Bytes history may hold, snapshots and steps together (historyBytes). Past it the oldest
+   * snapshot goes, with the steps before the next one, though the newest two always stay. The
+   * default is three copies of the layer, 25MB at 3840x2160 and 50MB at 4096x4096, one of them
+   * the newest snapshot.
+   */
+  maxHistoryBytes?: number;
 }
 
 interface Step extends Applied {
   op: MaskOp;
   rect: Rect;
+  /** Roughly what the op holds in memory. */
+  bytes: number;
 }
 
 interface Snapshot {
   /** How many steps it already holds. */
   at: number;
-  /** null for an empty layer, which costs nothing to keep. */
+  /**
+   * The newest is a plain copy of the layer, or null while that's empty. Each older one is only
+   * what changed from it to the next, as XOR: zero wherever nothing did, so it packs (packMask)
+   * to a fraction of the layer.
+   */
   data: Uint8Array | null;
+  packed: boolean;
 }
+
+/** An op's points are small objects; this counts them generously. */
+const opBytes = (op: MaskOp) => 64 + ("points" in op ? op.points.length * 48 : 0);
 
 interface LiveStroke {
   brush: Brush;
@@ -584,17 +758,17 @@ interface LiveStroke {
  * The mask layer plus undo and redo (⌘Z / ⇧⌘Z, §4.6). Undo rebuilds from the newest snapshot at or
  * before the target and replays the steps after it; redo applies the one step again. Snapshots are
  * taken every `checkpointSteps` steps, or sooner when the steps since the last were heavy, so an undo
- * never replays much more than `checkpointPixels` of work. Memory stays bounded: once more than
- * `maxSnapshots` are held, the oldest goes along with the steps before the next one. With the
- * defaults the layer plus history holds at most 4 copies: 33MB at 3840x2160, 67MB at 4096x4096.
- * The cost is reach: light steps keep 50 or more undoable, but only a few full-width strokes of a
- * 512px brush fit.
+ * never replays much more than `checkpointPixels` of work. Only the newest snapshot is a full copy;
+ * older ones keep just what changed between them, packed, so at 4K each is usually well under 1MB
+ * and the `maxHistoryBytes` budget holds far more than the 50 steps §4.6 asks for, whatever the
+ * brush. Only steps that wipe out or bring back most of a layer that doesn't pack, like clearing
+ * noise, keep fewer.
  */
 export class MaskEditor {
   readonly mask: Mask;
   readonly #checkpointSteps: number;
   readonly #checkpointCost: number;
-  readonly #maxSnapshots: number;
+  readonly #maxBytes: number;
   /** Every step since the oldest snapshot; the ones from `#cursor` on are the redo stack. */
   #steps: Step[] = [];
   #cursor = 0;
@@ -615,10 +789,10 @@ export class MaskEditor {
       this.mask.data.set(initial);
     }
     this.#empty = isMaskEmpty(this.mask);
-    this.#snapshots = [{ at: 0, data: this.#empty ? null : this.mask.data.slice() }];
+    this.#snapshots = [{ at: 0, data: this.#empty ? null : this.mask.data.slice(), packed: false }];
     this.#checkpointSteps = Math.max(1, options.checkpointSteps ?? 25);
     this.#checkpointCost = Math.max(1, options.checkpointPixels ?? 32_000_000);
-    this.#maxSnapshots = Math.max(2, options.maxSnapshots ?? 3);
+    this.#maxBytes = Math.max(0, options.maxHistoryBytes ?? 3 * this.mask.data.length);
   }
 
   /** Goes up on every change, for useSyncExternalStore and friends. */
@@ -642,9 +816,12 @@ export class MaskEditor {
     return this.#steps.length - this.#cursor;
   }
 
-  /** Bytes held in snapshots, not counting the layer itself. */
+  /** Bytes history holds, snapshots plus a generous count for the steps, not counting the layer itself. */
   get historyBytes(): number {
-    return this.#snapshots.reduce((sum, snapshot) => sum + (snapshot.data?.byteLength ?? 0), 0);
+    let bytes = 0;
+    for (const snapshot of this.#snapshots) bytes += snapshot.data?.byteLength ?? 0;
+    for (const step of this.#steps) bytes += step.bytes;
+    return bytes;
   }
 
   get stroking(): boolean {
@@ -813,8 +990,15 @@ export class MaskEditor {
   #commit(op: MaskOp, rect: Rect, cost: number) {
     // A new step forgets the redo stack and any snapshot taken along it.
     this.#steps.length = this.#cursor;
-    this.#snapshots = this.#snapshots.filter((snapshot) => snapshot.at <= this.#cursor);
-    this.#steps.push({ op, rect, cost });
+    const snapshots = this.#snapshots;
+    while (snapshots.at(-1)!.at > this.#cursor) {
+      // The one before becomes the newest: its diff turns the full copy back into it.
+      const copy = snapshots.pop()!.data ?? new Uint8Array(this.mask.data.length);
+      xorInto(copy, snapshots.at(-1)!);
+      snapshots.at(-1)!.data = copy;
+      snapshots.at(-1)!.packed = false;
+    }
+    this.#steps.push({ op, rect, cost, bytes: opBytes(op) });
     this.#cursor++;
 
     const newest = this.#snapshots.at(-1)!;
@@ -822,25 +1006,52 @@ export class MaskEditor {
     for (let i = newest.at; i < this.#cursor; i++) since += this.#steps[i]!.cost;
     if (this.#cursor - newest.at < this.#checkpointSteps && since < this.#checkpointCost) return;
 
-    // A snapshot is one memcpy of the layer.
-    this.#snapshots.push({ at: this.#cursor, data: this.mask.data.slice() });
-    while (this.#snapshots.filter((snapshot) => snapshot.data).length > this.#maxSnapshots) {
-      this.#snapshots.shift();
+    this.#checkpoint();
+    // The newest two stay, so a step just before a snapshot can always be undone.
+    let held = this.historyBytes;
+    while (held > this.#maxBytes && this.#snapshots.length > 2) {
+      held -= this.#snapshots.shift()!.data?.byteLength ?? 0;
       const floor = this.#snapshots[0]!.at;
-      this.#steps.splice(0, floor);
+      for (const step of this.#steps.splice(0, floor)) held -= step.bytes;
       this.#cursor -= floor;
       for (const snapshot of this.#snapshots) snapshot.at -= floor;
     }
   }
 
-  /** The layer as it was after `target` steps: the newest snapshot at or before it, then replay. */
-  #restore(target: number) {
-    let snapshot = this.#snapshots[0]!;
-    for (const candidate of this.#snapshots) if (candidate.at <= target) snapshot = candidate;
-    if (snapshot.data) this.mask.data.set(snapshot.data);
-    else this.mask.data.fill(0);
-    for (let i = snapshot.at; i < target; i++) applyOp(this.mask, this.#steps[i]!.op);
+  /**
+   * Snapshots the layer as the newest copy. The copy before it becomes what changed since: XOR in
+   * place, then packed. One pass over the layer, a pack of mostly zeros and a memcpy.
+   */
+  #checkpoint() {
+    const layer = this.mask.data;
+    const previous = this.#snapshots.at(-1)!;
+    const copy = previous.data ?? new Uint8Array(layer.length);
+    // From an empty layer, what changed is the layer itself.
+    xorBytes(copy, layer);
+    const packed = packMask(copy);
+    previous.data = packed ?? copy.slice();
+    previous.packed = packed !== null;
+    copy.set(layer);
+    this.#snapshots.push({ at: this.#cursor, data: copy, packed: false });
   }
+
+  /** The layer as it was after `target` steps: back from the newest snapshot to one at or before it, then replay. */
+  #restore(target: number) {
+    const snapshots = this.#snapshots;
+    let k = snapshots.length - 1;
+    const newest = snapshots[k]!;
+    if (newest.data) this.mask.data.set(newest.data);
+    else this.mask.data.fill(0);
+    while (snapshots[k]!.at > target) xorInto(this.mask.data, snapshots[--k]!);
+    for (let i = snapshots[k]!.at; i < target; i++) applyOp(this.mask, this.#steps[i]!.op);
+  }
+}
+
+/** Takes an older snapshot's diff back: `layer` goes from the snapshot after it to it. */
+function xorInto(layer: Uint8Array, snapshot: Snapshot) {
+  if (!snapshot.data) return;
+  if (snapshot.packed) decode(snapshot.data, layer, true);
+  else xorBytes(layer, snapshot.data);
 }
 
 type Effect = MaskMode | "invert" | "clear";

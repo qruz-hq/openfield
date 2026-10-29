@@ -15,8 +15,10 @@ import {
   normalizeBrush,
   overlayRgba,
   type Point,
+  packMask,
   type Rect,
   strokeSpacing,
+  unpackMask,
   writeMaskRgba,
 } from "../src/detail/edit/mask";
 import { encodeMaskPng } from "../src/detail/edit/mask-png";
@@ -613,9 +615,9 @@ describe("history", () => {
 
   const histories = [
     {},
-    { checkpointSteps: 3, maxSnapshots: 2 },
-    { checkpointSteps: 4, checkpointPixels: 4000, maxSnapshots: 3 },
-    { checkpointSteps: 2, checkpointPixels: 1, maxSnapshots: 2 },
+    { checkpointSteps: 3, maxHistoryBytes: 2 * W * H },
+    { checkpointSteps: 4, checkpointPixels: 4000, maxHistoryBytes: 3 * W * H },
+    { checkpointSteps: 2, checkpointPixels: 1, maxHistoryBytes: 0 },
   ];
   // Several seeds, so passing never hangs on one lucky sequence.
   for (const [options, seed] of histories.flatMap((options) =>
@@ -660,11 +662,15 @@ describe("history", () => {
         expect(editor.undoSteps).toBeLessThanOrEqual(done.length);
         expect(editor.redoSteps).toBe(undone.length);
         expect(editor.isEmpty()).toBe(isMaskEmpty(editor.mask));
-        expect(editor.historyBytes).toBeLessThanOrEqual((options.maxSnapshots ?? 3) * W * H);
+        // Over budget only by what always stays: the newest copy, one diff, and the steps around it.
+        expect(editor.historyBytes).toBeLessThanOrEqual(
+          Math.max(options.maxHistoryBytes ?? 3 * W * H, 2 * W * H) +
+            2 * (options.checkpointSteps ?? 25) * 512,
+        );
         if (editor.undoSteps < done.length) forgot = true;
       }
       // Small budgets must have dropped old snapshots along the way, so that path is covered too.
-      if (options.maxSnapshots) expect(forgot).toBe(true);
+      if (options.maxHistoryBytes !== undefined) expect(forgot).toBe(true);
     });
   }
 
@@ -819,18 +825,77 @@ describe("history", () => {
   });
 });
 
+describe("snapshot packing", () => {
+  const roundTrip = (data: Uint8Array) => {
+    const packed = packMask(data);
+    if (!packed) return null;
+    const back: Uint8Array = new Uint8Array(data.length);
+    unpackMask(packed, back);
+    expect(back).toEqual(data);
+    return packed;
+  };
+
+  test("unpacks to the same bytes, runs, soft edges and jumps alike", () => {
+    const next = random(5);
+    for (let round = 0; round < 400; round++) {
+      const length = 1 + Math.floor(next() * 400);
+      // Every fourth buffer starts off a word boundary, so the word-wide scan has to fall back.
+      const offset = round % 4 === 3 ? 1 : 0;
+      const data = new Uint8Array(length + 4).subarray(offset, offset + length);
+      let v = Math.floor(next() * 256);
+      for (let i = 0; i < length; i++) {
+        const roll = next();
+        if (roll < 0.15) v = Math.floor(next() * 256);
+        else if (roll < 0.75) v = (v + Math.floor(next() * 17) + 248) % 256;
+        data[i] = v;
+        if (next() < 0.1)
+          for (let run = Math.floor(next() * 60); run > 0 && i + 1 < length; run--) data[++i] = v;
+      }
+      roundTrip(data);
+    }
+    // Small steps right from the first byte, which start from 0.
+    expect(roundTrip(Uint8Array.from({ length: 40 }, (_, i) => 5 + i))).not.toBeNull();
+  });
+
+  test("a painted layer packs to an eighth of it or less, and noise doesn't pack", () => {
+    const mask = createMask(2048, 2048);
+    applyMaskOp(mask, { type: "rect", mode: "paint", from: { x: 100, y: 200 }, to: { x: 900, y: 1500 } });
+    for (const hardness of [0, 50, 100]) {
+      applyMaskOp(mask, {
+        type: "stroke",
+        brush: brush(300, hardness),
+        points: [centre(200 + hardness * 10, 1900), centre(1800, 150 + hardness * 5)],
+      });
+    }
+    expect(roundTrip(mask.data)!.length).toBeLessThan(mask.data.length / 8);
+    expect(roundTrip(createMask(4096, 4096).data)!.length).toBeLessThan(16);
+
+    const noise = createMask(300, 200);
+    const next = random(9);
+    for (let i = 0; i < noise.data.length; i++) noise.data[i] = Math.floor(next() * 256);
+    expect(packMask(noise.data)).toBeNull();
+  });
+
+  test("won't unpack into a layer of another size", () => {
+    const packed = packMask(createMask(64, 64).data)!;
+    expect(() => unpackMask(packed, new Uint8Array(63 * 64))).toThrow(RangeError);
+    expect(() => unpackMask(packed, new Uint8Array(65 * 64))).toThrow(RangeError);
+  });
+});
+
 describe("4K", () => {
   for (const [width, height] of [
     [3840, 2160],
     [4096, 4096],
   ] as const) {
-    test(`${width}x${height}: the layer is one byte a pixel and history stays within three snapshots`, () => {
+    test(`${width}x${height}: the layer is one byte a pixel, and a tight budget forgets old steps but not the newest`, () => {
       const pixels = width * height;
       const mask = createMask(width, height);
       expect(mask.data.length).toBe(pixels);
       expect(mask.data.buffer.byteLength).toBeLessThan(pixels + 4);
 
-      const editor = new MaskEditor(width, height);
+      // Room for the newest copy and little else, so every snapshot past the second drops one.
+      const editor = new MaskEditor(width, height, { maxHistoryBytes: pixels });
       const ops: MaskOp[] = [];
       // Full-width sweeps with the biggest brush, 13M-17M pixel visits each.
       for (let i = 0; i < 12; i++) {
@@ -845,9 +910,8 @@ describe("4K", () => {
       }
       for (const op of ops) {
         editor.apply(op);
-        expect(editor.historyBytes).toBeLessThanOrEqual(3 * pixels);
+        expect(editor.historyBytes).toBeLessThanOrEqual(2 * pixels);
       }
-      // Heavy steps: older ones were forgotten to hold memory, and a couple still undo.
       expect(editor.undoSteps).toBeLessThan(ops.length);
       expect(editor.undoSteps).toBeGreaterThanOrEqual(2);
 
@@ -861,6 +925,35 @@ describe("4K", () => {
       expect(bounds).not.toBeNull();
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
       expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(height);
+    });
+
+    test(`${width}x${height}: 128px and 256px strokes keep at least 50 steps undoable (§4.6)`, () => {
+      for (const size of [128, 256]) {
+        const editor = new MaskEditor(width, height);
+        const next = random(size);
+        const seen: bigint[] = [];
+        // Long strokes all over, soft to hard, sampled every 6px the way a drag arrives.
+        for (let i = 0; i < 60; i++) {
+          const angle = next() * Math.PI * 2;
+          const dx = Math.cos(angle) * 2000;
+          const dy = Math.sin(angle) * 2000;
+          const x = next() * (width - Math.abs(dx)) + Math.max(0, -dx);
+          const y = next() * (height - Math.abs(dy)) + Math.max(0, -dy);
+          editor.beginStroke(brush(size, [0, 50, 100][i % 3]!), { x, y });
+          for (let k = 1; k < 333; k++) editor.strokeTo({ x: x + (dx * k) / 333, y: y + (dy * k) / 333 });
+          editor.endStroke({ x: x + dx, y: y + dy });
+          // A stroke that changed nothing isn't a step, so it isn't a state to undo to.
+          const state = BigInt(Bun.hash(editor.mask.data));
+          if (state !== seen.at(-1)) seen.push(state);
+        }
+        expect(editor.undoSteps).toBeGreaterThanOrEqual(50);
+        expect(editor.historyBytes).toBeLessThanOrEqual(3 * width * height);
+        // Each undo lands on the layer as it was before that stroke.
+        for (let back = 1; back <= 4; back++) {
+          editor.undo();
+          expect(BigInt(Bun.hash(editor.mask.data))).toBe(seen.at(-1 - back)!);
+        }
+      }
     });
   }
 });
