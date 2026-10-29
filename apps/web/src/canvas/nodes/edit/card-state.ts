@@ -4,7 +4,7 @@ import type { CardView } from "../generate/card-state";
 // Before it has made anything it shows the image coming in, which is no result of its own: no pill
 // says it's up to date, and Run waits at rest as on an empty Generate. Waiting for a mask, the card
 // is covered (Canvas / Node / Image edit / No mask): the image at full strength under the scrim,
-// Paint mask in the middle, and only the top bar on hover (the bottom one stays away, nodes.css).
+// Paint mask in the middle, and neither bar, even on hover or selected (nodes.css).
 
 export interface EditCardInput {
   /** It has images it made. */

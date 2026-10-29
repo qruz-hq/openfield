@@ -356,6 +356,11 @@
   width: 100%;
 }
 
+/* Run keeps the right end when there's no Edit mask beside it (a linked mask, a locked card). */
+.of-card-actions > :last-child {
+  margin-left: auto;
+}
+
 .of-card-center {
   position: absolute;
   inset: 0;
@@ -389,8 +394,9 @@
   padding: 0;
 }
 
-/* Covered, painting is the next step: the bottom bar's Run waits under it, so it stays away. */
-.of-card[data-covered] .of-card-bottom {
+/* Covered, painting is the next step: neither bar shows over the scrim (No mask hides Top and
+   Bottom), selected or not. The node menu is still a right-click away. */
+.of-card[data-covered] :is(.of-card-top, .of-card-bottom) {
   display: none;
 }
 
