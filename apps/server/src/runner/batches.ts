@@ -548,16 +548,20 @@ export class BatchWatcher {
         const staged = image && sink.take(image.assetId);
         if (image && staged) {
           const speedUsed = item.result.speedUsed ?? "batch";
+          // As in the runner: a masked edit keeps the original outside its mask, and if a cancel
+          // wins meanwhile, succeed() discards the composite.
+          const kept = await outcomes.composite(call, staged);
           outcomes.succeed({
             set,
             job,
             call,
             image,
-            staged,
+            staged: kept.staged,
             cost: outcomes.cost(manifest, call, speedUsed, item.result),
             speedUsed,
             latencyMs,
             usage: item.result.usage,
+            edit: kept.edit,
           });
           continue;
         }

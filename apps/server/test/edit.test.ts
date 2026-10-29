@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import {
   assetDetailResponseSchema,
   type CostEstimate,
@@ -8,9 +9,10 @@ import {
   type UploadResponse,
   uploadResponseSchema,
 } from "@openfield/core";
-import { assetsForJobSets, getJobSet } from "@openfield/db";
+import { assetsForJobSets, getAsset, getJobSet, jobsOf } from "@openfield/db";
+import { createFakeFetch } from "@openfield/providers/server";
 import sharp from "sharp";
-import { completed, saveKey, startTestServer, type TestServer } from "./helpers";
+import { completed, saveKey, startTestServer, type TestServer, waitFor } from "./helpers";
 
 // POST /api/edit (§0.6): every op but generate, in the generate body. An edit's base and mask are
 // checked before the job set exists, an edit that leaves its size open asks for the base's, and
@@ -25,8 +27,8 @@ afterEach(async () => {
 const OPENAI = "openai:gpt-image-2";
 const NANO_BANANA = "google:gemini-3.1-flash-image";
 
-async function ready(): Promise<TestServer> {
-  const s = await startTestServer();
+async function ready(opts: Parameters<typeof startTestServer>[0] = {}): Promise<TestServer> {
+  const s = await startTestServer(opts);
   await saveKey(s);
   const res = await s.json("/api/settings/keys/openai", {
     method: "PUT",
@@ -49,6 +51,21 @@ const photo = async (width: number, height: number, format: "png" | "jpeg" = "pn
       [format]()
       .toBuffer(),
   );
+
+/** Coarse noise, so a pixel copied from the wrong place never matches the base by luck. */
+async function texture(width: number, height: number): Promise<Uint8Array> {
+  const rgb = new Uint8Array(width * height * 3);
+  let s = width ^ height;
+  for (let i = 0; i < rgb.length; i++) {
+    s = (Math.imul(s, 1_664_525) + 1_013_904_223) >>> 0;
+    rgb[i] = (s >>> 28) * 17;
+  }
+  return new Uint8Array(
+    await sharp(rgb, { raw: { width, height, channels: 3 } })
+      .png()
+      .toBuffer(),
+  );
+}
 
 /** A saved mask for `baseId`, transparent in its top-left quarter. */
 async function mask(baseId: string, width: number, height: number): Promise<string> {
@@ -288,5 +305,163 @@ describe("the edited image's detail", () => {
     expect(later.mask?.id).toBe(maskId);
     expect(later.mask?.deletedAt).not.toBeNull();
     expect(later.mask?.fileUrl).toBe(`/files/asset/${maskId}?trash=1`);
+  });
+});
+
+describe("a masked edit's result", () => {
+  /**
+   * The base's and the result's decoded pixels, compared around the mask's top-left quarter:
+   * nothing farther than `reach` (expand plus feather) takes any of the edit.
+   */
+  async function expectKept(baseId: string, resultId: string, reach = 12) {
+    const file = (id: string) => server!.services.ingest.fileOf(getAsset(server!.services.db, id)!.path);
+    const decode = async (id: string) => {
+      const { data, info } = await sharp(file(id)).raw().toBuffer({ resolveWithObject: true });
+      return { data, ...info };
+    };
+    const base = await decode(baseId);
+    const made = await decode(resultId);
+    expect([made.width, made.height, made.channels]).toEqual([base.width, base.height, base.channels]);
+    const hole = { w: Math.ceil(base.width / 2), h: Math.ceil(base.height / 2) };
+    let outside = 0;
+    let inside = 0;
+    for (let y = 0; y < base.height; y++)
+      for (let x = 0; x < base.width; x++) {
+        const dx = Math.max(0, x - (hole.w - 1));
+        const dy = Math.max(0, y - (hole.h - 1));
+        const i = (y * base.width + x) * base.channels;
+        const same = base.data
+          .subarray(i, i + base.channels)
+          .equals(made.data.subarray(i, i + base.channels));
+        if (Math.hypot(dx, dy) > reach && !same) outside++;
+        if (dx === 0 && dy === 0 && !same) inside++;
+      }
+    expect(outside).toBe(0);
+    expect(inside).toBeGreaterThan(hole.w * hole.h * 0.9);
+  }
+
+  test("keeps the original outside the mask, at the base's size", async () => {
+    server = await ready();
+    const base = await upload(await texture(1920, 1080));
+    const maskId = await mask(base.id, 1920, 1080);
+    const run = jobSetAcceptedSchema.parse(
+      (await edit({ base: { assetId: base.id, role: "base" }, mask: { assetId: maskId } })).body,
+    );
+    expect((await completed(server, run.jobSet.id)).status).toBe("succeeded");
+    const [made] = assetsForJobSets(server.services.db, [run.jobSet.id]);
+    // The fake draws OpenAI's 1920 × 1088 at most 768 wide; the composite scales it to the base.
+    expect(made).toMatchObject({
+      kind: "edited",
+      width: 1920,
+      height: 1080,
+      mime: "image/png",
+      parentAssetId: base.id,
+      maskAssetId: maskId,
+      approximate: false,
+      approximateReason: null,
+      opParams: {
+        edit: {
+          composite: { applied: true, expandPx: 4, featherPx: 8, resizedFrom: { width: 768, height: 435 } },
+        },
+      },
+    });
+    await expectKept(base.id, made!.id);
+    // Usage records what the company made, not the composite.
+    const usage = server.services.db.$client.query("SELECT size FROM usage_log").get() as { size: string };
+    expect(usage.size).toBe("768x435");
+  });
+
+  test("on a model without a mask input, edits the whole image and still keeps the rest", async () => {
+    server = await ready();
+    const base = await upload(await texture(640, 480));
+    const maskId = await mask(base.id, 640, 480);
+    const run = jobSetAcceptedSchema.parse(
+      (
+        await edit({
+          model: NANO_BANANA,
+          op: "edit",
+          base: { assetId: base.id, role: "base" },
+          mask: { assetId: maskId, featherPx: 0, expandPx: 12 },
+        })
+      ).body,
+    );
+    await completed(server, run.jobSet.id);
+    const [made] = assetsForJobSets(server.services.db, [run.jobSet.id]);
+    expect(made).toMatchObject({
+      kind: "edited",
+      op: "edit",
+      width: 640,
+      height: 480,
+      approximate: true,
+      approximateReason: "whole_image",
+      opParams: {
+        edit: { composite: { applied: true, expandPx: 12, featherPx: 0 }, fallback: "whole_image" },
+      },
+    });
+    await expectKept(base.id, made!.id);
+  });
+
+  test("keeps the original outside the mask at Batch speed too", async () => {
+    const clock = { now: Date.now() };
+    server = await ready({
+      fetch: createFakeFetch({ delayMs: 0, now: () => clock.now }),
+      queue: { batchPollMs: 15 },
+    });
+    await server.json("/api/providers/google/settings", {
+      method: "PATCH",
+      body: { values: { speed: "batch" } },
+    });
+    const base = await upload(await texture(640, 480));
+    const maskId = await mask(base.id, 640, 480);
+    const run = jobSetAcceptedSchema.parse(
+      (
+        await edit({
+          model: NANO_BANANA,
+          op: "edit",
+          base: { assetId: base.id, role: "base" },
+          mask: { assetId: maskId },
+        })
+      ).body,
+    );
+    expect(run.jobSet.speed).toBe("batch");
+    await waitFor(() => jobsOf(server!.services.db, run.jobSet.id).every((j) => j.status === "queued"));
+    clock.now += 2_000;
+    await waitFor(() => jobsOf(server!.services.db, run.jobSet.id).every((j) => j.status === "running"));
+    clock.now += 10_000;
+    expect((await completed(server, run.jobSet.id)).status).toBe("succeeded");
+    const [made] = assetsForJobSets(server.services.db, [run.jobSet.id]);
+    expect(made).toMatchObject({
+      width: 640,
+      height: 480,
+      approximate: true,
+      opParams: { edit: { composite: { applied: true }, fallback: "whole_image" } },
+    });
+    await expectKept(base.id, made!.id);
+  });
+
+  test("a cancel that wins while the composite is made leaves no file behind", async () => {
+    server = await ready();
+    const base = await upload(await texture(640, 480));
+    const maskId = await mask(base.id, 640, 480);
+    const outcomes = server.services.runner.outcomes;
+    const composite = outcomes.composite.bind(outcomes);
+    const files: string[] = [];
+    outcomes.composite = async (call, staged) => {
+      const kept = await composite(call, staged);
+      files.push(
+        server!.services.ingest.fileOf(staged.path),
+        server!.services.ingest.fileOf(kept.staged.path),
+      );
+      // The person cancels just as the composite is done.
+      await server!.request(`/api/job-sets/${call.jobSetId}/cancel`, { method: "POST" });
+      return kept;
+    };
+    const run = jobSetAcceptedSchema.parse(
+      (await edit({ base: { assetId: base.id, role: "base" }, mask: { assetId: maskId } })).body,
+    );
+    expect((await completed(server, run.jobSet.id)).status).toBe("canceled");
+    expect(assetsForJobSets(server.services.db, [run.jobSet.id])).toEqual([]);
+    expect(files).toHaveLength(2);
+    expect(files.filter((f) => existsSync(f))).toEqual([]);
   });
 });

@@ -226,6 +226,11 @@ export class Ingest {
     return absolutePath(this.paths, relative);
   }
 
+  /** A fresh path in tmp/ for a file needed only for a moment. The caller removes it. */
+  tmpPath(extension: string): string {
+    return join(this.paths.tmp, `${newId()}.${extension}`);
+  }
+
   /** A stored image's bytes, for a reference, an edit base or a mask (§0.9: ids, never paths). */
   async read(assetId: string): Promise<StoredAsset> {
     const row = getAsset(this.db, assetId);

@@ -86,6 +86,28 @@ export const assetSchema = assetListItemSchema.extend({
 });
 
 /**
+ * What a masked edit records in its result's opParams.edit (§0.9). `composite` says whether the
+ * original was put back outside the mask and with which settings. `fallback` marks a model that
+ * can't take a mask, so it changed the whole image and only the composite kept the rest.
+ */
+export const editOpParamsSchema = z.object({
+  composite: z.object({
+    applied: z.boolean(),
+    expandPx: z.int().nonnegative(),
+    featherPx: z.int().nonnegative(),
+    /** The size the model sent back, when it wasn't the base's and was scaled to fit. */
+    resizedFrom: z.object({ width: z.int().positive(), height: z.int().positive() }).optional(),
+    /**
+     * Why it wasn't applied: the request turned it off, the image library can't load on this
+     * computer, the base is a photo saved on its side, or it failed. The result is then the
+     * model's own, every pixel of it.
+     */
+    reason: z.enum(["off", "unavailable", "turned", "failed"]).optional(),
+  }),
+  fallback: z.literal("whole_image").optional(),
+});
+
+/**
  * One folder, flat. Folders nest through parentId with no depth limit (§0.7); the client builds
  * the tree (buildFolderTree) and derives subfolder counts from the same list.
  */
@@ -312,6 +334,7 @@ export const folderDeleteResponseSchema = z.object({
 
 export type AssetListItem = z.infer<typeof assetListItemSchema>;
 export type Asset = z.infer<typeof assetSchema>;
+export type EditOpParams = z.infer<typeof editOpParamsSchema>;
 export type Folder = z.infer<typeof folderSchema>;
 export type AssetsListQuery = z.infer<typeof assetsListQuerySchema>;
 export type AssetsListResponse = z.infer<typeof assetsListResponseSchema>;
