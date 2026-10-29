@@ -870,7 +870,8 @@ describe("Edit nodes", () => {
     const mine = await upload(b, await texture(640, 480));
     expect(mine).not.toBe(made.base);
     const result = resultOf(await imported(b, file));
-    expect(result).toMatchObject({ imported: 5, reused: 1, missing: 0 });
+    // Images as the new folder lists them: the two masks come along, but aren't counted.
+    expect(result).toMatchObject({ imported: 3, reused: 1, missing: 0 });
 
     const doc = savedDoc(b, result.canvasId);
     const edits = doc.nodes.filter((n) => n.type === "image.edit");
@@ -895,6 +896,28 @@ describe("Edit nodes", () => {
     ).toEqual([]);
     // Nothing turned stale: the painted mask still fits the image it was painted on.
     expect((await upToDate(b, result.canvasId)).sort()).toEqual(edits.map((n) => n.id).sort());
+  });
+
+  test("a photo back from the Trash under a new id brings its painted mask with it", async () => {
+    const a = await start();
+    const made = await editedCanvas(a);
+    const file = await exportZip(a, made.canvas.id);
+    // The photo sits in the Trash, so the import gives it a new id; the mask here is still live.
+    a.services.library.trash([made.base]);
+    const result = resultOf(await imported(a, file));
+    const doc = savedDoc(a, result.canvasId);
+    const edit = doc.nodes.find((n) => n.type === "image.edit" && n.params.maskAssetId)!;
+    const photo = doc.nodes.find((n) => n.type === "image.upload")!.params.assetIds as string[];
+    expect(edit.params.maskFor).not.toBe(made.base);
+    expect(photo).toContain(edit.params.maskFor as string);
+    // A mask of its own, painted on the photo the canvas has now, so the editor and a run agree.
+    expect(edit.params.maskAssetId).not.toBe(made.painted);
+    expect(getAsset(a.services.db, edit.params.maskAssetId as string)).toMatchObject({
+      kind: "mask",
+      parentAssetId: edit.params.maskFor,
+    });
+    const plan = await a.services.canvasRuns.runScope(result.canvasId, { scope: "all", dryRun: true });
+    expect(plan.blocked).toEqual([]);
   });
 
   test("a folder sends the masks with the edits that need them, and none the library has", async () => {

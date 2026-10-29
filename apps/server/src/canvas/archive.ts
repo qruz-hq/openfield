@@ -129,15 +129,26 @@ export function planExport(
     files.map((f) => ({ name: f.name, size: f.size, modifiedAt: at })),
     opts.zip,
   );
+  // Counted as images, as the person sees them: masks travel along but aren't images to show.
+  const masks = paintedMasks(doc);
   return {
     canvasId: row.id,
     name: row.name,
     fileName: archiveFileName(row.name, t("canvas.names.untitled")),
-    assets: assets.length,
-    missing: missing.length,
+    assets: assets.filter((a) => a.kind !== "mask").length,
+    missing: missing.filter((id) => !masks.has(id)).length,
     files,
     zip,
   };
+}
+
+/** The masks painted in a canvas's Edit nodes. */
+export function paintedMasks(doc: CanvasDocument): Set<string> {
+  return new Set(
+    doc.nodes.flatMap((node) =>
+      typeof node.params.maskAssetId === "string" ? [node.params.maskAssetId] : [],
+    ),
+  );
 }
 
 /** The archive's bytes. A file that changed size since it was planned stops the stream. */

@@ -33,6 +33,7 @@ import {
   type Executor,
   findLiveAssetBySha256,
   getAsset,
+  getAssets,
   getCanvas,
   insertAsset,
   insertAssetEdges,
@@ -48,6 +49,7 @@ import { ApiFailure } from "../http/errors";
 import type { Logger } from "../log/logger";
 import { toAssetListItem } from "../mappers/asset";
 import type { SettingsService } from "../services/settings";
+import { paintedMasks } from "./archive";
 import { type ArchiveSource, CANVAS_FILE, MANIFEST_FILE, notArchive } from "./archive-source";
 import type { CanvasService } from "./canvases";
 import { readDocument } from "./documents";
@@ -138,7 +140,7 @@ export async function importArchive(
   const consider = (id: string, onCanvas: boolean) => {
     const entry = entries.get(id);
     const here = getAsset(db, id);
-    if (here && (!entry || here.sha256 === entry.sha256)) {
+    if (here && (!entry || here.sha256 === entry.sha256) && !reparented(here, entry)) {
       reused.add(id);
       return;
     }
@@ -160,8 +162,18 @@ export async function importArchive(
     const taken = getAsset(db, id, { includeDeleted: true });
     wanted.push({ entry, id: taken ? newId() : id });
   };
+  /**
+   * A mask here fits the image it was painted on. When that image comes in under another id (its
+   * old row sits in the Trash), the mask comes in again with it, so the two still match.
+   */
+  const goesTo = (id: string) => moved.get(id) ?? wanted.find((w) => w.entry.id === id)?.id ?? id;
+  const reparented = (here: AssetRow, entry: CanvasArchiveAsset | undefined) =>
+    here.kind === "mask" && !!entry?.parentAssetId && here.parentAssetId !== goesTo(entry.parentAssetId);
+  const maskish = (id: string) => (entries.get(id)?.kind ?? getAsset(db, id)?.kind) === "mask";
   const shown = documentAssetRefs(original).shown;
-  for (const id of shown) consider(id, true);
+  // Images first, so a mask knows where the image it was painted on went.
+  for (const id of shown.filter((id) => !maskish(id))) consider(id, true);
+  for (const id of shown.filter(maskish)) consider(id, true);
   // The masks new edits were made with come along, so each keeps the one its details show. An
   // edit already here has its own.
   const masks = archivedMasks(
@@ -268,14 +280,21 @@ export async function importArchive(
   }
   committed.created.settle();
   announce(deps, committed.folderId, committed.rows);
+  // Counted as images, as the new folder lists them: masks come along but aren't images to show.
+  const painted = paintedMasks(original);
+  const maskRows = new Set(
+    getAssets(db, [...reused])
+      .filter((a) => a.kind === "mask")
+      .map((a) => a.id),
+  );
   return {
     kind: "import",
     canvasId: committed.created.detail.id,
     name: committed.created.detail.name,
     folderId: committed.folderId,
-    imported: staged.length,
-    reused: reused.size,
-    missing: missing.size,
+    imported: staged.filter((s) => !isMask(s)).length,
+    reused: [...reused].filter((id) => !maskRows.has(id)).length,
+    missing: [...missing].filter((id) => !painted.has(id) && entries.get(id)?.kind !== "mask").length,
   };
 }
 
