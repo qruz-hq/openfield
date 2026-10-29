@@ -163,6 +163,7 @@ function OptionSlider({
         max={max}
         step={1}
         thumbLabel={label}
+        thumbValueText={shown}
         onValueChange={([next]) => next !== undefined && onChange(next)}
         className="w-96"
       />

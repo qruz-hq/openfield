@@ -274,6 +274,7 @@ test("on Edit the view's own keys stay quiet, and Esc drops the tool before it a
   await view.getByRole("tab", { name: "Edit" }).click();
   await spacePans();
   const size = view.getByRole("slider", { name: "Size" });
+  await expect(size).toHaveAttribute("aria-valuetext", /^\d+ px$/);
   const track = (await size.boundingBox())!;
   await drag(
     page,
