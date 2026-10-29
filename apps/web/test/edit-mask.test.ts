@@ -956,7 +956,8 @@ describe("4K", () => {
           expect(BigInt(Bun.hash(editor.mask.data))).toBe(seen.at(-1 - back)!);
         }
       }
-    });
+      // 120 long 4K strokes take about 2s here and over 7s on a CI runner.
+    }, 30_000);
   }
 });
 
