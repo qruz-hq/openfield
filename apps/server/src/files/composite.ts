@@ -149,8 +149,14 @@ async function compositeFiles(
     width,
     height,
   );
-  const shown = (await sharp(files.result).metadata()).autoOrient;
-  const result = await resultPixels(sharp, ingest, files.result, layout, width, height, icc);
+  const resultMeta = await sharp(files.result).metadata();
+  const shown = resultMeta.autoOrient;
+  // An opaque base keeps its channels, so a see-through result can't stay see-through: where the
+  // result is transparent the base shows instead of whatever colour hides under the transparency.
+  const seeThrough = !layout.alpha && resultMeta.hasAlpha;
+  const read = seeThrough ? { ...layout, alpha: true } : layout;
+  let result = await resultPixels(sharp, ingest, files.result, read, width, height, icc);
+  if (seeThrough) result = foldAlpha(result, weights, layout);
   const channels = (layout.grey ? 1 : 3) + (layout.alpha ? 1 : 0);
   const blended = blendPixels(base, result, weights, channels, { alpha: layout.alpha });
 
@@ -249,6 +255,25 @@ async function pixels(pipeline: Pipeline, layout: Layout, width: number, height:
     if (layout.alpha) grey[p * channels + 1] = values[i + 3]!;
   }
   return grey;
+}
+
+/**
+ * A result read with alpha, its alpha taken into `weights` (in place) and dropped, so it fits an
+ * opaque base's layout. A weight only ever shrinks, so a pixel that kept the base still does.
+ */
+function foldAlpha(values: Values, weights: Uint8Array, layout: Layout): Values {
+  const colours = layout.grey ? 1 : 3;
+  const stride = colours + 1;
+  const max = layout.deep ? 65_535 : 255;
+  const out = layout.deep
+    ? new Uint16Array(weights.length * colours)
+    : new Uint8Array(weights.length * colours);
+  for (let p = 0, i = 0, o = 0; p < weights.length; p++, i += stride, o += colours) {
+    for (let c = 0; c < colours; c++) out[o + c] = values[i + c]!;
+    const w = weights[p]!;
+    if (w) weights[p] = Math.round((w * values[i + colours]!) / max);
+  }
+  return out;
 }
 
 /** Colour chunks a PNG may carry that would contradict an embedded profile. */

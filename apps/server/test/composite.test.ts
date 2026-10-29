@@ -292,6 +292,38 @@ describe("compositeEdit", () => {
     expect(faded).toBeGreaterThan(3);
   });
 
+  test("where a result is see-through over an opaque base, the base shows", async () => {
+    const width = 200;
+    const height = 100;
+    const base = await rgbNoise(width, height);
+    const hole = { x: 60, y: 20, w: 80, h: 60 };
+    const { call } = await masked(base, hole);
+    // Transparent on the left with green hidden under it, opaque red on the right.
+    const rgba = new Uint8Array(width * height * 4);
+    for (let p = 0; p < width * height; p++) {
+      const right = p % width >= 100;
+      rgba.set(right ? [255, 0, 0, 255] : [0, 255, 0, 0], p * 4);
+    }
+    const result = new Uint8Array(
+      await sharp(rgba, { raw: { width, height, channels: 4 } })
+        .png()
+        .toBuffer(),
+    );
+    const out = await compositeEdit(server.services, call(), await stage(result));
+    expect(out?.edit.composite.applied).toBe(true);
+    const before = await decoded(base);
+    const after = await decoded(fileOf(out!.staged));
+    expect(after.channels).toBe(3);
+    const at = (v: Uint8Array | Uint16Array, x: number, y: number) => {
+      const i = (y * width + x) * 3;
+      return [...v.subarray(i, i + 3)];
+    };
+    // Inside the mask: the see-through part kept the base, the opaque part took the edit.
+    for (const x of [62, 70, 90]) expect(at(after.values, x, 50)).toEqual(at(before.values, x, 50));
+    for (const x of [110, 130, 139]) expect(at(after.values, x, 50)).toEqual([255, 0, 0]);
+    await expectKept(base, fileOf(out!.staged), { ...hole, x: 100, w: 40 }, 12);
+  });
+
   test("a CMYK JPEG comes back as RGB that shows the same outside the mask", async () => {
     const raw = noise(320 * 240 * 3, 11);
     const base = new Uint8Array(
