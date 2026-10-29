@@ -1,5 +1,6 @@
 import {
   adapterOpFor,
+  compositeSettingsOf,
   formatBytes,
   type GenerateRequest,
   type ModelManifest,
@@ -11,7 +12,7 @@ import {
   t,
 } from "@openfield/core";
 import { type AssetRow, type Db, getAsset, getAssets } from "@openfield/db";
-import { editSizeFor } from "@openfield/providers/manifest";
+import { editSizeFor, shapeOf } from "@openfield/providers/manifest";
 import {
   editableImage,
   type MaskDeps,
@@ -138,6 +139,34 @@ export function withEditSize<T extends Sizable>(manifest: ModelManifest, req: T,
   const fit = editSizeFor(manifest, base, tier);
   return { ...req, size: fit.size, ...(fit.resolution && { resolution: fit.resolution }) };
 }
+
+/**
+ * A masked edit laid back over its base must come back in the base's shape: a square result
+ * stretched over a wide photo wouldn't line up with its mask. A chosen size of another shape is
+ * refused; one left open asks for the base's own. With the composite off the result is kept as it
+ * comes, so any shape goes.
+ */
+export function requireBaseShape(
+  manifest: ModelManifest,
+  req: Pick<GenerateRequest, "size" | "resolution" | "mask">,
+  base: PixelSize,
+): void {
+  if (!req.mask || !compositeSettingsOf(req.mask).composite || !req.size) return;
+  const asked = shapeOf(req.size);
+  if (asked === undefined) return;
+  // The base's own shape, or the nearest the model takes, which is what an open size would ask.
+  const fitted = shapeOf(editSizeFor(manifest, base, req.resolution).size);
+  const near = (shape: number | undefined) =>
+    shape !== undefined && Math.abs(Math.log(asked / shape)) <= SAME_SHAPE;
+  if (near(base.width / base.height) || near(fitted)) return;
+  throw new ApiFailure(400, "bad_request", "A masked edit's size must have its base's shape", {
+    field: "size",
+    userMessage: t("masks.otherShape"),
+  });
+}
+
+// Within 2%, so a size snapped to a model's grid (1080 to 1088) still counts as the same shape.
+const SAME_SHAPE = 0.02;
 
 /**
  * Pixel sizes of the images a request sends in, its base and then its references, for pricing.

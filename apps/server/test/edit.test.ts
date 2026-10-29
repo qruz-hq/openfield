@@ -441,6 +441,35 @@ describe("POST /api/edit", () => {
     expect(large.jobSet.costEstimateUsd!).toBeGreaterThan(0.1);
     await completed(server, large.jobSet.id);
   });
+
+  test("a masked edit keeps its base's shape: a size of another shape is refused", async () => {
+    server = await ready();
+    const base = await upload(await photo(1920, 1080));
+    const maskId = await mask(base.id, 1920, 1080);
+    const asked = { base: { assetId: base.id, role: "base" }, mask: { assetId: maskId } };
+    const square = await edit({ ...asked, size: { kind: "aspect", ratio: "1:1" } });
+    expect(square.status).toBe(400);
+    expect(errorEnvelopeSchema.parse(square.body).error).toMatchObject({
+      field: "size",
+      userMessage:
+        "An edit with a mask keeps the image's own shape, so the edit lines up with it. Leave the aspect ratio on Auto.",
+    });
+    const tall = await edit({ ...asked, size: { kind: "pixels", width: 1088, height: 1920 } });
+    expect(errorEnvelopeSchema.parse(tall.body).error.field).toBe("size");
+    expect(jobSets()).toBe(0);
+
+    // The base's own shape is fine, snapped to the model's grid or not, and so is any shape when
+    // the model's whole result is kept.
+    for (const overrides of [
+      { size: { kind: "aspect", ratio: "16:9" } },
+      { size: { kind: "pixels", width: 1920, height: 1088 } },
+      { size: { kind: "aspect", ratio: "1:1" }, mask: { assetId: maskId, composite: false } },
+    ]) {
+      const res = await edit({ ...asked, ...overrides });
+      expect({ overrides, status: res.status }).toEqual({ overrides, status: 202 });
+      await completed(server, jobSetAcceptedSchema.parse(res.body).jobSet.id);
+    }
+  });
 });
 
 describe("the edited image's detail", () => {

@@ -2087,6 +2087,7 @@
     "maskGone": "This mask isn't saved anymore. Paint the area to change again.",
     "notMask": "This is an image, not a saved mask. Save the mask first, then try again.",
     "maskAsImage": "This is a mask, not an image. Choose an image instead.",
+    "otherShape": "An edit with a mask keeps the image's own shape, so the edit lines up with it. Leave the aspect ratio on Auto.",
     "tooManyPixels": "This image is {width} × {height}, too large to edit with a mask. Masked edits take images up to {megapixels} megapixels.",
     "turned": "This photo is saved on its side, so it can't be edited with a mask yet. Save an upright copy, add it to your library and try again.",
     "cantOpen": "Openfield can't open images on this computer, so it can't save this mask."

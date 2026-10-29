@@ -67,6 +67,7 @@ import {
   checkInputBytes,
   inputImageSizes,
   refuseMaskInputs,
+  requireBaseShape,
   withEditSize,
 } from "./edit-inputs";
 import { batchAction, callsFor, eachFromSet, finalReason, Outcomes } from "./outcomes";
@@ -313,6 +314,7 @@ export class Runner {
     this.#requireEnabled(manifest.providerId);
     // A base or mask that can't be used is refused now, not after the job set is made.
     const base = await checkEditInputs(this.deps, asked);
+    if (base) requireBaseShape(manifest, asked, base);
     refuseMaskInputs(this.deps.db, asked);
     checkInputBytes(this.deps.db, manifest, asked);
     const body = withEditSize(manifest, asked, base);

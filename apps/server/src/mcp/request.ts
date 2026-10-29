@@ -34,7 +34,7 @@ export const imageRequestFields = {
     .enum(ASPECT_RATIOS)
     .optional()
     .describe(
-      'Aspect ratio, such as "1:1", "3:4" or "16:9". Default: the person\'s default, else the model\'s. An edit keeps its image\'s own shape unless you set one.',
+      'Aspect ratio, such as "1:1", "3:4" or "16:9". Default: the person\'s default, else the model\'s. An edit keeps its image\'s own shape unless you set one, and an edit with a mask always keeps it.',
     ),
   size: z
     .object({ width: z.int().min(64).max(16_384), height: z.int().min(64).max(16_384) })

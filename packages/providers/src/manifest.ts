@@ -81,6 +81,7 @@ export {
   placeholderSize,
   ratioValue,
   resolveSize,
+  shapeOf,
 } from "./manifest/size";
 export {
   offeredSpeeds,

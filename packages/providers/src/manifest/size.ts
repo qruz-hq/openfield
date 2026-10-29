@@ -193,6 +193,13 @@ export function editSizeFor(
   };
 }
 
+/** Width over height of a size, or undefined for one with no shape of its own. */
+export function shapeOf(size: SizeSpec): number | undefined {
+  if (size.kind === "pixels") return size.width / size.height;
+  if (size.kind === "aspect" && size.ratio !== "auto") return ratioValue(size.ratio);
+  return undefined;
+}
+
 /** The smallest tier at least `edge` pixels long, else the largest. */
 function coveringTier(tiers: readonly ResolutionTier[], edge: number): ResolutionTier | undefined {
   const sorted = [...tiers].sort((a, b) => RESOLUTION_TIER_PX[a] - RESOLUTION_TIER_PX[b]);
