@@ -1,5 +1,4 @@
 import {
-  type AspectRatio,
   type Capabilities,
   formatLocale,
   isEarly,
@@ -9,7 +8,6 @@ import {
   t,
 } from "@openfield/core";
 import {
-  aspectLabel,
   type ControlResolution,
   carryValues,
   expectedSize,
@@ -20,17 +18,6 @@ import {
   resolveValues,
   visibleControls,
 } from "@openfield/providers/manifest";
-import { AspectGlyph, StepperChip, Tooltip } from "@openfield/ui";
-import {
-  Dices,
-  Gauge,
-  Gem,
-  type LucideIcon,
-  RectangleHorizontal,
-  RectangleVertical,
-  Scan,
-  Square,
-} from "lucide-react";
 import {
   type ClipboardEvent,
   type DragEvent,
@@ -49,17 +36,16 @@ import { findModel, useModels } from "../../api/hooks/models";
 import { useRunSpeed } from "../../api/hooks/provider-settings";
 import { useSettings } from "../../api/hooks/settings";
 import { errorMessage } from "../../api/raw";
-import { aspectChoices, qualityChoices, resolutionChoices } from "../../lib/control-choices";
 import { speedFallbackHint } from "../../lib/cost";
 import { notify, notifyError } from "../../lib/notify";
 import { companyName } from "../../lib/provider";
 import { askedPrice } from "../../lib/remote-price";
 import { askToNotifyOnce } from "../../lib/system-notify";
+import { ControlChip } from "./control-chip";
 import { focusPrompt, registerPrompt } from "./focus";
 import { GenerateButton, type GenerateSpeed } from "./generate-button";
 import { ModelSelect } from "./model-select";
-import { DisabledChip, OptionChip } from "./option-chip";
-import { ComposerReferences, referenceNote, useReferenceUploads } from "./references";
+import { ReferenceRow, referenceNote, useReferenceUploads } from "./references";
 import { useComposer } from "./store";
 
 // Composer / Full: 1120×146, floating 16 above the bottom, and the prompt grows it upward (§3.1).
@@ -69,12 +55,6 @@ import { useComposer } from "./store";
 // a paste into the prompt (§3.2).
 
 const PROMPT_MAX = 112;
-
-function aspectIcon(ratio: AspectRatio | undefined): LucideIcon {
-  if (!ratio || ratio === "auto") return Scan;
-  const [w, h] = ratio.split(":").map(Number) as [number, number];
-  return w === h ? Square : w > h ? RectangleHorizontal : RectangleVertical;
-}
 
 const list = (items: string[]) =>
   new Intl.ListFormat(formatLocale(), { style: "short", type: "unit" }).format(items);
@@ -103,7 +83,7 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
   const composer = useComposer();
   const generate = useGenerate();
   const prompt = useRef<HTMLTextAreaElement>(null);
-  const uploads = useReferenceUploads();
+  const uploads = useReferenceUploads(composer.addReferences);
   const [dropping, setDropping] = useState(false);
 
   const anyReady = models.some((m) => m.ready);
@@ -279,104 +259,6 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
     stops[(at + (event.key === "ArrowRight" ? 1 : -1) + stops.length) % stops.length]?.focus();
   };
 
-  const chip = (control: ControlResolution & { id: string }) => {
-    if (!caps || !resolved) return null;
-    const unsupported = control.state === "unsupported";
-    switch (control.id) {
-      case "aspect": {
-        const icon = aspectIcon(resolved.aspect);
-        const label = resolved.aspect ? aspectLabel(resolved.aspect) : "";
-        if (unsupported)
-          return <DisabledChip key="aspect" icon={icon} value={label} reason={control.reason ?? ""} />;
-        return (
-          <OptionChip
-            key="aspect"
-            icon={icon}
-            label={t("composer.chips.aspect.label")}
-            value={resolved.aspect}
-            valueLabel={label}
-            width="w-240"
-            emulated={control.state === "emulated"}
-            options={aspectChoices(control).map((choice) => ({
-              ...choice,
-              leading: <AspectGlyph ratio={choice.value} />,
-            }))}
-            onChange={(aspect) => composer.setValues({ aspect })}
-          />
-        );
-      }
-      case "resolution": {
-        const value = resolved.resolution ?? "";
-        if (unsupported)
-          return <DisabledChip key="resolution" icon={Gauge} value={value} reason={control.reason ?? ""} />;
-        return (
-          <OptionChip
-            key="resolution"
-            icon={Gauge}
-            label={t("composer.chips.resolution.label")}
-            value={resolved.resolution}
-            valueLabel={value}
-            width="w-240"
-            options={picked ? resolutionChoices(picked, control, resolved, speed) : []}
-            onChange={(resolution) => composer.setValues({ resolution })}
-          />
-        );
-      }
-      case "quality": {
-        const value = resolved.quality ? qualityLabel(caps, resolved.quality) : "";
-        if (unsupported)
-          return <DisabledChip key="quality" icon={Gem} value={value} reason={control.reason ?? ""} />;
-        return (
-          <OptionChip
-            key="quality"
-            icon={Gem}
-            label={t("composer.chips.quality.label")}
-            value={resolved.quality}
-            valueLabel={value}
-            width="w-300"
-            options={picked ? qualityChoices(picked, control, resolved, speed) : []}
-            onChange={(quality) => composer.setValues({ quality })}
-          />
-        );
-      }
-      case "batch": {
-        const emulated = control.state === "emulated";
-        const stepper = (
-          <StepperChip
-            key="batch"
-            emulated={emulated}
-            value={resolved.batch}
-            min={1}
-            max={control.max ?? caps.batch.max}
-            onValueChange={composer.setBatch}
-            label={t("composer.chips.batch.label")}
-            decrementLabel={t("composer.chips.batch.fewer")}
-            incrementLabel={t("composer.chips.batch.more")}
-          />
-        );
-        return emulated ? (
-          <Tooltip key="batch" content={t("composer.chips.batch.emulated")}>
-            {stepper}
-          </Tooltip>
-        ) : (
-          stepper
-        );
-      }
-      case "seed":
-        return unsupported ? (
-          <DisabledChip
-            key="seed"
-            icon={Dices}
-            value={t("composer.chips.seed.label")}
-            reason={control.reason ?? ""}
-          />
-        ) : null;
-      default:
-        // Enhance, Avoid, Background, Advanced and the rest have no popover yet, so no chip.
-        return null;
-    }
-  };
-
   return (
     <div className="fixed bottom-16 left-1/2 z-40 flex min-h-146 w-[min(1120px,calc(100vw-160px))] -translate-x-1/2 rounded-26 bg-surface p-2">
       <form
@@ -393,7 +275,12 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
         <div className="flex min-w-0 flex-1 flex-col justify-between gap-12">
           {/* The references and the + first, above the prompt, like a Generate node's card (iy0ZN). */}
           <div className="flex w-full min-w-0 flex-col gap-12">
-            <ComposerReferences model={picked} pending={uploads.pending} onUpload={uploads.upload} />
+            <ReferenceRow
+              store={composer}
+              model={picked}
+              pending={uploads.pending}
+              onUpload={uploads.upload}
+            />
             <textarea
               ref={(el) => {
                 prompt.current = el;
@@ -417,7 +304,22 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
             className="-m-4 flex items-center gap-8 overflow-x-auto p-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
           >
             <ModelSelect models={models} selected={picked} onSelect={switchTo} />
-            {controls.filter((c) => c.id !== "model").map(chip)}
+            {caps && resolved
+              ? controls
+                  .filter((c) => c.id !== "model")
+                  .map((control) => (
+                    <ControlChip
+                      key={control.id}
+                      control={control}
+                      caps={caps}
+                      resolved={resolved}
+                      model={picked}
+                      speed={speed}
+                      onValues={composer.setValues}
+                      onBatch={composer.setBatch}
+                    />
+                  ))
+              : null}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-10 self-stretch">
