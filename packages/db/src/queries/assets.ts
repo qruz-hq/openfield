@@ -185,13 +185,17 @@ export interface LibraryStats {
   trash: { count: number; bytes: number };
 }
 
-/** Settings > Storage counts (§8.2.2). Thumbnail and database sizes come from the disk. */
+/**
+ * Settings > Storage counts (§8.2.2). Thumbnail and database sizes come from the disk. Masks are
+ * never counted as images, as the library never lists them, but their bytes are on disk too.
+ */
 export function libraryStats(db: Executor): LibraryStats {
+  const image = sql`${assets.kind} <> 'mask'`;
   const row = db
     .select({
-      assets: sql<number>`coalesce(sum(${assets.deletedAt} IS NULL), 0)`,
+      assets: sql<number>`coalesce(sum(${assets.deletedAt} IS NULL AND ${image}), 0)`,
       bytes: sql<number>`coalesce(sum(CASE WHEN ${assets.deletedAt} IS NULL THEN ${assets.bytes} END), 0)`,
-      trashCount: sql<number>`coalesce(sum(${assets.deletedAt} IS NOT NULL), 0)`,
+      trashCount: sql<number>`coalesce(sum(${assets.deletedAt} IS NOT NULL AND ${image}), 0)`,
       trashBytes: sql<number>`coalesce(sum(CASE WHEN ${assets.deletedAt} IS NOT NULL THEN ${assets.bytes} END), 0)`,
     })
     .from(assets)

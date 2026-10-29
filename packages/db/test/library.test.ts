@@ -21,6 +21,7 @@ import {
   libraryCounts,
   libraryFacets,
   libraryPage,
+  libraryStats,
   listFolders,
   type OpenDb,
   openDb,
@@ -56,6 +57,10 @@ interface ImageOpts {
   path?: string;
   sha?: string;
   bytes?: number;
+  /** The image it was drawn on or made from. */
+  parent?: string;
+  /** The mask an edit was made with. */
+  mask?: string;
 }
 
 /** An image made `at` minutes past ten; ids sort in the same order as the times. */
@@ -73,6 +78,8 @@ function image(id: string, o: ImageOpts = {}) {
     modelId: o.model ?? "gpt-image",
     prompt: o.prompt ?? "",
     createdAt: minute(o.at ?? 0),
+    ...(o.parent && { parentAssetId: o.parent }),
+    ...(o.mask && { maskAssetId: o.mask }),
   });
 }
 
@@ -83,6 +90,8 @@ function folder(name: string, parentId?: string) {
 }
 
 const ids = (page: { items: { id: string }[] }) => page.items.map((a) => a.id);
+const getAssetIds = () =>
+  (db().$client.query("SELECT id FROM assets ORDER BY id").all() as { id: string }[]).map((r) => r.id);
 const byName = () => new Map(listFolders(db()).map((f) => [f.name, f]));
 
 /** Every page of a view, following the cursor. */
@@ -430,15 +439,53 @@ describe("trash", () => {
     purgeAssets(db(), ["S1"]);
     expect(fts()).toBe(0);
   });
+
+  test("an image's masks go with it for good, once no edit still names them", () => {
+    image("B1", { path: "uploads/b1.png", sha: "e".repeat(64), bytes: 50 });
+    image("M1", { kind: "mask", parent: "B1", path: "uploads/m1.png", sha: "f".repeat(64), bytes: 3, at: 1 });
+    image("M2", { kind: "mask", parent: "B1", path: "uploads/m2.png", sha: "9".repeat(64), bytes: 4, at: 2 });
+    // An edit made with M2: its detail view and Recreate still need the mask.
+    image("X1", { parent: "B1", mask: "M2", at: 3 });
+
+    // In the Trash, the image keeps its masks, so restoring it brings them back too.
+    softDeleteAssets(db(), ["B1"]);
+    expect(getAssetIds()).toEqual(["B1", "M1", "M2", "X1"]);
+
+    const first = emptyTrash(db());
+    // Only the image is reported deleted, but the unused mask's file is freed with it.
+    expect(first.deleted.map((r) => r.id)).toEqual(["B1"]);
+    expect(first.files.sort()).toEqual(["uploads/b1.png", "uploads/m1.png"]);
+    expect(first.reclaimedBytes).toBe(53);
+    expect(getAssetIds()).toEqual(["M2", "X1"]);
+
+    // Once the edit goes too, nothing needs M2.
+    const last = purgeAssets(db(), ["X1"], { includeLive: true });
+    expect(last.deleted.map((r) => r.id)).toEqual(["X1"]);
+    expect(last.files).toContain("uploads/m2.png");
+    expect(getAssetIds()).toEqual([]);
+  });
+
+  test("a mask stays while its image is live, whatever happens to its edits", () => {
+    image("B2");
+    image("M3", { kind: "mask", parent: "B2", at: 1 });
+    image("X2", { parent: "B2", mask: "M3", at: 2 });
+    purgeAssets(db(), ["X2"], { includeLive: true });
+    expect(getAssetIds()).toEqual(["B2", "M3"]);
+  });
 });
 
 describe("views, search and filters", () => {
   test("masks are never listed or counted", () => {
-    image("L1");
-    image("L2", { kind: "mask", at: 1 });
+    image("L1", { bytes: 10 });
+    image("L2", { kind: "mask", at: 1, bytes: 2 });
+    image("L3", { at: 2, bytes: 20 });
+    image("L4", { kind: "mask", at: 3, bytes: 1 });
+    softDeleteAssets(db(), ["L3", "L4"]);
     expect(ids(libraryPage(db(), {}))).toEqual(["L1"]);
     expect(ids(libraryPage(db(), { kind: "mask" }))).toEqual([]);
     expect(libraryCounts(db()).all).toBe(1);
+    // Settings > Storage and agents count images; the masks' bytes are on disk all the same.
+    expect(libraryStats(db())).toEqual({ assets: 1, bytes: 12, trash: { count: 1, bytes: 21 } });
   });
 
   test("search takes the folder, model, company and date filters, pages on the shared cursor, and counts", () => {
