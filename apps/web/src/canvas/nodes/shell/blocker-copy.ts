@@ -55,6 +55,12 @@ export function blockerCopy(
       );
     case "end_frame_unsupported":
       return fix("pick_model", t("canvas.nodes.blocked.pickModel"), t("canvas.nodes.blocked.noEndFrame"));
+    case "no_mask":
+      return plain(t("canvas.nodes.blocked.noMask"));
+    case "mask_stale":
+      return plain(t("canvas.nodes.blocked.maskStale"));
+    case "no_description":
+      return plain(t("canvas.nodes.blocked.noDescription"));
     case "no_prompt":
       return plain(t("canvas.nodes.blocked.noPrompt"));
     case "missing_input":

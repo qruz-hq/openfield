@@ -81,6 +81,7 @@ export const STANDING_BLOCKERS: ReadonlySet<NodeBlocker["kind"]> = new Set([
   "references_unsupported",
   "too_many_references",
   "end_frame_unsupported",
+  "mask_stale",
   "too_many_jobs",
   "loop",
 ]);

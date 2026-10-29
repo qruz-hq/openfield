@@ -22,6 +22,7 @@ export * from "./engine/runtime";
 export * from "./engine/types";
 export * from "./nodes/annotations";
 export * from "./nodes/assets/spec";
+export * from "./nodes/edit/spec";
 export * from "./nodes/generate/card-size";
 export * from "./nodes/generate/settings";
 export * from "./nodes/generate/spec";

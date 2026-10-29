@@ -1,4 +1,4 @@
-import { BATCH_MAX, GENERATE_PROMPT_MAX, t } from "@openfield/core";
+import { BATCH_MAX, GENERATE_PROMPT_MAX, MASK_COMPOSITE_MAX_PX, t } from "@openfield/core";
 import { PROMPT_MAX } from "./prompt/spec";
 import { LIST_MAX, TAKES_MAX, TAKES_MIN } from "./variations/spec";
 
@@ -10,6 +10,12 @@ import { LIST_MAX, TAKES_MAX, TAKES_MIN } from "./variations/spec";
 export const NODE_LIMITS = {
   prompt: { text: { maxChars: PROMPT_MAX } },
   "image.generate": { prompt: { maxChars: GENERATE_PROMPT_MAX }, batch: { min: 1, max: BATCH_MAX } },
+  "image.edit": {
+    prompt: { maxChars: GENERATE_PROMPT_MAX },
+    batch: { min: 1, max: BATCH_MAX },
+    featherPx: { min: 0, max: MASK_COMPOSITE_MAX_PX },
+    expandPx: { min: 0, max: MASK_COMPOSITE_MAX_PX },
+  },
   "image.variations": {
     count: { min: TAKES_MIN, max: TAKES_MAX },
     prompts: { maxItems: LIST_MAX, maxChars: PROMPT_MAX },
@@ -32,6 +38,12 @@ export function limitProblem(type: string, params: Readonly<Record<string, unkno
         return t("canvas.edits.limits.generatePrompt", { max: GENERATE_PROMPT_MAX, count });
       }
       return null;
+    }
+    case "image.edit": {
+      const count = chars(params.prompt);
+      return count > GENERATE_PROMPT_MAX
+        ? t("canvas.edits.limits.editPrompt", { max: GENERATE_PROMPT_MAX, count })
+        : null;
     }
     case "image.variations": {
       const { count, prompts, models } = params;

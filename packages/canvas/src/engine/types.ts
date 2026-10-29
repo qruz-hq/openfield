@@ -182,6 +182,12 @@ export type NodeBlocker =
   | { kind: "too_many_references"; model: ModelKey; max: number }
   /** An end frame is connected, and this video model can't end on one. */
   | { kind: "end_frame_unsupported"; model: ModelKey }
+  /** An edit with no mask: none painted in the node and none connected. */
+  | { kind: "no_mask" }
+  /** The mask painted in the node was painted on another image than the one coming in now. */
+  | { kind: "mask_stale" }
+  /** An edit with nothing said about the change, upstream or in the node. */
+  | { kind: "no_description" }
   /** Variations in Prompts or Models mode needs at least `min` entries. */
   | { kind: "needs_more"; what: "prompts" | "models"; min: number }
   /** A fan-out that would make more images than a run can (CANVAS_RUN_MAX_JOBS). */

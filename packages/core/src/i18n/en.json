@@ -1512,6 +1512,10 @@
         "referencesHint": "The model gets them in this order. Drag an image to move everything from its node.",
         "referenceItem": "{name}, {images, plural, one {# image} other {# images}}, {index} of {count}"
       },
+      "edit": {
+        "label": "Edit",
+        "description": "Change an image with words or a mask"
+      },
       "variations": {
         "label": "Variations",
         "description": "Try several takes at once",
@@ -1557,7 +1561,8 @@
         "noReferences": "This model doesn't take reference images",
         "startFrame": "Start frame",
         "endFrame": "End frame",
-        "video": "Video"
+        "video": "Video",
+        "mask": "Mask"
       },
       "connect": {
         "mismatch": "{from, select, text {Text} image {An image} mask {A mask} preset {A style} other {This}} can't go into {to, select, text {a text} image {an image} mask {a mask} preset {a style} other {this}} input on {node}.",
@@ -1624,7 +1629,10 @@
         "upstreamFailed": "An earlier node didn't finish",
         "upstreamBlocked": "An earlier node can't run yet",
         "loop": "This node is in a loop, or reads from one. Remove a connection to run it.",
-        "noEndFrame": "This model can't end on a chosen frame. Pick another model."
+        "noEndFrame": "This model can't end on a chosen frame. Pick another model.",
+        "noMask": "Paint a mask or connect one to run this",
+        "maskStale": "The image changed. Paint the mask again.",
+        "noDescription": "Describe the change to run this"
       },
       "collapsed": {
         "expand": "Expand {name}",
@@ -1797,6 +1805,7 @@
       "limits": {
         "promptText": "A Prompt node holds at most {max} characters. This text has {count}.",
         "generatePrompt": "A Generate prompt can be at most {max} characters. This one has {count}.",
+        "editPrompt": "An Edit prompt can be at most {max} characters. This one has {count}.",
         "takes": "New takes makes {min} to {max} images. This asks for {count}.",
         "prompts": "Variations takes at most {max} prompts. This has {count}.",
         "promptLine": "Each Variations prompt can be at most {max} characters. Prompt {index} has {count}.",

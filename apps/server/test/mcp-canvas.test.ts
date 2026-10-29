@@ -388,6 +388,11 @@ describe("canvases", () => {
     expect(generate.outputs).toEqual([{ port: "images", gives: "image" }]);
     expect(generate.defaults.model).toBe("google:gemini-3-pro-image");
     expect(Object.keys(generate.settings)).toContain("prompt");
+    const edit = types.find((t) => t.type === "image.edit")!;
+    expect(edit).toMatchObject({ name: "Edit", makesImages: true });
+    expect(edit.inputs.map((p: Json) => p.port)).toEqual(["image", "mask", "prompt", "input_images"]);
+    expect(edit.inputs[0]).toMatchObject({ takes: "image", required: true });
+    expect(edit.defaults).toMatchObject({ keepOriginal: true, featherPx: 8, expandPx: 4 });
     expect(types.find((t) => t.type === "note")).toMatchObject({ forLayout: true, makesImages: false });
   });
 
