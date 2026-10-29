@@ -95,6 +95,10 @@ describe("maskNote", () => {
     expect(
       maskNote({ opParams: record({}, { fallback: "whole_image" }), params: null }, "Nano Banana Pro"),
     ).toBe("Redrawn by Nano Banana Pro, the rest put back");
+    // The image's own approximate_reason says the same.
+    expect(
+      maskNote({ opParams: record({}), params: null, approximateReason: "whole_image" }, "Nano Banana Pro"),
+    ).toBe("Redrawn by Nano Banana Pro, the rest put back");
   });
 
   test("turned off, the rest wasn't kept; when putting it back failed, it says so", () => {

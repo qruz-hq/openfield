@@ -61,10 +61,13 @@ export function askedComposite(asset: Pick<Asset, "opParams" | "params">): Compo
 
 /**
  * What became of the rest of the image: the composite's settings when the original was put back,
- * or why it wasn't. A model that can't take a mask redrew the whole image, which is worth saying
- * even when the rest was put back.
+ * or why it wasn't. A model that can't take a mask redrew the whole image (the record's fallback,
+ * and the image's approximate_reason), which is worth saying even when the rest was put back.
  */
-export function maskNote(asset: Pick<Asset, "opParams" | "params">, modelName: string | undefined): string {
+export function maskNote(
+  asset: Pick<Asset, "opParams" | "params"> & Partial<Pick<Asset, "approximateReason">>,
+  modelName: string | undefined,
+): string {
   const edit = editRecord(asset);
   if (!edit) {
     // Made before the result recorded it: what the request asked for is all there is to go on.
@@ -80,7 +83,7 @@ export function maskNote(asset: Pick<Asset, "opParams" | "params">, modelName: s
         ? "assets.detail.editedFrom.notKept"
         : "assets.detail.editedFrom.notKeptExactly",
     );
-  if (fallback === "whole_image" && modelName)
+  if ((fallback === "whole_image" || asset.approximateReason === "whole_image") && modelName)
     return t("assets.detail.editedFrom.wholeImage", { model: modelName });
   return t("assets.detail.editedFrom.settings", { feather: composite.featherPx, expand: composite.expandPx });
 }
