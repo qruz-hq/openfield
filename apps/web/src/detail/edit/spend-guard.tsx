@@ -3,6 +3,7 @@ import { Button, Modal, ModalClose, ModalContent, ModalDescription, ModalFooter 
 import { type ReactNode, useCallback, useRef, useState } from "react";
 import { useSettings } from "../../api/hooks/settings";
 import { fetchSpentThisMonth } from "../../api/hooks/usage";
+import { useReturnFocus } from "../../lib/return-focus";
 
 // The monthly spending limit for the Edit tab's Generate (§6.9): a run that would take this month
 // past the limit set in Settings > Spending asks first (Dialog / Spend limit, design d2drT0), as a
@@ -77,6 +78,8 @@ function SpendGuardDialog({
   const shown = useRef<Ask | null>(null);
   if (ask) shown.current = ask;
   const current = ask ?? shown.current;
+  const cancel = useRef<HTMLButtonElement>(null);
+  const returnFocus = useReturnFocus(ask !== null);
   const mono = (value: string) => (
     <span key="amount" className="font-mono">
       {value}
@@ -95,13 +98,19 @@ function SpendGuardDialog({
             </span>
           }
           closeLabel={t("actions.close")}
+          // It asks before spending, so it starts on the choice that spends nothing.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault();
+            cancel.current?.focus();
+          }}
+          onCloseAutoFocus={returnFocus}
         >
           <ModalDescription>
             {withMono(tParts<ReactNode>("spendGuard.body", { limit: mono(formatMoney(current.limit)) }))}
           </ModalDescription>
           <ModalFooter>
             <ModalClose asChild>
-              <Button variant="secondary" size="m">
+              <Button ref={cancel} variant="secondary" size="m">
                 {t("spendGuard.cancel")}
               </Button>
             </ModalClose>

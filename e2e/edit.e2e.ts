@@ -282,6 +282,23 @@ test("on Edit the view's own keys stay quiet, and Esc drops the tool before it a
   await leave.getByRole("button", { name: "Keep editing" }).click();
   await expect(leave).toHaveCount(0);
   await expect(tool(page, "Undo")).toBeEnabled();
+  // Focus is back in the view, so its keys still work.
+  await expect(view).toBeFocused();
+  await page.keyboard.press("a");
+  await expect(tool(page, "Lasso")).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(tool(page, "Undo")).toBeDisabled();
+  // Undo from the keyboard, until it turns itself off, keeps them working too.
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(tool(page, "Undo")).toBeEnabled();
+  await tool(page, "Undo").focus();
+  await page.keyboard.press("Enter");
+  await expect(tool(page, "Undo")).toBeDisabled();
+  await expect(tool(page, "Undo")).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+Shift+z");
+  await expect(tool(page, "Undo")).toBeEnabled();
+  await page.keyboard.press("d");
+  await expect(tool(page, "Brush")).toHaveAttribute("aria-pressed", "true");
 
   // The close button asks too.
   await view.getByRole("button", { name: "Close" }).first().click();
@@ -780,7 +797,7 @@ test("a whole-image model says so, Keep the rest can be turned off, and the mont
     await expect(panel.getByText("The model may change other parts too.")).toBeVisible();
     await expect(panel.getByRole("slider", { name: "Feather" })).toHaveAttribute("data-disabled", "");
 
-    // Generate asks first, and Cancel sends nothing.
+    // Generate asks first, starting on Cancel, and Cancel sends nothing and hands focus back.
     await paintAndDescribe(page, "Dry the berries");
     let sent = false;
     page.on("request", (r) => {
@@ -789,9 +806,11 @@ test("a whole-image model says so, Keep the rest can be turned off, and the mont
     await generateIn(page).click();
     const ask = page.getByRole("dialog", { name: /^This run costs about/ });
     await expect(ask).toContainText("It would pass your monthly limit of $0.01.");
+    await expect(ask.getByRole("button", { name: "Cancel" })).toBeFocused();
     await ask.getByRole("button", { name: "Cancel" }).click();
     await expect(ask).toHaveCount(0);
     expect(sent).toBe(false);
+    await expect(generateIn(page)).toBeFocused();
 
     // Run anyway runs it on the model picked, with the rest of the image left to the model.
     await generateIn(page).click();

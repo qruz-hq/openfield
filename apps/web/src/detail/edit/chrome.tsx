@@ -30,8 +30,12 @@ import { BRUSH_SLIDER_STEPS, type MaskTool, sizeOfSlider, sliderOfSize, useEditS
  */
 const keepFocus = (event: MouseEvent) => event.preventDefault();
 
-/** Icon button / Tool / 36, dimmed to 40% when it can't do anything yet (design jk02HG1ctk). */
-const dimmed = "disabled:text-text-secondary disabled:opacity-40";
+/**
+ * Icon button / Tool / 36, dimmed to 40% when it can't do anything yet (design jk02HG1ctk). Off by
+ * aria-disabled rather than disabled, so pressing Undo from the keyboard until there's nothing left
+ * keeps focus on it, where the view's keys still reach.
+ */
+const dimmed = "aria-disabled:cursor-default aria-disabled:opacity-40";
 
 const TOOLS: Record<MaskTool, { icon: LucideIcon; label: MessageKey }> = {
   pan: { icon: Hand, label: "edit.tools.pan" },
@@ -66,9 +70,9 @@ function ToolButton({
         label={label}
         active={active}
         aria-pressed={pressed}
-        disabled={disabled}
+        aria-disabled={disabled || undefined}
         onMouseDown={keepFocus}
-        onClick={onClick}
+        onClick={disabled ? undefined : onClick}
         className={dimmed}
       />
     </Tooltip>

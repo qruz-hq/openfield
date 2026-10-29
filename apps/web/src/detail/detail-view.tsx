@@ -46,6 +46,7 @@ import { ApiError, errorMessage } from "../api/raw";
 import { tightCost } from "../lib/cost";
 import { notify, notifyError } from "../lib/notify";
 import { asksForPrice } from "../lib/remote-price";
+import { useReturnFocus } from "../lib/return-focus";
 import {
   copyImage,
   downloadOriginal,
@@ -175,15 +176,16 @@ function DetailContent({
   const runner = useEditRunner();
   const { reset: resetRunner } = runner;
 
-  // Generate gives way to Stop and back, the form goes out of reach while a run goes, and Edit the
-  // mask gives way to the toolbar. Focus on any of them would fall to the page, out of reach of the
-  // view's keys, so it comes back here.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when a run starts or ends, or the compare opens or closes.
+  // Generate gives way to Stop and back, the form goes out of reach while a run goes, Edit the mask
+  // gives way to the toolbar, and a tool's options bar gives way to another's. Focus on any of them
+  // would fall to the page, out of reach of the view's keys, so it comes back here.
+  const tool = useEditSession((s) => s.tool);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when a run starts or ends, the compare opens or closes, or the tool changes.
   useEffect(() => {
     const active = document.activeElement;
     if (!active || active === document.body || active.closest("[inert]"))
       content.current?.focus({ preventScroll: true });
-  }, [runner.busy, runner.compared]);
+  }, [runner.busy, runner.compared, tool]);
 
   // An edit lasts while its image is open: stepping to another image or closing the view drops it,
   // and lets its run go on in the feed. Both ask first (leaveEdit) when there's a mask or a prompt
@@ -844,6 +846,7 @@ function ConfirmDialog({
   onConfirm: (kind: Confirm) => void;
 }) {
   const cancel = useRef<HTMLButtonElement>(null);
+  const returnFocus = useReturnFocus(kind !== null);
   // The last one stays on screen while the dialog animates out.
   const [shown, setShown] = useState<Confirm | null>(null);
   if (kind && kind !== shown) setShown(kind);
@@ -888,6 +891,9 @@ function ConfirmDialog({
             event.preventDefault();
             cancel.current?.focus();
           }}
+          // Opened by a key or a button, not a trigger: focus goes back where it was, so Keep
+          // editing leaves the Edit tab's keys working.
+          onCloseAutoFocus={returnFocus}
         >
           <ModalDescription>{copy.body}</ModalDescription>
           <ModalFooter>
