@@ -36,7 +36,13 @@ import { listItemOf } from "../../../detail/format";
 import { Media, type MediaHandle, type MediaInset } from "../../../detail/media";
 import { notifyError } from "../../../lib/notify";
 import { useCanvasEngineContext } from "../../engine/engine-store";
-import { useCanvasActions, useLocked, useNodeFrame, useReadOnly } from "../../store/context";
+import {
+  useCanvasActions,
+  useCanvasStoreApi,
+  useLocked,
+  useNodeFrame,
+  useReadOnly,
+} from "../../store/context";
 import { nodeWrapper } from "../shell/focus";
 import { useParsedParams } from "../shell/use-node";
 import { usePaintBase } from "./base";
@@ -93,12 +99,15 @@ export function MaskWindow({ nodeId }: { nodeId: string }) {
  * It also runs when the window unmounts outright (Radix's FocusScope does that on a timeout).
  */
 function useOpenerFocus(nodeId: string): (event: Event) => void {
+  const store = useCanvasStoreApi();
   const from = useRef<Element | null>(null);
   // Before the window moves focus into itself.
   useLayoutEffect(() => {
     from.current = document.activeElement;
   }, []);
   return (event) => {
+    // The loading frame giving way to the window isn't the window closing.
+    if (store.getState().ui.maskNodeId === nodeId) return;
     const el = from.current;
     const opener =
       el instanceof HTMLElement && el !== document.body && el.isConnected && !el.matches(":disabled")
