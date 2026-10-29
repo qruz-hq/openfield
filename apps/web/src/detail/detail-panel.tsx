@@ -33,6 +33,7 @@ import {
   Tooltip,
 } from "@openfield/ui";
 import {
+  Brush,
   ChevronDown,
   ChevronUp,
   Copy,
@@ -69,6 +70,8 @@ export interface DetailActions {
   favourite: boolean;
   restoring: boolean;
   onRecreate: () => void;
+  /** Opens the Edit tab. Left out for what can't be edited (a video). */
+  onEdit?: (() => void) | undefined;
   onReuse: () => void;
   /** Left out for a video: it can't go on the clipboard the way an image can. */
   onCopyImage?: () => void;
@@ -490,25 +493,33 @@ function Hint({ content, shortcut, children }: { content?: string; shortcut?: st
   );
 }
 
-/** Detail / Actions / Assets (design AtTwE). */
+/** Detail / Actions / Assets, With Edit (design AtTwE, CIfbbd5WMA). */
 function LibraryActions({ id, actions }: { id: string; actions: DetailActions }) {
   const [filing, setFiling] = useState(false);
   const replayHint = actions.canReplay ? undefined : t("assets.detail.notMadeHere");
   const favouriteLabel = actions.favourite ? t("assets.detail.unfavorite") : t("assets.detail.favorite");
   return (
     <div className="flex w-full shrink-0 flex-col gap-8">
-      <Hint content={replayHint ?? (actions.recreateInexact ? t("feed.tile.recreateInexact") : undefined)}>
-        <Button
-          icon={RefreshCw}
-          price={actions.canReplay ? actions.recreatePrice : undefined}
-          loading={actions.recreating}
-          aria-disabled={!actions.canReplay || undefined}
-          onClick={actions.canReplay ? actions.onRecreate : undefined}
-          className={cn("w-full", !actions.canReplay && "cursor-default opacity-40")}
-        >
-          {t("assets.detail.recreate")}
-        </Button>
-      </Hint>
+      {/* Recreate row: Recreate, and Edit beside it, which stays on even when Recreate can't. */}
+      <div className="flex w-full gap-8">
+        <Hint content={replayHint ?? (actions.recreateInexact ? t("feed.tile.recreateInexact") : undefined)}>
+          <Button
+            icon={RefreshCw}
+            price={actions.canReplay ? actions.recreatePrice : undefined}
+            loading={actions.recreating}
+            aria-disabled={!actions.canReplay || undefined}
+            onClick={actions.canReplay ? actions.onRecreate : undefined}
+            className={cn("min-w-0 flex-1", !actions.canReplay && "cursor-default opacity-40")}
+          >
+            {t("assets.detail.recreate")}
+          </Button>
+        </Hint>
+        {actions.onEdit ? (
+          <Button variant="secondary" size="l" icon={Brush} onClick={actions.onEdit}>
+            {t("assets.detail.edit")}
+          </Button>
+        ) : null}
+      </div>
       <div className="flex w-full gap-8">
         <Hint content={replayHint}>
           <Button

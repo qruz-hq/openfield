@@ -463,6 +463,7 @@ function DetailContent({
         (error: unknown) => notifyError(errorMessage(error)),
       );
     },
+    onEdit: editable ? () => setTab("edit") : undefined,
     onReuse: () => {
       if (!canReplay) return;
       if (isVideo) reuseVideoSettings({ ...frozen, prompt });

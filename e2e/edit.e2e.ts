@@ -48,6 +48,73 @@ async function openOnEdit(page: Page, prompt: string): Promise<string> {
   return id;
 }
 
+const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const tile = (page: Page, prompt: string) =>
+  page.getByRole("listitem", { name: new RegExp(`^${escapeRegExp(prompt)} · `) });
+
+test("Edit opens the Edit tab from a feed tile, at every zoom step, the library's menu and the footer", async ({
+  page,
+}) => {
+  const token = await sessionToken(page.request);
+  const prompt = unique("a quiet still life");
+  const id = await makeImage(page.request, token, prompt);
+  const view = detail(page);
+  const onEdit = new RegExp(`\\?asset=${id}&tab=edit$`);
+
+  // The tile's hover: Edit at the bottom left, the model's name after it.
+  await page.goto("/image");
+  await expect(tile(page, prompt).locator("img")).toBeVisible({ timeout: 15_000 });
+  await tile(page, prompt).hover();
+  const edit = tile(page, prompt).getByRole("button", { name: "Edit", exact: true });
+  await expect(edit).toHaveText("Edit");
+  const box = (await edit.boundingBox())!;
+  const tileBox = (await tile(page, prompt).boundingBox())!;
+  expect(box.x - tileBox.x).toBeCloseTo(10, 0);
+  expect(tileBox.y + tileBox.height - (box.y + box.height)).toBeCloseTo(10, 0);
+  await edit.click();
+  await expect(page).toHaveURL(onEdit);
+  await expect(view.getByRole("tab", { name: "Edit" })).toHaveAttribute("aria-selected", "true");
+  await expect(toolbar(page)).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(view).toHaveCount(0);
+
+  // At the smallest step the buttons are 32 and Edit is an icon, with no caption beside it.
+  await api(page.request, token, "PATCH", "/api/settings", { feedZoom: 0 });
+  try {
+    await page.reload();
+    await expect(tile(page, prompt).locator("img")).toBeVisible({ timeout: 15_000 });
+    await tile(page, prompt).hover();
+    const icon = tile(page, prompt).getByRole("button", { name: "Edit", exact: true });
+    await expect(icon).toHaveText("");
+    expect((await icon.boundingBox())!.width).toBe(32);
+    expect((await tile(page, prompt).getByRole("button", { name: "Download" }).boundingBox())!.width).toBe(
+      32,
+    );
+    await icon.click();
+    await expect(page).toHaveURL(onEdit);
+    await page.keyboard.press("Escape");
+  } finally {
+    await api(page.request, token, "PATCH", "/api/settings", { feedZoom: 3 });
+  }
+
+  // The library card's menu has it after Reuse.
+  await page.goto("/assets");
+  const card = page.getByRole("gridcell", { name: new RegExp(`^${escapeRegExp(prompt)} · `) });
+  await card.hover();
+  await card.getByRole("button", { name: "More" }).click();
+  const items = await page.getByRole("menuitem").allInnerTexts();
+  expect(items.indexOf("Edit")).toBe(items.indexOf("Reuse") + 1);
+  await page.getByRole("menuitem", { name: "Edit" }).click();
+  await expect(page).toHaveURL(onEdit);
+
+  // On Info, the footer's Edit beside Recreate goes to the Edit tab.
+  await view.getByRole("tab", { name: "Info" }).click();
+  await expect(page).toHaveURL(new RegExp(`\\?asset=${id}$`));
+  await view.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(onEdit);
+  await expect(toolbar(page)).toBeVisible();
+});
+
 test("the Edit tab paints a mask, and its tools undo, redo, invert and clear it", async ({ page }) => {
   const prompt = unique("berries in a vase");
   const id = await openOnEdit(page, prompt);
