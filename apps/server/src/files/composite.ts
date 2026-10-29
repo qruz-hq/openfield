@@ -24,6 +24,8 @@ export interface CompositeDeps {
   db: Db;
   ingest: Ingest;
   logger: Logger;
+  /** files/sharp.ts unless given, so tests can stand in a computer where sharp won't load. */
+  loadSharp?: () => Promise<Sharp>;
 }
 
 export interface CompositeOutcome {
@@ -59,7 +61,7 @@ export async function compositeEdit(
 
   let sharp: Sharp;
   try {
-    sharp = await loadSharp();
+    sharp = await (deps.loadSharp ?? loadSharp)();
   } catch {
     return skip("unavailable");
   }

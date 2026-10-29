@@ -7,6 +7,7 @@ import type { StagedFile } from "../src/files/ingest";
 import { saveMask } from "../src/files/mask";
 import { loadSharp } from "../src/files/sharp";
 import { saveUpload } from "../src/files/upload";
+import { maskOutcome } from "../src/mcp/runs";
 import { startTestServer, type TestServer } from "./helpers";
 
 // The composite (§0.9): a masked edit's result laid over its base so that every pixel farther than
@@ -407,6 +408,64 @@ describe("compositeEdit", () => {
     await expectKept(base, fileOf(out!.staged), hole, 12);
     // And sharp holds no file open once it has read it, so discarding usually works there too.
     expect((await loadSharp()).cache().files.max).toBe(0);
+  });
+
+  test("when sharp can't load, keeps the model's result and never says the rest was kept", async () => {
+    const base = await rgbNoise(320, 240);
+    const { call } = await masked(base, { x: 10, y: 10, w: 50, h: 50 });
+    const result = await stage(await gradientPng(256, 192, 9));
+    const noSharp = { ...server.services, loadSharp: () => Promise.reject(new Error("no sharp here")) };
+    // Nano Banana's whole-image edit: the case where keeping the rest matters most.
+    const out = await compositeEdit(noSharp, call("edit"), result);
+    expect(out).toEqual({
+      staged: result,
+      edit: {
+        composite: { applied: false, expandPx: 4, featherPx: 8, reason: "unavailable" },
+        fallback: "whole_image",
+      },
+    });
+    expect(existsSync(fileOf(result))).toBe(true);
+    expect(maskOutcome({ opParams: { edit: out!.edit } })).toEqual({
+      keptOutsideMask: false,
+      why: "Openfield can't open images on this computer, so this is the model's whole result.",
+    });
+  });
+
+  test("a base saved on its side is never laid over, and says why", async () => {
+    // Refused before any run; this covers one that got past, e.g. a base swapped mid-run.
+    const svc = server.services;
+    const upright = await saveUpload(svc, new Blob([await rgbNoise(320, 240, "jpeg")]));
+    const { asset: sideways } = await saveUpload(
+      svc,
+      new Blob([
+        await sharp(await rgbNoise(320, 240, "jpeg"))
+          .withMetadata({ orientation: 6 })
+          .jpeg()
+          .toBuffer(),
+      ]),
+    );
+    const saved = await saveMask(
+      svc,
+      new Blob([(await holeMask(320, 240, { x: 10, y: 10, w: 50, h: 50 })) as Uint8Array<ArrayBuffer>]),
+      { baseAssetId: upright.asset.id },
+    );
+    const call = {
+      op: "inpaint",
+      jobId: "job",
+      prompt: "a red door",
+      base: { assetId: sideways.id, role: "base" },
+      mask: { assetId: saved.asset.id },
+    } as unknown as NormalizedRequest;
+    const result = await stage(await gradientPng(320, 240, 10));
+    const out = await compositeEdit(svc, call, result);
+    expect(out).toEqual({
+      staged: result,
+      edit: { composite: { applied: false, expandPx: 4, featherPx: 8, reason: "turned" } },
+    });
+    expect(maskOutcome({ opParams: { edit: out!.edit } })).toEqual({
+      keptOutsideMask: false,
+      why: "The image is saved on its side, so this is the model's whole result.",
+    });
   });
 
   test("leaves anything but a masked image edit alone", async () => {
