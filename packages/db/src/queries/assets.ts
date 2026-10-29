@@ -87,6 +87,23 @@ export function findLiveAssetBySha256(db: Executor, sha256: string, kind?: Asset
     .get();
 }
 
+/** A live mask with these bytes, drawn for this image: saving the same mask again finds it. */
+export function findLiveMask(db: Executor, sha256: string, parentAssetId: string): AssetRow | undefined {
+  return db
+    .select()
+    .from(assets)
+    .where(
+      and(
+        eq(assets.sha256, sha256),
+        eq(assets.kind, "mask"),
+        eq(assets.parentAssetId, parentAssetId),
+        isNull(assets.deletedAt),
+      ),
+    )
+    .orderBy(asc(assets.createdAt))
+    .get();
+}
+
 export function assetsForJobSets(db: Executor, jobSetIds: readonly string[]): AssetRow[] {
   if (jobSetIds.length === 0) return [];
   return db
@@ -97,12 +114,15 @@ export function assetsForJobSets(db: Executor, jobSetIds: readonly string[]): As
     .all();
 }
 
-/** Version strip and History: one index scan per lineage root, no recursion (§0.7). */
+/**
+ * Version strip and History: one index scan per lineage root, no recursion (§0.7). Masks share
+ * their image's root but aren't versions of it.
+ */
 export function assetVersions(db: Executor, rootAssetId: string): AssetRow[] {
   return db
     .select()
     .from(assets)
-    .where(and(eq(assets.rootAssetId, rootAssetId), isNull(assets.deletedAt)))
+    .where(and(eq(assets.rootAssetId, rootAssetId), isNull(assets.deletedAt), ne(assets.kind, "mask")))
     .orderBy(asc(assets.createdAt))
     .all();
 }

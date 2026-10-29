@@ -20,8 +20,8 @@ export const SIZE_RULES = {
   maxPixels: 8_294_400,
 } as const;
 
-/** A mask must be a PNG "less than 4MB" (Image API reference, checked 2026-10-29). */
-export const MASK_MAX_BYTES = 4_000_000;
+/** A mask must be a PNG "less than 4MB". Core holds every saved mask to the same limit. */
+export { MASK_MAX_BYTES } from "@openfield/core";
 
 /**
  * Every ratio the composer offers maps to a legal custom size (conformance 2), so all three models

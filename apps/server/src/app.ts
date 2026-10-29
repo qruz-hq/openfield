@@ -19,6 +19,7 @@ import { healthRoutes } from "./routes/health";
 import { jobSetsRoutes } from "./routes/job-sets";
 import { keysRoutes } from "./routes/keys";
 import { libraryRoutes } from "./routes/library";
+import { masksRoutes } from "./routes/masks";
 import { modelsRoutes } from "./routes/models";
 import { presenceRoutes } from "./routes/presence";
 import { providersRoutes } from "./routes/providers";
@@ -44,6 +45,7 @@ const api = new Hono<Env>()
   .route("/", libraryRoutes)
   .route("/", usageRoutes)
   .route("/", uploadsRoutes)
+  .route("/", masksRoutes)
   .route("/", canvasesRoutes)
   .route("/", canvasRunsRoutes)
   .route("/", canvasArchivesRoutes)
@@ -69,6 +71,13 @@ export const LARGER_BODIES: { method: string; path: RegExp; maxSize: number; use
       path: /^\/api\/uploads$/,
       maxSize: UPLOAD_MAX_BYTES + 64 * 1024,
       userMessage: () => t("uploads.tooLarge", { size: formatBytes(UPLOAD_MAX_BYTES) }),
+    },
+    // A mask comes in as any image the size of the one it's for, and is made small once it's in.
+    {
+      method: "POST",
+      path: /^\/api\/masks$/,
+      maxSize: UPLOAD_MAX_BYTES + 64 * 1024,
+      userMessage: () => t("errors.maskTooLarge", { size: formatBytes(UPLOAD_MAX_BYTES) }),
     },
     { method: "POST", path: /^\/api\/canvases$/, maxSize: CANVAS_DOCUMENT_BYTES },
     { method: "PATCH", path: /^\/api\/canvases\/[^/]+$/, maxSize: CANVAS_DOCUMENT_BYTES },
