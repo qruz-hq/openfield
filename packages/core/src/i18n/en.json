@@ -284,6 +284,8 @@
     "scrollRight": "Scroll settings right",
     "limited": "Limited controls. Couldn't load this model's settings.",
     "unsupported": "{model} doesn't support {setting}.",
+    "wholeImageEdit": "{model} can only edit the whole image.{keep, select, yes { Openfield puts back everything outside your area afterwards.} other {}}",
+    "areaEditOff": "{model} can only edit the whole image. Choose another model, or allow approximate area edits in Settings.",
     "adjusted": "Adjusted {count, plural, one {# setting} other {# settings}} for {model}: {changes}",
     "change": "{from} → {to}",
     "chips": {
@@ -491,7 +493,7 @@
       },
       "editing": "Editing",
       "regionalFallback": "Allow approximate area edits",
-      "regionalFallbackHint": "Some models can't edit a single area. Openfield edits the whole image and keeps your area as close as it can.",
+      "regionalFallbackHint": "Some models can only edit the whole image. Openfield lets them, then puts back everything outside the area you painted.",
       "restarts": "Restarts",
       "rerunInterrupted": "Run interrupted images again after a restart",
       "rerunInterruptedHint": "Only for images that can't pick up where they left off. You may be charged twice."
@@ -1067,6 +1069,8 @@
     "rateLimitedIn": "Too many requests. Trying again in {seconds}s.",
     "forbiddenModel": "Your key can't use {model}.",
     "referenceTooLarge": "This reference image is too large. The limit is {size}.",
+    "maskMissing": "Paint the area to change first.",
+    "maskInverted": "Invert the mask when you save it, not when you run the edit.",
     "imageBlocked": "Image blocked. It came from an unknown site.",
     "companyOff": "{company} is turned off, so its models can't run.",
     "keyNotPrivate": "Couldn't save your key. This folder can't keep files private.",

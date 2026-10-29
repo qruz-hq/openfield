@@ -45,11 +45,20 @@ describe("enums", () => {
 
   test("ops compile to adapter ops per §0.4", () => {
     const plain = { hasMask: false, canInpaint: false };
-    for (const op of ADAPTER_OPS) expect(adapterOpFor(op, plain)).toBe(op);
+    for (const op of ADAPTER_OPS.filter((o) => o !== "inpaint")) expect(adapterOpFor(op, plain)).toBe(op);
     expect(adapterOpFor("variation", plain)).toBe("generate");
     expect(adapterOpFor("relight", plain)).toBe("edit");
     expect(adapterOpFor("relight", { hasMask: true, canInpaint: true })).toBe("inpaint");
     expect(adapterOpFor("decompose", plain)).toBeNull();
     for (const op of LOCAL_OPS) expect(adapterOpFor(op, plain)).toBeNull();
+  });
+
+  test("an edit or inpaint is an inpaint only with a mask, on a model that takes one", () => {
+    for (const op of ["edit", "inpaint"] as const) {
+      expect(adapterOpFor(op, { hasMask: true, canInpaint: true })).toBe("inpaint");
+      expect(adapterOpFor(op, { hasMask: true, canInpaint: false })).toBe("edit");
+      expect(adapterOpFor(op, { hasMask: false, canInpaint: true })).toBe("edit");
+      expect(adapterOpFor(op, { hasMask: false, canInpaint: false })).toBe("edit");
+    }
   });
 });

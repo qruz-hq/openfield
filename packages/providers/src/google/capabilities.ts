@@ -71,7 +71,8 @@ export function geminiCapabilities(opts: GeminiCapabilityOptions): Capabilities 
     ops: {
       textToImage: true,
       imageEdit: true,
-      // No mask input: masked edits use Openfield's regional fallback (§0.9).
+      // No mask input: a masked edit runs as a whole-image edit, and Openfield puts back
+      // everything outside the mask afterwards (§0.9).
       inpaint: false,
       outpaint: false,
       upscale: false,

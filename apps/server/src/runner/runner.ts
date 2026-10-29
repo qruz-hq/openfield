@@ -305,6 +305,7 @@ export class Runner {
     const result = await normalize(manifest, body, {
       jobSetId: newId(),
       settings: this.deps.providerSettings.forRun(manifest.providerId),
+      wholeImageFallback: this.deps.settings.get().regionalFallback,
     });
     if (result.error) {
       throw new ApiFailure(400, result.error.code, result.error.userMessage, {

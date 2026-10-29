@@ -178,19 +178,20 @@ export const diagnosticSchema = z.object({
 
 /**
  * The adapter op a recorded op compiles to (§0.4), or null for local and plugin-only ops.
- * Widget edits become an inpaint only when there's a mask and the model can inpaint.
+ * Edits, inpaints and widget edits become an inpaint only when there's a mask and the model can
+ * inpaint; otherwise they're a whole-image edit, and normalize() decides what the mask still does.
  */
 export function adapterOpFor(op: Op, opts: { hasMask: boolean; canInpaint: boolean }): AdapterOp | null {
   switch (op) {
     case "generate":
-    case "edit":
-    case "inpaint":
     case "outpaint":
     case "upscale":
     case "remove_bg":
       return op;
     case "variation":
       return "generate";
+    case "edit":
+    case "inpaint":
     case "relight":
     case "angles":
     case "enhance":

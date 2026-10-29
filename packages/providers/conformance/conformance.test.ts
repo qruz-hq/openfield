@@ -491,7 +491,11 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
         mask: { assetId: newId() },
       });
       const inpaint = await normalize(manifest, inpaintReq, { jobSetId: newId() });
-      golden.inpaint = caps.ops.inpaint ? { op: inpaint.request.op } : { error: inpaint.error?.code };
+      // A model without a mask input edits the whole image and says so (§0.9).
+      const note = inpaint.diagnostics.find((d) => d.field === "mask")?.code;
+      golden.inpaint = inpaint.error
+        ? { error: inpaint.error.code }
+        : { op: inpaint.request.op, ...(note && { note }) };
 
       expect(golden).toMatchSnapshot(manifest.key);
     }

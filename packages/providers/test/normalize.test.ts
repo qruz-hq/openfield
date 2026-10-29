@@ -8,6 +8,7 @@ import {
 } from "@openfield/core";
 import { GOOGLE_MODELS } from "../src/google/models";
 import { GOOGLE_SETTINGS } from "../src/google/settings";
+import { HIGGSFIELD_MODELS } from "../src/higgsfield/models";
 import { appendAvoid, normalize, planCalls } from "../src/normalize";
 
 const pro = GOOGLE_MODELS.find((m) => m.modelId === "gemini-3-pro-image")!;
@@ -144,12 +145,95 @@ describe("normalize", () => {
   });
 
   test("an op the model can't do is always an error", async () => {
-    const out = await run(pro, {
-      op: "inpaint",
-      base: { assetId: newId(), role: "base" },
-      mask: { assetId: newId() },
-    });
+    const out = await run(pro, { op: "upscale", base: { assetId: newId(), role: "base" } });
     expect(out.error?.code).toBe("capability_unsupported");
+  });
+
+  describe("masked edits (§0.9)", () => {
+    const base = { assetId: newId(), role: "base" as const };
+    const mask = { assetId: newId() };
+    const inpainter = variant({ ops: { ...pro.capabilities.ops, inpaint: true } });
+
+    test("an edit or inpaint with a mask is an inpaint on a model that takes masks", async () => {
+      for (const op of ["edit", "inpaint"] as const) {
+        const out = await run(inpainter, { op, base, mask });
+        expect(out.error).toBeUndefined();
+        expect(out.diagnostics).toEqual([]);
+        expect(out.request.op).toBe("inpaint");
+        // The composite settings are frozen, defaults filled, so Recreate replays them.
+        expect(out.request.mask).toEqual({
+          assetId: mask.assetId,
+          composite: true,
+          expandPx: 4,
+          featherPx: 8,
+        });
+      }
+      const set = await run(inpainter, {
+        op: "inpaint",
+        base,
+        mask: { ...mask, composite: false, expandPx: 0, featherPx: 32 },
+      });
+      expect(set.request.mask).toEqual({
+        assetId: mask.assetId,
+        composite: false,
+        expandPx: 0,
+        featherPx: 32,
+      });
+    });
+
+    test("a model without a mask input edits the whole image, with a note, and keeps the mask", async () => {
+      for (const op of ["edit", "inpaint", "relight"] as const) {
+        const out = await run(pro, { op, base, mask });
+        expect(out.error).toBeUndefined();
+        expect(out.request.op).toBe("edit");
+        expect(out.request.mask?.assetId).toBe(mask.assetId);
+        expect(out.diagnostics).toEqual([
+          {
+            level: "warning",
+            field: "mask",
+            code: "whole_image",
+            message:
+              "Nano Banana Pro can only edit the whole image. Openfield puts back everything outside your area afterwards.",
+          },
+        ]);
+      }
+      const raw = await run(pro, { op: "inpaint", base, mask: { ...mask, composite: false } });
+      expect(raw.diagnostics[0]?.message).toBe("Nano Banana Pro can only edit the whole image.");
+    });
+
+    test("with the fallback turned off, the same edit is refused", async () => {
+      const out = await normalize(pro, req({ op: "inpaint", base, mask }), {
+        jobSetId: newId(),
+        wholeImageFallback: false,
+      });
+      expect(out.error).toMatchObject({ code: "capability_unsupported", field: "mask" });
+      expect(out.error?.userMessage).toContain("allow approximate area edits in Settings");
+    });
+
+    test("a model that can't edit at all still can't, mask or not", async () => {
+      const higgsfield = HIGGSFIELD_MODELS.find((m) => !m.capabilities.ops.imageEdit)!;
+      const out = await run(higgsfield, { model: higgsfield.key, op: "inpaint", base, mask });
+      expect(out.error?.code).toBe("capability_unsupported");
+      expect(out.diagnostics.filter((d) => d.field === "mask")).toEqual([]);
+    });
+
+    test("an inpaint needs a mask, and an inverted one is refused", async () => {
+      const bare = await run(inpainter, { op: "inpaint", base });
+      expect(bare.error).toMatchObject({ code: "invalid_request", field: "mask" });
+      expect(bare.error?.userMessage).toBe("Paint the area to change first.");
+      const inverted = await run(inpainter, { op: "inpaint", base, mask: { ...mask, invert: true } });
+      expect(inverted.error).toMatchObject({ code: "invalid_request", field: "mask" });
+      // An edit without a mask is a plain whole-image edit, no note.
+      const plain = await run(pro, { op: "edit", base });
+      expect(plain.diagnostics).toEqual([]);
+      expect(plain.request.mask).toBeUndefined();
+    });
+
+    test("a mask on a generation is dropped", async () => {
+      const out = await run(pro, { mask });
+      expect(out.request.op).toBe("generate");
+      expect(out.request.mask).toBeUndefined();
+    });
   });
 
   test("widget edits compile to edit, and edits need a base", async () => {
