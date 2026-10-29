@@ -12,7 +12,7 @@ import { assetsForJobSets, getAsset, getCanvas, getJobSet } from "@openfield/db"
 import { serverEngineContext } from "../src/canvas/engine-context";
 import { finished, newCanvas } from "./canvas-helpers";
 import { saveKey, startTestServer, type TestServer } from "./helpers";
-import { keptOutside, quarterMask, texture } from "./pixels";
+import { keptOutside, quarterMask, texture, whiteQuarter } from "./pixels";
 
 // The Edit node on a canvas run (§7.7, §0.9): the server binds the image and the mask the node
 // sends with its keep-the-rest settings, and the result keeps the original outside the mask,
@@ -81,11 +81,8 @@ async function editCanvas(params: Record<string, unknown> = {}) {
   return { canvasId: canvas.id, base, mask, edit: aliases.e! };
 }
 
-/**
- * Runs the whole canvas to the end as the editor does: compiled from the saved document, then
- * posted. The Edit node's one job set and its result.
- */
-async function runAll(canvasId: string, edit: string) {
+/** Posts the whole canvas as the editor's Run all does: compiled from the saved document. */
+async function post(canvasId: string) {
   const ctx = serverEngineContext(server!.services);
   const { slice } = fromDocument(savedDoc(canvasId));
   const fingerprints = await resolveFingerprints(planFingerprints(slice, specRegistry, ctx), new Map());
@@ -103,12 +100,28 @@ async function runAll(canvasId: string, edit: string) {
   });
   expect(res.status).toBe(201);
   const run = canvasRunResponseSchema.parse(res.body);
-  expect((await finished(server!, run.runId!, 20_000)).status).toBe("succeeded");
+  return { run, done: await finished(server!, run.runId!, 20_000) };
+}
+
+/** Runs the whole canvas to the end. The Edit node's one job set and its result. */
+async function runAll(canvasId: string, edit: string) {
+  const { run, done } = await post(canvasId);
+  expect(done.status).toBe("succeeded");
   const jobSetId = run.jobSets.find((j) => j.nodeId === edit)!.jobSetId;
   const [made] = assetsForJobSets(server!.services.db, [jobSetId]);
   const result = savedDoc(canvasId).nodes.find((n) => n.id === edit)!.result!;
   return { set: getJobSet(server!.services.db, jobSetId)!, made: made!, result };
 }
+
+/** Nothing past expand plus feather (`reach`) took any of the edit, and the area to change did. */
+async function expectKept(baseId: string, resultId: string, reach = 4 + 8) {
+  const kept = await keptOutside(fileOf(baseId), fileOf(resultId), reach);
+  expect(kept).toMatchObject({ sameShape: true, outside: 0 });
+  expect(kept.inside).toBeGreaterThan(kept.quarter * 0.9);
+}
+
+const upToDate = async (canvasId: string) =>
+  (await server!.services.canvasRuns.runScope(canvasId, { scope: "all", dryRun: true })).upToDate;
 
 describe("an Edit node's run", () => {
   test("sends the painted mask with its settings and keeps the original outside it", async () => {
@@ -130,16 +143,12 @@ describe("an Edit node's run", () => {
       maskAssetId: mask,
       opParams: { edit: { composite: { applied: true, expandPx: 4, featherPx: 8 } } },
     });
-    // Nothing past expand plus feather takes any of the edit; the area to change does.
-    const kept = await keptOutside(fileOf(base), fileOf(made.id), 4 + 8);
-    expect(kept).toMatchObject({ sameShape: true, outside: 0 });
-    expect(kept.inside).toBeGreaterThan(kept.quarter * 0.9);
+    await expectKept(base, made.id);
 
     expect(result.assetIds).toEqual([made.id]);
     expect(result.inputs).toEqual([base, mask].sort());
     // What it read is what it holds now, so it isn't run again.
-    const again = await server.services.canvasRuns.runScope(canvasId, { scope: "all", dryRun: true });
-    expect(again.upToDate).toContain(edit);
+    expect(await upToDate(canvasId)).toContain(edit);
   });
 
   test("its own grow and soften settings reach the composite", async () => {
@@ -150,10 +159,7 @@ describe("an Edit node's run", () => {
     expect(made.opParams).toMatchObject({
       edit: { composite: { applied: true, expandPx: 0, featherPx: 16 } },
     });
-    expect(await keptOutside(fileOf(base), fileOf(made.id), 16)).toMatchObject({
-      sameShape: true,
-      outside: 0,
-    });
+    await expectKept(base, made.id, 16);
   });
 
   test("with Keep the rest off, the model's own result is kept as it came", async () => {
@@ -162,5 +168,60 @@ describe("an Edit node's run", () => {
     const { set, made } = await runAll(canvasId, edit);
     expect(set.requestJson.mask).toEqual({ assetId: mask, composite: false, expandPx: 4, featherPx: 8 });
     expect(made.opParams).toMatchObject({ edit: { composite: { applied: false, reason: "off" } } });
+  });
+});
+
+describe("an image wired into the Mask input", () => {
+  /** Upload → Edit's image, and another Upload → Edit's mask: no mask painted in the node. */
+  async function wiredCanvas(maskImage: Uint8Array) {
+    const base = await upload(await texture(640, 480));
+    const source = await upload(maskImage);
+    const canvas = await newCanvas(server!, { name: "Wired" });
+    const { aliases } = server!.services.canvases.edit(
+      canvas.id,
+      [
+        { op: "add_node", as: "up", type: "image.upload", params: { assetIds: [base] } },
+        { op: "add_node", as: "m", type: "image.upload", params: { assetIds: [source] } },
+        { op: "add_node", as: "e", type: "image.edit", params: { model: OPENAI, prompt: "a red door" } },
+        { op: "connect", source: "up", target: "e", targetHandle: "image" },
+        { op: "connect", source: "m", target: "e", targetHandle: "mask" },
+      ],
+      tab,
+    );
+    return { canvasId: canvas.id, base, source, edit: aliases.e! };
+  }
+
+  test("goes as a mask saved for the image, white changing, and the rest is kept", async () => {
+    server = await ready();
+    const { canvasId, base, source, edit } = await wiredCanvas(await whiteQuarter(640, 480));
+    const { set, made, result } = await runAll(canvasId, edit);
+
+    const maskId = set.requestJson.mask!.assetId;
+    expect(maskId).not.toBe(source);
+    expect(getAsset(server.services.db, maskId)).toMatchObject({
+      kind: "mask",
+      parentAssetId: base,
+      width: 640,
+      height: 480,
+    });
+    expect(set.op).toBe("inpaint");
+    expect(made).toMatchObject({ kind: "edited", parentAssetId: base, maskAssetId: maskId });
+    await expectKept(base, made.id);
+
+    // The node read the image it was given, so it's up to date with it.
+    expect(result.inputs).toEqual([base, source].sort());
+    expect(await upToDate(canvasId)).toContain(edit);
+  });
+
+  test("an image of another size isn't sent, and says why", async () => {
+    server = await ready();
+    const { canvasId, edit } = await wiredCanvas(await whiteQuarter(320, 240));
+    const { run, done } = await post(canvasId);
+    expect(done.status).toBe("failed");
+    expect(run.jobSets).toEqual([]);
+    expect(done.nodes.find((n) => n.nodeId === edit)).toMatchObject({
+      state: "failed",
+      error: { code: "invalid_request", reason: expect.stringContaining("320 × 240") },
+    });
   });
 });

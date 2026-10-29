@@ -42,6 +42,17 @@ export async function quarterMask(width: number, height: number): Promise<Uint8A
   );
 }
 
+/** An opaque black image, white in its top-left quarter: the same area as quarterMask, by brightness. */
+export async function whiteQuarter(width: number, height: number): Promise<Uint8Array> {
+  const rgb = new Uint8Array(width * height * 3);
+  for (let y = 0; y < height / 2; y++) rgb.fill(255, y * width * 3, (y * width + Math.ceil(width / 2)) * 3);
+  return new Uint8Array(
+    await sharp(rgb, { raw: { width, height, channels: 3 } })
+      .png()
+      .toBuffer(),
+  );
+}
+
 export interface Kept {
   /** Both decode to the same width, height and channel count. */
   sameShape: boolean;

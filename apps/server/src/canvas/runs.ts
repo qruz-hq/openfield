@@ -58,6 +58,7 @@ import {
   canvasRunsSince,
   createFolder,
   type Db,
+  getAsset,
   getAssets,
   getCanvas,
   getCanvasRun,
@@ -72,6 +73,8 @@ import {
 } from "@openfield/db";
 import { estimate, pricedOp, resolveProviderSettings } from "@openfield/providers/manifest";
 import type { EventHub } from "../events/hub";
+import type { Ingest } from "../files/ingest";
+import { saveMask } from "../files/mask";
 import { ApiFailure } from "../http/errors";
 import type { Logger } from "../log/logger";
 import type { Runner } from "../runner/runner";
@@ -110,6 +113,8 @@ const TRACKED = new Set(["job.started", "job.output", "job.failed", "job.cancele
 
 export interface CanvasRunDeps {
   db: Db;
+  /** Saves an image wired into a mask input as a mask for the image it edits. */
+  ingest: Ingest;
   runner: Runner;
   models: ModelService;
   /** Prices a company answers per request (§6.9). Without it those nodes are priced as unknown. */
@@ -823,7 +828,8 @@ export class CanvasRunService {
       return;
     }
     try {
-      const accepted = await this.deps.runner.createJobSet(launch.request, {
+      const request = await this.#withSavedMask(launch.request);
+      const accepted = await this.deps.runner.createJobSet(request, {
         priority: run.priority,
         canvasRunId: run.id,
         agent: run.record.agent,
@@ -847,6 +853,23 @@ export class CanvasRunService {
         });
       }
     }
+  }
+
+  /**
+   * An image wired into a mask input (§7.6) goes as a mask saved for the image this launch edits,
+   * the way POST /api/masks saves one: by its transparency, or by brightness when it has none
+   * (white changes). The launch keeps the image it was given, so the node's result names what it
+   * read, and the same image saved again for the same base comes back as the same mask.
+   */
+  async #withSavedMask(request: GenerateRequest): Promise<GenerateRequest> {
+    const { mask, base } = request;
+    if (!mask || !base) return request;
+    const row = getAsset(this.deps.db, mask.assetId);
+    // A saved mask goes as it is, and one that's gone is the runner's to refuse.
+    if (!row || row.kind === "mask") return request;
+    const file = Bun.file(this.deps.ingest.fileOf(row.path));
+    const saved = await saveMask(this.deps, file, { baseAssetId: base.assetId });
+    return { ...request, mask: { ...mask, assetId: saved.asset.id } };
   }
 
   /** Marks a node for recomputing and processes the run soon, once per task. */
