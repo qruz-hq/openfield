@@ -10,7 +10,14 @@ import {
   TAKES_MAX,
   TAKES_MIN,
 } from "@openfield/canvas";
-import { ASPECT_RATIOS, BATCH_MAX, CANVAS_EDGE_KINDS, GENERATE_PROMPT_MAX, t } from "@openfield/core";
+import {
+  ASPECT_RATIOS,
+  BATCH_MAX,
+  CANVAS_EDGE_KINDS,
+  GENERATE_PROMPT_MAX,
+  MASK_COMPOSITE_MAX_PX,
+  t,
+} from "@openfield/core";
 import { type CanvasEdit, canvasEditSchema } from "@openfield/core/canvas";
 import { getCanvas } from "@openfield/db";
 import { z } from "zod";
@@ -50,6 +57,23 @@ const SETTINGS: Partial<Record<string, Record<string, string>>> = {
     aspect: 'Shorthand for size: an aspect ratio such as "1:1", "3:4" or "16:9".',
     size: '{"kind":"aspect","ratio":"16:9"}, {"kind":"pixels","width":1024,"height":1536} or {"kind":"auto"}.',
     resolution: 'A resolution tier the model lists, such as "1K" or "2K".',
+    quality: "A quality id the model lists in list_models.",
+    batch: `How many images, 1 to ${BATCH_MAX}. Each is billed.`,
+    seed: '{"mode":"random"} or {"mode":"fixed","value":42}, for models that take seeds.',
+  },
+  "image.edit": {
+    model:
+      "A model key from list_models that can edit an image. One with masks: true takes the mask itself; any other edits the whole image, then Openfield puts back everything outside the mask. Leave out for the default.",
+    prompt: `What to change. A connected Prompt node's text comes first, then this; together at most ${GENERATE_PROMPT_MAX} characters.`,
+    maskAssetId:
+      "The mask for the image on its image input: where that image may change. A mask connected to its mask input is used instead.",
+    maskFor: "The image the mask was made for. The mask fits only that image.",
+    keepOriginal:
+      "true (default): put the original back everywhere outside the mask, so only that area changes. false keeps the model's whole result.",
+    expandPx: `Grow the area to change by this many pixels first, 0 to ${MASK_COMPOSITE_MAX_PX}.`,
+    featherPx: `Blend the edit into the original over this many more pixels, 0 to ${MASK_COMPOSITE_MAX_PX}.`,
+    resolution:
+      'A resolution tier the model lists, such as "1K" or "2K". The result always keeps the image\'s shape.',
     quality: "A quality id the model lists in list_models.",
     batch: `How many images, 1 to ${BATCH_MAX}. Each is billed.`,
     seed: '{"mode":"random"} or {"mode":"fixed","value":42}, for models that take seeds.',

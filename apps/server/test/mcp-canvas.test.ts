@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { type CallToolResult, CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { canvasRunStateSchema, canvasUpdatedSchema } from "@openfield/core";
@@ -6,6 +8,7 @@ import { type CanvasDocument, type CanvasNode, canvasDocumentSchema } from "@ope
 import { getCanvas, jobSetsOfRun } from "@openfield/db";
 import { gatedFetch, saveKey, startTestServer, type TestServer } from "./helpers";
 import { call, connectAgent, turnOnAgents } from "./mcp-helpers";
+import { texture } from "./pixels";
 
 // Canvases through /mcp (docs/agents.md): an agent builds, changes, runs and reads canvases with the
 // SDK's own client, as the person watches in an open tab. Fake companies answer every call.
@@ -393,6 +396,10 @@ describe("canvases", () => {
     expect(edit.inputs.map((p: Json) => p.port)).toEqual(["image", "mask", "prompt", "input_images"]);
     expect(edit.inputs[0]).toMatchObject({ takes: "image", required: true });
     expect(edit.defaults).toMatchObject({ keepOriginal: true, featherPx: 8, expandPx: 4 });
+    expect(Object.keys(edit.settings)).toEqual(
+      expect.arrayContaining(["model", "prompt", "maskAssetId", "keepOriginal", "expandPx", "featherPx"]),
+    );
+    expect(edit.limits).toMatchObject({ featherPx: { min: 0, max: 32 }, expandPx: { min: 0, max: 32 } });
     expect(types.find((t) => t.type === "note")).toMatchObject({ forLayout: true, makesImages: false });
   });
 
@@ -517,6 +524,40 @@ describe("running canvases", () => {
       await call(client!, "get_run", { canvas: second.canvasId, runId: running.runId, wait: 10 }),
     );
     expect(after.status).toBe("canceled");
+  });
+});
+
+describe("Edit nodes", () => {
+  /** A photo brought in from a file, wired into an Edit node. */
+  async function photoToEdit(s: TestServer, c: Client, params: Record<string, unknown> = {}) {
+    const file = join(s.home, "tmp", "photo.png");
+    writeFileSync(file, await texture(640, 480));
+    const photo = j(await call(c, "import_image", { source: file })).assetId as string;
+    const made = j(await call(c, "create_canvas", { name: "Door" }));
+    const built = await call(c, "edit_canvas", {
+      canvas: made.canvasId,
+      edits: [
+        { op: "add_node", as: "u", type: "image.upload", params: { assetIds: [photo] } },
+        { op: "add_node", as: "e", type: "image.edit", params },
+        { connect: "u.images", to: "e.image" },
+      ],
+    });
+    expect(built.isError).toBe(false);
+    const created = j(built).created as { u: string; e: string };
+    return { canvasId: made.canvasId as string, photo, ...created };
+  }
+
+  test("get_canvas shows an Edit node's settings, and that it waits for a mask", async () => {
+    const { server: s, client: c } = await ready();
+    const { canvasId, e } = await photoToEdit(s, c, { prompt: "a red door", featherPx: 2 });
+    const node = j(await call(c, "get_canvas", { canvas: canvasId })).nodes.find((n: Json) => n.id === e);
+    expect(node).toMatchObject({
+      type: "image.edit",
+      title: "Edit",
+      params: { prompt: "a red door", keepOriginal: true, featherPx: 2, expandPx: 4 },
+      state: "idle",
+      needs: "Paint a mask or connect one to run this",
+    });
   });
 });
 
