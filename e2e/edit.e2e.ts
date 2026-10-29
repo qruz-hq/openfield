@@ -1,8 +1,10 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
-import { api, makeImage, sessionToken } from "./support";
+import { api, FAKE_KEY, makeImage, SESSION_HEADER, sessionToken } from "./support";
 
 // The detail view's Edit tab (§4.6, design "Image edit"): paint a mask over an image with the
-// brush, eraser, lasso and rectangle, undo and redo it, and never lose it without asking.
+// brush, eraser, lasso and rectangle, undo and redo it, and never lose it without asking. Then run
+// the edit on the fake models: its price on Generate, the monthly limit, the new image linked to
+// the image and its mask, a run that fails, and a phone photo that can't take a mask.
 
 let runs = 0;
 const unique = (name: string) => `${name} ${Date.now().toString(36)}${runs++}`;
@@ -187,3 +189,258 @@ test("on Edit the view's own keys stay quiet, and Esc drops the tool before it a
 });
 
 const xy = (p: { x: number; y: number }) => [p.x, p.y] as const;
+
+const panelOf = (page: Page) => detail(page).getByRole("tabpanel", { name: "Edit" });
+const generateIn = (page: Page) => panelOf(page).getByRole("button", { name: /^Generate/ });
+
+/** An image with OpenAI's fake key added too, so models that take a mask are ready. Opened on Edit. */
+async function editable(page: Page, prompt: string): Promise<{ id: string; token: string }> {
+  const token = await sessionToken(page.request);
+  await api(page.request, token, "PUT", "/api/settings/keys/openai", { apiKey: FAKE_KEY });
+  const id = await makeImage(page.request, token, prompt);
+  await page.goto(`/assets?asset=${id}&tab=edit`);
+  await expect(toolbar(page)).toBeVisible();
+  return { id, token };
+}
+
+/** A box over the middle of the image, then the words. */
+async function paintAndDescribe(page: Page, words: string) {
+  await page.keyboard.press("m");
+  const layer = maskLayer(page);
+  await drag(page, await at(layer, 0.3, 0.3), await at(layer, 0.6, 0.6));
+  await expect.poll(() => tintAt(page, 0.45, 0.45)).toBe(255);
+  await panelOf(page).getByRole("textbox", { name: "What to change" }).fill(words);
+}
+
+test("Generate runs the painted edit at its price, and the new image comes from the image and its mask", async ({
+  page,
+}) => {
+  const { id, token } = await editable(page, unique("white vases"));
+  const panel = panelOf(page);
+  const generate = generateIn(page);
+
+  // Nothing painted: Generate waits and says why, with no price.
+  await expect(generate).toBeDisabled();
+  await expect(generate).not.toContainText("$");
+  await expect(panel.getByText("Paint over the part you want to change.")).toBeVisible();
+  await expect(panel.getByText("1:1, same as the image")).toBeVisible();
+  await expect(panel.getByText(/^New image keeps the original size, \d+ × \d+\.$/)).toBeVisible();
+
+  // The model picked takes a mask: its group comes first, the whole-image models after.
+  await panel.getByRole("button", { name: "Model" }).click();
+  const list = page.getByRole("listbox", { name: "Choose model" });
+  const text = await list.innerText();
+  expect(text.indexOf("Change only what you paint")).toBeGreaterThanOrEqual(0);
+  expect(text.indexOf("Change only what you paint")).toBeLessThan(text.indexOf("Redraw the whole image"));
+  const picked = (await list.getByRole("option", { selected: true }).innerText()).split("\n")[0]!;
+  expect(text.indexOf(picked)).toBeLessThan(text.indexOf("Redraw the whole image"));
+  await page.keyboard.press("Escape");
+  await expect(list).toHaveCount(0);
+
+  // A box, then the words: Generate shows the price, as the composer does.
+  await page.keyboard.press("m");
+  const layer = maskLayer(page);
+  await drag(page, await at(layer, 0.3, 0.3), await at(layer, 0.6, 0.6));
+  await expect(panel.getByText("Describe the change.")).toBeVisible();
+  await expect(generate).toBeDisabled();
+  await panel.getByRole("textbox", { name: "What to change" }).fill("Make the berries pale and dried");
+  await expect(generate).toBeEnabled();
+  await expect(generate).toContainText(/~\$\d/);
+
+  // It saves the mask, then asks for the edit with it, kept to the painted area.
+  const masks = page.waitForResponse(
+    (r) => r.url().endsWith("/api/masks") && r.request().method() === "POST",
+  );
+  const edits = page.waitForRequest((r) => r.url().endsWith("/api/edit") && r.method() === "POST");
+  await generate.click();
+  const saved = (await (await masks).json()) as { asset: { id: string } };
+  const body = (await edits).postDataJSON() as {
+    op: string;
+    source: string;
+    base: { assetId: string };
+    mask: { assetId: string; composite: boolean; featherPx: number; expandPx: number };
+  };
+  expect(body).toMatchObject({
+    op: "inpaint",
+    source: "detail_editor",
+    base: { assetId: id },
+    mask: { assetId: saved.asset.id, composite: true, featherPx: 8, expandPx: 4 },
+  });
+
+  // The new image lands in the results strip, and the note says the original is untouched.
+  await expect(panel.getByText("Saved as 1 new image. The original stays as it is.")).toBeVisible({
+    timeout: 20_000,
+  });
+  const strip = detail(page).getByRole("group", { name: "New images" });
+  await expect(strip.getByRole("button", { name: "Original" })).toBeVisible();
+  await expect(strip.getByRole("button", { name: "New image 1" })).toHaveAttribute("aria-pressed", "true");
+  await expect(generate).toHaveText(/^Generate again/);
+  await expect(panel.getByText("Softens the edge on your next Generate.")).toBeVisible();
+
+  // Generate again sends the same mask by its id.
+  const again = page.waitForRequest((r) => r.url().endsWith("/api/edit") && r.method() === "POST");
+  let resaved = false;
+  page.on("request", (r) => {
+    if (r.url().endsWith("/api/masks")) resaved = true;
+  });
+  await generate.click();
+  expect(((await again).postDataJSON() as { mask: { assetId: string } }).mask.assetId).toBe(saved.asset.id);
+  expect(resaved).toBe(false);
+  await expect(panel.getByText("Saved as 1 new image. The original stays as it is.")).toBeVisible({
+    timeout: 20_000,
+  });
+
+  // Open new image shows it, nothing lost, and it was made from the image and the mask.
+  await panel.getByRole("button", { name: "Open new image" }).click();
+  await expect(page.getByRole("alertdialog")).toHaveCount(0);
+  await expect(page).not.toHaveURL(new RegExp(`asset=${id}`));
+  const shown = new URL(page.url()).searchParams.get("asset")!;
+  const detailOf = await api<{ asset: { parentAssetId: string; maskAssetId: string; op: string } }>(
+    page.request,
+    token,
+    "GET",
+    `/api/assets/${shown}`,
+  );
+  expect(detailOf.asset).toMatchObject({ parentAssetId: id, maskAssetId: saved.asset.id, op: "inpaint" });
+});
+
+test("a whole-image model says so, Keep the rest can be turned off, and the monthly limit asks first", async ({
+  page,
+}) => {
+  const { token } = await editable(page, unique("red berries"));
+  const panel = panelOf(page);
+
+  await panel.getByRole("button", { name: "Model" }).click();
+  await page.getByRole("option", { name: /Nano Banana 2 Lite/ }).click();
+  await expect(panel.getByRole("button", { name: "Model" })).toContainText("Nano Banana 2 Lite");
+  await expect(
+    panel.getByText(
+      "Nano Banana 2 Lite redraws the whole image, then everything outside your mask is put back.",
+    ),
+  ).toBeVisible();
+
+  // Off, the model may change anything, and Feather and Expand rest.
+  await panel.getByRole("switch", { name: "Keep the rest of the image" }).click();
+  await expect(
+    panel.getByText("Nano Banana 2 Lite redraws the whole image, so anything can change."),
+  ).toBeVisible();
+  await expect(panel.getByText("The model may change other parts too.")).toBeVisible();
+  await expect(panel.getByRole("slider", { name: "Feather" })).toHaveAttribute("data-disabled", "");
+
+  // A limit of a cent: Generate asks first, and Cancel sends nothing.
+  await api(page.request, token, "PATCH", "/api/settings", { spendGuardUsd: 0.01 });
+  try {
+    await page.reload();
+    await expect(toolbar(page)).toBeVisible();
+    await paintAndDescribe(page, "Dry the berries");
+    let sent = false;
+    page.on("request", (r) => {
+      if (r.url().endsWith("/api/edit")) sent = true;
+    });
+    await generateIn(page).click();
+    const ask = page.getByRole("dialog", { name: /^This run costs about/ });
+    await expect(ask).toContainText("It would pass your monthly limit of $0.01.");
+    await ask.getByRole("button", { name: "Cancel" }).click();
+    await expect(ask).toHaveCount(0);
+    expect(sent).toBe(false);
+
+    // Run anyway runs it.
+    await generateIn(page).click();
+    const edits = page.waitForRequest((r) => r.url().endsWith("/api/edit") && r.method() === "POST");
+    await page
+      .getByRole("dialog", { name: /^This run costs about/ })
+      .getByRole("button", { name: "Run anyway" })
+      .click();
+    await edits;
+    await expect(panelOf(page).getByText(/^Saved as 1 new image/)).toBeVisible({ timeout: 20_000 });
+  } finally {
+    await api(page.request, token, "PATCH", "/api/settings", { spendGuardUsd: null });
+  }
+});
+
+test("while it runs the form rests and Stop stops it; a run that fails keeps the mask to try again", async ({
+  page,
+}) => {
+  await editable(page, unique("stems"));
+  const panel = panelOf(page);
+
+  // The slow fake keeps it running long enough to see.
+  await paintAndDescribe(page, "Pale berries #fake:slow");
+  await generateIn(page).click();
+  await expect(panel.getByText("Generating 1 image")).toBeVisible();
+  await expect(detail(page).getByText("Generating", { exact: true })).toBeVisible();
+  await expect(detail(page).getByRole("group", { name: "New images" })).toBeVisible();
+  await expect(toolbar(page)).toHaveCSS("opacity", "0.4");
+  // The form rests at 45%, out of reach.
+  const card = panel.getByRole("textbox", { name: "What to change" }).locator("xpath=..");
+  await expect(card).toHaveCSS("opacity", "0.45");
+  await expect(card).toHaveAttribute("inert", "");
+  // The tools' keys rest too: the box stays in hand.
+  await page.keyboard.press("e");
+  await expect(tool(page, "Rectangle")).toHaveAttribute("aria-pressed", "true");
+  await expect(tool(page, "Eraser")).toHaveAttribute("aria-pressed", "false");
+  await panel.getByRole("button", { name: "Stop" }).click();
+  await expect(generateIn(page)).toBeEnabled({ timeout: 15_000 });
+  await expect(detail(page).getByRole("group", { name: "New images" })).toHaveCount(0);
+
+  // The fake refuses: none of it worked, the toast says the mask is still here, and Try again
+  // sends it once more.
+  await panel.getByRole("textbox", { name: "What to change" }).fill("Pale berries #fake:refused");
+  await generateIn(page).click();
+  const failed = page.getByText("Couldn't make this edit. Your mask is still here.");
+  await expect(failed).toBeVisible({ timeout: 20_000 });
+  expect(await tintAt(page, 0.45, 0.45)).toBe(255);
+  await expect(generateIn(page)).toHaveText(/^Generate/);
+  const again = page.waitForRequest((r) => r.url().endsWith("/api/edit") && r.method() === "POST");
+  await page.getByRole("button", { name: "Try again" }).click();
+  await again;
+});
+
+/** A JPEG that says it's stored turned (EXIF orientation 6), as a phone saves a portrait photo. */
+async function turnedJpeg(page: Page): Promise<Buffer> {
+  const base64 = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 64;
+    canvas.height = 48;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = "#c87850";
+    context.fillRect(0, 0, 64, 48);
+    return canvas.toDataURL("image/jpeg").split(",")[1]!;
+  });
+  const jpeg = Buffer.from(base64, "base64");
+  // TIFF, big-endian: one IFD entry, Orientation (0x0112), SHORT, 1, value 6.
+  const tiff = Buffer.from([
+    0x4d, 0x4d, 0, 42, 0, 0, 0, 8, 0, 1, 0x01, 0x12, 0, 3, 0, 0, 0, 1, 0, 6, 0, 0, 0, 0, 0, 0,
+  ]);
+  const payload = Buffer.concat([Buffer.from("Exif\0\0", "binary"), tiff]);
+  const app1 = Buffer.concat([
+    Buffer.from([0xff, 0xe1, (payload.length + 2) >> 8, (payload.length + 2) & 0xff]),
+    payload,
+  ]);
+  return Buffer.concat([jpeg.subarray(0, 2), app1, jpeg.subarray(2)]);
+}
+
+test("a phone photo stored on its side says it can't be edited yet, and can still be a reference", async ({
+  page,
+}) => {
+  const token = await sessionToken(page.request);
+  await page.goto("/assets");
+  const res = await page.request.post("/api/uploads", {
+    headers: { [SESSION_HEADER]: token },
+    multipart: { file: { name: "IMG_4821.jpg", mimeType: "image/jpeg", buffer: await turnedJpeg(page) } },
+  });
+  expect(res.ok(), await res.text()).toBe(true);
+  const { asset } = (await res.json()) as { asset: { id: string } };
+
+  await page.goto(`/assets?asset=${asset.id}&tab=edit`);
+  const panel = panelOf(page);
+  await expect(panel.getByText("This photo can't be edited yet")).toBeVisible();
+  await expect(
+    panel.getByText("Your phone saved it sideways, so what you paint wouldn't line up with the photo."),
+  ).toBeVisible();
+  await expect(panel.getByRole("textbox", { name: "What to change" })).toHaveCount(0);
+  await expect(generateIn(page)).toBeDisabled();
+  await expect(toolbar(page)).toHaveCSS("opacity", "0.4");
+  await panel.getByRole("button", { name: "Use as reference" }).click();
+  await expect(page.getByText("Added as a reference.")).toBeVisible();
+});
