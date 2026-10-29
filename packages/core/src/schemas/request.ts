@@ -39,10 +39,20 @@ export const referenceInputSchema = z.object({
 });
 
 export const maskInputSchema = z.object({
-  /** An RGBA PNG asset at the base image's exact size. Alpha 0 is the area to regenerate (§0.9). */
+  /** A mask asset: an RGBA PNG at the base image's exact size. Alpha 0 is the area to change (§0.9). */
   assetId: ulidSchema,
-  /** Applied by core before upload; never reaches the adapter. */
+  /**
+   * Inverting happens when the mask is saved (POST /api/masks), so a request that still asks for
+   * it is refused: the model would edit the opposite area.
+   */
   invert: z.boolean().optional(),
+  // The composite settings below are Openfield's own (core/image/mask.ts). The model gets the
+  // stored mask as it is; these decide how much of its result is kept. Absent means the defaults.
+  /** Put the original back outside the mask. On unless false. */
+  composite: z.boolean().optional(),
+  /** Grow the mask by this many pixels before compositing. */
+  expandPx: z.int().min(0).max(32).optional(),
+  /** Soften the mask's edge over this many pixels, outside the expanded mask. */
   featherPx: z.int().min(0).max(32).optional(),
 });
 
