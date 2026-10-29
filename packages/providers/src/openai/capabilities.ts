@@ -20,6 +20,9 @@ export const SIZE_RULES = {
   maxPixels: 8_294_400,
 } as const;
 
+/** A mask must be a PNG "less than 4MB" (Image API reference, checked 2026-10-29). */
+export const MASK_MAX_BYTES = 4_000_000;
+
 /**
  * Every ratio the composer offers maps to a legal custom size (conformance 2), so all three models
  * share the list. "auto" sends size "auto" and lets the model choose.

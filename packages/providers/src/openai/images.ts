@@ -1,5 +1,6 @@
 import { formatBytes, type ModelManifest, type NormalizedRequest, t } from "@openfield/core";
 import { type CallContext, ProviderError, type StoredAsset } from "../types";
+import { MASK_MAX_BYTES } from "./capabilities";
 
 // The images an edit sends: the base first (the mask applies to it), then the references, read
 // from the asset store and checked against the manifest. Masks need no conversion: OpenAI edits
@@ -54,9 +55,23 @@ export async function editInputs(
   if (req.op !== "inpaint" || !req.mask) return { images };
   const mask = await read(ctx, req.mask.assetId, "mask");
   const base = images[0];
-  // OpenAI wants a PNG with an alpha channel, the same size as the image it edits.
+  // OpenAI wants a PNG with an alpha channel, under 4MB, the same size as the image it edits.
   if (mask.mimeType !== "image/png") {
     throw new ProviderError("invalid_request", { field: "mask", message: "The mask must be a PNG" });
+  }
+  if (!pngHasAlpha(mask.bytes)) {
+    throw new ProviderError("invalid_request", {
+      field: "mask",
+      message: "The mask has no alpha channel",
+      userMessage: t("errors.maskNoAlpha"),
+    });
+  }
+  if (mask.bytes.byteLength >= MASK_MAX_BYTES) {
+    throw new ProviderError("payload_too_large", {
+      field: "mask",
+      message: `The mask is ${mask.bytes.byteLength} bytes`,
+      userMessage: t("errors.maskTooLarge", { size: formatBytes(MASK_MAX_BYTES) }),
+    });
   }
   if (base && (mask.width !== base.width || mask.height !== base.height)) {
     throw new ProviderError("invalid_request", {
@@ -65,6 +80,24 @@ export async function editInputs(
     });
   }
   return { images, mask };
+}
+
+/**
+ * Whether a PNG carries transparency: a colour type with alpha (grey or RGB plus alpha), or a
+ * tRNS chunk, which has to come before the image data.
+ */
+export function pngHasAlpha(bytes: Uint8Array): boolean {
+  if (bytes.byteLength < 33) return false;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const colourType = bytes[25];
+  if (colourType === 4 || colourType === 6) return true;
+  for (let pos = 8; pos + 8 <= bytes.byteLength; ) {
+    const type = String.fromCharCode(...bytes.subarray(pos + 4, pos + 8));
+    if (type === "tRNS") return true;
+    if (type === "IDAT" || type === "IEND") return false;
+    pos += 12 + view.getUint32(pos);
+  }
+  return false;
 }
 
 async function read(ctx: CallContext, id: string, field: string): Promise<StoredAsset> {

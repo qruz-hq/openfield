@@ -1071,6 +1071,8 @@
     "referenceTooLarge": "This reference image is too large. The limit is {size}.",
     "maskMissing": "Paint the area to change first.",
     "maskInverted": "Invert the mask when you save it, not when you run the edit.",
+    "maskNoAlpha": "This mask isn't transparent anywhere. Make the area to change transparent, then try again.",
+    "maskTooLarge": "This mask is too large. The limit is {size}.",
     "imageBlocked": "Image blocked. It came from an unknown site.",
     "companyOff": "{company} is turned off, so its models can't run.",
     "keyNotPrivate": "Couldn't save your key. This folder can't keep files private.",
