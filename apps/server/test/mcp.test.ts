@@ -422,6 +422,17 @@ describe("editing part of an image", () => {
     expect(again.json).toMatchObject({ op: "inpaint", edit: { image: edit.image, mask: edit.mask } });
     const details = await call(c, "get_asset", { assetId: result!.assetId, preview: false });
     expect(details.json).toMatchObject({ mask: edit.mask, keptOutsideMask: true });
+    const raw = await call(c, "estimate", {
+      prompt: "a red door",
+      model: OPENAI,
+      edit: { image, mask, composite: false },
+    });
+    expect(raw.json).toMatchObject({
+      edit: {
+        composite: false,
+        note: "The model edits the masked area, and this time Openfield won't put back the original outside it, so other parts may change too.",
+      },
+    });
   });
 
   test("a model without a mask input edits the whole image, keeps the rest, and says so", async () => {
@@ -458,7 +469,10 @@ describe("editing part of an image", () => {
       keptOutsideMask: false,
       why: "Composite was off, so this is the model's whole result.",
     });
-    expect((raw.json.edit as unknown as { note: string }).note).toContain("all of it may change");
+    // The note can be shown to the person in an approval prompt, so it names no settings.
+    expect((raw.json.edit as unknown as { note: string }).note).toBe(
+      "Nano Banana Pro can't take a mask, so it edits the whole image, and this time Openfield won't put the original back, so all of it may change.",
+    );
     expect(getJobSet(s.services.db, raw.json.runId as unknown as string)!.requestJson.mask).toMatchObject({
       composite: false,
       expandPx: 4,

@@ -106,7 +106,11 @@ export async function describeRun(
   return { summary, blocks };
 }
 
-/** An edit's image, mask and composite, from its frozen request. Undefined for anything else. */
+/**
+ * An edit's image, mask and composite, from its frozen request. Undefined for anything else. The
+ * note is also shown to the person when a run needs their approval, so it describes what happens
+ * rather than naming settings.
+ */
 export function editOf(call: NormalizedRequest, modelName: string): EditSummary | undefined {
   if (!call.base) return undefined;
   if (!call.mask) return { image: call.base.assetId };
@@ -121,10 +125,10 @@ export function editOf(call: NormalizedRequest, modelName: string): EditSummary 
     note: wholeImage
       ? settings.composite
         ? `${modelName} can't take a mask, so it edits the whole image. Openfield then puts back everything outside the mask, so only the masked area changes.`
-        : `${modelName} can't take a mask, so it edits the whole image, and with composite off all of it may change.`
+        : `${modelName} can't take a mask, so it edits the whole image, and this time Openfield won't put the original back, so all of it may change.`
       : settings.composite
         ? "Only the masked area changes: Openfield puts back the original everywhere else."
-        : "The model edits the masked area. With composite off its whole result is kept, so pixels outside the mask may change too.",
+        : "The model edits the masked area, and this time Openfield won't put back the original outside it, so other parts may change too.",
   };
 }
 
