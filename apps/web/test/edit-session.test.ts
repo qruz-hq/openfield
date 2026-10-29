@@ -4,6 +4,7 @@ import { editKey } from "../src/detail/edit/keys";
 import { type LassoStep, lassoDoubleClick, lassoDown, lassoMove, lassoUp } from "../src/detail/edit/lasso";
 import type { Point, Rect } from "../src/detail/edit/mask";
 import {
+  addReferencesTo,
   cancelLeave,
   confirmLeave,
   defaultBrushSize,
@@ -238,6 +239,19 @@ describe("the edit session", () => {
     expect(useEditSession.getState().mask).toMatchObject({ empty: false, changes: false });
     // Still something to lose by leaving, as it shows.
     expect(editHasWork()).toBe(true);
+  });
+
+  test("an upload that finishes after its edit has ended lands on no edit", () => {
+    useEditSession.getState().start("a", 64, 64);
+    const first = useEditSession.getState().editor;
+    addReferencesTo(first, ["ref-1"]);
+    expect(useEditSession.getState().references).toEqual(["ref-1"]);
+    useEditSession.getState().end();
+    useEditSession.getState().start("b", 64, 64);
+    addReferencesTo(first, ["ref-2"]);
+    expect(useEditSession.getState().references).toEqual([]);
+    addReferencesTo(useEditSession.getState().editor, ["ref-3"]);
+    expect(useEditSession.getState().references).toEqual(["ref-3"]);
   });
 
   test("once a run has saved new images from the edit as it is, leaving doesn't ask", () => {

@@ -1,9 +1,9 @@
 import { type ModelListItem, t } from "@openfield/core";
 import { cn } from "@openfield/ui";
-import { useLayoutEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { ReferenceRow, useReferenceUploads } from "../../image/composer/references";
-import { useEditSession } from "./session";
+import { addReferencesTo, useEditSession } from "./session";
 
 // Image edit / Prompt card (design WYVVphaWWT): the reference images in a row, then what to change.
 // With none yet the row is just the + (Image edit / Prompt card / Empty). The references are the
@@ -19,7 +19,13 @@ export function PromptCard({ model, resting }: { model: ModelListItem | undefine
       moveReference: s.moveReference,
     })),
   );
-  const uploads = useReferenceUploads(useEditSession.getState().addReferences);
+  // An upload that finishes after this edit has ended (Esc, another image) belongs to none.
+  const editor = useEditSession((s) => s.editor);
+  const addToThisEdit = useCallback(
+    (assetIds: readonly string[]) => addReferencesTo(editor, assetIds),
+    [editor],
+  );
+  const uploads = useReferenceUploads(addToThisEdit);
   const text = useRef<HTMLTextAreaElement>(null);
 
   // Grows with what's written, as the design's text does; the panel scrolls past that.

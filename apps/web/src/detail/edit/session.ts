@@ -266,5 +266,14 @@ export function confirmLeave(): void {
   then?.();
 }
 
+/**
+ * Adds references to the edit that `editor` belongs to, while it's still the one open. An upload
+ * that finishes after the person left it (Esc, another image) lands on no edit.
+ */
+export function addReferencesTo(editor: MaskEditor | null, assetIds: readonly string[]): void {
+  const session = useEditSession.getState();
+  if (editor !== null && session.editor === editor) session.addReferences(assetIds);
+}
+
 /** "Keep editing". */
 export const cancelLeave = () => useEditSession.setState({ leaving: null });
