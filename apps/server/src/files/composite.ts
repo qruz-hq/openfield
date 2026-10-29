@@ -194,17 +194,16 @@ async function compositeFiles(
   };
 }
 
-/** One alpha value per pixel. */
+/** One alpha value per pixel, read on its own so the mask never sits in memory four times over. */
 async function maskAlpha(sharp: Sharp, file: string, width: number, height: number): Promise<Uint8Array> {
   const { data, info } = await sharp(file, { failOn: "truncated" })
     .ensureAlpha()
+    .extractChannel(3)
     .raw()
     .toBuffer({ resolveWithObject: true });
-  if (info.width !== width || info.height !== height || info.channels !== 4)
+  if (info.width !== width || info.height !== height || info.channels !== 1)
     throw new Error(`The mask is ${info.width}×${info.height}, the image ${width}×${height}`);
-  const alpha = new Uint8Array(width * height);
-  for (let p = 0; p < alpha.length; p++) alpha[p] = data[p * 4 + 3]!;
-  return alpha;
+  return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 }
 
 /**

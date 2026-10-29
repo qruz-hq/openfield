@@ -16,6 +16,13 @@ export const MASK_CHANGE_BELOW = 128;
  */
 export const MASK_COMPOSITE_DEFAULTS = { composite: true, expandPx: 4, featherPx: 8 } as const;
 
+/**
+ * The most pixels an image edited with a mask may have, so a 48 megapixel phone photo fits. The
+ * composite holds several full-size copies of the image in memory at once, which past this would
+ * run to gigabytes and could stop the app after the model was already paid.
+ */
+export const MASK_MAX_PIXELS = 50_000_000;
+
 export interface CompositeSettings {
   composite: boolean;
   expandPx: number;

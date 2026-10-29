@@ -236,6 +236,26 @@ describe("POST /api/edit", () => {
     expect((await edit({ op: "edit", base: { assetId: sideways.id, role: "base" } })).status).toBe(202);
   });
 
+  test("a masked edit of an image past the pixel limit is refused before anything is made", async () => {
+    server = await ready();
+    const base = await upload(await photo(640, 480));
+    const maskId = await mask(base.id, 640, 480);
+    server.services.db.$client.run("UPDATE assets SET width = 10000, height = 6000 WHERE id = ?", [base.id]);
+    const res = await edit({ base: { assetId: base.id, role: "base" }, mask: { assetId: maskId } });
+    expect(res.status).toBe(400);
+    expect(errorEnvelopeSchema.parse(res.body).error).toMatchObject({
+      field: "base",
+      userMessage:
+        "This image is 10,000 × 6,000, too large to edit with a mask. Masked edits take images up to 50 megapixels.",
+    });
+    expect(jobSets()).toBe(0);
+    // Without a mask there's no composite to make, so the size is the model's to judge.
+    const whole = jobSetAcceptedSchema.parse(
+      (await edit({ op: "edit", base: { assetId: base.id, role: "base" } })).body,
+    );
+    await completed(server, whole.jobSet.id);
+  });
+
   test("an image larger than the model takes is refused before anything is made", async () => {
     server = await ready();
     const base = await upload(await photo(640, 480));

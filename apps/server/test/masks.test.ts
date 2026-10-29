@@ -4,6 +4,7 @@ import {
   assetsListResponseSchema,
   errorEnvelopeSchema,
   librarySummaryResponseSchema,
+  MASK_MAX_PIXELS,
   UPLOAD_MAX_BYTES,
   uploadResponseSchema,
 } from "@openfield/core";
@@ -278,5 +279,20 @@ describe("masks", () => {
       await image("jpeg", { width: 300, height: 200, background: "#a53a6e" }),
     );
     expect((await saveMask(await holeMask(300, 200, BOX), upright.id)).status).toBe(201);
+  });
+
+  test("an image past the masked edit limit can't take a mask", async () => {
+    server = await startTestServer();
+    const base = await uploadImage(await image("png", { width: 300, height: 200 }));
+    // Stands in for a 60 megapixel photo, so the test doesn't have to make one.
+    server.services.db.$client.run("UPDATE assets SET width = 10000, height = 6000 WHERE id = ?", [base.id]);
+    const res = await saveMask(await holeMask(300, 200, BOX), base.id);
+    expect(res.status).toBe(400);
+    expect(await error(res)).toMatchObject({
+      field: "baseAssetId",
+      userMessage:
+        "This image is 10,000 × 6,000, too large to edit with a mask. Masked edits take images up to 50 megapixels.",
+    });
+    expect(MASK_MAX_PIXELS).toBe(50_000_000);
   });
 });

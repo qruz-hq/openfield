@@ -6,6 +6,7 @@ import {
   luminanceToAlpha,
   MASK_CHANGE_BELOW,
   MASK_MAX_BYTES,
+  MASK_MAX_PIXELS,
   t,
   UPLOAD_MAX_BYTES,
   type UploadResponse,
@@ -54,6 +55,7 @@ const tooLarge = (message: string, limit: number) =>
 export async function saveMask(deps: MaskDeps, file: Blob, opts: SaveMaskOptions): Promise<UploadResponse> {
   const { db, ingest } = deps;
   const base = editableImage(db, opts.baseAssetId, "baseAssetId");
+  requireMaskableSize(base, "baseAssetId");
   if (file.size > UPLOAD_MAX_BYTES) throw tooLarge(`The file is ${file.size} bytes`, UPLOAD_MAX_BYTES);
   const bytes = new Uint8Array(await file.arrayBuffer());
   const probed = probeImage(bytes);
@@ -128,6 +130,19 @@ export function editableImage(db: Db, id: string, field: string): AssetRow {
     });
   }
   return row;
+}
+
+/** An image small enough for its composite to be made without running out of memory. */
+export function requireMaskableSize(base: AssetRow, field: string): void {
+  if (base.width * base.height <= MASK_MAX_PIXELS) return;
+  throw new ApiFailure(400, "bad_request", `${base.width}×${base.height} is past ${MASK_MAX_PIXELS} pixels`, {
+    field,
+    userMessage: t("masks.tooManyPixels", {
+      width: base.width,
+      height: base.height,
+      megapixels: MASK_MAX_PIXELS / 1_000_000,
+    }),
+  });
 }
 
 /** A mask must cover its image pixel for pixel. */

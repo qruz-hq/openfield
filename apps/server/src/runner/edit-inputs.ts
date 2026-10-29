@@ -12,7 +12,13 @@ import {
 } from "@openfield/core";
 import { type AssetRow, type Db, getAsset, getAssets } from "@openfield/db";
 import { editSizeFor } from "@openfield/providers/manifest";
-import { editableImage, type MaskDeps, requireSameSize, requireUpright } from "../files/mask";
+import {
+  editableImage,
+  type MaskDeps,
+  requireMaskableSize,
+  requireSameSize,
+  requireUpright,
+} from "../files/mask";
 import { ApiFailure } from "../http/errors";
 
 // The images an edit sends in, checked when the run is asked for, before anything is spent
@@ -31,6 +37,7 @@ export async function checkEditInputs(
   if (req.op === "generate" || !req.base) return undefined;
   const base = editableImage(deps.db, req.base.assetId, "base");
   if (!req.mask) return base;
+  requireMaskableSize(base, "base");
   const id = req.mask.assetId;
   const mask = getAsset(deps.db, id);
   if (!mask) {
