@@ -1650,6 +1650,7 @@
         "noEndFrame": "This model can't end on a chosen frame. Pick another model.",
         "noMask": "Paint a mask or connect one to run this",
         "maskStale": "The image changed. Paint the mask again.",
+        "maskSeveral": "A painted mask fits one image. Connect one image, or connect a mask.",
         "noDescription": "Describe the change to run this"
       },
       "collapsed": {

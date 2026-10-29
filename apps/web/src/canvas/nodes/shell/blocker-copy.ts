@@ -59,7 +59,10 @@ export function blockerCopy(
     case "no_mask":
       return plain(t("canvas.nodes.blocked.noMask"));
     case "mask_stale":
-      return fix("paint_mask", t("canvas.nodes.edit.paintMask"), t("canvas.nodes.blocked.maskStale"));
+      // Over several images there's no one image to paint it on again.
+      return blocker.several
+        ? plain(t("canvas.nodes.blocked.maskSeveral"))
+        : fix("paint_mask", t("canvas.nodes.edit.paintMask"), t("canvas.nodes.blocked.maskStale"));
     case "no_description":
       return plain(t("canvas.nodes.blocked.noDescription"));
     case "no_prompt":

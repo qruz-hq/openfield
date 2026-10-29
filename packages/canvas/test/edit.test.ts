@@ -219,8 +219,11 @@ describe("the Edit node", () => {
     // Still priced, but without the mask.
     expect(e.estimate).not.toBeNull();
     expect(e.compiled).toBeNull();
-    // A list fits no painted mask: it was painted on one image.
-    expect((await evaluate(painted({}, [BASE, OTHER]))).get("e")!.blocker).toEqual({ kind: "mask_stale" });
+    // A list fits no painted mask: it was painted on one image, and can't be painted again over several.
+    expect((await evaluate(painted({}, [BASE, OTHER]))).get("e")!.blocker).toEqual({
+      kind: "mask_stale",
+      several: true,
+    });
 
     // From a Generate node: the image it has now, whether or not it runs again.
     const generated = () =>

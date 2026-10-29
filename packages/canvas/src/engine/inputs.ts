@@ -33,6 +33,13 @@ export function imagesOf(inputs: ResolvedInputs, port: string): ImageValue[] {
 export const imageCount = (values: readonly ImageValue[]): number =>
   values.reduce((sum, v) => sum + (v.kind === "asset" ? 1 : Math.max(0, v.expected)), 0);
 
+/**
+ * The images values stand for now: an asset's own, and those a node upstream has before it runs
+ * again (what its card shows). An Edit node's mask is painted on one of them.
+ */
+export const imagesNow = (values: readonly ImageValue[]): string[] =>
+  values.flatMap((v) => (v.kind === "asset" ? [v.assetId] : [...(v.current ?? [])]));
+
 /** The run plan's form of an image value. */
 export const planValue = (v: ImageValue) =>
   v.kind === "asset"

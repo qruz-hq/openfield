@@ -186,8 +186,11 @@ export type NodeBlocker =
   | { kind: "end_frame_unsupported"; model: ModelKey }
   /** An edit with no mask: none painted in the node and none connected. */
   | { kind: "no_mask" }
-  /** The mask painted in the node was painted on another image than the one coming in now. */
-  | { kind: "mask_stale" }
+  /**
+   * The mask painted in the node was painted on another image than the one coming in now. `several`:
+   * more than one comes in, and a painted mask fits one.
+   */
+  | { kind: "mask_stale"; several?: boolean }
   /** An edit with nothing said about the change, upstream or in the node. */
   | { kind: "no_description" }
   /** Variations in Prompts or Models mode needs at least `min` entries. */

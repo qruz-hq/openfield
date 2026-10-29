@@ -1,6 +1,6 @@
 import { speedOf } from "@openfield/canvas/engine/context-base";
 import { nodeTitle } from "@openfield/canvas/engine/describe";
-import { type EditParams, editModelKeyOf, editSpec } from "@openfield/canvas/nodes/edit/spec";
+import { type EditParams, editModelKeyOf, editSpec, maskFitsBase } from "@openfield/canvas/nodes/edit/spec";
 import { resolveFor } from "@openfield/canvas/nodes/generate/settings";
 import { incomingEdges } from "@openfield/canvas/store/graph";
 import { assetFileUrl, t } from "@openfield/core";
@@ -149,12 +149,18 @@ function MaskCard({ nodeId, params }: { nodeId: string; params: EditParams }) {
   const incoming = analysis?.baseImages ?? [];
   const linked = analysis?.maskLinked ?? false;
   const painted = params.maskAssetId ?? null;
-  // Painted on one image; anything else coming in now (another one, or several) doesn't fit it.
-  const stale = !linked && !!painted && !!params.maskFor && incoming.length > 0 && base !== params.maskFor;
+  // The engine's own rule on the engine's own list (paintedMaskFits), while an image is connected:
+  // painted on one image, anything else coming in now (another one, several, none yet) doesn't fit.
+  const stale =
+    !linked &&
+    !!painted &&
+    !!params.maskFor &&
+    !!analysis?.baseLinked &&
+    !maskFitsBase(params.maskFor, incoming);
   const subtitle = linked
     ? t("canvas.nodes.edit.maskLinked")
     : stale
-      ? t("canvas.nodes.blocked.maskStale")
+      ? t(incoming.length > 1 ? "canvas.nodes.blocked.maskSeveral" : "canvas.nodes.blocked.maskStale")
       : painted
         ? t("canvas.nodes.edit.maskPainted")
         : t("canvas.nodes.edit.maskNone");

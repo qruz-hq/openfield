@@ -13,6 +13,7 @@ import { scaleEstimate } from "../../engine/cost";
 import {
   type ImageValue,
   imageCount,
+  imagesNow,
   imagesOf,
   joinPrompt,
   modelBlocker,
@@ -144,10 +145,14 @@ export const editPrompt = (node: EngineNode<EditParams>, inputs: ResolvedInputs)
 
 /**
  * The images the image input stands for now: its own, or those its node has before it runs again.
- * A mask is made for one of them, painted in the editor or set by an agent.
+ * A mask is made for one of them, painted in the editor or set by an agent. The editor reads the
+ * same list (NodeAnalysis.baseImages), so the two never disagree on what the mask fits.
  */
-export const editBaseNow = (inputs: ResolvedInputs): string[] =>
-  imagesOf(inputs, "image").flatMap((v) => (v.kind === "asset" ? [v.assetId] : [...(v.current ?? [])]));
+export const editBaseNow = (inputs: ResolvedInputs): string[] => imagesNow(imagesOf(inputs, "image"));
+
+/** A mask painted on `maskFor` fits only that one image coming in, alone. */
+export const maskFitsBase = (maskFor: string, base: readonly string[]): boolean =>
+  base.length === 1 && base[0] === maskFor;
 
 /** The Mask input holds the node's own painted mask: nothing is connected there. */
 function painted(node: EngineNode<EditParams>, inputs: ResolvedInputs): boolean {
@@ -166,8 +171,7 @@ function painted(node: EngineNode<EditParams>, inputs: ResolvedInputs): boolean 
  */
 export function paintedMaskFits(node: EngineNode<EditParams>, inputs: ResolvedInputs): boolean {
   if (!painted(node, inputs) || !node.params.maskFor) return true;
-  const now = editBaseNow(inputs);
-  return now.length === 1 && now[0] === node.params.maskFor;
+  return maskFitsBase(node.params.maskFor, editBaseNow(inputs));
 }
 
 /** The mask a run sends: none while a painted one doesn't fit the image. */
@@ -279,7 +283,10 @@ export const editEngine: NodeEngine<EditParams> = {
     if (references) return references;
     if (imageCount(imagesOf(inputs, "image")) === 0) return { kind: "missing_input", port: "image" };
     if (imageCount(imagesOf(inputs, "mask")) === 0) return { kind: "no_mask" };
-    if (!paintedMaskFits(node, inputs)) return { kind: "mask_stale" };
+    if (!paintedMaskFits(node, inputs)) {
+      // Over several images it can't be painted again here: each would need its own.
+      return editBaseNow(inputs).length > 1 ? { kind: "mask_stale", several: true } : { kind: "mask_stale" };
+    }
     if (painted(node, inputs) && ctx.missing?.has(node.params.maskAssetId!)) return { kind: "missing_asset" };
     // An area to change comes before words for it, as on the Edit tab.
     if (!editPrompt(node, inputs)) return { kind: "no_description" };

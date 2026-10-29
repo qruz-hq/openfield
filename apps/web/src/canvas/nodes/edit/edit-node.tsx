@@ -43,7 +43,7 @@ export const EditNode = memo(function EditNode(props: NodeComponentProps) {
   const frame = basics?.frame;
   const own = result?.assetIds ?? NO_IMAGES;
   // Before it makes anything, the card shows the first image coming in and takes its shape.
-  const incoming = analysis?.baseImages.find((image) => image !== null) ?? null;
+  const incoming = analysis?.baseImages[0] ?? null;
   useEffect(() => showBase(id, own.length ? null : incoming), [id, own.length, incoming]);
   const layout = useEditLayout(id, frame ?? { id }, own);
   useSyncPorts(id, props.width, props.height);

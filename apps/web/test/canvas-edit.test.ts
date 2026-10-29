@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { planFingerprints, resolveFingerprints } from "@openfield/canvas/engine/fingerprint";
 import type { EngineContext } from "@openfield/canvas/engine/types";
+import { maskFitsBase } from "@openfield/canvas/nodes/edit/spec";
 import { createNodeRegistry } from "@openfield/canvas/nodes/registry";
 import { DATA_SPECS } from "@openfield/canvas/nodes/specs";
 import type { ModelListItem } from "@openfield/core";
@@ -14,6 +15,7 @@ import { editableOutput, planEditFrom } from "../src/canvas/nodes/edit/edit-from
 import { cardMedia } from "../src/canvas/nodes/generate/card-media";
 import { cardView } from "../src/canvas/nodes/generate/card-state";
 import type { NodeDefinition } from "../src/canvas/nodes/registry";
+import { blockerCopy } from "../src/canvas/nodes/shell/blocker-copy";
 import { applyOps, type DocSlice, emptyDocument, fromDocument } from "../src/canvas/store";
 import { banana, flareEdit } from "./fixtures";
 
@@ -35,6 +37,7 @@ const ctx: EngineContext = {
 const ULID = (n: number) => `01K6BQ80000000000000AS${String(n).padStart(4, "0")}`;
 const PHOTO = ULID(1);
 const OTHER = ULID(2);
+const MASK = ULID(3);
 
 const node = (id: string, type: CanvasNode["type"], params: Record<string, unknown> = {}): CanvasNode => ({
   id,
@@ -110,10 +113,62 @@ describe("what the Edit node reads", () => {
     expect(soleBase(painted)).toBeNull();
   });
 
-  test("several images coming in, or one still to come, leave no single image to paint on", () => {
+  test("several images coming in, or none yet, leave no single image to paint on", () => {
     expect(soleBase({ baseImages: [PHOTO, OTHER] })).toBeNull();
-    expect(soleBase({ baseImages: [null] })).toBeNull();
+    expect(soleBase({ baseImages: [] })).toBeNull();
     expect(soleBase({ baseImages: [PHOTO] })).toBe(PHOTO);
+  });
+
+  // The editor (Paint, the Mask card) and the engine (the blocker, a run) read one list, so they
+  // agree on what a painted mask fits whatever the node upstream expects to make next.
+  describe("the editor and the engine agree on the image a mask fits", () => {
+    const chain = (batch: number, made: string[]) => {
+      const doc = docOf(
+        [
+          node("g", "image.generate", { model: banana.key, prompt: "berries", batch }),
+          node("x", "image.edit", { ...editParams, maskAssetId: MASK, maskFor: PHOTO }),
+        ],
+        [edge("g", "images", "x", "image")],
+      );
+      return applyOps(doc, [{ op: "setResult", id: "g", result: done(made) }]).doc;
+    };
+    const editorStale = (analysis: { baseImages: readonly string[]; baseLinked: boolean }) =>
+      analysis.baseLinked && !maskFitsBase(PHOTO, analysis.baseImages);
+
+    test("a batch lowered after a run of two: both say the mask doesn't fit the two it has", async () => {
+      const analysis = await analysisOf(chain(1, [PHOTO, OTHER]), "x");
+      expect(analysis.baseImages).toEqual([PHOTO, OTHER]);
+      expect(soleBase(analysis)).toBeNull();
+      expect(editorStale(analysis)).toBe(true);
+      expect(analysis.blocker).toEqual({ kind: "mask_stale", several: true });
+    });
+
+    test("a batch raised after a run of one: both say it fits the one it has", async () => {
+      const analysis = await analysisOf(chain(2, [PHOTO]), "x");
+      expect(analysis.baseImages).toEqual([PHOTO]);
+      expect(soleBase(analysis)).toBe(PHOTO);
+      expect(editorStale(analysis)).toBe(false);
+      expect(analysis.blocker).toBeNull();
+    });
+
+    test("the card offers Paint mask only where one image can take it", () => {
+      expect(blockerCopy({ kind: "mask_stale" }, [])).toMatchObject({
+        fix: "paint_mask",
+        message: "The image changed. Paint the mask again.",
+      });
+      expect(blockerCopy({ kind: "mask_stale", several: true }, [])).toEqual({
+        fix: null,
+        action: null,
+        message: "A painted mask fits one image. Connect one image, or connect a mask.",
+      });
+    });
+
+    test("another image: both say it doesn't fit, and it can be painted again", async () => {
+      const analysis = await analysisOf(chain(1, [OTHER]), "x");
+      expect(soleBase(analysis)).toBe(OTHER);
+      expect(editorStale(analysis)).toBe(true);
+      expect(analysis.blocker).toEqual({ kind: "mask_stale" });
+    });
   });
 });
 

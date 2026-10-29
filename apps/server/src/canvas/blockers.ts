@@ -26,7 +26,7 @@ export function blockerMessage(blocker: NodeBlocker, providers: readonly Provide
     case "no_mask":
       return t("canvas.nodes.blocked.noMask");
     case "mask_stale":
-      return t("canvas.nodes.blocked.maskStale");
+      return t(blocker.several ? "canvas.nodes.blocked.maskSeveral" : "canvas.nodes.blocked.maskStale");
     case "no_description":
       return t("canvas.nodes.blocked.noDescription");
     case "no_prompt":
