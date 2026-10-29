@@ -88,6 +88,7 @@ import {
 import type { ModelService } from "../services/models";
 import type { SettingsService } from "../services/settings";
 import {
+  defaultEditModelKey,
   defaultModel,
   documentAssetIds,
   documentCounts,
@@ -230,7 +231,10 @@ export class CanvasService {
       { ...graph, meta: { ...graph.meta, previewPath: null } },
       { id, name, updatedAt: at, createdAt: at },
     );
-    doc = fillModels(doc, defaultModel(this.deps.models, this.deps.settings));
+    doc = fillModels(doc, {
+      image: defaultModel(this.deps.models, this.deps.settings),
+      edit: defaultEditModelKey(this.deps.models, this.deps.settings),
+    });
     const row = insertCanvas(db, {
       id,
       name,
