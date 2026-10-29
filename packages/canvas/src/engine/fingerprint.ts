@@ -102,14 +102,22 @@ export function planFingerprints(doc: DocSlice, registry: NodeRegistry, ctx: Eng
     let ports: string[];
     if (def?.engine) {
       const fp = def.engine.fingerprintParams(node, ctx);
+      ports = def.ports.filter((p) => p.direction === "in").map((p) => p.id);
+      // What the node holds itself counts like what comes in, and only while it's used: nothing
+      // connected to its port (evaluate.ts). An Edit node's painted mask, not while one is wired in.
+      const own = def.engine.inlineInputs?.(node, ctx) ?? {};
+      const inline = Object.fromEntries(
+        ports
+          .filter((port) => own[port]?.length && incomingEdges(doc, id, port).length === 0)
+          .map((port) => [port, own[port]!.map((v) => (v.kind === "asset" ? v.assetId : v.kind))]),
+      );
       base = {
         typeId: frame.type,
         typeVersion: frame.typeVersion,
-        params: fp.params,
+        params: Object.keys(inline).length ? { params: fp.params, inline } : fp.params,
         modelKey: fp.model,
         manifestVersion: fp.manifestVersion,
       };
-      ports = def.ports.filter((p) => p.direction === "in").map((p) => p.id);
     } else {
       // A type this build doesn't know still passes its result on, so its images count too.
       base = {

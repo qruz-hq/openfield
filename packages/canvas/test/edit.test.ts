@@ -284,6 +284,22 @@ describe("the Edit node", () => {
     expect(await fp({ keepOriginal: false, featherPx: 20 })).toBe(await fp({ keepOriginal: false }));
   });
 
+  test("a painted mask counts only while it's used: not while a mask is wired in", async () => {
+    const wired = (params: Record<string, unknown>) =>
+      docOf(
+        [upload("u", [BASE]), upload("m", [WIRED]), editNode(params)],
+        [edge("e1", "u", "images", "e", "image"), edge("e2", "m", "images", "e", "mask")],
+      );
+    const fp = async (params: Record<string, unknown>) => (await fingerprintsOf(wired(params))).e;
+    const kept = await fp({});
+    expect(await fp({ maskAssetId: undefined, maskFor: undefined })).toBe(kept);
+    expect(await fp({ maskAssetId: OTHER })).toBe(kept);
+    // So taking the unused one off keeps a finished run up to date (an agent's set_node_mask null).
+    const done = await ran(wired({}), "e", [BASE, WIRED]);
+    const cleared = { ...done, params: { ...done.params, e: { ...done.params.e, maskAssetId: undefined } } };
+    expect((await evaluate(cleared)).get("e")!.upToDate).toBe(true);
+  });
+
   test("a finished edit stays up to date: the mask it read counts, painted or connected", async () => {
     // The server records the base and the mask a run sent (canvas runs.ts).
     const done = await ran(painted(), "e", [BASE, MASK]);

@@ -208,11 +208,11 @@ function fingerprintParams(node: EngineNode<EditParams>, ctx: EngineContext): Fi
   const p = node.params;
   const key = editModelKeyOf(p.model, ctx);
   const model = ctx.model(key);
-  // The image and a connected mask count through their own fingerprints; a painted one is here.
-  // Growing and softening only matter while the original is put back.
+  // The image and a connected mask count through their own fingerprints; a painted one as the
+  // node's own input (inlineInputs), only while nothing is connected in its place. Growing and
+  // softening only matter while the original is put back.
   const common = {
     prompt: p.prompt.trim(),
-    mask: p.maskAssetId ?? null,
     composite: p.keepOriginal ? { expandPx: p.expandPx, featherPx: p.featherPx } : false,
     providerOptions: p.providerOptions,
   };
