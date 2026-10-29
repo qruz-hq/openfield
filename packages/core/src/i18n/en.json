@@ -1515,6 +1515,15 @@
       "edit": {
         "label": "Edit",
         "description": "Change an image with words or a mask",
+        "paintMask": "Paint mask",
+        "editMask": "Edit mask",
+        "paintHint": "Paint where the image should change.",
+        "mask": "Mask",
+        "maskPainted": "Painted on the input image",
+        "maskNone": "Not painted yet. Paint it to run.",
+        "maskLinked": "From the Mask input",
+        "paint": "Paint",
+        "fromPrompt": "From the {name} node",
         "maskWindow": {
           "title": "Paint the mask",
           "hint": "Paint over what should change. Everything else stays as it is.",

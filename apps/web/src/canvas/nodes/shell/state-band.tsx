@@ -306,6 +306,7 @@ export function useBlockerFix(id: string, blocker: NodeBlocker) {
     if (copy.fix === "add_key") navigate("/settings/api-keys", { state: { focusKey: true } });
     else if (copy.fix === "open_settings") navigate("/settings/api-keys");
     else if (copy.fix === "pick_model") actions.openInspector(id);
+    else if (copy.fix === "paint_mask") actions.setUi({ maskNodeId: id });
   };
   return { copy, onFix };
 }

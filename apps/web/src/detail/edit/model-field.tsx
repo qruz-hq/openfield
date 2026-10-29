@@ -43,15 +43,25 @@ export interface ModelFieldProps {
   resting: boolean;
   /** A model was picked. One whose company has no key is the caller's to send to Settings. */
   onPick: (model: ModelListItem) => void;
+  /** For the field's label, where the surface sets its own (a canvas node's settings). */
+  labelClassName?: string;
 }
 
-export function ModelField({ models, selected, base, composite, resting, onPick }: ModelFieldProps) {
+export function ModelField({
+  models,
+  selected,
+  base,
+  composite,
+  resting,
+  onPick,
+  labelClassName,
+}: ModelFieldProps) {
   // A model without a mask input runs over the whole image (§0.9), so the field says what happens.
   const whole = selected && !selected.capabilities.ops.inpaint;
   return (
     // Image edit / Model field: the field, then the note, 6 apart.
     <div inert={resting} className={cn("flex w-full shrink-0 flex-col gap-6", resting && "opacity-45")}>
-      <Field label={t("edit.model.label")} className="px-2 py-4">
+      <Field label={t("edit.model.label")} labelClassName={labelClassName} className="px-2 py-4">
         <ModelPicker models={models} selected={selected} base={base} onPick={onPick} />
       </Field>
       {whole ? (

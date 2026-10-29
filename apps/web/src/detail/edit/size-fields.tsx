@@ -34,6 +34,8 @@ export interface SizeFieldsProps {
   resting: boolean;
   /** The size the new image comes out at, under the fields. */
   note?: boolean;
+  /** For the fields' labels, where the surface sets its own (a canvas node's settings). */
+  labelClassName?: string;
   onValues: (values: ComposerValues) => void;
   onBatch: (batch: number) => void;
 }
@@ -47,6 +49,7 @@ export function SizeFields({
   speed,
   resting,
   note = true,
+  labelClassName,
   onValues,
   onBatch,
 }: SizeFieldsProps) {
@@ -84,7 +87,11 @@ export function SizeFields({
       {/* Size row */}
       <div className="flex w-full gap-8">
         {offered(resolution?.state) && resolved?.resolution ? (
-          <Field label={t("edit.size.resolution")} className="min-w-0 flex-1 px-2 py-4">
+          <Field
+            label={t("edit.size.resolution")}
+            labelClassName={labelClassName}
+            className="min-w-0 flex-1 px-2 py-4"
+          >
             <Select
               value={resolved.resolution}
               onValueChange={(value) => onValues({ resolution: value as ResolutionTier })}
@@ -108,7 +115,11 @@ export function SizeFields({
           </Field>
         ) : null}
         {offered(quality?.state) && caps?.quality && resolved?.quality ? (
-          <Field label={t("edit.size.quality")} className="min-w-0 flex-1 px-2 py-4">
+          <Field
+            label={t("edit.size.quality")}
+            labelClassName={labelClassName}
+            className="min-w-0 flex-1 px-2 py-4"
+          >
             <Select value={resolved.quality} onValueChange={(value) => onValues({ quality: value })}>
               {caps.quality.levels.map((level) => (
                 <SelectItem

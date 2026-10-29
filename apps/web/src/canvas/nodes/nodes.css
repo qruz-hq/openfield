@@ -331,6 +331,31 @@
   line-clamp: 1;
 }
 
+/* Edit's bottom bar (design nRuORN2ZyA): the words over a row with Edit mask and Run, 10 apart,
+   130 tall. The words are 13/500 there. */
+.of-card[data-stacked] .of-card-bottom {
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: stretch;
+  height: 130px;
+}
+
+.of-card[data-stacked] .of-card-text {
+  flex: none;
+  width: 100%;
+}
+
+.of-card[data-stacked] .of-card-text .of-card-prompt {
+  font-weight: 500;
+}
+
+.of-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
 .of-card-center {
   position: absolute;
   inset: 0;
@@ -348,6 +373,25 @@
 
 .of-card-center[data-over-image] {
   padding: 16px 20px;
+}
+
+/* Edit with no mask yet (design YyIfrxsFFt): the whole card under the dark $scrim, whatever the
+   theme, with Paint mask and its hint 10 apart in the middle. */
+.of-card-scrim {
+  position: absolute;
+  inset: 0;
+  background: var(--of-scrim);
+  pointer-events: none;
+}
+
+.of-card-center[data-cover] {
+  gap: 10px;
+  padding: 0;
+}
+
+/* Covered, painting is the next step: the bottom bar's Run waits under it, so it stays away. */
+.of-card[data-covered] .of-card-bottom {
+  display: none;
 }
 
 /* After a result the message sits on its own $overlay scrim over the last image (KAgcC, jxhcX,

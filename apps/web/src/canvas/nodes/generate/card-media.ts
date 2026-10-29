@@ -14,7 +14,15 @@ import { createStore } from "zustand/vanilla";
 // made it (job.output) or the canvas as it opens (assetSizes). A thumbnail's size is a rounded
 // stand-in that only draws the card until the exact one arrives; it's never saved.
 
-export const cardMedia = createStore<CardMediaView>()(() => ({ dims: {}, shown: {} }));
+export interface EditorCardMedia extends CardMediaView {
+  /**
+   * The image an Edit card shows before it has one of its own: the one coming in to be edited,
+   * whose shape it takes (edit/card-media.ts). Kept here so its box follows it like any other.
+   */
+  bases: Readonly<Record<string, string>>;
+}
+
+export const cardMedia = createStore<EditorCardMedia>()(() => ({ dims: {}, shown: {}, bases: {} }));
 
 /**
  * An image's pixel size. Images never change, so an exact size, once known, stands; a thumbnail's

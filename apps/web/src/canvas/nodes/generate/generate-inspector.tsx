@@ -1,24 +1,18 @@
 import { speedOf } from "@openfield/canvas/engine/context-base";
 import { modelKeyOf, modelsFitting } from "@openfield/canvas/engine/inputs";
 import { type GenerateParams, generateSpec } from "@openfield/canvas/nodes/generate/spec";
-import { uploadSpec } from "@openfield/canvas/nodes/upload/spec";
-import { incomingEdges, newEdgeId, newNodeId } from "@openfield/canvas/store/graph";
 import { type ModelListItem, t } from "@openfield/core";
 import { clampBatch } from "@openfield/providers/manifest";
-import { Badge, Button, cn, Divider, IconButton, MiniChip, Stepper } from "@openfield/ui";
-import { ChevronDown, Link, Plus, SlidersHorizontal, Timer } from "lucide-react";
-import { type ReactNode, useId, useMemo, useRef, useState } from "react";
+import { Badge, Button, cn, Divider, Stepper } from "@openfield/ui";
+import { ChevronDown, SlidersHorizontal, Timer } from "lucide-react";
+import { type ReactNode, useId, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { UPLOAD_ACCEPT, uploadImages } from "../../../api/hooks/uploads";
-import { errorMessage } from "../../../api/raw";
-import { notifyError } from "../../../lib/notify";
 import { useCanvasEngineContext, useNodeAnalysis } from "../../engine/engine-store";
-import { useCanvasStoreApi, useLocked, useNodeFrame, useReadOnly } from "../../store/context";
+import { useLocked, useNodeFrame, useReadOnly } from "../../store/context";
 import { InspectorRun, LOCKED_DIM, ModelField, SizeField } from "../shell/inspector-parts";
-import { LinkedPrompt } from "../shell/linked-text";
+import { PromptCard } from "../shell/prompt-card";
 import { useNodeDisplay, useParsedParams, useRunNode, useSetParams } from "../shell/use-node";
 import { sizeControls, useModelSwitch } from "./controls";
-import { ReferenceOrder } from "./reference-order";
 import { SeedField } from "./seed-field";
 
 // Generate's settings (design AWQzm): the prompt card (add a reference, the whole prompt coming in
@@ -26,9 +20,6 @@ import { SeedField } from "./seed-field";
 // (resolution or quality, and aspect ratio), how many images, the Advanced row (the seed, and
 // later each model's extras), then Run. Everything the card doesn't show is set here. While the
 // node is locked (design L79Zt) each of those is read-only at 45%, and Run waits at 35%.
-
-/** Where a reference added from here goes: to the left of the node, like the design's graphs. */
-const REFERENCE_GAP = 80;
 
 export function GenerateInspector({ nodeId }: { nodeId: string }) {
   const ctx = useCanvasEngineContext();
@@ -39,122 +30,27 @@ export function GenerateInspector({ nodeId }: { nodeId: string }) {
   const analysis = useNodeAnalysis(nodeId);
   const display = useNodeDisplay(nodeId);
   const run = useRunNode(nodeId);
-  const store = useCanvasStoreApi();
   const readOnly = useReadOnly();
   const locked = useLocked(nodeId);
   const dim = locked ? LOCKED_DIM : undefined;
-  const files = useRef<HTMLInputElement>(null);
   const key = modelKeyOf(params.model, ctx);
   const model = ctx.model(key);
   const speed = model ? speedOf(ctx, model) : "standard";
   const controls = useMemo(() => sizeControls(model, params, 1, speed), [model, params, speed]);
-  const upstream = analysis?.upstreamText ?? "";
   const busy = display.state === "queued" || display.state === "running";
-
-  const focusPromptNode = () => {
-    const state = store.getState();
-    const source = incomingEdges(state.doc, nodeId, "prompt")[0]?.source;
-    if (!source) return;
-    state.actions.setSelection({ nodeIds: [source], edgeIds: [] });
-    state.viewController.focusNode(source);
-  };
-
-  /** Uploads the files into a new Upload node wired into this node's references. */
-  const addReference = async (list: File[]) => {
-    if (!list.length || !frame) return;
-    const { assetIds, failed } = await uploadImages(list);
-    for (const { error } of failed) notifyError(errorMessage(error));
-    if (!assetIds.length) return;
-    const width = uploadSpec.size!.w;
-    const node = {
-      id: newNodeId(),
-      type: uploadSpec.type,
-      typeVersion: uploadSpec.typeVersion,
-      position: { x: frame.position.x - width - REFERENCE_GAP, y: frame.position.y },
-      size: { ...uploadSpec.size! },
-      parentId: frame.parentId,
-      collapsed: false,
-      title: null,
-      params: { assetIds },
-      presetLocks: [],
-      result: null,
-    };
-    store.getState().actions.apply(
-      [
-        { op: "addNode", node },
-        {
-          op: "addEdge",
-          edge: {
-            id: newEdgeId(),
-            source: node.id,
-            sourceHandle: "images",
-            target: nodeId,
-            targetHandle: "input_images",
-            kind: "data",
-          },
-        },
-      ],
-      { label: "reference" },
-    );
-  };
 
   if (!frame) return null;
   return (
     <>
-      <div className={cn("flex w-full flex-col gap-12 rounded-14 bg-surface p-12", dim)}>
-        <input
-          ref={files}
-          type="file"
-          accept={UPLOAD_ACCEPT}
-          multiple
-          hidden
-          onChange={(event) => {
-            void addReference([...(event.target.files ?? [])]);
-            event.target.value = "";
-          }}
-        />
-        {/* The references come in first, then the + that adds one (design iy0ZN). */}
-        <div className="flex flex-wrap items-center gap-6">
-          <ReferenceOrder nodeId={nodeId} />
-          <IconButton
-            variant="secondary"
-            size={32}
-            icon={Plus}
-            label={t("canvas.nodes.generate.addReference")}
-            disabled={readOnly || locked || !model?.capabilities.references.supported}
-            // Locked, the + keeps its look inside the dimmed card.
-            className={
-              locked && model?.capabilities.references.supported ? "disabled:text-inherit" : undefined
-            }
-            onClick={() => files.current?.click()}
-          />
-        </div>
-        {/* The whole prompt coming in, then this node's own words after it. */}
-        {upstream ? (
-          <p className="w-full text-small leading-[1.5] break-words whitespace-pre-wrap text-text-primary">
-            <LinkedPrompt parts={analysis?.upstreamParts ?? []} own="" />
-          </p>
-        ) : null}
-        <textarea
-          value={params.prompt}
-          readOnly={readOnly || locked}
-          rows={2}
-          // Locked, nothing can be added, so nothing asks for it.
-          placeholder={locked ? undefined : t("canvas.nodes.generate.promptPlaceholder")}
-          aria-label={t("canvas.nodes.generate.promptField")}
-          onChange={(event) => setParams({ prompt: event.target.value }, "prompt")}
-          onKeyDown={(event) => event.stopPropagation()}
-          className="field-sizing-content max-h-200 min-h-20 w-full resize-none bg-transparent text-small leading-[1.5] text-text-primary outline-none placeholder:text-text-tertiary"
-        />
-        {upstream ? (
-          <MiniChip
-            icon={Link}
-            label={t("canvas.nodes.generate.fromPrompt")}
-            onClick={focusPromptNode}
-            className="self-start"
-          />
-        ) : null}
-      </div>
+      <PromptCard
+        nodeId={nodeId}
+        value={params.prompt}
+        onChange={(prompt) => setParams({ prompt }, "prompt")}
+        references={!!model?.capabilities.references.supported}
+        placeholder={t("canvas.nodes.generate.promptPlaceholder")}
+        fieldLabel={t("canvas.nodes.generate.promptField")}
+        fromLabel={t("canvas.nodes.generate.fromPrompt")}
+      />
       <ModelField
         models={modelsFitting(ctx.models, { references: analysis?.references ?? 0 }, key)}
         selected={model}

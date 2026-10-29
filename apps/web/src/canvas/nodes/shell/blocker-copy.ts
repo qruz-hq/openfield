@@ -3,9 +3,10 @@ import { type ProviderSummary, safeParseModelKey, t } from "@openfield/core";
 import { companyName } from "../../../lib/provider";
 
 // The words and the fix for each blocker (the hatched band, §7.5). Fixes are what a person can do
-// from here: add a key, pick another model, or turn the company back on.
+// from here: add a key, pick another model, turn the company back on, or paint an Edit node's mask
+// again on the image it now has.
 
-export type BlockerFix = "add_key" | "pick_model" | "open_settings";
+export type BlockerFix = "add_key" | "pick_model" | "open_settings" | "paint_mask";
 
 export interface BlockerCopy {
   message: string;
@@ -58,7 +59,7 @@ export function blockerCopy(
     case "no_mask":
       return plain(t("canvas.nodes.blocked.noMask"));
     case "mask_stale":
-      return plain(t("canvas.nodes.blocked.maskStale"));
+      return fix("paint_mask", t("canvas.nodes.edit.paintMask"), t("canvas.nodes.blocked.maskStale"));
     case "no_description":
       return plain(t("canvas.nodes.blocked.noDescription"));
     case "no_prompt":

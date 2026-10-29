@@ -34,12 +34,13 @@ import { RunPill } from "./run-pill";
 import { clock, useBlockedMessage, useBlockerFix, useCancel, useElapsed, useFailureFix } from "./state-band";
 import { useRunNode } from "./use-node";
 
-// An image card (Generate, design Y5jjx; Variations, design njYDO): the node is its images. At
-// rest: the images, the label and the ports, and a pill only when the state needs attention. On
-// hover, keyboard focus, or as the only node selected: the top bar (pill, the node's own extras,
-// menu) and the bottom bar (the words that run and Run, or Stop / Cancel while it runs). Every state
-// the card can be in (card-state.ts) looks the same on both kinds of card; each kind brings only its
-// media, its words and what shows in an empty card.
+// An image card (Generate, design Y5jjx; Variations, design njYDO; Edit, design nRuORN2ZyA): the
+// node is its images. At rest: the images, the label and the ports, and a pill only when the state
+// needs attention. On hover, keyboard focus, or as the only node selected: the top bar (pill, the
+// node's own extras, menu) and the bottom bar (the words that run and Run, or Stop / Cancel while it
+// runs). Every state the card can be in (card-state.ts) looks the same on each kind of card; each
+// kind brings only its media, its words and what shows in an empty card. Edit also puts its own
+// button beside Run, under the words, and covers the card while it waits for a mask.
 
 export interface ImageCardProps {
   id: string;
@@ -68,6 +69,18 @@ export interface ImageCardProps {
   empty: (view: CardView) => ReactNode;
   /** The bottom bar's words. */
   text: (view: CardView) => ReactNode;
+  /**
+   * The words go over a row with this on the left and Run on the right (Edit's Edit mask). The
+   * bottom bar is then a column, 130 tall.
+   */
+  actions?: ReactNode;
+  /**
+   * What the card needs before it can run, over the whole card on the $scrim, in place of the empty
+   * glyph and any message (Edit's Paint mask, design YyIfrxsFFt).
+   */
+  cover?: ReactNode;
+  /** This kind of card's take on the shared view (card-state.ts). */
+  shape?: (view: CardView) => CardView;
   run: {
     estimate: CostEstimate | null;
     blocker: NodeBlocker | null;
@@ -98,6 +111,9 @@ export function ImageCard({
   topExtra,
   empty,
   text,
+  actions,
+  cover,
+  shape,
   run,
   model,
 }: ImageCardProps) {
@@ -111,7 +127,7 @@ export function ImageCard({
   // The voxel swarm needs WebGL, set up the first time a card runs or waits.
   const live = display.state === "running" || display.state === "queued";
   const voxels = useMemo(() => live && voxelsSupported(), [live]);
-  const view = cardView({
+  const shared = cardView({
     state: display.state,
     images: hasImages,
     atCompany: !!wait,
@@ -119,6 +135,7 @@ export function ImageCard({
     voxels,
     locked: display.locked,
   });
+  const view = shape ? shape(shared) : shared;
   const scrim = hasScrim(view);
   // Over an image the bars and what's on them are dark in both themes (nodes.css).
   const paint = scrim ? "dark" : undefined;
@@ -135,6 +152,8 @@ export function ImageCard({
       data-several={several || undefined}
       data-short={short || undefined}
       data-message={view.message || undefined}
+      data-stacked={actions !== undefined || undefined}
+      data-covered={cover ? true : undefined}
       data-phase={view.phase}
     >
       {media(opacity, view)}
@@ -169,31 +188,60 @@ export function ImageCard({
       </div>
       <div className={view.bottomAtRest ? "of-card-bottom" : "of-card-bottom of-reveal"} data-paint={paint}>
         <div className="of-card-text">{text(view)}</div>
-        {view.action === "run" ? (
-          <RunPill
-            id={id}
-            name={name}
-            estimate={run.estimate}
-            blocker={run.blocker}
-            upToDate={run.upToDate}
-            seedless={run.seedless}
-            models={run.models}
-            muted={run.muted}
-            primary
-          />
-        ) : view.action ? (
-          <StopButton id={id} name={name} cancel={view.action === "cancel"} />
-        ) : null}
+        {actions !== undefined ? (
+          <div className="of-card-actions">
+            {actions}
+            <CardAction id={id} name={name} view={view} run={run} />
+          </div>
+        ) : (
+          <CardAction id={id} name={name} view={view} run={run} />
+        )}
       </div>
-      <div className="of-card-center" data-over-image={(view.message && scrim) || undefined}>
-        {view.emptyGlyph ? empty(view) : null}
-        {view.message ? (
-          <Message id={id} view={view} display={display} model={model} overImage={scrim} />
-        ) : null}
-      </div>
+      {cover ? <div aria-hidden className="of-card-scrim" data-paint="dark" /> : null}
+      {cover ? (
+        <div className="of-card-center" data-cover data-paint="dark">
+          {cover}
+        </div>
+      ) : (
+        <div className="of-card-center" data-over-image={(view.message && scrim) || undefined}>
+          {view.emptyGlyph ? empty(view) : null}
+          {view.message ? (
+            <Message id={id} view={view} display={display} model={model} overImage={scrim} />
+          ) : null}
+        </div>
+      )}
       {view.progress ? <Progress id={id} /> : null}
     </div>
   );
+}
+
+/** Next to the words: Run, Stop (running) or Cancel (queued), or nothing while a message acts. */
+function CardAction({
+  id,
+  name,
+  view,
+  run,
+}: {
+  id: string;
+  name: string;
+  view: CardView;
+  run: ImageCardProps["run"];
+}) {
+  if (view.action === "run")
+    return (
+      <RunPill
+        id={id}
+        name={name}
+        estimate={run.estimate}
+        blocker={run.blocker}
+        upToDate={run.upToDate}
+        seedless={run.seedless}
+        models={run.models}
+        muted={run.muted}
+        primary
+      />
+    );
+  return view.action ? <StopButton id={id} name={name} cancel={view.action === "cancel"} /> : null;
 }
 
 function StatusPill({ id, view, display }: { id: string; view: CardView; display: NodeDisplay }) {

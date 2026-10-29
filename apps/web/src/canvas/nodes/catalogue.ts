@@ -1,11 +1,15 @@
 import { assetsSpec } from "@openfield/canvas/nodes/assets/spec";
+import { editSpec } from "@openfield/canvas/nodes/edit/spec";
 import { generateSpec } from "@openfield/canvas/nodes/generate/spec";
 import { promptSpec } from "@openfield/canvas/nodes/prompt/spec";
 import { uploadSpec } from "@openfield/canvas/nodes/upload/spec";
 import { variationsSpec } from "@openfield/canvas/nodes/variations/spec";
 import { videoSpec } from "@openfield/canvas/nodes/video/spec";
-import { Film, Images, LayoutGrid, Sparkles, Type, Upload } from "lucide-react";
+import { Brush, Film, Images, LayoutGrid, Sparkles, Type, Upload } from "lucide-react";
 import { AssetsNode } from "./assets/assets-node";
+import { editBox, editRest } from "./edit/card-media";
+import { EditInspector } from "./edit/edit-inspector";
+import { EditNode } from "./edit/edit-node";
 import { generateBox, generateRest } from "./generate/card-media";
 import { GenerateInspector } from "./generate/generate-inspector";
 import { GenerateNode } from "./generate/generate-node";
@@ -19,11 +23,11 @@ import { videoBox, videoRest } from "./video/card-media";
 import { VideoInspector } from "./video/video-inspector";
 import { VideoNode } from "./video/video-node";
 
-// Data node definitions, in catalogue order: Prompt, Upload, Assets, Generate, Variations, Video.
-// Each is its pure spec (@openfield/canvas, which the engine, its tests and the server use) plus
-// its icon and React parts.
-// Edit (M4-19) and Style (M4-20) join this list when they ship; until then a saved node of either
-// type opens as the editor's placeholder and saves back unchanged.
+// Data node definitions, in catalogue order: Prompt, Upload, Assets, Generate, Edit, Variations,
+// Video. Each is its pure spec (@openfield/canvas, which the engine, its tests and the server use)
+// plus its icon and React parts.
+// Style (M4-20) joins this list when it ships; until then a saved node of that type opens as the
+// editor's placeholder and saves back unchanged.
 
 export const DATA_NODES: readonly NodeDefinition[] = [
   defineNode({ ...promptSpec, icon: Type, Component: PromptNode }),
@@ -36,6 +40,14 @@ export const DATA_NODES: readonly NodeDefinition[] = [
     rest: generateRest,
     Component: GenerateNode,
     Inspector: GenerateInspector,
+  }),
+  defineNode({
+    ...editSpec,
+    icon: Brush,
+    box: editBox,
+    rest: editRest,
+    Component: EditNode,
+    Inspector: EditInspector,
   }),
   defineNode({
     ...variationsSpec,

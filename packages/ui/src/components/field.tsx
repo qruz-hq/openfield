@@ -31,6 +31,8 @@ export interface FieldProps extends Omit<ComponentProps<"div">, "children"> {
   layout?: "stack" | "inline";
   /** Id for the control. Generated when left out. */
   controlId?: string;
+  /** For the label, where a surface sets its labels its own way (a node's settings: 12/500, tertiary). */
+  labelClassName?: string;
   children: ReactNode;
 }
 
@@ -40,6 +42,7 @@ export function Field({
   description,
   layout = "stack",
   controlId,
+  labelClassName,
   className,
   children,
   ...props
@@ -64,7 +67,7 @@ export function Field({
           <label
             id={value.labelId}
             htmlFor={value.controlId}
-            className="text-small font-medium text-text-primary"
+            className={cn("text-small font-medium text-text-primary", labelClassName)}
           >
             {label}
           </label>
