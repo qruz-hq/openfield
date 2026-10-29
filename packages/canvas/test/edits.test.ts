@@ -113,8 +113,8 @@ describe("compileEdits", () => {
       compile(base, [{ op: "add_node", type: "image.generate", params: { model: "google:nope" } }]),
     );
     expect(model.code).toBe("bad_model");
-    const edit = failure(() => compile(base, [{ op: "add_node", type: "image.edit" }]));
-    expect(edit.code).toBe("not_supported");
+    const upscale = failure(() => compile(base, [{ op: "add_node", type: "image.upscale" }]));
+    expect(upscale.code).toBe("not_supported");
   });
 
   test("update_node merges settings and removes the ones set to null", () => {
