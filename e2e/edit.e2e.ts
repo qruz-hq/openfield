@@ -1,11 +1,12 @@
+import { inflateSync } from "node:zlib";
 import { expect, type Locator, type Page, test } from "@playwright/test";
 import { api, FAKE_KEY, makeImage, SESSION_HEADER, sessionToken } from "./support";
 
 // The detail view's Edit tab (§4.6, design "Image edit"): paint a mask over an image with the
 // brush, eraser, lasso and rectangle, undo and redo it, and never lose it without asking. Then run
-// the edit on the fake models: its price on Generate, the monthly limit, the new image linked to
-// the image and its mask, comparing it with the original, a run that fails, and a phone photo that
-// can't take a mask.
+// the edit on the fake models: its price on Generate, the mask PNG it uploads, the monthly limit,
+// the new image in the results strip and the feed, linked to the image and its mask, comparing it
+// with the original, a run that fails, and a phone photo that can't take a mask.
 
 let runs = 0;
 const unique = (name: string) => `${name} ${Date.now().toString(36)}${runs++}`;
@@ -446,6 +447,207 @@ test("Generate runs the painted edit at its price, and the new image comes from 
     saved.asset.id,
   );
   expect(resaved).toBe(false);
+});
+
+/**
+ * A PNG's alpha, decoded here with zlib rather than by the browser that encoded it, so the test
+ * checks the bytes the server gets. 8 bits a channel, not interlaced, as a canvas writes it.
+ */
+function pngAlpha(png: Buffer): { width: number; height: number; alpha: Uint8Array } {
+  let width = 0;
+  let height = 0;
+  let channels = 4;
+  const data: Buffer[] = [];
+  for (let at = 8; ; ) {
+    const length = png.readUInt32BE(at);
+    const type = png.toString("latin1", at + 4, at + 8);
+    const body = png.subarray(at + 8, at + 8 + length);
+    if (type === "IHDR") {
+      width = body.readUInt32BE(0);
+      height = body.readUInt32BE(4);
+      expect([body[8], body[12]], "8 bits a channel, not interlaced").toEqual([8, 0]);
+      channels = ({ 0: 1, 2: 3, 4: 2, 6: 4 } as Record<number, number>)[body[9]!]!;
+    } else if (type === "IDAT") data.push(body);
+    else if (type === "IEND") break;
+    at += 12 + length;
+  }
+  // Each row is a filter byte, then the row as a difference from its left, upper or both.
+  const raw = inflateSync(Buffer.concat(data));
+  const stride = width * channels;
+  const pixels = new Uint8Array(stride * height);
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)]!;
+    const row = y * (stride + 1) + 1;
+    for (let x = 0; x < stride; x++) {
+      const a = x >= channels ? pixels[y * stride + x - channels]! : 0;
+      const b = y > 0 ? pixels[(y - 1) * stride + x]! : 0;
+      const c = x >= channels && y > 0 ? pixels[(y - 1) * stride + x - channels]! : 0;
+      const p = a + b - c;
+      const paeth =
+        Math.abs(p - a) <= Math.abs(p - b) && Math.abs(p - a) <= Math.abs(p - c)
+          ? a
+          : Math.abs(p - b) <= Math.abs(p - c)
+            ? b
+            : c;
+      const predicted = [0, a, b, (a + b) >> 1, paeth][filter]!;
+      pixels[y * stride + x] = (raw[row + x]! + predicted) & 0xff;
+    }
+  }
+  const alpha = new Uint8Array(width * height).fill(255);
+  if (channels === 2 || channels === 4)
+    for (let i = 0; i < alpha.length; i++) alpha[i] = pixels[i * channels + channels - 1]!;
+  return { width, height, alpha };
+}
+
+/**
+ * Keeps what the app posts to /api/masks. Chromium doesn't hand a multipart body holding a file to
+ * Playwright (postDataBuffer() is null), so the page's fetch keeps the form it was given.
+ */
+async function keepMaskUploads(page: Page) {
+  await page.addInitScript(() => {
+    const send = window.fetch;
+    window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = input instanceof Request ? input.url : String(input);
+      if (url.endsWith("/api/masks") && init?.body instanceof FormData)
+        Object.assign(window, { maskUpload: init.body });
+      return send(input, init);
+    }) as typeof fetch;
+  });
+}
+
+/** The last mask the app posted: the image it names and the PNG's bytes. */
+async function maskUpload(page: Page): Promise<{ baseAssetId: string; png: Buffer }> {
+  await page.waitForFunction(() => "maskUpload" in window);
+  const { baseAssetId, base64 } = await page.evaluate(async () => {
+    const form = (window as unknown as { maskUpload: FormData }).maskUpload;
+    const bytes = new Uint8Array(await (form.get("mask") as File).arrayBuffer());
+    let binary = "";
+    for (const byte of bytes) binary += String.fromCharCode(byte);
+    return { baseAssetId: String(form.get("baseAssetId")), base64: btoa(binary) };
+  });
+  return { baseAssetId, png: Buffer.from(base64, "base64") };
+}
+
+/** Every alpha value in a box given as fractions of the mask: [left, top, right, bottom]. */
+function alphasIn(mask: ReturnType<typeof pngAlpha>, [l, t, r, b]: [number, number, number, number]) {
+  const seen = new Set<number>();
+  for (let y = Math.floor(mask.height * t); y < Math.ceil(mask.height * b); y++)
+    for (let x = Math.floor(mask.width * l); x < Math.ceil(mask.width * r); x++)
+      seen.add(mask.alpha[y * mask.width + x]!);
+  return [...seen].sort((p, q) => p - q);
+}
+
+test("from a feed tile: a box and a stroke, the words, the price, and the new image in the strip and the feed", async ({
+  page,
+}) => {
+  const token = await sessionToken(page.request);
+  await api(page.request, token, "PUT", "/api/settings/keys/openai", { apiKey: FAKE_KEY });
+  const prompt = unique("a linen dress");
+  const id = await makeImage(page.request, token, prompt);
+  const base = await api<{ asset: { width: number; height: number } }>(
+    page.request,
+    token,
+    "GET",
+    `/api/assets/${id}`,
+  );
+  const view = detail(page);
+  const panel = panelOf(page);
+  await keepMaskUploads(page);
+
+  // The feed tile's Edit opens the image on the Edit tab.
+  await page.goto("/image");
+  await expect(tile(page, prompt).locator("img")).toBeVisible({ timeout: 15_000 });
+  await tile(page, prompt).hover();
+  await tile(page, prompt).getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`/image\\?asset=${id}&tab=edit$`));
+  await expect(toolbar(page)).toBeVisible();
+
+  // D, E, A and M pick the brush, the eraser, the lasso and the box.
+  const tools = { d: "Brush", e: "Eraser", a: "Lasso", m: "Rectangle" };
+  for (const [key, name] of Object.entries(tools)) {
+    await page.keyboard.press(key);
+    for (const other of Object.values(tools))
+      await expect(tool(page, other)).toHaveAttribute("aria-pressed", String(other === name));
+  }
+
+  // A brush stroke along the bottom right, then a box at the top left.
+  const layer = maskLayer(page);
+  await page.keyboard.press("d");
+  await drag(page, await at(layer, 0.55, 0.75), await at(layer, 0.85, 0.75));
+  await expect.poll(() => tintAt(page, 0.7, 0.75)).toBe(255);
+  await page.keyboard.press("m");
+  await drag(page, await at(layer, 0.1, 0.1), await at(layer, 0.4, 0.4));
+  await expect.poll(() => tintAt(page, 0.25, 0.25)).toBe(255);
+  expect(await tintAt(page, 0.7, 0.25)).toBe(0);
+
+  // The words, typed: their letters stay in the prompt and leave the box in hand.
+  const words = unique("Make the dress deep red");
+  await panel.getByRole("textbox", { name: "What to change" }).pressSequentially(words);
+  await expect(panel.getByRole("textbox", { name: "What to change" })).toHaveValue(words);
+  await expect(tool(page, "Rectangle")).toHaveAttribute("aria-pressed", "true");
+
+  // GPT Image 2.5 Sunburst takes the mask. Medium at 1:1 and 1K is 439 output tokens at $30 per
+  // million, and the 768 px image going in counts as 1,024 tokens at $8 per million: about $0.021.
+  await expect(panel.getByRole("button", { name: "Model" })).toContainText("GPT Image 2.5 Sunburst");
+  const generate = generateIn(page);
+  await expect(generate).toHaveText(/^Generate\s*~\$0\.021$/);
+  await generate.hover();
+  await expect(page.getByRole("tooltip")).toContainText("1 × $0.013 + the image you're editing ($0.008)");
+
+  // The mask goes up as a PNG the image's exact size: alpha 0 where painted, 255 everywhere else.
+  const savedMask = page.waitForResponse(
+    (r) => r.url().endsWith("/api/masks") && r.request().method() === "POST",
+  );
+  const edits = page.waitForRequest((r) => r.url().endsWith("/api/edit") && r.method() === "POST");
+  await generate.click();
+  const upload = await maskUpload(page);
+  expect(upload.baseAssetId).toBe(id);
+  const mask = pngAlpha(upload.png);
+  expect([mask.width, mask.height]).toEqual([base.asset.width, base.asset.height]);
+  expect(alphasIn(mask, [0.12, 0.12, 0.38, 0.38]), "inside the box").toEqual([0]);
+  expect(alphasIn(mask, [0.58, 0.74, 0.82, 0.76]), "along the stroke").toEqual([0]);
+  expect(alphasIn(mask, [0.45, 0, 1, 0.68]), "top right").toEqual([255]);
+  expect(alphasIn(mask, [0, 0.45, 0.48, 1]), "bottom left").toEqual([255]);
+  expect(alphasIn(mask, [0, 0.84, 1, 1]), "below the stroke").toEqual([255]);
+
+  // The edit runs on Sunburst with that mask, kept to the painted areas.
+  const saved = (await (await savedMask).json()) as { asset: { id: string } };
+  expect((await edits).postDataJSON()).toMatchObject({
+    model: "openai:gpt-image-2.5-sunburst",
+    op: "inpaint",
+    prompt: words,
+    base: { assetId: id },
+    mask: { assetId: saved.asset.id, composite: true },
+  });
+
+  // The new image is in the results strip, picked and compared with the original.
+  await expect(panel.getByText("Saved as 1 new image. The original stays as it is.")).toBeVisible({
+    timeout: 20_000,
+  });
+  const strip = view.getByRole("group", { name: "New images" });
+  const made = strip.getByRole("button", { name: "New image 1" });
+  await expect(made).toHaveAttribute("aria-pressed", "true");
+  await expect(made.locator("img")).toBeVisible();
+  await expect(view.getByRole("radiogroup", { name: "Compare" })).toBeVisible();
+
+  // Leaving asks first, as the mask and the words are still here; then it's in the feed.
+  await page.keyboard.press("Escape");
+  const leave = page.getByRole("alertdialog", { name: "Leave this edit?" });
+  await leave.getByRole("button", { name: "Leave", exact: true }).click();
+  await expect(view).toHaveCount(0);
+  await expect(page).toHaveURL(/\/image$/);
+  await expect(tile(page, words).locator("img")).toBeVisible({ timeout: 15_000 });
+
+  // Its tile opens its details, which say it was edited from the image and its mask.
+  await tile(page, words)
+    .getByRole("button", { name: new RegExp(`^${escapeRegExp(words)} · `) })
+    .click();
+  const info = view.getByRole("tabpanel", { name: "Info" });
+  await expect(info.getByText("Edited from", { exact: true })).toBeVisible();
+  await expect(info.getByText(prompt, { exact: true })).toBeVisible();
+  await expect(info.getByText("The original, unchanged")).toBeVisible();
+  await expect(page.locator("[data-mask-thumb]")).toBeVisible();
+  await expect(info.getByText(words, { exact: true })).toBeVisible();
 });
 
 /** The Difference view's mark at a point given as fractions of the image: 0 where nothing changed. */
