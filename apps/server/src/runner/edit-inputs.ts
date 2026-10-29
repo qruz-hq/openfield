@@ -121,9 +121,11 @@ interface Sizable {
 }
 
 /**
- * An edit that leaves its size open (none, or "auto") asks for the base's own, or the nearest the
- * model takes, so the result lines up with the base and its mask. Its tier follows unless the
- * request names one. A size the request chose stays, and so does everything outside edits.
+ * An edit that leaves its size open (none, or "auto") asks for the base's shape, so the result
+ * lines up with the base and its mask. A masked edit with no tier also asks for the one that
+ * covers the base, so the area it changes keeps its detail when it's laid back over the base. An
+ * edit without a mask has nothing laid back, so it keeps the tier asked for or the model's own, as
+ * any run would. A size the request chose stays, and so does everything outside edits.
  */
 export function withEditSize<T extends Sizable>(manifest: ModelManifest, req: T, base?: PixelSize): T {
   if (!base || (req.size && req.size.kind !== "auto")) return req;
@@ -132,12 +134,9 @@ export function withEditSize<T extends Sizable>(manifest: ModelManifest, req: T,
     canInpaint: manifest.capabilities.ops.inpaint,
   });
   if (op !== "edit" && op !== "inpaint") return req;
-  const fit = editSizeFor(manifest, base);
-  return {
-    ...req,
-    size: fit.size,
-    ...(!req.resolution && fit.resolution && { resolution: fit.resolution }),
-  };
+  const tier = req.resolution ?? (req.mask ? undefined : manifest.capabilities.resolution?.default);
+  const fit = editSizeFor(manifest, base, tier);
+  return { ...req, size: fit.size, ...(fit.resolution && { resolution: fit.resolution }) };
 }
 
 /**

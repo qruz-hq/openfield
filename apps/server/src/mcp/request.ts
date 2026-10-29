@@ -40,7 +40,12 @@ export const imageRequestFields = {
     .object({ width: z.int().min(64).max(16_384), height: z.int().min(64).max(16_384) })
     .optional()
     .describe("Exact pixel size, for models that take one. Use aspect otherwise."),
-  resolution: z.enum(RESOLUTION_TIERS).optional().describe("Resolution tier, such as 1K, 2K or 4K."),
+  resolution: z
+    .enum(RESOLUTION_TIERS)
+    .optional()
+    .describe(
+      "Resolution tier, such as 1K, 2K or 4K. Default: the model's. An edit with a mask defaults to the smallest tier that covers its image, so the area it changes keeps its detail, which can cost more.",
+    ),
   quality: z.string().optional().describe("A quality id the model lists in list_models."),
   count: z
     .int()

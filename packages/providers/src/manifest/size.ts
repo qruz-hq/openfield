@@ -139,33 +139,40 @@ export function fitPixels(width: number, height: number, rules: PixelRules): Pix
 
 /**
  * What an edit of an image this size asks a model for, so the result lines up with the base and
- * its mask: the base's own pixels where the model takes exact sizes, else its nearest shape. The
- * tier is the smallest that covers the base's long edge, so the edited area isn't scaled up.
+ * its mask: the base's shape, at its own pixels where the model takes exact sizes, else its
+ * nearest shape. With no `tier`, the smallest that covers the base's long edge, so the edited area
+ * isn't scaled down. With one, the base's shape is scaled so its long edge is the tier's, as a run
+ * at that tier would come out, and the size sent is the size priced.
  */
 export function editSizeFor(
   manifest: Pick<ModelManifest, "capabilities">,
   base: PixelSize,
+  tier?: ResolutionTier,
 ): { size: SizeSpec; resolution?: ResolutionTier } {
   const caps = manifest.capabilities;
-  const resolution =
-    caps.resolution && coveringTier(caps.resolution.tiers, Math.max(base.width, base.height));
-  const tier = resolution ? { resolution } : {};
+  const long = Math.max(base.width, base.height);
+  const resolution = tier ?? (caps.resolution && coveringTier(caps.resolution.tiers, long));
+  const withTier = resolution ? { resolution } : {};
+  // The shape to fit: the base itself, or the base scaled to the tier asked for.
+  const scale = tier ? RESOLUTION_TIER_PX[tier] / long : 1;
+  const width = Math.max(1, Math.round(base.width * scale));
+  const height = Math.max(1, Math.round(base.height * scale));
   const size = caps.size;
   if (size.mode === "aspect") {
     if (size.pixels)
-      return { size: { kind: "pixels", ...fitPixels(base.width, base.height, size.pixels) }, ...tier };
+      return { size: { kind: "pixels", ...fitPixels(width, height, size.pixels) }, ...withTier };
     const blocked = caps.partial?.aspect?.unavailable ?? [];
     const ratio = nearestRatio(
-      base.width,
-      base.height,
+      width,
+      height,
       size.ratios.filter((r) => !blocked.includes(r)),
     );
-    return { size: ratio ? { kind: "aspect", ratio } : { kind: "auto" }, ...tier };
+    return { size: ratio ? { kind: "aspect", ratio } : { kind: "auto" }, ...withTier };
   }
   if (size.mode === "enum") {
     // The listed size nearest in shape, then in pixel count.
-    const target = Math.log(base.width / base.height);
-    const area = Math.log(base.width * base.height);
+    const target = Math.log(width / height);
+    const area = Math.log(width * height);
     const scored = size.sizes.map((s) => ({
       s,
       shape: Math.abs(Math.log(s.width / s.height) - target),
@@ -173,20 +180,16 @@ export function editSizeFor(
     }));
     scored.sort((a, b) => a.shape - b.shape || a.area - b.area);
     const hit = scored[0]!.s;
-    return { size: { kind: "pixels", width: hit.width, height: hit.height }, ...tier };
+    return { size: { kind: "pixels", width: hit.width, height: hit.height }, ...withTier };
   }
-  // Free size: the base's shape, scaled into the edges the model takes and snapped to its grid.
-  const scale = Math.min(1, size.maxEdge / Math.max(base.width, base.height));
-  const grow = Math.max(1, size.minEdge / Math.min(base.width * scale, base.height * scale));
+  // Free size: the shape, scaled into the edges the model takes and snapped to its grid.
+  const fit = Math.min(1, size.maxEdge / Math.max(width, height));
+  const grow = Math.max(1, size.minEdge / Math.min(width * fit, height * fit));
   const snap = (edge: number) =>
     Math.min(size.maxEdge, Math.max(size.minEdge, Math.round(edge / size.multipleOf) * size.multipleOf));
   return {
-    size: {
-      kind: "pixels",
-      width: snap(base.width * scale * grow),
-      height: snap(base.height * scale * grow),
-    },
-    ...tier,
+    size: { kind: "pixels", width: snap(width * fit * grow), height: snap(height * fit * grow) },
+    ...withTier,
   };
 }
 

@@ -147,6 +147,23 @@ describe("sizes", () => {
     }
   });
 
+  test("an edit at a tier asked for scales its base's shape to that tier", () => {
+    // A 4K photo edited at 1K is sent as 1K, not at its own size under a 1K price.
+    expect(editSizeFor(flare, { width: 3840, height: 2160 }, "1K")).toEqual({
+      size: { kind: "pixels", width: 1088, height: 608 },
+      resolution: "1K",
+    });
+    expect(editSizeFor(flare, { width: 3000, height: 2000 }, "1K")).toEqual({
+      size: { kind: "pixels", width: 1024, height: 688 },
+      resolution: "1K",
+    });
+    // A small photo asked for at 2K grows to it.
+    expect(editSizeFor(flare, { width: 800, height: 600 }, "2K")).toEqual({
+      size: { kind: "pixels", width: 2048, height: 1536 },
+      resolution: "2K",
+    });
+  });
+
   test("a size in pixels is kept when OpenAI takes it, and refused when it doesn't", async () => {
     const req = (width: number, height: number): GenerateRequest => ({
       idempotencyKey: newId(),

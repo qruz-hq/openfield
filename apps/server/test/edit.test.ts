@@ -370,6 +370,77 @@ describe("POST /api/edit", () => {
     expect(run.jobSet.costEstimateUsd).toBe(priced.body.max);
     await completed(server, run.jobSet.id);
   });
+
+  test("an edit without a mask keeps the model's usual tier, whatever the base's size", async () => {
+    server = await ready();
+    const base = await upload(await photo(3000, 2000));
+    const onBase = { base: { assetId: base.id, role: "base" } };
+    const plain = jobSetAcceptedSchema.parse(
+      (await edit({ model: NANO_BANANA, op: "edit", ...onBase })).body,
+    );
+    // Nothing is laid back over the base, so there's no reason to pay for 4K.
+    expect(getJobSet(server.services.db, plain.jobSet.id)!.requestJson).toMatchObject({
+      size: { aspect: "3:2" },
+      resolution: "1K",
+    });
+    const maskId = await mask(base.id, 3000, 2000);
+    const masked = jobSetAcceptedSchema.parse(
+      (await edit({ model: NANO_BANANA, op: "edit", ...onBase, mask: { assetId: maskId } })).body,
+    );
+    expect(getJobSet(server.services.db, masked.jobSet.id)!.requestJson).toMatchObject({
+      size: { aspect: "3:2" },
+      resolution: "4K",
+    });
+    expect(masked.jobSet.costEstimateUsd!).toBeGreaterThan(plain.jobSet.costEstimateUsd!);
+    await completed(server, plain.jobSet.id);
+    await completed(server, masked.jobSet.id);
+  });
+
+  test("a tier the edit asks for is the size sent and the size priced", async () => {
+    server = await ready();
+    const base = await upload(await photo(3840, 2160));
+    const maskId = await mask(base.id, 3840, 2160);
+    const asked = {
+      base: { assetId: base.id, role: "base" },
+      mask: { assetId: maskId },
+      resolution: "1K",
+      quality: "medium",
+    };
+    const priced = await server.json<CostEstimate>("/api/models/openai/gpt-image-2/estimate", {
+      method: "POST",
+      body: { op: "inpaint", prompt: "a red door", batch: 1, ...asked },
+    });
+    const run = jobSetAcceptedSchema.parse((await edit(asked)).body);
+    // Sent at 1K in the base's shape, not at 3840 × 2160 under a 1K price.
+    expect(getJobSet(server.services.db, run.jobSet.id)!.requestJson).toMatchObject({
+      size: { width: 1088, height: 608 },
+      resolution: "1K",
+    });
+    expect(run.jobSet.costEstimateUsd).toBe(priced.body.max);
+    await completed(server, run.jobSet.id);
+
+    // An exact size asked for outright is priced at that size too.
+    const large = jobSetAcceptedSchema.parse(
+      (
+        await server.json("/api/generate", {
+          method: "POST",
+          body: {
+            idempotencyKey: newId(),
+            model: OPENAI,
+            op: "generate",
+            prompt: "a red door",
+            size: { kind: "pixels", width: 3840, height: 2160 },
+            resolution: "1K",
+            quality: "medium",
+            batch: 1,
+            source: "api",
+          },
+        })
+      ).body,
+    );
+    expect(large.jobSet.costEstimateUsd!).toBeGreaterThan(0.1);
+    await completed(server, large.jobSet.id);
+  });
 });
 
 describe("the edited image's detail", () => {

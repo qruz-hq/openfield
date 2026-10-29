@@ -60,6 +60,15 @@ describe("editSizeFor", () => {
     expect(editSizeFor(pro, { width: 9000, height: 9000 }).resolution).toBe(tiers.at(-1));
   });
 
+  test("a tier asked for stays, and the shape follows the base", () => {
+    expect(editSizeFor(flash, { width: 3000, height: 2000 }, "1K")).toEqual({
+      size: { kind: "aspect", ratio: "3:2" },
+      resolution: "1K",
+    });
+    // Left open, the tier covers the base.
+    expect(editSizeFor(flash, { width: 3000, height: 2000 }).resolution).toBe("4K");
+  });
+
   test("an exact-size model gets the base's own pixels, or the closest it takes", () => {
     const exact = withCaps(pro, {
       size: { ...pro.capabilities.size, pixels: rules } as Capabilities["size"],
