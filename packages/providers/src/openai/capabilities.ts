@@ -20,6 +20,9 @@ export const SIZE_RULES = {
   maxPixels: 8_294_400,
 } as const;
 
+/** A mask must be a PNG "less than 4MB". Core holds every saved mask to the same limit. */
+export { MASK_MAX_BYTES } from "@openfield/core";
+
 /**
  * Every ratio the composer offers maps to a legal custom size (conformance 2), so all three models
  * share the list. "auto" sends size "auto" and lets the model choose.
@@ -73,19 +76,8 @@ export function openAiSize(ratio: AspectRatio, tier: ResolutionTier): PixelSize 
   return size;
 }
 
-/**
- * Output tokens for one image, from OpenAI's own calculator in the image generation guide: the
- * quality sets a base, the long side gets it and the short side gets it scaled by the shape
- * (rounded half to even), and the product scales with the pixel count.
- */
-export function outputTokens(base: number, width: number, height: number): number {
-  const long = Math.max(width, height);
-  const short = Math.min(width, height);
-  const s = base / (long / short);
-  const floor = Math.floor(s);
-  const scaled = s - floor === 0.5 ? floor + (floor % 2) : Math.round(s);
-  return Math.ceil((base * scaled * (2e6 + width * height)) / 4e6);
-}
+/** Output tokens for one image, from OpenAI's own calculator (core holds it, so estimates share it). */
+export { outputTokensFor as outputTokens } from "@openfield/core";
 
 /** Token bases per quality, from the calculator. The 2.5 models add Extra high and Max. */
 export const TOKEN_BASES = {
@@ -138,7 +130,8 @@ export function openAiCapabilities(opts: OpenAiCapabilityOptions): Capabilities 
       weights: false,
       strengthMode: "none",
     },
-    size: { mode: "aspect", ratios: RATIOS, default: "1:1" },
+    // Exact sizes too, so an edit can ask for its base's own size and line up with its mask.
+    size: { mode: "aspect", ratios: RATIOS, default: "1:1", pixels: SIZE_RULES },
     resolution: { tiers: TIERS, default: "1K" },
     quality: { levels: opts.quality, default: "medium" },
     // n goes up to 10; the composer's cap is 4. OpenAI returns exactly n images or an error.

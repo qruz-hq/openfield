@@ -46,7 +46,8 @@ exports[`google 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, 
     },
   ],
   "inpaint": {
-    "error": "capability_unsupported",
+    "note": "whole_image",
+    "op": "edit",
   },
   "t2i": [
     {
@@ -147,7 +148,8 @@ exports[`google 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, 
     },
   ],
   "inpaint": {
-    "error": "capability_unsupported",
+    "note": "whole_image",
+    "op": "edit",
   },
   "t2i": [
     {
@@ -245,7 +247,8 @@ exports[`google 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, 
     },
   ],
   "inpaint": {
-    "error": "capability_unsupported",
+    "note": "whole_image",
+    "op": "edit",
   },
   "t2i": [
     {

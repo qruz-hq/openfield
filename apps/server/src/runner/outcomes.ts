@@ -3,6 +3,7 @@ import {
   type CostSource,
   canvasSource,
   DEFAULT_CURRENCY,
+  type EditOpParams,
   type ErrorAction,
   errorCopy,
   formatMoney,
@@ -40,6 +41,7 @@ import {
   planCalls,
 } from "@openfield/providers/server";
 import type { EventHub } from "../events/hub";
+import { compositeEdit } from "../files/composite";
 import type { Ingest, StagedFile } from "../files/ingest";
 import { Thumbs, thumbSourceOf } from "../files/thumbs";
 import type { Logger } from "../log/logger";
@@ -115,6 +117,19 @@ export class Outcomes {
   }
 
   /**
+   * A masked edit's result laid over its base, so everything outside the mask stays the original
+   * (§0.9), with the record of it for succeed(). Anything else comes back as it is. Runs first:
+   * succeed() files in one synchronous transaction, which can't wait for pixels. When a composite is
+   * made, the result's own file is discarded and the composite is what's returned to file.
+   */
+  async composite(
+    call: NormalizedRequest,
+    staged: StagedFile,
+  ): Promise<{ staged: StagedFile; edit?: EditOpParams }> {
+    return (await compositeEdit(this.deps, call, staged)) ?? { staged };
+  }
+
+  /**
    * Files one image for one job: the asset, its lineage and a usage row, in the transaction that
    * marks the job succeeded. Undefined when the job had already moved on (a cancel won).
    */
@@ -130,8 +145,10 @@ export class Outcomes {
     usage?: ProviderUsage | undefined;
     /** A video's poster frame, already in the library next to it. */
     posterPath?: string | null;
+    /** A masked edit's record, from composite(). */
+    edit?: EditOpParams | undefined;
   }): AssetRow | undefined {
-    const { set, job, call, image, staged, cost, speedUsed, latencyMs } = args;
+    const { set, job, call, image, staged, cost, speedUsed, latencyMs, edit } = args;
     const base = call.base?.assetId;
     const video = staged.mime.startsWith("video/");
     // A video's frames are its inputs, in the order it plays them: start, then end.
@@ -167,10 +184,14 @@ export class Outcomes {
           ? (getAsset(tx, base, { includeDeleted: true })?.rootAssetId ?? base)
           : staged.assetId,
         op: set.op,
-        // Drives "Open in Canvas" in the detail view (§7.1).
-        opParams: call.canvas ? { source: canvasSource(call.canvas.canvasId, call.canvas.nodeId) } : null,
-        maskAssetId: call.mask?.assetId ?? null,
+        opParams: opParamsOf(call, edit),
+        // A mask deleted for good while the run was out is no longer there to point at.
+        maskAssetId:
+          call.mask && getAsset(tx, call.mask.assetId, { includeDeleted: true }) ? call.mask.assetId : null,
         generative: true,
+        // A model that can't take a mask changed the whole image (§0.9).
+        approximate: edit?.fallback !== undefined,
+        approximateReason: edit?.fallback ?? null,
         modality: video ? "video" : "image",
         ...(video && {
           // The file's own headers win over what the company said.
@@ -196,7 +217,8 @@ export class Outcomes {
         batchIndex: job.idx,
         operation: set.op,
         outcome: "succeeded",
-        size: `${staged.width}x${staged.height}`,
+        // What the company made, before any composite scaled it to the base.
+        size: sizeOf(edit?.composite.resizedFrom ?? staged),
         quality: call.quality ?? null,
         units: unitsOf(args.usage),
         estimateMin: cost.each.min,
@@ -445,6 +467,18 @@ export function batchAction(error: ProviderError): ErrorAction | null {
 export function finalReason(error: ProviderError): string | null {
   return error.userMessage === errorCopy(error.code).reason ? null : error.userMessage;
 }
+
+/** What the op did beyond its params: where on a canvas it ran, and a masked edit's record. */
+function opParamsOf(call: NormalizedRequest, edit: EditOpParams | undefined): Record<string, unknown> | null {
+  if (!call.canvas && !edit) return null;
+  return {
+    // Drives "Open in Canvas" in the detail view (§7.1).
+    ...(call.canvas && { source: canvasSource(call.canvas.canvasId, call.canvas.nodeId) }),
+    ...(edit && { edit }),
+  };
+}
+
+const sizeOf = ({ width, height }: { width: number; height: number }) => `${width}x${height}`;
 
 /** The settings that made an image, minus the ids that change on every run. */
 function paramsOf(call: NormalizedRequest): Record<string, unknown> {

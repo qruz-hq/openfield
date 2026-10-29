@@ -5,6 +5,7 @@ import {
   type InputImageTokens,
   type ModelManifest,
   type NormalizedRequest,
+  outputTokensFor,
   type PerImagePrice,
   type PriceModel,
   type SpeedId,
@@ -260,9 +261,14 @@ function perToken(
   // An "auto" size still has a tier: its shapes give the range.
   const inTier = !matched.length && tier ? pool.filter((r) => r.size.endsWith(`@${tier}`)) : [];
   const candidates = matched.length ? matched : inTier.length ? inTier : pool;
-  if (!candidates.length) return unknownCost(price.pricedAt);
+  // An exact size the table has no row for is counted as the company counts it, never as its tier.
+  const exact =
+    req.size && "width" in req.size && !bySize(sizeKey).length
+      ? pixelTokens(price, quality, req.size.width, req.size.height)
+      : undefined;
+  if (!exact && !candidates.length) return unknownCost(price.pricedAt);
 
-  const tokens = candidates.map((r) => r.tokens);
+  const tokens = exact ?? candidates.map((r) => r.tokens);
   const outLow = (Math.min(...tokens) * price.imageOutputPerMTok) / 1e6;
   const outHigh = (Math.max(...tokens) * price.imageOutputPerMTok) / 1e6;
   // Roughly four characters per token; input text is a small share of the total.
@@ -279,6 +285,20 @@ function perToken(
     basis: basis(count, moneyRange(low, high, price.currency), speedLabel),
     pricedAt: price.pricedAt,
   };
+}
+
+/** The tokens an exact size could come to: at the quality asked, else at any quality. */
+function pixelTokens(
+  price: PerTokenPriceModel,
+  quality: string | undefined,
+  width: number,
+  height: number,
+): number[] | undefined {
+  const bases = price.outputTokenBases;
+  if (!bases) return undefined;
+  const asked = quality === undefined ? undefined : bases[quality];
+  const counted = asked !== undefined ? [asked] : Object.values(bases);
+  return counted.length ? counted.map((base) => outputTokensFor(base, width, height)) : undefined;
 }
 
 type VideoTokenPriceModel = Extract<PriceModel, { kind: "video_tokens" }>;

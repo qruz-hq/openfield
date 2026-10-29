@@ -42,7 +42,7 @@ export const assets = sqliteTable(
     opParams: json<Record<string, unknown>>("op_params"),
     maskAssetId: text("mask_asset_id").references((): AnySQLiteColumn => assets.id, { onDelete: "set null" }),
     generative: flag("generative", 1), // 0 for local ops
-    approximate: flag("approximate", 0), // 1 when made by the regional fallback (§0.9)
+    approximate: flag("approximate", 0), // 1 when made by the whole-image fallback (§0.9)
     approximateReason: text("approximate_reason"),
     fileState: text("file_state", { enum: FILE_STATES }).notNull().default("ok"),
     // Videos only (0008): how long it runs, whether it has sound, and its poster frame, a JPEG the

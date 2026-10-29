@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -10,6 +10,7 @@ import { getCanvas, listJobSets } from "@openfield/db";
 import { actionsFor } from "../src/mcp/permissions";
 import { ORIGIN, saveKey, startTestServer, type TestServer } from "./helpers";
 import { appFetch, call, connectAgent, turnOnAgents } from "./mcp-helpers";
+import { quarterMask, texture } from "./pixels";
 
 // Allow, Ask and Default per action (Settings > Agents). An app that can show a prompt (MCP
 // elicitation) is asked there; one that can't is refused until the agent asked in its chat and
@@ -170,6 +171,25 @@ describe("Ask", () => {
     const declined = await call(no.client, "generate_image", { prompt: "no" });
     expect(declined.text).toContain("said no");
     expect(listJobSets(s.services.db, { status: "all" }).items).toHaveLength(1);
+  });
+
+  test("an edit is asked for as an edit, and says when the model changes the whole image", async () => {
+    const s = await ready();
+    await permissions(s, { make_images: "ask" });
+    const image = join(s.home, "tmp", "photo.png");
+    const mask = join(s.home, "tmp", "mask.png");
+    writeFileSync(image, await texture(640, 480));
+    writeFileSync(mask, await quarterMask(640, 480));
+    const yes = await promptingApp(s, "accept");
+    const made = await call(yes.client, "generate_image", { prompt: "a red door", edit: { image, mask } });
+    expect(made.json).toMatchObject({ status: "succeeded", edit: { wholeImage: true } });
+    expect(yes.prompts).toEqual([
+      "Cursor wants to edit an image for about $0.14. Nano Banana Pro can't take a mask, so it edits the whole image. Openfield then puts back everything outside the mask, so only the masked area changes. Allow it?",
+    ]);
+    await call(yes.client, "generate_image", { prompt: "bluer", count: 2, edit: { image } });
+    expect(yes.prompts[1]).toMatch(
+      /^Cursor wants to make 2 edits of an image for about \$[\d.]+\. Allow it\?$/,
+    );
   });
 
   test("reading a resource set to Ask checks first too", async () => {

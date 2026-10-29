@@ -19,6 +19,7 @@ import { resolveProviderSettings } from "../src/manifest/provider-settings";
 import { offeredSpeeds, resumesAfterRestart } from "../src/manifest/speed";
 import { normalize } from "../src/normalize";
 import { createModelRegistry } from "../src/registry";
+import { maskPng } from "../src/testing/png";
 import { ProviderError } from "../src/types";
 import {
   addImage,
@@ -32,6 +33,7 @@ import {
   prepare,
   request,
   run,
+  sentImages,
   withoutImageBytes,
 } from "./harness";
 
@@ -491,17 +493,60 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
         mask: { assetId: newId() },
       });
       const inpaint = await normalize(manifest, inpaintReq, { jobSetId: newId() });
-      golden.inpaint = caps.ops.inpaint ? { op: inpaint.request.op } : { error: inpaint.error?.code };
+      // A model without a mask input edits the whole image and says so (§0.9).
+      const note = inpaint.diagnostics.find((d) => d.field === "mask")?.code;
+      golden.inpaint = inpaint.error
+        ? { error: inpaint.error.code }
+        : { op: inpaint.request.op, ...(note && { note }) };
 
       expect(golden).toMatchSnapshot(manifest.key);
     }
   });
 
-  test("21. mask polarity: alpha 0 means edit, converted for the provider", () => {
+  test("21. masks: alpha 0 means change, and a mask goes out as stored, for the first image only", async () => {
+    const same = (a: Uint8Array, b: Uint8Array) => Buffer.from(a).equals(Buffer.from(b));
     for (const manifest of catalog) {
-      // Only adapters that take a mask have something to convert. The fixture pair test lives
-      // with an adapter that declares ops.inpaint.
-      if (!manifest.capabilities.ops.inpaint) expect(manifest.capabilities.ops.inpaint).toBe(false);
+      const caps = manifest.capabilities;
+      const h = harness(kit);
+      const base = await addImage(h, 64, 48);
+      // Openfield's canonical mask: RGBA, colour 0, alpha 0 where the image should change.
+      const maskBytes = await maskPng(64, 48, { x: 16, y: 12, width: 24, height: 16 });
+      const mask = await h.ctx.assets.add(maskBytes);
+      const ref = caps.references.supported ? await addImage(h, 16, 16) : undefined;
+      const req = request(manifest, {
+        op: "inpaint",
+        prompt: "Add a red door",
+        base: { assetId: base, role: "base" },
+        mask: { assetId: mask },
+        ...(ref && { references: [{ assetId: ref, role: "style" as const }] }),
+      });
+      if (caps.video || !caps.ops.imageEdit) {
+        // Nothing to edit with, so a masked edit is refused before anything is sent.
+        const refused = await normalize(manifest, req, { jobSetId: newId() });
+        expect(refused.error?.code).toBe("capability_unsupported");
+        continue;
+      }
+
+      const { normalized } = await run(kit, manifest, req, h);
+      // Either way the run keeps the mask, so the server can put back what's outside it.
+      expect(normalized.request.mask?.assetId).toBe(mask);
+      const sent = await sentImages(h);
+      const baseBytes = (await h.ctx.assets.read(base)).bytes;
+      const masks = sent.filter((bytes) => same(bytes, maskBytes));
+      if (caps.ops.inpaint) {
+        // Sent byte for byte: the company's polarity has to be Openfield's, never converted.
+        expect(normalized.request.op).toBe("inpaint");
+        expect(masks).toHaveLength(1);
+        // The first image is the base, the one a mask applies to, and the mask comes after it.
+        const images = sent.filter((bytes) => !same(bytes, maskBytes));
+        expect(same(images[0]!, baseBytes)).toBe(true);
+        expect(sent.indexOf(masks[0]!)).toBeGreaterThan(sent.indexOf(images[0]!));
+      } else {
+        // No mask input: the model edits the whole base and never sees the mask.
+        expect(normalized.request.op).toBe("edit");
+        expect(masks).toHaveLength(0);
+        expect(same(sent[0]!, baseBytes)).toBe(true);
+      }
     }
   });
 

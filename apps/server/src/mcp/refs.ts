@@ -3,18 +3,25 @@ import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { formatBytes, UPLOAD_MAX_BYTES } from "@openfield/core";
 import { type AssetRow, getAsset } from "@openfield/db";
+import { saveMask } from "../files/mask";
 import { saveUpload } from "../files/upload";
+import { ApiFailure } from "../http/errors";
 import { Refusal, type ToolContext } from "./kit";
 
 // An image an agent points at: an image already in the library (its id), a file on this computer
 // (a full path), or a web address. Files and addresses come in as uploads, the same way a
-// reference dropped on the composer does, so every check an upload gets applies here too.
+// reference dropped on the composer does, so every check an upload gets applies here too. A mask
+// comes in the way the editor saves one (files/mask.ts), so it never shows in the library.
 
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/;
 const FETCH_TIMEOUT_MS = 30_000;
 
 export const IMAGE_REF_HINT =
   "An image id from the library, a full path to an image file on this computer, or an http(s) address.";
+
+/** How a mask says what to change, as the editor and the models read it (§0.9). */
+export const MASK_RULE =
+  "A mask is the image's exact size and transparent where the image should change. In a mask with no transparency, white changes and black stays.";
 
 export async function resolveImage(ctx: ToolContext, ref: string): Promise<AssetRow> {
   const value = ref.trim();
@@ -23,11 +30,50 @@ export async function resolveImage(ctx: ToolContext, ref: string): Promise<Asset
     if (!row) throw new Refusal(`There's no image with the id ${value} in the library.`);
     // Agents' tools work on images; a video can't be a reference or an edit's base.
     if (row.modality === "video") throw new Refusal(`${value} is a video, not an image.`);
+    // A mask only says what an edit changes; it goes in an edit's `mask`, never as an image.
+    if (row.kind === "mask")
+      throw new Refusal(`${value} is a mask, not an image. Pass it as an edit's mask.`);
     return row;
   }
-  if (/^https?:\/\//i.test(value)) return upload(ctx, await download(value));
+  return upload(ctx, await fileAt(value));
+}
+
+/**
+ * The area of `base` an edit may change, as a saved mask. A saved mask's id is used as it is; any
+ * other image, from the library, a file or an address, is saved as a mask of `base` first.
+ */
+export async function resolveMask(ctx: ToolContext, ref: string, base: AssetRow): Promise<AssetRow> {
+  const value = ref.trim();
+  let file: Blob;
+  if (ULID_RE.test(value)) {
+    const row = getAsset(ctx.svc.db, value);
+    if (!row) throw new Refusal(`There's no mask or image with the id ${value} in the library.`);
+    if (row.kind === "mask") return row;
+    if (row.modality === "video") throw new Refusal(`${value} is a video, not a mask.`);
+    file = Bun.file(ctx.svc.ingest.fileOf(row.path));
+  } else {
+    file = await fileAt(value);
+  }
+  let saved: Awaited<ReturnType<typeof saveMask>>;
+  try {
+    saved = await saveMask(ctx.svc, file, { baseAssetId: base.id });
+  } catch (err) {
+    if (!(err instanceof ApiFailure) || !err.userMessage) throw err;
+    // The editor's own words, plus the rule an agent needs to make a mask that works.
+    throw new Refusal(
+      err.field === "mask" && err.status === 400 ? `${err.userMessage} ${MASK_RULE}` : err.userMessage,
+    );
+  }
+  const row = getAsset(ctx.svc.db, saved.asset.id);
+  if (!row) throw new Refusal("The mask was saved but can't be found. Try again.");
+  return row;
+}
+
+/** The file a full path or a web address points at. */
+async function fileAt(value: string): Promise<Blob> {
+  if (/^https?:\/\//i.test(value)) return download(value);
   const path = value.startsWith("~/") ? join(homedir(), value.slice(2)) : value;
-  if (isAbsolute(path)) return upload(ctx, readFile(path));
+  if (isAbsolute(path)) return readFile(path);
   throw new Refusal(`"${value}" isn't an image Openfield can find. Use ${IMAGE_REF_HINT.toLowerCase()}`);
 }
 

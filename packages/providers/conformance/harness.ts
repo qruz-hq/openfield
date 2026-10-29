@@ -51,6 +51,8 @@ export interface Sent {
   headers: Record<string, string>;
   /** Parsed JSON, or a marker for bodies that aren't JSON (multipart, say). */
   body: unknown;
+  /** The body as it was handed to fetch, for tests that look at the bytes. */
+  raw: unknown;
 }
 
 /** A clock the fake API and the context both read, moved by hand so timelines take no real time. */
@@ -93,7 +95,7 @@ export function harness(
   const spy: FetchLike = async (input, init) => {
     const url = input instanceof Request ? input.url : String(input);
     const headers = Object.fromEntries(new Headers(init?.headers).entries());
-    sent.push({ url, headers, body: parseBody(init?.body) });
+    sent.push({ url, headers, body: parseBody(init?.body), raw: init?.body });
     return fake(input, init);
   };
   const ctx = createTestContext({
@@ -255,6 +257,44 @@ export function withoutImageBytes(value: unknown): unknown {
       return dataUrl ? `<base64 ${dataUrl[1]}>` : v;
     }),
   );
+}
+
+/**
+ * Every image a run sent, as bytes, in the order it sent them: multipart files, and base64 or
+ * data: URLs anywhere in a JSON body. Anything that doesn't start like a PNG or JPEG is skipped.
+ */
+export async function sentImages(h: Harness): Promise<Uint8Array[]> {
+  const images: Uint8Array[] = [];
+  const keep = (bytes: Uint8Array) => {
+    const png = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
+    const jpeg = bytes[0] === 0xff && bytes[1] === 0xd8;
+    if (png || jpeg) images.push(bytes);
+  };
+  const walk = (value: unknown) => {
+    if (typeof value === "string") {
+      const base64 = /^data:[a-z]+\/[a-z0-9.+-]+;base64,(.*)$/is.exec(value)?.[1] ?? value;
+      if (base64.length >= 16 && /^[A-Za-z0-9+/]+={0,2}$/.test(base64)) keep(Buffer.from(base64, "base64"));
+    } else if (Array.isArray(value)) {
+      for (const item of value) walk(item);
+    } else if (value && typeof value === "object") {
+      for (const item of Object.values(value)) walk(item);
+    }
+  };
+  for (const { raw } of h.sent) {
+    if (raw instanceof FormData) {
+      for (const [, value] of raw.entries())
+        if (typeof value !== "string") keep(new Uint8Array(await (value as Blob).arrayBuffer()));
+    } else if (typeof raw === "string") {
+      try {
+        walk(JSON.parse(raw));
+      } catch {
+        // Not JSON, so no images to find.
+      }
+    } else if (raw instanceof Uint8Array) {
+      keep(raw);
+    }
+  }
+  return images;
 }
 
 /** Long unbroken base64 runs or data: URLs anywhere in a value. */

@@ -289,7 +289,7 @@ export function purgeAssets(
         .all();
       deleted.push(...rows);
     }
-    return orphansOf(tx, deleted);
+    return orphansOf(tx, deleted, dropUnusedMasks(tx, deleted));
   });
 }
 
@@ -297,14 +297,53 @@ export function purgeAssets(
 export function emptyTrash(db: Executor): PurgeResult {
   return db.transaction((tx) => {
     const deleted = tx.delete(assets).where(isNotNull(assets.deletedAt)).returning().all();
-    return orphansOf(tx, deleted);
+    return orphansOf(tx, deleted, dropUnusedMasks(tx, deleted));
   });
 }
 
-function orphansOf(db: Executor, deleted: AssetRow[]): PurgeResult {
+// A mask whose image is gone for good and that no remaining edit names. The parent has no FK
+// (a tombstone), so this is checked by hand, against the rows left after the delete.
+const UNUSED_MASK = sql.raw(
+  `"assets"."kind" = 'mask'` +
+    ` AND NOT EXISTS (SELECT 1 FROM "assets" AS "image" WHERE "image"."id" = "assets"."parent_asset_id")` +
+    ` AND NOT EXISTS (SELECT 1 FROM "assets" AS "edit" WHERE "edit"."mask_asset_id" = "assets"."id")`,
+);
+
+/**
+ * Deletes the masks drawn on, or used by, rows just deleted for good, once nothing needs them.
+ * A mask is never listed, so nobody could ever select one to delete it. A mask an edit still
+ * names stays for that edit's detail view and Recreate, and goes once that edit does.
+ */
+function dropUnusedMasks(tx: Executor, deleted: AssetRow[]): AssetRow[] {
+  const ids = deleted.map((row) => row.id);
+  const named = deleted.flatMap((row) => (row.maskAssetId ? [row.maskAssetId] : []));
+  const dropped: AssetRow[] = [];
+  for (const [column, values] of [
+    [assets.parentAssetId, ids],
+    [assets.id, named],
+  ] as const) {
+    for (const part of chunked([...new Set(values)])) {
+      dropped.push(
+        ...tx
+          .delete(assets)
+          .where(and(UNUSED_MASK, inArray(column, part)))
+          .returning()
+          .all(),
+      );
+    }
+  }
+  return dropped;
+}
+
+/**
+ * The files and thumbnails no remaining row uses, of the rows deleted. `alsoGone` are rows that
+ * went with them (their masks), whose files count but which aren't reported as deleted.
+ */
+function orphansOf(db: Executor, deleted: AssetRow[], alsoGone: AssetRow[] = []): PurgeResult {
+  const gone = [...deleted, ...alsoGone];
   const bytesByPath = new Map<string, number>();
-  for (const row of deleted) bytesByPath.set(row.path, row.bytes);
-  const hashes = new Set(deleted.map((row) => row.sha256));
+  for (const row of gone) bytesByPath.set(row.path, row.bytes);
+  const hashes = new Set(gone.map((row) => row.sha256));
 
   const stillUsed = (column: typeof assets.path | typeof assets.sha256, values: string[]) => {
     const used = new Set<string>();
@@ -323,7 +362,7 @@ function orphansOf(db: Executor, deleted: AssetRow[]): PurgeResult {
   const usedHashes = stillUsed(assets.sha256, [...hashes]);
   const orphaned = [...bytesByPath.keys()].filter((path) => !usedPaths.has(path));
   // A video's poster goes with its file: identical videos share both.
-  const posters = deleted.flatMap((row) =>
+  const posters = gone.flatMap((row) =>
     row.posterPath && orphaned.includes(row.path) ? [row.posterPath] : [],
   );
   const files = [...orphaned, ...new Set(posters)];

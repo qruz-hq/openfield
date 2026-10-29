@@ -8,7 +8,7 @@ OpenAI's Image API, with its current image models under their own names.
 | GPT Image 2.5 Flare | `gpt-image-2.5-flare` | auto + 12 | 1K, 1.5K, 2K, 4K | low, medium, high, xhigh, max, auto | no |
 | GPT Image 2 | `gpt-image-2` | auto + 12 | 1K, 1.5K, 2K, 4K | low, medium, high, auto | yes |
 
-Checked on 2026-09-27 against OpenAI's [models](https://developers.openai.com/api/docs/models/all), each model's page, the [image generation guide](https://developers.openai.com/api/docs/guides/image-generation), the Image API reference, the [pricing page](https://developers.openai.com/api/docs/pricing), the [batch guide](https://developers.openai.com/api/docs/guides/batch) and the error code and rate limit guides, plus the official `openai-node` SDK where the docs are thin. **Not yet run against the live API**: nobody had a key when this was written. Run `OPENFIELD_CONFORMANCE=live bun test packages/providers/conformance` with `OPENFIELD_OPENAI_API_KEY` set before relying on it, and record real fixtures.
+Checked on 2026-09-27 against OpenAI's [models](https://developers.openai.com/api/docs/models/all), each model's page, the [image generation guide](https://developers.openai.com/api/docs/guides/image-generation), the Image API reference, the [pricing page](https://developers.openai.com/api/docs/pricing), the [batch guide](https://developers.openai.com/api/docs/guides/batch) and the error code and rate limit guides, plus the official `openai-node` SDK where the docs are thin. **Mostly not run against the live API**: nobody had a key when this was written; the one live check so far is below. Run `OPENFIELD_CONFORMANCE=live bun test packages/providers/conformance` with `OPENFIELD_OPENAI_API_KEY` set before relying on it, and record real fixtures.
 
 The older image models (`gpt-image-1`, `gpt-image-1-mini`, `gpt-image-1.5`, `chatgpt-image-latest`) are deprecated and shut down by December 1, 2026, so they're left out of the catalog. Discovery doesn't recognise them either.
 
@@ -16,6 +16,7 @@ The older image models (`gpt-image-1`, `gpt-image-1-mini`, `gpt-image-1.5`, `cha
 
 - **Generate:** `POST https://api.openai.com/v1/images/generations`, JSON: `model`, `prompt`, `n`, `size`, and `quality`, `background`, `output_format`, `output_compression` and `moderation` when set.
 - **Edit, inpaint, or a generation with references:** `POST /v1/images/edits`, multipart: the same fields as form values, then `image[]` (the edit base first, then references, up to 16 in all) and `mask` for an inpaint.
+- **Masks:** Openfield's saved mask is sent as it is: a PNG at the base's exact size, transparent where the image should change, which is how OpenAI documents it. A mask with no transparency, or of 4 MB or more, is refused before the call. An edit that leaves its size open asks for the base's own size when OpenAI takes it, else the nearest size that fits OpenAI's rules; Openfield scales the result back and puts the original back outside the mask.
 - **Answers:** GPT Image models always answer with `data[].b64_json`, so `assetHosts` is empty and an image URL in a response is refused. `response_format` is never sent (it's for DALL·E). `revised_prompt` is kept when a model sends one.
 - **Auth:** `Authorization: Bearer <key>`. The optional `OpenAI-Organization` and `OpenAI-Project` headers aren't sent: a project key already names its project.
 - **Hosts:** `api.openai.com` only.
@@ -99,10 +100,19 @@ The Responses API's background mode could resume by id, and its image tool takes
 
 A key OpenAI echoes back in a message (`sk-proj-****…`) is replaced before it's stored.
 
+## Checked live
+
+One masked edit on 2026-10-29 (`gpt-image-2.5-flare`, 1024x1024, Low quality, $0.0142), recorded in `__fixtures__/mask-edit-live.json`:
+
+- **Mask polarity:** the transparent area is what changes. Openfield's mask goes out unchanged.
+- **Size:** a 1024x1024 base came back at 1024x1024.
+- **Billing:** `usage` came back (1,053 input and 196 output tokens), and the cost matched the estimate for one input image, so the mask isn't billed as a second image.
+- **Outside the mask:** the model redrew the whole scene. The mean drift was 9.9/255, 8.5% of pixels moved by more than 28/255, and a table edge moved about 95 px. Openfield's composite (on by default) puts the original back there.
+
 ## Still unverified
 
 - The exact 403 text for organization verification (it comes from community reports; any 403 mentioning verification gets the verify message).
-- Whether `usage` comes back for every model: the schema text still says "gpt-image-1 only", but the reference examples show it for `gpt-image-2.5-flare`. Without it, a run is priced from the estimate.
+- Whether `usage` comes back for every model. It did for a `gpt-image-2.5-flare` edit (above); without it, a run is priced from the estimate.
 - The JSON form of `/v1/images/edits` inside a batch (above).
 - `input_fidelity` on the 2.5 models. It's never sent: `gpt-image-2` doesn't allow it.
 - Streaming and partial images: each model page says streaming isn't supported, while the reference shows streaming examples. Not declared until a live check settles it.

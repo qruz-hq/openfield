@@ -4,7 +4,8 @@ import { openAiSize, outputTokens, RATIOS, TIERS, TOKEN_BASES } from "./capabili
 // Per 1M tokens, from developers.openai.com/api/docs/pricing (checked 2026-09-27). The Image API
 // bills text input, image input and image output tokens. It publishes no per-image price, so the
 // estimate reads output tokens from a table built with OpenAI's own calculator for exactly the
-// sizes this adapter sends. Cached input rates apply only to the Responses API's image tool, never
+// sizes this adapter sends, and for any other exact size (an edit at its image's own size) from the
+// same calculator's bases. Cached input rates apply only to the Responses API's image tool, never
 // to /v1/images, so none is declared.
 
 const PRICED = {
@@ -61,6 +62,7 @@ const standard = (family: Family): PriceModel => ({
   imageInputTokens: INPUT_IMAGE_TOKENS,
   imageOutputPerMTok: 30,
   outputTokenTable: outputTokenTable(family),
+  outputTokenBases: { ...TOKEN_BASES[family] },
 });
 
 export const PRICES = {
@@ -79,5 +81,6 @@ export const BATCH_PRICES = {
     imageInputTokens: INPUT_IMAGE_TOKENS,
     imageOutputPerMTok: 15,
     outputTokenTable: outputTokenTable("gpt-image-2"),
+    outputTokenBases: { ...TOKEN_BASES["gpt-image-2"] },
   },
 } satisfies Record<string, PriceModel>;

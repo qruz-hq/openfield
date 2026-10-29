@@ -1,5 +1,5 @@
 import type { EdgeRelation, FileState } from "@openfield/core/constants";
-import { and, asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
 import type { Executor } from "../client";
 import type { AssetEdgeRow, AssetRow } from "../rows";
 import { assetEdges, assets } from "../schema";
@@ -53,12 +53,12 @@ export function edgesInto(db: Executor, childAssetIds: readonly string[]): Asset
   );
 }
 
-/** Live images made directly from this one. */
+/** Live images made directly from this one. Masks drawn on it aren't images made from it. */
 export function childrenOf(db: Executor, parentAssetId: string): AssetRow[] {
   return db
     .select()
     .from(assets)
-    .where(and(eq(assets.parentAssetId, parentAssetId), isNull(assets.deletedAt)))
+    .where(and(eq(assets.parentAssetId, parentAssetId), isNull(assets.deletedAt), ne(assets.kind, "mask")))
     .orderBy(asc(assets.createdAt))
     .all();
 }

@@ -11,7 +11,7 @@ import serverError from "../openai/__fixtures__/server-error.json";
 import unavailable from "../openai/__fixtures__/unavailable.json";
 import { openAiBatchRoutes } from "./openai-batch";
 import { badRequest, type ImageRequest, imagesResponse, json, planImages } from "./openai-common";
-import { probeImage } from "./png";
+import { pngHasTransparency, probeImage } from "./png";
 import {
   type FakeRoute,
   type FakeScenario,
@@ -39,6 +39,8 @@ const fixtures: Partial<Record<FakeScenario, RecordedExchange>> = {
 };
 
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
+/** The reference's mask limit: "less than 4MB". */
+const MASK_LIMIT = 4_000_000;
 
 export const openAiFake: FakeRoute = {
   providerId: "openai",
@@ -113,9 +115,11 @@ async function editBody(
   }
   const mask = form.get("mask");
   if (mask && typeof mask !== "string") {
-    const probed = probeImage(new Uint8Array(await mask.arrayBuffer()));
-    if (probed?.mimeType !== "image/png")
+    const bytes = new Uint8Array(await mask.arrayBuffer());
+    const probed = probeImage(bytes);
+    if (probed?.mimeType !== "image/png" || !pngHasTransparency(bytes))
       return badRequest("The mask must be a PNG with an alpha channel.", "mask");
+    if (mask.size >= MASK_LIMIT) return badRequest("The mask must be less than 4MB.", "mask");
     if (probed.width !== inputs[0]!.width || probed.height !== inputs[0]!.height)
       return badRequest("The mask must be the same size as the first image.", "mask");
   }

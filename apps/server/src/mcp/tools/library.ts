@@ -19,6 +19,7 @@ import { ancestorsOf } from "../../services/library";
 import { imageInfo, PREVIEW_EDGE, preview } from "../images";
 import { guarded, Refusal, reply, type ToolContext } from "../kit";
 import { IMAGE_REF_HINT, resolveImage } from "../refs";
+import { maskOutcome } from "../runs";
 
 // The person's library: find images, look at them, file them, and bring new ones in.
 
@@ -122,6 +123,7 @@ export function libraryTools(server: McpServer, ctx: ToolContext): void {
           ...(row.deletedAt && { inTrash: true }),
           seed: row.seed,
           settings: row.params,
+          ...(row.maskAssetId && { mask: row.maskAssetId, ...maskOutcome(row) }),
           runId: row.jobSetId,
           ...(set && { runPrompt: set.prompt, runStatus: set.status }),
           references: referencesOf(db, row.id).map(brief),

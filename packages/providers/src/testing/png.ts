@@ -1,4 +1,4 @@
-// A tiny PNG encoder and reader for fake responses and tests. RGB, 8 bits, one IDAT.
+// A tiny PNG encoder and reader for fake responses and tests. RGB or RGBA, 8 bits, one IDAT.
 // Deflate comes from CompressionStream when the runtime has it, else stored (uncompressed) blocks.
 
 const CRC_TABLE = (() => {
@@ -67,8 +67,24 @@ function chunk(type: string, data: Uint8Array): Uint8Array {
 export type Rgb = readonly [number, number, number];
 
 /** Encodes `rgb` (width × height × 3 bytes, row-major) as a PNG. */
-export async function encodePng(width: number, height: number, rgb: Uint8Array): Promise<Uint8Array> {
-  const stride = width * 3;
+export function encodePng(width: number, height: number, rgb: Uint8Array): Promise<Uint8Array> {
+  return encode(width, height, rgb, 3);
+}
+
+/** Encodes `rgba` (width × height × 4 bytes, row-major) as a PNG with an alpha channel. */
+export function encodeRgbaPng(width: number, height: number, rgba: Uint8Array): Promise<Uint8Array> {
+  return encode(width, height, rgba, 4);
+}
+
+async function encode(
+  width: number,
+  height: number,
+  pixels: Uint8Array,
+  channels: 3 | 4,
+): Promise<Uint8Array> {
+  if (pixels.length !== width * height * channels)
+    throw new RangeError(`Expected ${width * height * channels} bytes, got ${pixels.length}`);
+  const stride = width * channels;
   // Filter type 1 (Sub) stores each pixel as the difference from its left neighbour, which turns
   // smooth gradients into long runs that deflate well.
   const raw = new Uint8Array((stride + 1) * height);
@@ -76,15 +92,16 @@ export async function encodePng(width: number, height: number, rgb: Uint8Array):
     const row = y * (stride + 1);
     raw[row] = 1;
     for (let x = 0; x < stride; x++) {
-      const left = x >= 3 ? rgb[y * stride + x - 3]! : 0;
-      raw[row + 1 + x] = (rgb[y * stride + x]! - left) & 0xff;
+      const left = x >= channels ? pixels[y * stride + x - channels]! : 0;
+      raw[row + 1 + x] = (pixels[y * stride + x]! - left) & 0xff;
     }
   }
   const header = new Uint8Array(13);
   const view = new DataView(header.buffer);
   view.setUint32(0, width);
   view.setUint32(4, height);
-  header.set([8, 2, 0, 0, 0], 8);
+  // Bit depth 8, then colour type 2 (RGB) or 6 (RGBA).
+  header.set([8, channels === 4 ? 6 : 2, 0, 0, 0], 8);
 
   const parts = [
     new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
@@ -145,6 +162,40 @@ export async function gradientPng(width: number, height: number, seed: number): 
     }
   }
   return encodePng(width, height, rgb);
+}
+
+/**
+ * A mask in Openfield's form (§0.9): RGBA, colour 0, alpha 0 inside `hole` (the area to change)
+ * and 255 everywhere else.
+ */
+export function maskPng(
+  width: number,
+  height: number,
+  hole: { x: number; y: number; width: number; height: number },
+): Promise<Uint8Array> {
+  const rgba = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const inside = x >= hole.x && x < hole.x + hole.width && y >= hole.y && y < hole.y + hole.height;
+      rgba[(y * width + x) * 4 + 3] = inside ? 0 : 255;
+    }
+  }
+  return encodeRgbaPng(width, height, rgba);
+}
+
+/** True for a PNG with an alpha channel (colour type 4 or 6) or a tRNS chunk before its data. */
+export function pngHasTransparency(bytes: Uint8Array): boolean {
+  if (bytes.length < 33 || bytes[0] !== 0x89 || bytes[1] !== 0x50) return false;
+  if (bytes[25] === 4 || bytes[25] === 6) return true;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let pos = 8;
+  while (pos + 8 <= bytes.length) {
+    const type = String.fromCharCode(bytes[pos + 4]!, bytes[pos + 5]!, bytes[pos + 6]!, bytes[pos + 7]!);
+    if (type === "tRNS") return true;
+    if (type === "IDAT") return false;
+    pos += 12 + view.getUint32(pos);
+  }
+  return false;
 }
 
 /** Width and height from a PNG or JPEG header, or null for anything else. */

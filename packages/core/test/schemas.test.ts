@@ -172,6 +172,16 @@ describe("requests", () => {
     ).toBe(true);
   });
 
+  test("a mask carries its composite settings, each within range", () => {
+    const mask = { assetId: ID_C, composite: false, expandPx: 4, featherPx: 32 };
+    expect(roundTrip(generateRequestSchema, { ...request, mask })).toEqual({ ...request, mask });
+    for (const bad of [{ expandPx: 33 }, { featherPx: -1 }, { expandPx: 1.5 }]) {
+      expect(generateRequestSchema.safeParse({ ...request, mask: { assetId: ID_C, ...bad } }).success).toBe(
+        false,
+      );
+    }
+  });
+
   test("rejects a slash model key and a batch over four", () => {
     expect(generateRequestSchema.safeParse({ ...request, model: "google/gemini-3-pro-image" }).success).toBe(
       false,

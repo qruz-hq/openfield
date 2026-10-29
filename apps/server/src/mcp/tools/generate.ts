@@ -1,12 +1,12 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
-import type { CostEstimate } from "@openfield/core";
+import type { CostEstimate, GenerateRequest } from "@openfield/core";
 import { getJobSet } from "@openfield/db";
 import { z } from "zod";
 import { approveSpend, checkSpend, priceOf, spendFields, spendMode } from "../guard";
 import { guarded, Refusal, reply, type ToolContext } from "../kit";
 import { buildRequest, imageRequestFields } from "../request";
-import { describeRun } from "../runs";
+import { describeRun, editOf } from "../runs";
 import { DEFAULT_WAIT_S, waitField, waitForRuns } from "../wait";
 
 // Making images. They land in the person's Image feed like any other run, with the agent's name on
@@ -22,7 +22,7 @@ export function generateTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "Make images",
       description:
-        "Makes images with the person's own keys, or edits one (see edit). They appear in Openfield's Image feed as they're made. " +
+        "Makes images with the person's own keys, or edits one (see edit), with a mask to change only part of it. They appear in Openfield's Image feed as they're made. " +
         "Waits for them (see wait) and answers with a preview of each, its file path and a link to open it in Openfield. " +
         "Costs money: check the price with dryRun or estimate first when making more than one image.",
       inputSchema: { ...imageRequestFields, ...spendFields, wait: waitField },
@@ -36,15 +36,24 @@ export function generateTools(server: McpServer, ctx: ToolContext): void {
     guarded(ctx, "generate_image", async (args, extra) => {
       const request = await buildRequest(ctx, args);
       const mode = spendMode(ctx, "make_images");
-      const count = request.batch === 1 ? "an image" : `${request.batch} images`;
-      const asked = await approveSpend(ctx, extra, (await ctx.svc.runner.quote(request)).estimate, args, {
+      // The base and mask are checked here, before the person is asked to pay for anything.
+      const first = await ctx.svc.runner.quote(request);
+      const edit = editOf(first.request, modelName(ctx, request.model));
+      const asked = await approveSpend(ctx, extra, first.estimate, args, {
         mode,
-        what: `make ${count}`,
+        what: whatItDoes(request),
+        note: edit?.note,
       });
       if ("stop" in asked) return asked.stop;
       const started = await ctx.svc.agents.spending(async (): Promise<Started> => {
         const quote = await ctx.svc.runner.quote(request);
-        const stop = checkSpend(ctx, quote.estimate, { ...args, confirmCost: asked.confirmCost }, mode);
+        const stop = checkSpend(
+          ctx,
+          quote.estimate,
+          { ...args, confirmCost: asked.confirmCost },
+          mode,
+          edit && { op: quote.request.op, edit },
+        );
         if (stop) return { stop };
         const accepted = await ctx.svc.runner.createJobSet(request, { agent: ctx.session.client });
         return { runId: accepted.jobSet.id, estimate: quote.estimate };
@@ -106,3 +115,12 @@ export function generateTools(server: McpServer, ctx: ToolContext): void {
     }),
   );
 }
+
+/** What a request does, as the person reads it when asked to allow it. */
+export function whatItDoes(request: Pick<GenerateRequest, "op" | "batch">): string {
+  if (request.op === "generate")
+    return request.batch === 1 ? "make an image" : `make ${request.batch} images`;
+  return request.batch === 1 ? "edit an image" : `make ${request.batch} edits of an image`;
+}
+
+export const modelName = (ctx: ToolContext, key: string) => ctx.svc.models.get(key)?.displayName ?? key;

@@ -533,6 +533,11 @@ export type CanvasArchiveJobState = (typeof CANVAS_ARCHIVE_JOB_STATES)[number];
  * reference (Google's 20 MB, §3.2), so every upload can go to every model.
  */
 export const UPLOAD_MAX_BYTES = 20_000_000;
+/**
+ * Largest mask POST /api/masks keeps. OpenAI, the only launch model that takes a mask, wants one
+ * "less than 4MB" (Image API reference, checked 2026-10-29), so a saved mask is always smaller.
+ */
+export const MASK_MAX_BYTES = 4_000_000;
 
 // Event stream (§0.6, §8.3.2)
 export const SSE_EVENT_TYPES = [

@@ -105,7 +105,7 @@ If Google adds background support for an image model, that speed can move onto I
 ## Left out
 
 - **Nano Banana (`gemini-2.5-flash-image`):** Google shuts it down on October 2, 2026 and already limits it to existing users. Discovery lists it as not supported.
-- Masks, upscale and background removal: not offered by these models. Masked edits use Openfield's regional fallback.
+- Masks, upscale and background removal: not offered by these models. A masked edit runs as a whole-image edit, and Openfield puts back everything outside the mask afterwards, so pixels there stay the original's. The result is marked approximate (`whole_image`). With the `regionalFallback` setting off, a mask is refused instead.
 - Multi-turn editing, and JSONL batch input files (Files API references cover big runs).
 
 ## Discovery

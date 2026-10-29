@@ -3,6 +3,7 @@ export * from "./constants";
 export * from "./hash";
 export * from "./i18n";
 export * from "./ids";
+export * from "./image/mask";
 export * from "./library";
 export * from "./schemas";
 export * from "./video";

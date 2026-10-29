@@ -4,6 +4,7 @@ import {
   adapterOpFor,
   type Capabilities,
   type ControlId,
+  compositeSettingsOf,
   type Diagnostic,
   type ErrorCode,
   type GenerateRequest,
@@ -22,7 +23,7 @@ import {
   type VideoResolution,
 } from "@openfield/core";
 import { resolveProviderSettings } from "./manifest/provider-settings";
-import { nearestRatio, placeholderSize, resolveSize } from "./manifest/size";
+import { fitPixels, nearestRatio, placeholderSize, resolveSize } from "./manifest/size";
 import { plannedVideoSize, type ResolvedVideo, resolveVideo, videoSize } from "./manifest/video";
 import { ProviderError } from "./types";
 
@@ -57,6 +58,12 @@ export interface NormalizeOptions {
    * resolved for this model and frozen onto the request (§0.3). Without them the run is Standard.
    */
   settings?: { schema?: ProviderSettingsSchema; stored?: Readonly<Record<string, unknown>> | null };
+  /**
+   * A masked edit on a model that can't take a mask (§0.9, settings.regionalFallback): on, the
+   * default, it runs as a whole-image edit and the mask stays on the request for the composite.
+   * Off, it's refused.
+   */
+  wholeImageFallback?: boolean;
 }
 
 export interface NormalizeResult {
@@ -112,6 +119,25 @@ export async function normalize(
     block("op", "capability_unsupported", t("errors.capability_unsupported.reason"));
   if (op && EDIT_SOURCE_OPS.includes(op) && !req.base) {
     block("base", "invalid_request", t("errors.invalid_request.reason"));
+  }
+
+  // Masks (§0.9). An inpaint needs one, and inverting happens when a mask is saved, never here:
+  // a model sent the stored mask with invert on would edit the opposite area. A model with no mask
+  // input edits the whole image, and the server's composite keeps everything outside the mask.
+  if (req.op === "inpaint" && !req.mask) block("mask", "invalid_request", t("errors.maskMissing"));
+  if (req.mask?.invert) block("mask", "invalid_request", t("errors.maskInverted"));
+  if (req.mask && op === "edit" && canDo(caps, "edit")) {
+    if (opts.wholeImageFallback === false) {
+      block("mask", "capability_unsupported", t("composer.areaEditOff", { model }));
+    } else {
+      const keep = compositeSettingsOf(req.mask).composite ? "yes" : "no";
+      diagnostics.push({
+        level: "warning",
+        field: "mask",
+        code: "whole_image",
+        message: t("composer.wholeImageEdit", { model, keep }),
+      });
+    }
   }
 
   // Prompt, presets and mentions (§0.8)
@@ -255,7 +281,7 @@ export async function normalize(
     seed,
     references: references.length ? references : undefined,
     base: op && EDIT_SOURCE_OPS.includes(op) ? req.base : undefined,
-    mask: op === "inpaint" || op === "outpaint" ? req.mask : undefined,
+    mask: frozenMask(op, req.mask),
     expand: op === "outpaint" ? req.expand : undefined,
     moderation,
     video,
@@ -321,6 +347,17 @@ export function planCalls(
   }));
 }
 
+/**
+ * The mask a run keeps: an inpaint's, which the model gets, and a whole-image edit's, which only
+ * the composite reads. Its composite settings are filled in so Recreate replays exactly this.
+ */
+function frozenMask(op: AdapterOp | null, mask: GenerateRequest["mask"]): GenerateRequest["mask"] {
+  if (!mask) return undefined;
+  if (op === "outpaint") return mask;
+  if (op !== "inpaint" && op !== "edit") return undefined;
+  return { assetId: mask.assetId, ...compositeSettingsOf(mask) };
+}
+
 /** "a cat on a mat. Avoid: dogs, text." One trailing sentence, as §0.8 asks. */
 export function appendAvoid(prompt: string, avoid: string): string {
   const base = prompt.trimEnd();
@@ -383,6 +420,12 @@ function resolveRequestSize(
       if (size.ratios.includes(spec.ratio) && !blocked) return { aspect: spec.ratio };
       onUnsupported();
       return { aspect: size.default };
+    }
+    // Pixels on a model that also takes exact sizes: kept, or snapped to its rules.
+    if (size.pixels) {
+      const fitted = fitPixels(spec.width, spec.height, size.pixels);
+      if (fitted.width !== spec.width || fitted.height !== spec.height) onUnsupported();
+      return fitted;
     }
     // Pixels on an aspect-only model: keep the shape, let the model pick the pixels.
     const nearest = nearestRatio(spec.width, spec.height, size.ratios);

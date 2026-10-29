@@ -124,6 +124,7 @@ export const assetsRoutes = new Hono<Env>()
     const references = referencesOf(db, row.id);
     const ancestors = ancestorsOf(db, row);
     const children = childrenOf(db, row.id);
+    const mask = row.maskAssetId ? getAsset(db, row.maskAssetId, { includeDeleted: true }) : undefined;
     const reruns = rerunJobIds(
       db,
       [row, ...references, ...ancestors, ...children].map((a) => a.jobId),
@@ -137,6 +138,7 @@ export const assetsRoutes = new Hono<Env>()
       params: row.params,
       references: references.map(wire),
       lineage: { ancestors: ancestors.map(wire), children: children.map(wire) },
+      mask: mask ? wire(mask) : null,
       // For an image in the Trash, the folders Restore puts it back in.
       folders: foldersOfAssetWithCounts(db, row.id).map(toFolder),
       isFavourite: asset.isFavourite,

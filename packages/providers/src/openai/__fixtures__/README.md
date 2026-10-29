@@ -1,6 +1,6 @@
 # OpenAI fixtures
 
-**These are hand-made, not recorded.** Nobody on the project had run an OpenAI key against the adapter when it was written, so each file follows the shapes in OpenAI's own documentation as of 2026-09-27:
+**These are hand-made, not recorded**, except `mask-edit-live.json`. Nobody on the project had run an OpenAI key against the adapter when it was written, so each file follows the shapes in OpenAI's own documentation as of 2026-09-27:
 
 - errors: the `{ "error": { "message", "type", "param", "code" } }` envelope from the [error codes guide](https://developers.openai.com/api/docs/guides/error-codes), the billing codes from the [rate limits guide](https://developers.openai.com/api/docs/guides/rate-limits), and `moderation_blocked` with `moderation_details` from the image generation guide's "Handling blocked requests";
 - the model list: `GET /v1/models` in the [API reference](https://developers.openai.com/api/reference/overview).
@@ -20,3 +20,4 @@ Ids and messages are realistic but invented. The organization-verification messa
 | `moderation-input.json` | 400 `moderation_blocked`, input stage | `content_refused` |
 | `foreign-asset.json` | An image URL instead of `b64_json` | `provider_error` |
 | `models-list.json` | The three image models, their dated snapshots and some strangers | discovery |
+| `mask-edit-live.json` | Recorded 2026-10-29: one real masked edit, its size, usage, cost and what changed inside and outside the mask | mask polarity (`M2-15`) |

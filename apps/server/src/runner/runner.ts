@@ -24,7 +24,7 @@ import {
   clearCanceledHandles,
   createJobSet,
   type Db,
-  getAssets,
+  getAsset,
   getJob,
   getJobSet,
   getJobSetByIdempotencyKey,
@@ -62,6 +62,14 @@ import type { ProviderSettingsService } from "../services/provider-settings";
 import { asksForPrice, type RemotePrices } from "../services/remote-prices";
 import type { SettingsService } from "../services/settings";
 import { asProviderError, BatchWatcher, refused, untilAborted } from "./batches";
+import {
+  checkEditInputs,
+  checkInputBytes,
+  inputImageSizes,
+  refuseMaskInputs,
+  requireBaseShape,
+  withEditSize,
+} from "./edit-inputs";
 import { batchAction, callsFor, eachFromSet, finalReason, Outcomes } from "./outcomes";
 import { type CallContexts, noWrites } from "./provider-fetch";
 import {
@@ -295,16 +303,26 @@ export class Runner {
     return { estimate: asked ?? this.#estimate(manifest, result.request), request: result.request };
   }
 
-  /** The model, company and settings checks, then normalize (§0.3). Throws what the caller shows. */
-  async #prepare(body: GenerateRequest) {
-    const manifest = this.deps.models.get(body.model);
+  /**
+   * The model, company and settings checks, an edit's images, then normalize (§0.3). Throws what
+   * the caller shows.
+   */
+  async #prepare(asked: GenerateRequest) {
+    const manifest = this.deps.models.get(asked.model);
     if (!manifest)
-      throw new ApiFailure(400, "bad_request", `Unknown model ${body.model}`, { field: "model" });
+      throw new ApiFailure(400, "bad_request", `Unknown model ${asked.model}`, { field: "model" });
     this.#requireEnabled(manifest.providerId);
+    // A base or mask that can't be used is refused now, not after the job set is made.
+    const base = await checkEditInputs(this.deps, asked);
+    if (base) requireBaseShape(manifest, asked, base);
+    refuseMaskInputs(this.deps.db, asked);
+    checkInputBytes(this.deps.db, manifest, asked);
+    const body = withEditSize(manifest, asked, base);
     // The company's settings are resolved for this model and frozen onto the run (§0.3).
     const result = await normalize(manifest, body, {
       jobSetId: newId(),
       settings: this.deps.providerSettings.forRun(manifest.providerId),
+      wholeImageFallback: this.deps.settings.get().regionalFallback,
     });
     if (result.error) {
       throw new ApiFailure(400, result.error.code, result.error.userMessage, {
@@ -362,6 +380,7 @@ export class Runner {
         field: "model",
       });
     this.#requireEnabled(manifest.providerId);
+    this.#requireInputs(set.requestJson);
     const jobIds = Array.from({ length: change.batch }, () => newId());
     // The frozen speed replays, unless the model stopped offering it.
     const speed = resolveSpeed(manifest, set.requestJson.speed, pricedOp(set.op)).speed;
@@ -386,17 +405,31 @@ export class Runner {
     });
   }
 
+  /**
+   * A replayed edit's base and mask must still exist. The Trash keeps their files, but one deleted
+   * for good is gone, and a model that never reads the mask would otherwise be paid for a run that
+   * can't be filed.
+   */
+  #requireInputs(request: NormalizedRequest): void {
+    const { db } = this.deps;
+    if (request.base && !getAsset(db, request.base.assetId, { includeDeleted: true })) {
+      throw new ApiFailure(400, "bad_request", `No base ${request.base.assetId}`, {
+        field: "base",
+        userMessage: t("masks.imageGone"),
+      });
+    }
+    if (request.mask && !getAsset(db, request.mask.assetId, { includeDeleted: true })) {
+      throw new ApiFailure(400, "bad_request", `No mask ${request.mask.assetId}`, {
+        field: "mask",
+        userMessage: t("masks.maskGone"),
+      });
+    }
+  }
+
   /** The local estimate, with the images the request sends in priced at their own sizes. */
   #estimate(manifest: ModelManifest, request: NormalizedRequest): CostEstimate {
-    const ids = [
-      ...(request.base ? [request.base.assetId] : []),
-      ...(request.references ?? []).map((r) => r.assetId),
-    ];
-    const sizes = new Map(
-      getAssets(this.deps.db, ids).map((a) => [a.id, { width: a.width, height: a.height }]),
-    );
-    const known = ids.flatMap((id) => sizes.get(id) ?? []);
-    return estimate(manifest, { ...request, ...(known.length === ids.length && { inputImageSizes: known }) });
+    const sizes = inputImageSizes(this.deps.db, request);
+    return estimate(manifest, { ...request, ...(sizes && { inputImageSizes: sizes }) });
   }
 
   #insert(
@@ -1216,17 +1249,21 @@ export class Runner {
       let posterPath: string | null = null;
       if (isVideoMime(staged.mime)) posterPath = await this.deps.ingest.poster(staged, still);
       else if (still) this.deps.ingest.discard(still);
+      // A masked edit keeps the original outside its mask. If a cancel wins meanwhile, no file is
+      // left behind: a composite already replaced the result's own file, and succeed() discards it.
+      const kept = await this.outcomes.composite(call, staged);
       const committed = this.outcomes.succeed({
         set,
         job,
         call,
         image,
-        staged,
+        staged: kept.staged,
         cost,
         speedUsed,
         latencyMs,
         usage: result.usage,
         posterPath,
+        edit: kept.edit,
       });
       // A cancel won while the poster was made: the poster goes with the file.
       if (!committed && posterPath && !staged.duplicate) this.deps.ingest.discardPath(posterPath);
