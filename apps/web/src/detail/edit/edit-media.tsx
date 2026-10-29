@@ -17,7 +17,7 @@ import { tooLargeToMask } from "./plan";
 import { GeneratingLabel, ResultsStrip } from "./results";
 import type { EditRunner } from "./runner";
 import { useEditSession } from "./session";
-import { useTurnedPhoto } from "./turned";
+import { useShownSideways, useTurnedPhoto } from "./turned";
 
 // An image in the detail view, on either tab. On Info it's Media as it always was. On Edit the same
 // Media (so zoom and the loaded pixels carry over) takes the mask's layer and the pointer, with the
@@ -54,6 +54,10 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
   const spaceHeld = useSpaceHeld(editing);
   const turned = useTurnedPhoto(item, editing);
   const tooLarge = tooLargeToMask(item);
+  // The browser draws a photo stored on its side upright, so its box is the other way round from
+  // the stored size. An upload is the only kind that can be.
+  const sideways = useShownSideways(item, editing || item.kind === "uploaded");
+  const upright = sideways ? { ...item, width: item.height, height: item.width } : item;
   // A new image picked in the results strip: Before and after, or Difference, in place of the mask.
   const compared = editing ? runner.compared : null;
   const [mode, setMode] = useState<CompareMode>("split");
@@ -90,7 +94,7 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
     <>
       <Media
         ref={media}
-        item={item}
+        item={upright}
         expanded={expanded}
         label={label}
         onZoomedChange={onZoomedChange}

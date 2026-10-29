@@ -1,7 +1,7 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
 import type { ModelListItem } from "@openfield/core";
-import { isTurnedOrientation, jpegOrientation } from "../src/detail/edit/exif";
+import { isTurnedOrientation, jpegOrientation, swapsSides } from "../src/detail/edit/exif";
 import {
   anyEditReady,
   aspectText,
@@ -199,6 +199,20 @@ describe("a photo stored on its side", () => {
     expect(isTurnedOrientation(null)).toBe(false);
     expect(isTurnedOrientation(6)).toBe(true);
     expect(isTurnedOrientation(2)).toBe(true);
+  });
+
+  test("only a quarter turn shows it the other way round", () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 8, null].map(swapsSides)).toEqual([
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+    ]);
   });
 });
 

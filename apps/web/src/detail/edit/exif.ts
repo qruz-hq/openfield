@@ -56,3 +56,7 @@ function tiffOrientation(view: DataView, start: number, end: number): number | n
 /** Shown turned or mirrored, as the server sees it (apps/server/src/files/mask.ts). */
 export const isTurnedOrientation = (orientation: number | null): boolean =>
   orientation !== null && orientation >= 2 && orientation <= 8;
+
+/** Turned a quarter, so it shows with its width and height swapped (orientations 5 to 8). */
+export const swapsSides = (orientation: number | null): boolean =>
+  orientation !== null && orientation >= 5 && orientation <= 8;

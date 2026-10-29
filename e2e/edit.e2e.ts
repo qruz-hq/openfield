@@ -948,6 +948,14 @@ test("a phone photo stored on its side says it can't be edited yet, and can stil
   await page.goto(`/assets?asset=${asset.id}&tab=edit`);
   const panel = panelOf(page);
   await expect(panel.getByText("This photo can't be edited yet")).toBeVisible();
+  // Stored 64 × 48 on its side, it shows upright, in a box the same way round.
+  const picture = detail(page).locator("[role='img'] > div > div > img").first();
+  await expect
+    .poll(async () => {
+      const box = await picture.boundingBox();
+      return box ? [Math.round(box.width), Math.round(box.height)] : null;
+    })
+    .toEqual([48, 64]);
   await expect(
     panel.getByText("Your phone saved it sideways, so what you paint wouldn't line up with the photo."),
   ).toBeVisible();
