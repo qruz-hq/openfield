@@ -6,11 +6,13 @@ import {
   editOpParamsSchema,
   errorEnvelopeSchema,
   jobSetAcceptedSchema,
+  type ModelsListResponse,
   newId,
   type UploadResponse,
   uploadResponseSchema,
 } from "@openfield/core";
 import { assetsForJobSets, getAsset, getJobSet, jobsOf } from "@openfield/db";
+import { editBody as editTabBody, estimateRun, resolveValues } from "@openfield/providers/manifest";
 import { createFakeFetch } from "@openfield/providers/server";
 import sharp from "sharp";
 import { completed, saveKey, startTestServer, type TestServer, waitFor } from "./helpers";
@@ -470,6 +472,35 @@ describe("POST /api/edit", () => {
       const res = await edit({ ...asked, ...overrides });
       expect({ overrides, status: res.status }).toEqual({ overrides, status: 202 });
       await completed(server, jobSetAcceptedSchema.parse(res.body).jobSet.id);
+    }
+  });
+});
+
+describe("the Edit tab's request", () => {
+  test("is taken as built, and the run records the price the tab showed", async () => {
+    server = await ready();
+    const { models } = (await server.json<ModelsListResponse>("/api/models")).body;
+    const base = await upload(await photo(1152, 1536));
+    const maskId = await mask(base.id, 1152, 1536);
+    const plan = { base: { assetId: base.id, width: 1152, height: 1536 }, masked: true };
+    // One model takes the mask, the other redraws the whole image.
+    for (const key of ["openai:gpt-image-2.5-flare", NANO_BANANA]) {
+      const model = models.find((m) => m.key === key)!;
+      const resolved = resolveValues(model.capabilities, {}, 2);
+      const shown = estimateRun(model, resolved, "a red door", "standard", { edit: plan });
+      const body = editTabBody(model, resolved, "a red door", newId(), {
+        base: plan.base,
+        mask: { assetId: maskId },
+      });
+      const res = await server.json("/api/edit", { method: "POST", body });
+      expect(res.status).toBe(202);
+      const run = jobSetAcceptedSchema.parse(res.body);
+      expect(run.jobSet.costEstimateUsd).toBe(shown.max);
+      expect(getJobSet(server.services.db, run.jobSet.id)!.requestJson).toMatchObject({
+        source: "detail_editor",
+        mask: { assetId: maskId },
+      });
+      await completed(server, run.jobSet.id);
     }
   });
 });
