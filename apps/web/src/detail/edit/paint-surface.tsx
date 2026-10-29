@@ -420,9 +420,17 @@ const rectOf = ({ from, to }: Box) => ({
   height: Math.abs(to.y - from.y),
 });
 
-/** Things Space presses on its own when they have focus. */
-const SPACE_TAKERS =
-  "input, textarea, select, [contenteditable='true'], button, a, [role='button'], [role='slider'], [role='tab']";
+/**
+ * Things Space presses on its own when they have focus. A slider's thumb and the tab already open
+ * do nothing with it, and a click or a drag leaves focus on them, so they don't count.
+ */
+const SPACE_TAKERS = "input, textarea, select, [contenteditable='true'], button, a, [role='button']";
+const SPACE_IGNORERS = "[role='slider'], [role='tab'][aria-selected='true']";
+
+const takesSpace = (target: EventTarget | null) => {
+  const el = target instanceof Element ? target.closest(SPACE_TAKERS) : null;
+  return el !== null && !el.matches(SPACE_IGNORERS);
+};
 
 /** Holding Space pans while it's down, from any tool (§4.5). */
 export function useSpaceHeld(enabled: boolean): boolean {
@@ -434,9 +442,10 @@ export function useSpaceHeld(enabled: boolean): boolean {
     }
     const down = (event: KeyboardEvent) => {
       if (event.key !== " " || event.metaKey || event.ctrlKey || event.altKey) return;
-      if ((event.target as Element | null)?.closest?.(SPACE_TAKERS)) return;
+      if (takesSpace(event.target)) return;
       event.preventDefault();
-      if (!event.repeat) setHeld(true);
+      // Repeats too: a press that began on a button pans once focus moves off it.
+      setHeld(true);
     };
     const up = (event: KeyboardEvent) => {
       if (event.key === " ") setHeld(false);

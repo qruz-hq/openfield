@@ -656,6 +656,9 @@ function DetailContent({
             size={32}
             icon={expanded ? Minimize : Maximize}
             label={expanded ? t("assets.detail.showDetails") : t("assets.detail.expand")}
+            // Focus stays on the view, so holding Space pans the Edit tab's image after a click
+            // rather than pressing the button again.
+            onMouseDown={(event) => event.preventDefault()}
             onClick={() => setExpanded((e) => !e)}
           />
         </div>

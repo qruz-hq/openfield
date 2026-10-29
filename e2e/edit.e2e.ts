@@ -259,13 +259,32 @@ test("on Edit the view's own keys stay quiet, and Esc drops the tool before it a
 
   // Space held pans the image whatever the tool, and painting while it's held paints nothing.
   const layer = maskLayer(page);
-  const before = (await layer.boundingBox())!;
-  await page.keyboard.down("Space");
-  await drag(page, await at(layer, 0.5, 0.5), await at(layer, 0.6, 0.5));
-  await page.keyboard.up("Space");
-  const after = (await layer.boundingBox())!;
-  expect(after.x).toBeGreaterThan(before.x + 10);
-  await expect(tool(page, "Undo")).toBeDisabled();
+  const spacePans = async () => {
+    const before = (await layer.boundingBox())!;
+    await page.keyboard.down("Space");
+    await drag(page, await at(layer, 0.5, 0.5), await at(layer, 0.6, 0.5));
+    await page.keyboard.up("Space");
+    const after = (await layer.boundingBox())!;
+    expect(after.x).toBeGreaterThan(before.x + 10);
+    await expect(tool(page, "Undo")).toBeDisabled();
+  };
+  await spacePans();
+  // Also right after the Edit tab is clicked, or a slider is dragged, which keep focus.
+  await view.getByRole("tab", { name: "Info" }).click();
+  await view.getByRole("tab", { name: "Edit" }).click();
+  await spacePans();
+  const size = view.getByRole("slider", { name: "Size" });
+  const track = (await size.boundingBox())!;
+  await drag(
+    page,
+    { x: track.x + track.width / 2, y: track.y + track.height / 2 },
+    {
+      x: track.x + track.width / 2 + 6,
+      y: track.y + track.height / 2,
+    },
+  );
+  await expect(size).toBeFocused();
+  await spacePans();
 
   // Esc with the box picked puts the brush back, and a clean edit then closes on the next Esc.
   await page.keyboard.press("m");
