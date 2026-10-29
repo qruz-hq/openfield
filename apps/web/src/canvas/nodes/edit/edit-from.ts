@@ -6,13 +6,16 @@ import { cardBox } from "@openfield/canvas/nodes/generate/card-size";
 import { absolutePosition, isLocked, newEdgeId } from "@openfield/canvas/store/graph";
 import { applyOps, type CanvasOp, type DocSlice, type Point } from "@openfield/canvas/store/ops";
 import type { CanvasNode } from "@openfield/core/canvas";
+import { useEngineStore } from "../../engine/engine-store";
 import { cardMedia } from "../generate/card-media";
 import type { NodeRegistry } from "../registry";
 
 // The node menu's Edit (design UgTpM6ixP2, screens "Edit from an image node" and "New Edit node"):
-// a new Edit node beside the one whose image it edits, already wired, in one undo step. A mask fits
-// one image, so a node that shows several hands the Edit node only the one on show: an Assets node
-// holds it, between the two. Pure apart from reading the card media, so the plan is tested.
+// a new Edit node 140 to the right of the one whose image it edits, tops aligned, already wired, in
+// one undo step. A mask fits one image, so the Edit node gets the image on show and keeps it: from a
+// node that shows several, or one whose next run makes a new one (changed, or a model that makes a
+// new image every run), an Assets node holds that image between the two. Pure apart from reading
+// the card media and the live analysis, so the plan is tested.
 
 /** The images a node hands on: what it made, else the ones it holds (Upload, Assets). */
 export function imagesOf(doc: DocSlice, id: string): readonly string[] {
@@ -36,10 +39,14 @@ export interface EditFromPlan {
   editId: string;
 }
 
+/** From the source's right edge to the new node (design blc5dYrGqG). */
+const EDIT_GAP = 140;
+
 /**
  * The ops that add an Edit node for `sourceId`'s image on show, or null when it has none. `shown`
  * is the image its card shows (the pager's pick); `sizes` the images' sizes, for the new card's
- * shape and to keep clear of its neighbours.
+ * shape and to keep clear of its neighbours; `upToDate` whether a run would leave the source's
+ * images as they are (its live analysis).
  */
 export function planEditFrom(input: {
   doc: DocSlice;
@@ -48,6 +55,7 @@ export function planEditFrom(input: {
   sourceId: string;
   shown?: string | undefined;
   sizes: Readonly<Record<string, { w: number; h: number }>>;
+  upToDate?: boolean;
 }): EditFromPlan | null {
   const { doc, registry, ctx, sourceId, sizes } = input;
   const source = doc.nodes[sourceId];
@@ -67,6 +75,8 @@ export function planEditFrom(input: {
       side: "right",
       parentId,
       source: { ctx, images: sizes },
+      gap: EDIT_GAP,
+      grid: false,
     });
     node.position = { x: Math.round(at.x - origin.x), y: Math.round(at.y - origin.y) };
     const op: CanvasOp = { op: "addNode", node };
@@ -87,8 +97,12 @@ export function planEditFrom(input: {
 
   let from = sourceId;
   let handle = output;
-  if (images.length > 1) {
-    // Several images: the one on show goes on alone.
+  // Upload and Assets nodes, locked nodes and up-to-date ones hand on the same image next run too.
+  const runs = !!registry.get(source.type)?.runnable && !isLocked(doc, sourceId);
+  const keeps = !runs || input.upToDate === true;
+  if (images.length > 1 || !keeps) {
+    // Several images, or one a run would replace (Run all would leave the mask on another image):
+    // the one on show goes on alone, and stays.
     const pin = registry.instantiate(assetsSpec.type, { position: ORIGIN, ctx, parentId });
     pin.params = { assetIds: [image] };
     add(pin, sourceId);
@@ -117,5 +131,14 @@ export function planEditFromCard(
   sourceId: string,
 ): EditFromPlan | null {
   const media = cardMedia.getState();
-  return planEditFrom({ doc, registry, ctx, sourceId, shown: media.shown[sourceId], sizes: media.dims });
+  const upToDate = useEngineStore.getState().analysis.nodes[sourceId]?.upToDate ?? false;
+  return planEditFrom({
+    doc,
+    registry,
+    ctx,
+    sourceId,
+    shown: media.shown[sourceId],
+    sizes: media.dims,
+    upToDate,
+  });
 }

@@ -173,16 +173,19 @@ describe("Edit from the node menu", () => {
   const sizes = { [PHOTO]: { w: 768, h: 1024 }, [OTHER]: { w: 1024, h: 1024 } };
 
   test("an image node gets an Edit node beside it, its image wired in, as one change", () => {
-    let doc = docOf([node("g", "image.generate", { model: banana.key })]);
+    let doc = docOf([
+      { ...node("g", "image.generate", { model: banana.key }), position: { x: 100, y: 230 } },
+    ]);
     doc = applyOps(doc, [{ op: "setResult", id: "g", result: done([PHOTO]) }]).doc;
     expect(editableOutput(doc, registry, "g")).toBe("images");
-    const plan = planEditFrom({ doc, registry, ctx, sourceId: "g", sizes })!;
+    const plan = planEditFrom({ doc, registry, ctx, sourceId: "g", sizes, upToDate: true })!;
     const added = plan.ops.flatMap((op) => (op.op === "addNode" ? [op.node] : []));
     expect(added.map((n) => n.type)).toEqual(["image.edit"]);
     const edit = added[0]!;
     expect(edit.id).toBe(plan.editId);
-    // To the right of the source, at the image's shape.
-    expect(edit.position.x).toBeGreaterThan(320);
+    // 140 to the right of the 320-wide source, tops aligned off the grid (design blc5dYrGqG), at
+    // the image's shape.
+    expect(edit.position).toEqual({ x: 100 + 320 + 140, y: 230 });
     expect(edit.size).toEqual({ w: 320, h: 320 / 0.75 });
     expect(plan.ops.filter((op) => op.op === "addEdge").map((op) => op.op === "addEdge" && op.edge)).toEqual([
       expect.objectContaining({
@@ -209,6 +212,28 @@ describe("Edit from the node menu", () => {
     expect(Object.values(after.edges).map((e) => [e.source, e.target, e.targetHandle])).toEqual([
       [pin!.id, edit!.id, "image"],
     ]);
+  });
+
+  test("an image the source's next run would replace is held by an Assets node, so the mask keeps fitting", () => {
+    let doc = docOf([node("g", "image.generate", { model: banana.key })]);
+    doc = applyOps(doc, [{ op: "setResult", id: "g", result: done([PHOTO]) }]).doc;
+    for (const upToDate of [false, undefined]) {
+      const plan = planEditFrom({
+        doc,
+        registry,
+        ctx,
+        sourceId: "g",
+        sizes,
+        ...(upToDate === false && { upToDate }),
+      })!;
+      const added = plan.ops.flatMap((op) => (op.op === "addNode" ? [op.node] : []));
+      expect(added.map((n) => n.type)).toEqual(["image.asset", "image.edit"]);
+      expect(added[0]!.params).toEqual({ assetIds: [PHOTO] });
+    }
+    // A locked one keeps its images whatever its settings say.
+    const locked = applyOps(doc, [{ op: "setLocked", id: "g", locked: true }]).doc;
+    const plan = planEditFrom({ doc: locked, registry, ctx, sourceId: "g", sizes })!;
+    expect(plan.ops.flatMap((op) => (op.op === "addNode" ? [op.node.type] : []))).toEqual(["image.edit"]);
   });
 
   test("Upload and Assets nodes edit what they hold; nodes without an image have no Edit", () => {
