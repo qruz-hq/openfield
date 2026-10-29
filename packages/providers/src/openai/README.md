@@ -16,6 +16,7 @@ The older image models (`gpt-image-1`, `gpt-image-1-mini`, `gpt-image-1.5`, `cha
 
 - **Generate:** `POST https://api.openai.com/v1/images/generations`, JSON: `model`, `prompt`, `n`, `size`, and `quality`, `background`, `output_format`, `output_compression` and `moderation` when set.
 - **Edit, inpaint, or a generation with references:** `POST /v1/images/edits`, multipart: the same fields as form values, then `image[]` (the edit base first, then references, up to 16 in all) and `mask` for an inpaint.
+- **Masks:** Openfield's saved mask is sent as it is: a PNG at the base's exact size, transparent where the image should change, which is how OpenAI documents it. A mask with no transparency, or of 4 MB or more, is refused before the call. An edit that leaves its size open asks for the base's own size when OpenAI takes it, else the nearest size that fits OpenAI's rules; Openfield scales the result back and puts the original back outside the mask.
 - **Answers:** GPT Image models always answer with `data[].b64_json`, so `assetHosts` is empty and an image URL in a response is refused. `response_format` is never sent (it's for DALL·E). `revised_prompt` is kept when a model sends one.
 - **Auth:** `Authorization: Bearer <key>`. The optional `OpenAI-Organization` and `OpenAI-Project` headers aren't sent: a project key already names its project.
 - **Hosts:** `api.openai.com` only.
@@ -104,6 +105,7 @@ A key OpenAI echoes back in a message (`sk-proj-****…`) is replaced before it'
 - The exact 403 text for organization verification (it comes from community reports; any 403 mentioning verification gets the verify message).
 - Whether `usage` comes back for every model: the schema text still says "gpt-image-1 only", but the reference examples show it for `gpt-image-2.5-flare`. Without it, a run is priced from the estimate.
 - The JSON form of `/v1/images/edits` inside a batch (above).
+- Mask polarity: OpenAI documents transparent as the area to change, and conformance 21 checks the mask goes out unchanged after the base, but a live check is still pending. It should also say what size comes back for an edit and whether the mask is billed as an input image.
 - `input_fidelity` on the 2.5 models. It's never sent: `gpt-image-2` doesn't allow it.
 - Streaming and partial images: each model page says streaming isn't supported, while the reference shows streaming examples. Not declared until a live check settles it.
 - The organization id and project headers: not needed with a project key; add a setting if someone needs them.
