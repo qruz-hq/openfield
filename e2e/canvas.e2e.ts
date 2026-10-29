@@ -1286,3 +1286,81 @@ test("a folder in Places browses that folder, and Cancel changes nothing on the 
   await expect(picker(page)).toHaveCount(0);
   await expect(assetsNode(page).getByText("Pick from your library")).toBeVisible();
 });
+
+// The Edit node (designs nRuORN2ZyA, MZI3JqbHJr, Q9q9tToKj4): made from an image node's menu, its
+// mask painted in its own window.
+
+test("Edit on an image node adds a wired Edit node, and its mask is painted in a window", async ({
+  page,
+  request,
+}) => {
+  const token = await sessionToken(request);
+  const photo = await makeImage(request, token, "white vases with red berries", "3:4");
+  const { id, aliases } = await canvasOf(request, "Still life", [
+    {
+      op: "add_node",
+      as: "u",
+      type: "image.upload",
+      position: { x: 0, y: 0 },
+      params: { assetIds: [photo] },
+    },
+  ]);
+  await page.goto(`/canvas/${id}`);
+  const upload = pane(page).locator(`.react-flow__node[data-id="${aliases.u}"]`);
+  await expect(upload).toBeVisible();
+
+  // Right-click, Edit: a new Edit node beside it, wired, selected, its settings open.
+  await upload.click({ button: "right", position: { x: 140, y: 120 } });
+  await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+  const edit = pane(page).locator(".react-flow__node-image\\.edit");
+  await expect(edit).toHaveCount(1);
+  await expect(edit).toHaveClass(/selected/);
+  const settings = page.getByRole("complementary", { name: "Edit" });
+  await expect(settings.getByText("Not painted yet. Paint it to run.")).toBeVisible();
+  // It waits for a mask: Paint mask covers the card, and Run waits.
+  await expect(edit.getByText("Paint where the image should change.")).toBeVisible();
+  await expect(settings.getByRole("button", { name: /^Run/ })).toBeDisabled();
+
+  // Paint a stroke, then Save mask.
+  await edit.getByRole("button", { name: "Paint mask" }).click();
+  const window = page.getByRole("dialog", { name: "Paint the mask" });
+  await expect(window).toBeVisible();
+  const surface = window.locator("[data-paint-input]");
+  const box = (await surface.boundingBox())!;
+  const from = { x: box.x + box.width / 2, y: box.y + box.height / 3 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) await page.mouse.move(from.x + i * 4, from.y + i * 6);
+  await page.mouse.up();
+  await window.getByRole("button", { name: "Save mask" }).click();
+  await expect(window).toBeHidden();
+  await expect(settings.getByText("Painted on the input image")).toBeVisible();
+  await expect(edit.getByText("Paint where the image should change.")).toBeHidden();
+
+  // Saved as a mask for that very image, and the node reads it through its image input.
+  await page.waitForTimeout(SETTLE_MS);
+  const { graph } = await api<CanvasDetail>(request, token, "GET", `/api/canvases/${id}`);
+  const saved = graph.nodes.find((n) => n.type === "image.edit")!;
+  expect(saved.params.maskFor).toBe(photo);
+  expect(typeof saved.params.maskAssetId).toBe("string");
+  expect(graph.edges).toEqual([
+    expect.objectContaining({
+      source: aliases.u,
+      sourceHandle: "images",
+      target: saved.id,
+      targetHandle: "image",
+    }),
+  ]);
+  const home = await libraryRoot(request, token);
+  const [mask] = queryDb<{ kind: string; parent: string }>(
+    home,
+    "select kind, parent_asset_id as parent from assets where id = ?",
+    saved.params.maskAssetId as string,
+  );
+  expect(mask).toEqual({ kind: "mask", parent: photo });
+
+  // One undo takes the mask back off.
+  await pane(page).click({ position: { x: 900, y: 700 } });
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(edit.getByText("Paint where the image should change.")).toBeVisible();
+});
