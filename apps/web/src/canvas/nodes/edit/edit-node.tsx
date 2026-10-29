@@ -19,7 +19,7 @@ import { LinkedPrompt } from "../shell/linked-text";
 import { NodeShell } from "../shell/node-shell";
 import { useSyncPorts } from "../shell/sync-ports";
 import { useNodeBasics, useNodeDisplay, useParsedParams } from "../shell/use-node";
-import { soleBase } from "./base";
+import { usePaintBase } from "./base";
 import { editLayout } from "./card-media";
 import { editCardView } from "./card-state";
 
@@ -138,7 +138,8 @@ function EditCard({ id, name, selected, display, layout, own, prompt, params }: 
   const blocker = analysis?.blocker?.kind ?? null;
   const busy = display.state === "queued" || display.state === "running";
   // A mask can be painted on one image that's here now, and not while locked.
-  const paintable = !readOnly && !display.locked && soleBase(analysis) !== null;
+  const paintOn = usePaintBase(id);
+  const paintable = !readOnly && !display.locked && paintOn !== null;
   const covered = blocker === "no_mask" && paintable && !busy;
   const several = own.length > 1;
   const partial = display.state === "running" ? (runtime?.partialThumbUrl ?? null) : null;

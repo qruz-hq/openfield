@@ -22,7 +22,7 @@ import { InspectorRun, LOCKED_DIM } from "../shell/inspector-parts";
 import { PromptCard } from "../shell/prompt-card";
 import { AssetImage } from "../shell/thumb";
 import { useNodeDisplay, useParsedParams, useRunNode, useSetParams } from "../shell/use-node";
-import { soleBase } from "./base";
+import { soleBase, usePaintBase } from "./base";
 
 // Canvas / Inspector / Image edit (design MZI3JqbHJr): the Mask card (the mask over the image and
 // Paint), the prompt card, then the Edit tab's own Model field, Size fields (no size note) and Keep
@@ -146,6 +146,7 @@ function MaskCard({ nodeId, params }: { nodeId: string; params: EditParams }) {
   const readOnly = useReadOnly();
   const locked = useLocked(nodeId);
   const base = soleBase(analysis);
+  const paintOn = usePaintBase(nodeId);
   const incoming = analysis?.baseImages ?? [];
   const linked = analysis?.maskLinked ?? false;
   const painted = params.maskAssetId ?? null;
@@ -192,7 +193,7 @@ function MaskCard({ nodeId, params }: { nodeId: string; params: EditParams }) {
           variant="secondary"
           size="s"
           icon={Brush}
-          disabled={readOnly || locked || base === null}
+          disabled={readOnly || locked || paintOn === null}
           // Locked, Paint keeps its look inside the dimmed card.
           className={locked ? "disabled:bg-elevated-2 disabled:text-text-primary" : undefined}
           onClick={() => actions.setUi({ maskNodeId: nodeId })}

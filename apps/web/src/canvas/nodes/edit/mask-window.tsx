@@ -12,9 +12,10 @@ import {
   ModalSurface,
   ModalTitle,
   SliderRow,
+  Spinner,
 } from "@openfield/ui";
 import { X } from "lucide-react";
-import { type KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type KeyboardEvent, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { saveMask } from "../../../api/hooks/edit";
 import { useAssetDetail } from "../../../api/hooks/library";
 import { errorMessage, rawFetch } from "../../../api/raw";
@@ -34,16 +35,18 @@ import { useTurnedPhoto } from "../../../detail/edit/turned";
 import { listItemOf } from "../../../detail/format";
 import { Media, type MediaHandle, type MediaInset } from "../../../detail/media";
 import { notifyError } from "../../../lib/notify";
-import { useCanvasEngineContext, useNodeAnalysis } from "../../engine/engine-store";
+import { useCanvasEngineContext } from "../../engine/engine-store";
 import { useCanvasActions, useLocked, useNodeFrame, useReadOnly } from "../../store/context";
+import { nodeWrapper } from "../shell/focus";
 import { useParsedParams } from "../shell/use-node";
-import { soleBase } from "./base";
+import { usePaintBase } from "./base";
 
 // Canvas / Mask window (design Q9q9tToKj4): a Modal / Shell, 1152 wide, where an Edit node's mask is
 // painted on the image coming in. The stage is the Edit tab's painting (its MaskEditor session, paint
 // surface, toolbar and zoom control); the brush settings sit in a card beside it. Save mask uploads
 // the mask (POST /api/masks) and writes it and the image it was painted on to the node in one undo
-// step. Cancel, Close and Esc leave the node as it was.
+// step. Cancel, Close and Esc leave the node as it was, and wait while a save is under way. Opened
+// from the node or its settings rather than a trigger, it hands focus back to what opened it.
 
 /** Room round the photo in the 560-tall stage: it fits above the toolbar (Photo at 16, 460 tall). */
 const STAGE_INSET: MediaInset = { top: 16, right: 16, bottom: 84, left: 16 };
@@ -54,23 +57,109 @@ export function MaskWindow({ nodeId }: { nodeId: string }) {
   const frame = useNodeFrame(nodeId);
   const locked = useLocked(nodeId);
   const readOnly = useReadOnly();
-  const base = soleBase(useNodeAnalysis(nodeId));
-  const detail = useAssetDetail(base).data?.asset;
+  const base = usePaintBase(nodeId);
+  const query = useAssetDetail(base);
+  const detail = query.data?.asset;
   const item = useMemo(() => (detail ? listItemOf(detail) : undefined), [detail]);
   const open = !!frame && frame.type === editSpec.type && !locked && !readOnly && base !== null;
+  const close = () => actions.setUi({ maskNodeId: null });
+  const returnFocus = useOpenerFocus(nodeId);
   // A node that's gone, locked or lost its image closes the window.
   useEffect(() => {
     if (!open) actions.setUi({ maskNodeId: null });
   }, [open, actions]);
-  if (!open) return null;
+  // An image that can't be read can't be painted on: say why, and close.
+  const failure = query.error;
+  useEffect(() => {
+    if (!failure) return;
+    notifyError(errorMessage(failure));
+    actions.setUi({ maskNodeId: null });
+  }, [failure, actions]);
+  if (!open || failure) return null;
   return (
-    <Modal open onOpenChange={(next) => !next && actions.setUi({ maskNodeId: null })}>
-      {item ? <MaskWindowBody nodeId={nodeId} item={item} /> : null}
+    <Modal open onOpenChange={(next) => !next && close()}>
+      {item ? (
+        <MaskWindowBody nodeId={nodeId} item={item} onCloseAutoFocus={returnFocus} />
+      ) : (
+        <MaskWindowLoading onCloseAutoFocus={returnFocus} />
+      )}
     </Modal>
   );
 }
 
-function MaskWindowBody({ nodeId, item }: { nodeId: string; item: AssetListItem }) {
+/**
+ * Opened by code, the window has no trigger for Radix to hand focus back to: what had focus when
+ * it opened gets it again, else the node itself (a Paint mask that went once the mask was saved).
+ * It also runs when the window unmounts outright (Radix's FocusScope does that on a timeout).
+ */
+function useOpenerFocus(nodeId: string): (event: Event) => void {
+  const from = useRef<Element | null>(null);
+  // Before the window moves focus into itself.
+  useLayoutEffect(() => {
+    from.current = document.activeElement;
+  }, []);
+  return (event) => {
+    const el = from.current;
+    const opener =
+      el instanceof HTMLElement && el !== document.body && el.isConnected && !el.matches(":disabled")
+        ? el
+        : null;
+    const target = opener ?? nodeWrapper(nodeId);
+    if (!target) return;
+    event.preventDefault();
+    target.focus({ preventScroll: true });
+  };
+}
+
+/** The window's frame while the image's details load: the stage waits, and only Cancel works. */
+function MaskWindowLoading({ onCloseAutoFocus }: { onCloseAutoFocus: (event: Event) => void }) {
+  return (
+    <ModalSurface className="w-1152 gap-20 p-24" aria-busy onCloseAutoFocus={onCloseAutoFocus}>
+      <MaskWindowHeader />
+      <div className="flex h-560 w-full min-w-0 gap-16">
+        <div className="flex h-full min-w-0 flex-1 items-center justify-center rounded-14 bg-canvas">
+          <Spinner size={18} />
+        </div>
+        <div className="h-full w-300 shrink-0" />
+      </div>
+      <div className="flex w-full items-center justify-end gap-8">
+        <ModalClose asChild>
+          <Button variant="secondary" size="m">
+            {t("actions.cancel")}
+          </Button>
+        </ModalClose>
+        <Button variant="primary" size="m" disabled>
+          {t("canvas.nodes.edit.maskWindow.save")}
+        </Button>
+      </div>
+    </ModalSurface>
+  );
+}
+
+function MaskWindowHeader({ closing = true }: { closing?: boolean }) {
+  return (
+    <div className="flex w-full items-start justify-between">
+      {/* Title */}
+      <div className="flex flex-col gap-4">
+        <ModalTitle>{t("canvas.nodes.edit.maskWindow.title")}</ModalTitle>
+        <ModalDescription>{t("canvas.nodes.edit.maskWindow.hint")}</ModalDescription>
+      </div>
+      <ModalClose asChild>
+        <IconButton icon={X} label={t("actions.close")} disabled={!closing} />
+      </ModalClose>
+    </div>
+  );
+}
+
+function MaskWindowBody({
+  nodeId,
+  item,
+  onCloseAutoFocus,
+}: {
+  nodeId: string;
+  item: AssetListItem;
+  onCloseAutoFocus: (event: Event) => void;
+}) {
   const ctx = useCanvasEngineContext();
   const actions = useCanvasActions();
   const params = useParsedParams<EditParams>(nodeId, editSpec, ctx);
@@ -96,6 +185,14 @@ function MaskWindowBody({ nodeId, item }: { nodeId: string; item: AssetListItem 
     enabled: started && !blocked,
     resting: saving,
   });
+  // Gone before a save came back (the node went, or got locked): nothing is written then.
+  const live = useRef(true);
+  useEffect(
+    () => () => {
+      live.current = false;
+    },
+    [],
+  );
   const close = () => actions.setUi({ maskNodeId: null });
   // The mask and the image it fits, together, so one undo takes both back.
   const setMask = (maskAssetId: string | undefined) =>
@@ -118,19 +215,26 @@ function MaskWindowBody({ nodeId, item }: { nodeId: string; item: AssetListItem 
     setSaving(true);
     try {
       const { asset } = await saveMask(await encodeMaskPng(editor.mask), item.id);
+      if (!live.current) return;
       setMask(asset.id);
       close();
     } catch (error) {
-      notifyError(errorMessage(error));
+      if (live.current) notifyError(errorMessage(error));
     } finally {
-      setSaving(false);
+      if (live.current) setSaving(false);
     }
   };
 
   // The Edit tab's keys: tool letters, undo and redo, and zoom. Fields keep their own keys.
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
-    if (target.closest("input, textarea, select, [contenteditable='true']") || !started || saving) return;
+    if (target.closest("input, textarea, select, [contenteditable='true']")) return;
+    // Nothing here is text to select, and the page behind the window mustn't be selected either.
+    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "a") {
+      event.preventDefault();
+      return;
+    }
+    if (!started || saving) return;
     const session = useEditSession.getState();
     const edit = editKey(event);
     let handled = true;
@@ -158,26 +262,22 @@ function MaskWindowBody({ nodeId, item }: { nodeId: string; item: AssetListItem 
         event.preventDefault();
         stage.current?.focus({ preventScroll: true });
       }}
-      // Esc first drops what's being drawn, then puts the brush back in hand, then closes.
+      onCloseAutoFocus={onCloseAutoFocus}
+      // Esc first drops what's being drawn, then puts the brush back in hand, then closes. Not while
+      // saving: the mask is on its way to the node.
       onEscapeKeyDown={(event) => {
+        if (saving) return event.preventDefault();
         if (paint.cancel()) return event.preventDefault();
         if (useEditSession.getState().tool !== DEFAULT_TOOL) {
           useEditSession.getState().setTool(DEFAULT_TOOL);
           event.preventDefault();
         }
       }}
+      onInteractOutside={(event) => {
+        if (saving) event.preventDefault();
+      }}
     >
-      {/* Header */}
-      <div className="flex w-full items-start justify-between">
-        {/* Title */}
-        <div className="flex flex-col gap-4">
-          <ModalTitle>{title}</ModalTitle>
-          <ModalDescription>{t("canvas.nodes.edit.maskWindow.hint")}</ModalDescription>
-        </div>
-        <ModalClose asChild>
-          <IconButton icon={X} label={t("actions.close")} />
-        </ModalClose>
-      </div>
+      <MaskWindowHeader closing={!saving} />
       {/* Editor */}
       <div className="flex h-560 w-full min-w-0 gap-16">
         {/* Stage */}
@@ -221,7 +321,7 @@ function MaskWindowBody({ nodeId, item }: { nodeId: string; item: AssetListItem 
       {/* Footer */}
       <div className="flex w-full items-center justify-end gap-8">
         <ModalClose asChild>
-          <Button variant="secondary" size="m">
+          <Button variant="secondary" size="m" disabled={saving}>
             {t("actions.cancel")}
           </Button>
         </ModalClose>

@@ -6,9 +6,8 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useProviders } from "../../../api/hooks/keys";
 import { companyName, providerOfKey } from "../../../lib/provider";
-import { useNodeAnalysis } from "../../engine/engine-store";
 import { useCanvasActions, useCanvasStoreApi, useNodeResult, useNodeRuntime } from "../../store/context";
-import { soleBase } from "../edit/base";
+import { usePaintBase } from "../edit/base";
 import { blockerCopy, companyOf } from "./blocker-copy";
 import { type CompanyWait, useCompanyWait } from "./company-wait";
 import { focusNodeSoon } from "./focus";
@@ -304,7 +303,7 @@ export function useBlockerFix(id: string, blocker: NodeBlocker) {
   const navigate = useNavigate();
   const actions = useCanvasActions();
   // Painting again needs the one image to paint on; while it's still to come there's no fix here.
-  const paintable = soleBase(useNodeAnalysis(id)) !== null;
+  const paintable = usePaintBase(id) !== null;
   const given = blockerCopy(blocker, providers);
   const copy = given.fix === "paint_mask" && !paintable ? { ...given, fix: null, action: null } : given;
   const onFix = () => {
