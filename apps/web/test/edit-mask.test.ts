@@ -734,6 +734,62 @@ describe("history", () => {
       editor.apply({ type: "rect", mode: "paint", from: { x: 40, y: 0 }, to: { x: 50, y: 10 } }),
     ).toBeNull();
     expect(editor.canUndo).toBe(false);
+
+    // Erasing a layer with nothing on it.
+    expect(editor.beginStroke(brush(10, 100, "erase"), centre(10, 10))).toBeNull();
+    expect(editor.canUndo).toBe(false);
+    expect(editor.endStroke(centre(20, 20))).toBeNull();
+    expect(
+      editor.apply({ type: "rect", mode: "erase", from: { x: 0, y: 0 }, to: { x: 30, y: 30 } }),
+    ).toBeNull();
+    expect(
+      editor.apply({ type: "polygon", mode: "erase", points: [centre(2, 2), centre(25, 4), centre(12, 26)] }),
+    ).toBeNull();
+    expect(editor.canUndo).toBe(false);
+    expect(editor.isEmpty()).toBe(true);
+
+    // Painting over what's already painted.
+    editor.apply({ type: "rect", mode: "paint", from: { x: 0, y: 0 }, to: { x: 20, y: 20 } });
+    const painted = editor.mask.data.slice();
+    expect(
+      editor.apply({ type: "rect", mode: "paint", from: { x: 5, y: 5 }, to: { x: 15, y: 15 } }),
+    ).toBeNull();
+    expect(
+      editor.apply({ type: "polygon", mode: "paint", points: [centre(2, 2), centre(17, 3), centre(9, 16)] }),
+    ).toBeNull();
+    editor.beginStroke(brush(6, 100), centre(6, 6));
+    editor.strokeTo(centre(14, 14));
+    editor.endStroke(centre(14, 6));
+    expect(editor.undoSteps).toBe(1);
+    expect(editor.mask.data).toEqual(painted);
+
+    // A stroke that only paints part of the way still counts, and undo takes it back.
+    editor.beginStroke(brush(6, 100), centre(10, 10));
+    editor.endStroke(centre(26, 10));
+    expect(editor.undoSteps).toBe(2);
+    expect(editor.undo()).not.toBeNull();
+    expect(editor.mask.data).toEqual(painted);
+  });
+
+  test("a rect over what's already there only reports the rows it changed", () => {
+    const mask = createMask(20, 20);
+    applyMaskOp(mask, { type: "rect", mode: "paint", from: { x: 0, y: 0 }, to: { x: 20, y: 10 } });
+    expect(
+      applyMaskOp(mask, { type: "rect", mode: "paint", from: { x: 2, y: 4 }, to: { x: 8, y: 14 } }),
+    ).toEqual({ x: 2, y: 10, width: 6, height: 4 });
+    expect(applyMaskOp(mask, { type: "invert" })).not.toBeNull();
+    applyMaskOp(mask, { type: "clear" });
+    expect(applyMaskOp(mask, { type: "clear" })).toBeNull();
+  });
+
+  test("undo mid-stroke undoes the step before when the stroke hasn't changed anything", () => {
+    const editor = new MaskEditor(40, 40);
+    editor.apply({ type: "rect", mode: "paint", from: { x: 0, y: 0 }, to: { x: 10, y: 10 } });
+    editor.beginStroke(brush(6, 100, "erase"), centre(30, 30));
+    expect(editor.canUndo).toBe(true);
+    expect(editor.undo()).toEqual({ x: 0, y: 0, width: 10, height: 10 });
+    expect(editor.stroking).toBe(false);
+    expect(editor.isEmpty()).toBe(true);
   });
 
   test("starts from a mask it's given, and undo stops there", () => {

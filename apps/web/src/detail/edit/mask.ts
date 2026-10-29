@@ -164,19 +164,21 @@ function corners(points: readonly Point[], tolerance2: number): number[] {
 /**
  * One capsule of a stroke: every pixel within the brush radius of the segment a-b (a dot when a = b).
  * Painting keeps the higher coverage and erasing the lower, so the joints between segments never
- * build up and painting a stroke in pieces gives the same bytes as painting it whole. Touches only
- * the segment's bounding box: about (length + size) × size pixels.
+ * build up and painting a stroke in pieces gives the same bytes as painting it whole. Visits only
+ * the segment's bounding box, about (length + size) × size pixels, and returns it as the change
+ * only when some pixel in it took a new value.
  */
-function paintSegment(mask: Mask, tip: Tip, a: Point, b: Point): Rect | null {
-  if (!finite(a) || !finite(b)) return null;
+function paintSegment(mask: Mask, tip: Tip, a: Point, b: Point): Applied {
+  if (!finite(a) || !finite(b)) return { rect: null, cost: 0 };
   const { width, height, data } = mask;
   const reach = tip.outer;
   const x0 = Math.max(0, Math.floor(Math.min(a.x, b.x) - reach));
   const x1 = Math.min(width, Math.ceil(Math.max(a.x, b.x) + reach));
   const y0 = Math.max(0, Math.floor(Math.min(a.y, b.y) - reach));
   const y1 = Math.min(height, Math.ceil(Math.max(a.y, b.y) + reach));
-  if (x0 >= x1 || y0 >= y1) return null;
+  if (x0 >= x1 || y0 >= y1) return { rect: null, cost: 0 };
 
+  let changed = false;
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   const length2 = dx * dx + dy * dy;
@@ -203,17 +205,36 @@ function paintSegment(mask: Mask, tip: Tip, a: Point, b: Point): Rect | null {
       const i = row + x;
       if (erase) {
         const keep = 255 - value;
-        if (data[i]! > keep) data[i] = keep;
+        if (data[i]! > keep) {
+          data[i] = keep;
+          changed = true;
+        }
       } else if (data[i]! < value) {
         data[i] = value;
+        changed = true;
       }
     }
   }
-  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+  const box = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+  return { rect: changed ? box : null, cost: area(box) };
 }
 
 // Lasso and rectangle fills are hard-edged: a pixel is in when its centre is. Softening the boundary
 // is the composite's feather setting (§0.9), so antialiasing them here would only cost time.
+
+/**
+ * Sets data[from, to) to `value`, and says whether any byte was different. Reads only up to the
+ * first one that is, then leaves the rest to the native fill.
+ */
+function fillSpan(data: Uint8Array, value: number, from: number, to: number): boolean {
+  for (let i = from; i < to; i++) {
+    if (data[i] !== value) {
+      data.fill(value, i, to);
+      return true;
+    }
+  }
+  return false;
+}
 
 interface Edge {
   top: number;
@@ -232,8 +253,8 @@ interface Edge {
  * default, so a preview drawn with ctx.fill() matches. Scanline with an active edge list:
  * O(rows × edges crossing a row) plus the pixels filled, all inside the outline's bounding box.
  */
-function fillPolygon(mask: Mask, mode: MaskMode, points: readonly Point[]): Rect | null {
-  if (points.length < 3 || !points.every(finite)) return null;
+function fillPolygon(mask: Mask, mode: MaskMode, points: readonly Point[]): Applied {
+  if (points.length < 3 || !points.every(finite)) return { rect: null, cost: 0 };
   const { width, height, data } = mask;
   const edges: Edge[] = [];
   let minY = Number.POSITIVE_INFINITY;
@@ -254,7 +275,7 @@ function fillPolygon(mask: Mask, mode: MaskMode, points: readonly Point[]): Rect
     minY = Math.min(minY, top.y);
     maxY = Math.max(maxY, bottom.y);
   }
-  if (edges.length < 2) return null;
+  if (edges.length < 2) return { rect: null, cost: 0 };
   edges.sort((p, q) => p.top - q.top);
 
   // Rows whose centre y + 0.5 lies in [minY, maxY).
@@ -265,6 +286,7 @@ function fillPolygon(mask: Mask, mode: MaskMode, points: readonly Point[]): Rect
   const xs: number[] = [];
   const turns: number[] = [];
   let next = 0;
+  let visited = 0;
   let left = width;
   let right = 0;
   let top = height;
@@ -301,28 +323,41 @@ function fillPolygon(mask: Mask, mode: MaskMode, points: readonly Point[]): Rect
       const from = Math.max(0, Math.ceil(xs[k]! - 0.5));
       const to = Math.min(width, Math.ceil(xs[k + 1]! - 0.5));
       if (from >= to) continue;
-      data.fill(value, row + from, row + to);
+      visited += to - from;
+      if (!fillSpan(data, value, row + from, row + to)) continue;
       left = Math.min(left, from);
       right = Math.max(right, to);
       top = Math.min(top, y);
       bottom = y + 1;
     }
   }
-  return right > left ? { x: left, y: top, width: right - left, height: bottom - top } : null;
+  return {
+    rect: right > left ? { x: left, y: top, width: right - left, height: bottom - top } : null,
+    cost: visited + points.length,
+  };
 }
 
 /** Every pixel whose centre is inside the rectangle between two corners, in either order. */
-function fillRect(mask: Mask, mode: MaskMode, from: Point, to: Point): Rect | null {
-  if (!finite(from) || !finite(to)) return null;
+function fillRect(mask: Mask, mode: MaskMode, from: Point, to: Point): Applied {
+  if (!finite(from) || !finite(to)) return { rect: null, cost: 0 };
   const { width, height, data } = mask;
   const x0 = Math.max(0, Math.ceil(Math.min(from.x, to.x) - 0.5));
   const x1 = Math.min(width, Math.ceil(Math.max(from.x, to.x) - 0.5));
   const y0 = Math.max(0, Math.ceil(Math.min(from.y, to.y) - 0.5));
   const y1 = Math.min(height, Math.ceil(Math.max(from.y, to.y) - 0.5));
-  if (x0 >= x1 || y0 >= y1) return null;
+  if (x0 >= x1 || y0 >= y1) return { rect: null, cost: 0 };
   const value = mode === "erase" ? 0 : 255;
-  for (let y = y0; y < y1; y++) data.fill(value, y * width + x0, y * width + x1);
-  return { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+  let top = -1;
+  let bottom = 0;
+  for (let y = y0; y < y1; y++) {
+    if (!fillSpan(data, value, y * width + x0, y * width + x1)) continue;
+    if (top < 0) top = y;
+    bottom = y + 1;
+  }
+  return {
+    rect: top < 0 ? null : { x: x0, y: top, width: x1 - x0, height: bottom - top },
+    cost: (x1 - x0) * (y1 - y0),
+  };
 }
 
 /** The data as 32-bit words when it's aligned, with the bytes past the last whole word. */
@@ -357,7 +392,7 @@ export function unionRect(a: Rect | null, b: Rect | null): Rect | null {
   };
 }
 
-/** What an op changed, and how many pixels it had to visit to do it (its replay cost). */
+/** What an op did: a box around the pixels it changed (null for none), and how many it visited (its replay cost). */
 interface Applied {
   rect: Rect | null;
   cost: number;
@@ -366,12 +401,11 @@ interface Applied {
 function strokeInto(mask: Mask, tip: Tip, points: readonly Point[]): Applied {
   const first = points[0];
   if (!first) return { rect: null, cost: 0 };
-  let rect = paintSegment(mask, tip, first, first);
-  let cost = area(rect);
+  let { rect, cost } = paintSegment(mask, tip, first, first);
   for (let i = 1; i < points.length; i++) {
     const segment = paintSegment(mask, tip, points[i - 1]!, points[i]!);
-    rect = unionRect(rect, segment);
-    cost += area(segment);
+    rect = unionRect(rect, segment.rect);
+    cost += segment.cost;
   }
   return { rect, cost };
 }
@@ -380,23 +414,21 @@ function applyOp(mask: Mask, op: MaskOp): Applied {
   switch (op.type) {
     case "stroke":
       return strokeInto(mask, tipOf(op.brush), op.points);
-    case "polygon": {
-      const rect = fillPolygon(mask, op.mode, op.points);
-      return { rect, cost: area(rect) + op.points.length };
-    }
-    case "rect": {
-      const rect = fillRect(mask, op.mode, op.from, op.to);
-      return { rect, cost: area(rect) };
-    }
+    case "polygon":
+      return fillPolygon(mask, op.mode, op.points);
+    case "rect":
+      return fillRect(mask, op.mode, op.from, op.to);
     case "invert":
       return { rect: invertMask(mask), cost: mask.data.length };
-    case "clear":
-      mask.data.fill(0);
-      return { rect: fullRect(mask), cost: mask.data.length };
+    case "clear": {
+      const empty = isMaskEmpty(mask);
+      if (!empty) mask.data.fill(0);
+      return { rect: empty ? null : fullRect(mask), cost: mask.data.length };
+    }
   }
 }
 
-/** Applies one op to `mask` and returns the pixels it may have changed, or null when it missed the image. */
+/** Applies one op to `mask` and returns a box around the pixels it changed, or null when it changed none. */
 export const applyMaskOp = (mask: Mask, op: MaskOp): Rect | null => applyOp(mask, op).rect;
 
 /** Nothing painted. The Edit view keeps Generate off until something is. O(pixels), 4 bytes at a time. */
@@ -595,7 +627,7 @@ export class MaskEditor {
   }
 
   get canUndo(): boolean {
-    return this.#stroke !== null || this.#cursor > 0;
+    return Boolean(this.#stroke?.rect) || this.#cursor > 0;
   }
 
   get canRedo(): boolean {
@@ -634,7 +666,7 @@ export class MaskEditor {
     if (!finite(at)) return null;
     const normal = normalizeBrush(brush);
     const tip = tipOf(normal);
-    const rect = paintSegment(this.mask, tip, at, at);
+    const { rect, cost } = paintSegment(this.mask, tip, at, at);
     const tolerance = strokeTolerance(normal.size);
     this.#stroke = {
       brush: normal,
@@ -644,7 +676,7 @@ export class MaskEditor {
       spacing: strokeSpacing(normal.size),
       tolerance2: tolerance * tolerance,
       rect,
-      cost: area(rect),
+      cost,
     };
     this.#changed(normal.mode);
     return rect;
@@ -662,7 +694,7 @@ export class MaskEditor {
 
   /**
    * Ends the stroke at `at`, where the pointer let go, or at the last point it was given, and makes
-   * it one undo step. Returns the pixels to redraw.
+   * it one undo step unless it changed nothing. Returns the pixels to redraw.
    */
   endStroke(at?: Point): Rect | null {
     const stroke = this.#stroke;
@@ -682,12 +714,15 @@ export class MaskEditor {
     const stroke = this.#stroke;
     if (!stroke) return null;
     this.#stroke = null;
-    this.#restore(this.#cursor);
+    if (stroke.rect) this.#restore(this.#cursor);
     this.#changed();
     return stroke.rect;
   }
 
-  /** A lasso, rectangle, invert or clear (or a whole stroke at once) as one undo step. */
+  /**
+   * A lasso, rectangle, invert or clear (or a whole stroke at once) as one undo step. Returns the
+   * pixels to redraw, or null when it changed nothing, which isn't a step.
+   */
   apply(op: MaskOp): Rect | null {
     if (this.#stroke) this.endStroke();
     if (op.type === "clear" && this.isEmpty()) return null;
@@ -699,9 +734,15 @@ export class MaskEditor {
     return rect;
   }
 
-  /** Returns the pixels to redraw, or null when there's nothing to undo. Undo mid-stroke drops the stroke. */
+  /**
+   * Returns the pixels to redraw, or null when there's nothing to undo. Undo mid-stroke drops the
+   * stroke, or undoes the step before when the stroke hasn't changed anything yet.
+   */
   undo(): Rect | null {
-    if (this.#stroke) return this.cancelStroke();
+    if (this.#stroke) {
+      const dropped = this.cancelStroke();
+      if (dropped) return dropped;
+    }
     const step = this.#steps[this.#cursor - 1];
     if (!step) return null;
     this.#cursor--;
@@ -749,9 +790,9 @@ export class MaskEditor {
     const from = stroke.points.at(-1)!;
     stroke.points.push(point);
     stroke.skipped = [];
-    const rect = paintSegment(this.mask, stroke.tip, from, point);
+    const { rect, cost } = paintSegment(this.mask, stroke.tip, from, point);
     stroke.rect = unionRect(stroke.rect, rect);
-    stroke.cost += area(rect);
+    stroke.cost += cost;
     this.#changed(stroke.brush.mode);
     return rect;
   }
