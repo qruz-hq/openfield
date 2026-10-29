@@ -212,6 +212,40 @@ describe("POST /api/edit", () => {
     expect((await edit({ op: "edit", base: { assetId: sideways.id, role: "base" } })).status).toBe(202);
   });
 
+  test("an image larger than the model takes is refused before anything is made", async () => {
+    server = await ready();
+    const base = await upload(await photo(640, 480));
+    const maskId = await mask(base.id, 640, 480);
+    // As a 4K composite can come out: past Nano Banana's 20 MB, within OpenAI's 50 MB.
+    server.services.db.$client.run("UPDATE assets SET bytes = 30000000 WHERE id = ?", [base.id]);
+    const asked = { op: "edit", base: { assetId: base.id, role: "base" }, mask: { assetId: maskId } };
+    const res = await edit({ model: NANO_BANANA, ...asked });
+    expect(res.status).toBe(413);
+    expect(errorEnvelopeSchema.parse(res.body).error).toMatchObject({
+      code: "payload_too_large",
+      field: "base",
+      userMessage: "This image is too large for Nano Banana 2. The limit is 20 MB.",
+    });
+    const asRef = await server.json("/api/generate", {
+      method: "POST",
+      body: {
+        idempotencyKey: newId(),
+        model: NANO_BANANA,
+        op: "generate",
+        prompt: "a red door",
+        size: { kind: "auto" },
+        batch: 1,
+        source: "composer",
+        references: [{ assetId: base.id, role: "subject" }],
+      },
+    });
+    expect(asRef.status).toBe(413);
+    expect(errorEnvelopeSchema.parse(asRef.body).error.field).toBe("references");
+    expect(jobSets()).toBe(0);
+    const openai = jobSetAcceptedSchema.parse((await edit(asked)).body);
+    await completed(server, openai.jobSet.id);
+  });
+
   test("the estimate route prices an edit as the run does, its base at its own size", async () => {
     server = await ready();
     // Small enough that OpenAI counts it as fewer input tokens than an image of unknown size.

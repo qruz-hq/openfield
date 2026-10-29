@@ -6,6 +6,7 @@ import {
   type EditOpParams,
   isEmptyMask,
   type NormalizedRequest,
+  UPLOAD_MAX_BYTES,
   weightsFromAlpha,
 } from "@openfield/core";
 import { type Db, getAsset } from "@openfield/db";
@@ -99,6 +100,12 @@ export async function compositeEdit(
   } catch (err) {
     return failed(err);
   }
+  if (kept.bytes > UPLOAD_MAX_BYTES) {
+    logger.info("The edited image is larger than some models take, so they'll refuse it as an input", {
+      jobId: call.jobId,
+      bytes: kept.bytes,
+    });
+  }
   ingest.discard(staged);
   return { staged: kept, edit: record(true, made.resizedFrom && { resizedFrom: made.resizedFrom }) };
 }
@@ -164,7 +171,9 @@ async function compositeFiles(
   const png = new Uint8Array(
     await sharp(blended, { raw: { width, height, channels: channels as 1 | 2 | 3 | 4 } })
       .toColourspace(space)
-      .png()
+      // Filtered at full effort: a 4K composite is often half the size, and a smaller file can go
+      // back to more models as a base or a reference.
+      .png({ adaptiveFiltering: true, compressionLevel: 9 })
       .toBuffer(),
   );
   const resized = shown.width !== width || shown.height !== height;

@@ -1069,6 +1069,7 @@
     "rateLimitedIn": "Too many requests. Trying again in {seconds}s.",
     "forbiddenModel": "Your key can't use {model}.",
     "referenceTooLarge": "This reference image is too large. The limit is {size}.",
+    "imageTooLarge": "This image is too large for {model}. The limit is {size}.",
     "maskMissing": "Paint the area to change first.",
     "maskInverted": "Invert the mask when you save it, not when you run the edit.",
     "maskNoAlpha": "This mask isn't transparent anywhere. Make the area to change transparent, then try again.",

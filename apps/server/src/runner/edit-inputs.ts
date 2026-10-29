@@ -1,5 +1,6 @@
 import {
   adapterOpFor,
+  formatBytes,
   type GenerateRequest,
   type ModelManifest,
   type Op,
@@ -47,6 +48,43 @@ export async function checkEditInputs(
   requireSameSize(mask, base);
   await requireUpright(deps.ingest, base, "base");
   return base;
+}
+
+/**
+ * Refuses an image the request sends in that's larger than the model takes, now rather than once
+ * the run is sent. An edit's composite can come out larger than an upload may be, so an edited
+ * image isn't always small enough to go back to every model.
+ */
+export function checkInputBytes(
+  db: Db,
+  manifest: ModelManifest,
+  req: Pick<GenerateRequest, "op" | "base" | "references">,
+): void {
+  const limit = manifest.capabilities.references.maxBytes;
+  // 0 is a model that takes no references, which normalize explains better.
+  if (!limit) return;
+  const base = req.op !== "generate" && req.base ? [req.base.assetId] : [];
+  const refs = (req.references ?? []).map((r) => r.assetId);
+  const rows = new Map(getAssets(db, [...base, ...refs]).map((a) => [a.id, a]));
+  const size = formatBytes(limit);
+  for (const id of base) {
+    const bytes = rows.get(id)?.bytes ?? 0;
+    if (bytes > limit) {
+      throw new ApiFailure(413, "payload_too_large", `The base ${id} is ${bytes} bytes`, {
+        field: "base",
+        userMessage: t("errors.imageTooLarge", { model: manifest.displayName, size }),
+      });
+    }
+  }
+  for (const id of refs) {
+    const bytes = rows.get(id)?.bytes ?? 0;
+    if (bytes > limit) {
+      throw new ApiFailure(413, "payload_too_large", `Reference ${id} is ${bytes} bytes`, {
+        field: "references",
+        userMessage: t("errors.referenceTooLarge", { size }),
+      });
+    }
+  }
 }
 
 interface Sizable {
