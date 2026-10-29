@@ -21,7 +21,8 @@ import type {
 //
 // A result is reusable only while it matches the node's settings (the fingerprint, §0.11) and the
 // images it read: seedless models make new images under the same settings, so an earlier node that
-// ran again, or runs in this pass at all, means new inputs here (§7.7).
+// ran again, or runs in this pass at all, means new inputs here (§7.7). Only the images a run sends
+// count, the way the server records them: one the node holds back can't put it out of date.
 
 export interface EvaluateInput {
   doc: DocSlice;
@@ -140,12 +141,16 @@ export function evaluateGraph(input: EvaluateInput): Evaluation {
     const node = engineNode(doc, id, registry, ctx);
     const fingerprint = fingerprints[id];
 
+    // What the node holds itself (the Edit node's painted mask) fills a port nothing is connected to.
+    const own = def?.engine?.inlineInputs?.(node, ctx);
     const inputs: Record<string, PortValue[]> = {};
     for (const port of def?.ports ?? []) {
       if (port.direction !== "in" || port.hidden) continue;
-      inputs[port.id] = incomingEdges(doc, id, port.id)
-        .flatMap((edge) => handedOn(edge.source, edge.sourceHandle))
-        .filter((value) => accepts(port.type, value));
+      const edges = incomingEdges(doc, id, port.id);
+      const values = edges.length
+        ? edges.flatMap((edge) => handedOn(edge.source, edge.sourceHandle))
+        : (own?.[port.id] ?? []);
+      inputs[port.id] = values.filter((value) => accepts(port.type, value));
     }
 
     const evaluation: NodeEvaluation = {
@@ -211,7 +216,10 @@ export function evaluateGraph(input: EvaluateInput): Evaluation {
     evaluation.blocker = blocker;
 
     const valid = hasValidResult(node, fingerprint);
-    const values = Object.values(inputs).flat();
+    // The images a run would send, as the server records them: a port the plan leaves out (a mask
+    // painted for another image) isn't read. Without a plan, everything that comes in.
+    const sent = compiled?.ok ? new Set(compiled.node.item.inputs.map((input) => input.port)) : null;
+    const values = Object.entries(inputs).flatMap(([port, v]) => (!sent || sent.has(port) ? v : []));
     const before = node.result?.inputs;
     const matches = (read: string[] | null) =>
       read !== null && (before === undefined || sameSet(before, read));
@@ -234,16 +242,20 @@ export function evaluateGraph(input: EvaluateInput): Evaluation {
     if (bypassed) item.bypassCache = true;
     evaluation.upToDate = cacheable && evaluation.fresh && !bypassed;
 
-    // Downstream nodes point at this one; they only need to know how many images to expect.
+    // Downstream nodes point at this one; they only need to know how many images to expect, and
+    // which it has now (a mask painted on one of them fits only that one).
     const produced = engine.outputs(node, inputs, ctx, true);
-    evaluation.outputs = evaluation.upToDate
-      ? Object.fromEntries(
-          Object.entries(produced).map(([port, values]) => [
-            port,
-            values.map((v) => (v.kind === "pending" ? { ...v, expected: node.result!.assetIds.length } : v)),
-          ]),
-        )
-      : produced;
+    const current = node.result?.assetIds ?? [];
+    evaluation.outputs = Object.fromEntries(
+      Object.entries(produced).map(([port, values]) => [
+        port,
+        values.map((v) =>
+          v.kind === "pending"
+            ? { ...v, current, ...(evaluation.upToDate && { expected: current.length }) }
+            : v,
+        ),
+      ]),
+    );
   }
 
   return { order, cyclic, nodes };

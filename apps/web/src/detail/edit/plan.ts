@@ -1,4 +1,4 @@
-import { modelsForEdit } from "@openfield/canvas/engine/inputs";
+import { defaultEditModel, modelsForEdit } from "@openfield/canvas/engine/inputs";
 import {
   ASPECT_RATIOS,
   isEarly,
@@ -28,12 +28,8 @@ export function pickEditModel(
   providers?: readonly Pick<ProviderSummary, "id" | "meta">[],
 ): ModelListItem | undefined {
   const { masked, whole } = modelsForEdit(models);
-  const editing = [...masked, ...whole];
-  const chosen = picked ? editing.find((m) => m.key === picked) : undefined;
-  if (chosen) return chosen;
-  const usable = (m: ModelListItem) => m.ready && !isEarly(providers, m.providerId);
-  const fallback = masked.find((m) => m.key === preferred && m.ready);
-  return fallback ?? masked.find(usable) ?? whole.find(usable);
+  const chosen = picked ? [...masked, ...whole].find((m) => m.key === picked) : undefined;
+  return chosen ?? defaultEditModel(models, preferred, (m) => m.ready && !isEarly(providers, m.providerId));
 }
 
 /**

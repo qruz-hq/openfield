@@ -108,6 +108,20 @@ export function modelsForEdit(models: readonly ModelListItem[]): EditModels {
 }
 
 /**
+ * The model an edit starts on (§0.9): the preferred one when it takes a mask and has its key, else
+ * the first usable model that takes a mask, else the first usable one that redraws the whole image.
+ * `usable` keeps out what mustn't be picked for the person, such as an early company's models.
+ */
+export function defaultEditModel(
+  models: readonly ModelListItem[],
+  preferred: ModelKey | null | undefined,
+  usable: (model: ModelListItem) => boolean = (m) => m.ready,
+): ModelListItem | undefined {
+  const { masked, whole } = modelsForEdit(models);
+  return masked.find((m) => m.key === preferred && m.ready) ?? masked.find(usable) ?? whole.find(usable);
+}
+
+/**
  * Models that can do what a node needs (§7.8 "Pick another model"): take its reference images.
  * The node's own model stays listed so the picker can show it, fitting or not.
  */

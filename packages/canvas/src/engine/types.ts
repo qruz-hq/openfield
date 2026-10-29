@@ -1,4 +1,5 @@
 import type {
+  AdapterOp,
   AspectRatio,
   CANVAS_PORT_TYPES,
   CanvasBlockReason,
@@ -7,6 +8,7 @@ import type {
   CanvasRunNodeResult,
   CanvasRunNodeState,
   CanvasRunState,
+  CompositeSettings,
   CostEstimate,
   ErrorCode,
   MessageKey,
@@ -108,6 +110,8 @@ export interface EngineContext {
   defaultModel: ModelKey | null;
   /** The first video model with a key, else the first video model. The Video node starts on it. */
   defaultVideoModel?: ModelKey | null;
+  /** The model the Edit node starts on: one that takes a mask where it can (defaultEditModel). */
+  defaultEditModel?: ModelKey | null;
   /** settings.defaultBatch: how many images a new Generate node makes. */
   defaultBatch?: number;
   /** settings.defaultAspect: written into a new node. A node without a size uses the model's default. */
@@ -116,8 +120,11 @@ export interface EngineContext {
   companyOff?(providerId: string): boolean;
   /** Images the canvas names that aren't in this library: drawn as placeholders, never sent. */
   missing?: ReadonlySet<string>;
-  /** The speed a run of this model gets from its company's settings (§0.3). Standard when absent. */
-  runSpeed?(model: ModelListItem): RunSpeed;
+  /**
+   * The speed a run of this model gets from its company's settings (§0.3), for an op (generate
+   * when left out): some speeds are offered for generating only. Standard when absent.
+   */
+  runSpeed?(model: ModelListItem, op?: AdapterOp): RunSpeed;
   /**
    * Prices a model its company prices per request (Higgsfield, §6.9). The web app asks through the
    * server; without it those models are priced from their manifest.
@@ -141,8 +148,19 @@ export type PortValue =
   | { kind: "text"; text: string }
   /** `prompt`: the text that made it, when a node here made it (Variations reuses it). */
   | { kind: "asset"; assetId: string; model?: ModelKey | null; prompt?: string }
-  /** A runnable node in the same run. Its images arrive later; `expected` is for fan-out and cost. */
-  | { kind: "pending"; nodeId: string; port: string; expected: number; prompt?: string };
+  /**
+   * A runnable node in the same run. Its images arrive later; `expected` is for fan-out and cost.
+   * `current`: the images that node has now (its card shows them), which it hands on if it doesn't
+   * run again. Set by evaluateGraph.
+   */
+  | {
+      kind: "pending";
+      nodeId: string;
+      port: string;
+      expected: number;
+      prompt?: string;
+      current?: readonly string[];
+    };
 
 /** By input port id, values in edge order. */
 export type ResolvedInputs = Readonly<Record<string, readonly PortValue[]>>;
@@ -219,6 +237,11 @@ export interface RunCall {
   /** null: the server picks seeds, only on models that take them (§0.11). */
   seed: number | null;
   providerOptions?: Record<string, unknown>;
+  /**
+   * With a mask among the inputs: whether the original is put back outside it, and how far the mask
+   * grows and softens first (core MaskInput). The mask itself is an input.
+   */
+  mask?: CompositeSettings;
   /** Caption for this call's images in the result grid, e.g. the prompt line. */
   label?: string;
 }
@@ -268,6 +291,11 @@ export interface NodeEngine<P = Record<string, unknown>> {
   fingerprintParams(node: EngineNode<P>, ctx: EngineContext): FingerprintParams;
   /** Values handed downstream: text for Prompt, assets for sources and finished runs, pending otherwise. */
   outputs(node: EngineNode<P>, inputs: ResolvedInputs, ctx: EngineContext, willRun: boolean): OutputValues;
+  /**
+   * Values the node holds in its own params, by input port: the Edit node's painted mask. Each
+   * fills its port only while nothing is connected to it.
+   */
+  inlineInputs?(node: EngineNode<P>, ctx: EngineContext): Readonly<Record<string, readonly PortValue[]>>;
   /** Why the node can't run right now, or null. */
   blocker(node: EngineNode<P>, inputs: ResolvedInputs, ctx: EngineContext): NodeBlocker | null;
   /** Runnable types only. */
