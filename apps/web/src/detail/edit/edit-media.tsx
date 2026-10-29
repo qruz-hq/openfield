@@ -6,6 +6,7 @@ import { usePaintSurface, useSpaceHeld } from "./paint-surface";
 import { GeneratingLabel, ResultsStrip } from "./results";
 import type { EditRunner } from "./runner";
 import { useEditSession } from "./session";
+import { useTurnedPhoto } from "./turned";
 
 // An image in the detail view, on either tab. On Info it's Media as it always was. On Edit the same
 // Media (so zoom and the loaded pixels carry over) takes the mask's layer and the pointer, with the
@@ -39,8 +40,9 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
   const [zoom, setZoom] = useState(0);
   const tool = useEditSession((s) => s.tool);
   const spaceHeld = useSpaceHeld(editing);
-  // While a run goes the mask stays as it is.
-  const resting = runner.busy;
+  const turned = useTurnedPhoto(item, editing);
+  // While a run goes, and on a photo that can't take a mask, the mask stays as it is.
+  const resting = runner.busy || turned;
   const panning = editing && (tool === "pan" || spaceHeld || resting);
   const paint = usePaintSurface({
     width: item.width,
@@ -77,7 +79,7 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
         onZoomChange={setZoom}
         inset={editing ? EDIT_INSET : undefined}
         panAnywhere={panning}
-        layer={editing ? paint.layer : null}
+        layer={editing && !turned ? paint.layer : null}
         pinned={editing && runner.busy ? <GeneratingLabel /> : null}
       >
         {editing && !resting ? paint.input : null}

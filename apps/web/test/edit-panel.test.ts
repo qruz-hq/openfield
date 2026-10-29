@@ -1,12 +1,13 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
 import type { ModelListItem } from "@openfield/core";
+import { isTurnedOrientation, jpegOrientation } from "../src/detail/edit/exif";
 import { aspectText, pickEditModel, resultSlots, runOutcome, savedNote } from "../src/detail/edit/plan";
 import { useEditSession } from "../src/detail/edit/session";
 import { at, banana, flare, flareEdit, jobSet, lite, pro } from "./fixtures";
 
 // The Edit tab's panel without a DOM: which model an edit runs on, how the image's shape reads,
-// and what a run came to.
+// what a run came to, and the EXIF tag that says a photo is stored on its side.
 
 describe("the model an edit runs on", () => {
   const models: ModelListItem[] = [banana, pro, flareEdit, lite];
@@ -127,5 +128,57 @@ describe("the session's settings", () => {
     expect(next.composite).toBe(true);
     expect(next.featherPx).toBe(8);
     session.end();
+  });
+});
+
+/** A JPEG's first bytes: SOI, optional APP0, then APP1 with one orientation entry. */
+function jpeg(orientation: number | null, opts: { little?: boolean; jfif?: boolean } = {}): Uint8Array {
+  const bytes: number[] = [0xff, 0xd8];
+  if (opts.jfif) bytes.push(0xff, 0xe0, 0x00, 0x06, 0x4a, 0x46, 0x49, 0x46);
+  if (orientation !== null) {
+    const u16 = (v: number) => (opts.little ? [v & 0xff, v >> 8] : [v >> 8, v & 0xff]);
+    const u32 = (v: number) =>
+      opts.little ? [...u16(v & 0xffff), ...u16(v >>> 16)] : [...u16(v >>> 16), ...u16(v & 0xffff)];
+    const tiff = [
+      ...(opts.little ? [0x49, 0x49] : [0x4d, 0x4d]),
+      ...u16(42),
+      ...u32(8),
+      ...u16(1),
+      ...u16(0x0112),
+      ...u16(3),
+      ...u32(1),
+      ...u16(orientation),
+      0,
+      0,
+      ...u32(0),
+    ];
+    const payload = [0x45, 0x78, 0x69, 0x66, 0, 0, ...tiff];
+    bytes.push(0xff, 0xe1, ...[(payload.length + 2) >> 8, (payload.length + 2) & 0xff], ...payload);
+  }
+  bytes.push(0xff, 0xda, 0x00, 0x02);
+  return new Uint8Array(bytes);
+}
+
+describe("a photo stored on its side", () => {
+  test("reads the orientation in either byte order, after a JFIF segment", () => {
+    expect(jpegOrientation(jpeg(6))).toBe(6);
+    expect(jpegOrientation(jpeg(8, { little: true }))).toBe(8);
+    expect(jpegOrientation(jpeg(3, { jfif: true }))).toBe(3);
+    expect(jpegOrientation(jpeg(1))).toBe(1);
+  });
+
+  test("no tag, or not a JPEG: none", () => {
+    expect(jpegOrientation(jpeg(null))).toBeNull();
+    expect(jpegOrientation(new Uint8Array([0x89, 0x50, 0x4e, 0x47]))).toBeNull();
+    expect(jpegOrientation(new Uint8Array([]))).toBeNull();
+    // Cut short inside the EXIF segment.
+    expect(jpegOrientation(jpeg(6).slice(0, 20))).toBeNull();
+  });
+
+  test("turned is 2 to 8, as the server reads it", () => {
+    expect(isTurnedOrientation(1)).toBe(false);
+    expect(isTurnedOrientation(null)).toBe(false);
+    expect(isTurnedOrientation(6)).toBe(true);
+    expect(isTurnedOrientation(2)).toBe(true);
   });
 });

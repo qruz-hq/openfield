@@ -9,13 +9,14 @@ import {
   resolveValues,
 } from "@openfield/providers/manifest";
 import { Button, cn, Divider, Spinner, Tooltip } from "@openfield/ui";
-import { ArrowUpRight, CircleAlert, CircleCheck, Sparkles, Square } from "lucide-react";
+import { ArrowUpRight, CircleAlert, CircleCheck, Smartphone, Sparkles, Square } from "lucide-react";
 import { useState } from "react";
 import { useProviders } from "../../api/hooks/keys";
 import { useModels } from "../../api/hooks/models";
 import { useRunSpeed } from "../../api/hooks/provider-settings";
 import { useSettings } from "../../api/hooks/settings";
 import { type GenerateSpeed, tooltipFor } from "../../image/composer/generate-button";
+import { useAddReference } from "../../image/composer/use-reference";
 import { speedFallbackHint, tightCost } from "../../lib/cost";
 import { notifyError } from "../../lib/notify";
 import { companyName } from "../../lib/provider";
@@ -29,11 +30,13 @@ import type { EditRunner } from "./runner";
 import { useEditSession } from "./session";
 import { SizeFields } from "./size-fields";
 import { useSpendGuard } from "./spend-guard";
+import { useTurnedPhoto } from "./turned";
 
 // The Edit tab's side of the panel (design gpRcEBbVNM, Image edit / Panel), under the tabs: the
 // prompt card, the model, the size fields, a divider, Keep the rest, then the footer at the bottom
 // with what became of the last run and Generate. While a run goes the form rests at 45% and
-// Generate gives way to its progress and Stop.
+// Generate gives way to its progress and Stop. A phone photo stored on its side gets a note in
+// place of the form (Image edit / Rotated photo).
 
 export interface EditPanelProps {
   item: AssetListItem;
@@ -53,6 +56,7 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   const masked = useEditSession((s) => !s.mask.empty);
   const prompt = useEditSession((s) => s.prompt);
   const references = useEditSession((s) => s.references);
+  const turned = useTurnedPhoto(item, true);
   const guard = useSpendGuard();
   // Reading the mask into a PNG, before the run is asked for.
   const [preparing, setPreparing] = useState(false);
@@ -90,7 +94,7 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   const saved = runner.outcome.kind === "saved";
 
   const submit = () => {
-    if (state.kind !== "ready" || !model || !resolved || busy) return;
+    if (state.kind !== "ready" || !model || !resolved || busy || turned) return;
     const session = useEditSession.getState();
     const editor = session.editor;
     if (!editor) return;
@@ -134,15 +138,16 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   };
 
   const note = savedNote(runner.outcome, runner.notKept);
-  const hint = busy
-    ? null
-    : state.kind === "blocked"
-      ? state.reason
-      : state.kind === "no-key" || state.kind === "needs-key"
-        ? t("composer.generate.addKeyFirst")
-        : null;
+  const hint =
+    busy || turned
+      ? null
+      : state.kind === "blocked"
+        ? state.reason
+        : state.kind === "no-key" || state.kind === "needs-key"
+          ? t("composer.generate.addKeyFirst")
+          : null;
   const opened = runner.shown ?? runner.slots.find((s) => s.state === "done")?.assetId ?? null;
-  const ready = state.kind === "ready";
+  const ready = state.kind === "ready" && !turned;
   const estimate = state.kind === "ready" ? state.estimate : undefined;
   const tip = ready ? tooltipFor(estimate, generateSpeed) : undefined;
   const generate = (
@@ -159,18 +164,24 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
 
   return (
     <>
-      <PromptCard model={model} resting={busy} />
-      <ModelField models={models} selected={model} base={base} resting={busy} />
-      <SizeFields model={model} resolved={resolved} plan={plan} speed={speed} resting={busy} />
-      <Divider className="w-full" />
-      <KeepRest resting={busy} afterRun={saved} />
+      {turned ? (
+        <RotatedPhoto assetId={item.id} />
+      ) : (
+        <>
+          <PromptCard model={model} resting={busy} />
+          <ModelField models={models} selected={model} base={base} resting={busy} />
+          <SizeFields model={model} resolved={resolved} plan={plan} speed={speed} resting={busy} />
+          <Divider className="w-full" />
+          <KeepRest resting={busy} afterRun={saved} />
+        </>
+      )}
       {/* Footer: a column at the panel's bottom, 10 apart. */}
       <div className="flex w-full flex-1 flex-col justify-end gap-10">
-        {note && !busy ? <SavedNoteRow note={note} /> : null}
+        {note && !busy && !turned ? <SavedNoteRow note={note} /> : null}
         {hint ? (
           <p className="w-full text-center text-caption font-normal text-text-tertiary">{hint}</p>
         ) : null}
-        {saved && opened && !busy ? (
+        {saved && opened && !busy && !turned ? (
           <Button
             variant="secondary"
             size="l"
@@ -220,6 +231,33 @@ function Working({ count, onStop }: { count: number; onStop: () => void }) {
       <Button variant="secondary" size="m" icon={Square} onClick={onStop}>
         {t("edit.generate.stop")}
       </Button>
+    </div>
+  );
+}
+
+/**
+ * Image edit / Rotated photo, in place of the form: a phone photo stored on its side can't take a
+ * mask yet (masks.turned), though it can still go into a new image as a reference.
+ */
+function RotatedPhoto({ assetId }: { assetId: string }) {
+  const addReference = useAddReference();
+  return (
+    <div className="flex w-full shrink-0 flex-col items-center rounded-14 bg-surface px-16 py-28">
+      {/* Message */}
+      <div className="flex w-full flex-col items-center gap-12">
+        <div className="flex size-40 items-center justify-center rounded-full bg-elevated-2">
+          <Smartphone size={18} aria-hidden className="text-text-tertiary" />
+        </div>
+        <div className="flex w-full flex-col items-center gap-4">
+          <p className="w-full text-center text-body-strong text-text-primary">{t("edit.turned.title")}</p>
+          <p className="w-full text-center text-small leading-[1.45] text-text-secondary">
+            {t("edit.turned.body")}
+          </p>
+        </div>
+        <Button variant="ghost" size="s" onClick={() => addReference(assetId)}>
+          {t("edit.turned.useAsReference")}
+        </Button>
+      </div>
     </div>
   );
 }
