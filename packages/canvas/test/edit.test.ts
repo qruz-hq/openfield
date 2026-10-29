@@ -187,6 +187,36 @@ describe("the Edit node", () => {
     expect(off.items[0]!.item.calls[0]!.mask).toEqual({ composite: false, expandPx: 4, featherPx: 8 });
   });
 
+  test("with approximate area edits off, a whole-image model waits and edits start on one that takes a mask", async () => {
+    const strict = buildEngineContext(
+      [banana, painter],
+      { defaultModel: banana.key, defaultBatch: 1, defaultAspect: null, regionalFallback: false },
+      undefined,
+    );
+    const doc = painted({ model: banana.key });
+    const evaluation = evaluateGraph({
+      doc,
+      registry: specRegistry,
+      ctx: strict,
+      fingerprints: await fingerprintsOf(doc),
+      runs: () => true,
+    });
+    const e = evaluation.nodes.get("e")!;
+    // Said up front, with no plan or job: the server would refuse it at launch.
+    expect(e.blocker).toEqual({ kind: "area_edit_off", model: banana.key, name: banana.displayName });
+    expect(STANDING_BLOCKERS.has("area_edit_off")).toBe(true);
+    expect(e.compiled).toBeNull();
+    // Only a model that takes the mask itself is picked for a new Edit node, even one with no key yet.
+    const settings = { defaultModel: banana.key, defaultBatch: 1, defaultAspect: null };
+    const noKey = { ...painter, ready: false };
+    expect(buildEngineContext([banana, noKey], settings, undefined).defaultEditModel).toBe(banana.key);
+    expect(
+      buildEngineContext([banana, noKey], { ...settings, regionalFallback: false }, undefined)
+        .defaultEditModel,
+    ).toBe(painter.key);
+    expect(buildEngineContext([banana], settings, undefined).regionalFallback).toBe(true);
+  });
+
   test("a mask on the Mask input is used instead of the painted one", async () => {
     // Painted on another image, which doesn't matter once a mask is connected.
     const doc = docOf(

@@ -56,6 +56,12 @@ export function blockerCopy(
       );
     case "end_frame_unsupported":
       return fix("pick_model", t("canvas.nodes.blocked.pickModel"), t("canvas.nodes.blocked.noEndFrame"));
+    case "area_edit_off":
+      return fix(
+        "pick_model",
+        t("canvas.nodes.blocked.pickModel"),
+        t("composer.areaEditOff", { model: blocker.name }),
+      );
     case "no_mask":
       return plain(t("canvas.nodes.blocked.noMask"));
     case "mask_stale":

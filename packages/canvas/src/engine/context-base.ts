@@ -18,7 +18,10 @@ import type { EngineContext } from "./types";
 
 export function buildEngineContext(
   models: readonly ModelListItem[],
-  settings: Pick<Settings, "defaultModel" | "defaultBatch" | "defaultAspect"> | undefined,
+  settings:
+    | (Pick<Settings, "defaultModel" | "defaultBatch" | "defaultAspect"> &
+        Partial<Pick<Settings, "regionalFallback">>)
+    | undefined,
   providers: readonly Pick<ProviderSummary, "id" | "enabled" | "meta">[] | undefined,
   providerSettings?: ReadonlyMap<string, ProviderSettingsResponse>,
   askPrice?: AskPrice,
@@ -35,13 +38,13 @@ export function buildEngineContext(
   const defaultVideoModel = videos.find((m) => m.ready)?.key ?? videos[0]?.key ?? null;
   // As the Edit tab picks (pickEditModel), else the first that can edit, so a node with no key yet
   // asks for one instead of saying there's no model.
+  // With approximate area edits off, only a model that takes the mask itself is picked for them.
   const editing = modelsForEdit(pickable);
+  const regionalFallback = settings?.regionalFallback ?? true;
+  const usable = (m: ModelListItem) => m.ready && !isEarly(providers, m.providerId);
   const defaultEditModelKey =
-    (
-      defaultEditModel(models, wanted, (m) => m.ready && !isEarly(providers, m.providerId)) ??
-      editing.masked[0] ??
-      editing.whole[0]
-    )?.key ?? null;
+    (defaultEditModel(models, wanted, usable, regionalFallback) ?? editing.masked[0] ?? editing.whole[0])
+      ?.key ?? null;
   const off = new Set(providers?.filter((p) => !p.enabled).map((p) => p.id));
   return {
     models,
@@ -49,6 +52,7 @@ export function buildEngineContext(
     defaultModel,
     defaultVideoModel,
     defaultEditModel: defaultEditModelKey,
+    regionalFallback,
     defaultBatch: settings?.defaultBatch ?? 1,
     defaultAspect: settings?.defaultAspect ?? null,
     companyOff: (providerId) => off.has(providerId),

@@ -288,6 +288,11 @@ export const editEngine: NodeEngine<EditParams> = {
       return editBaseNow(inputs).length > 1 ? { kind: "mask_stale", several: true } : { kind: "mask_stale" };
     }
     if (painted(node, inputs) && ctx.missing?.has(node.params.maskAssetId!)) return { kind: "missing_asset" };
+    // A model that redraws the whole image takes a mask only while the rest can be put back after
+    // (§0.9); with that off in Settings the server refuses it, so it's said here first.
+    if (ctx.regionalFallback === false && !model.capabilities.ops.inpaint) {
+      return { kind: "area_edit_off", model: model.key, name: model.displayName };
+    }
     // An area to change comes before words for it, as on the Edit tab.
     if (!editPrompt(node, inputs)) return { kind: "no_description" };
     return null;

@@ -128,7 +128,8 @@ export function defaultModel(models: ModelService, settings: SettingsService): M
  */
 export function defaultEditModelKey(models: ModelService, settings: SettingsService): ModelKey | null {
   const list = models.list().models;
-  return defaultEditModel(list, settings.get().defaultModel, canRun(models))?.key ?? null;
+  const { defaultModel, regionalFallback } = settings.get();
+  return defaultEditModel(list, defaultModel, canRun(models), regionalFallback)?.key ?? null;
 }
 
 export interface NewCanvasModels {

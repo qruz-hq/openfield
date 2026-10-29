@@ -114,6 +114,11 @@ export interface EngineContext {
   defaultVideoModel?: ModelKey | null;
   /** The model the Edit node starts on: one that takes a mask where it can (defaultEditModel). */
   defaultEditModel?: ModelKey | null;
+  /**
+   * settings.regionalFallback: a mask can go to a model that only redraws the whole image, with the
+   * rest put back afterwards. On when absent.
+   */
+  regionalFallback?: boolean;
   /** settings.defaultBatch: how many images a new Generate node makes. */
   defaultBatch?: number;
   /** settings.defaultAspect: written into a new node. A node without a size uses the model's default. */
@@ -184,6 +189,8 @@ export type NodeBlocker =
   | { kind: "too_many_references"; model: ModelKey; max: number }
   /** An end frame is connected, and this video model can't end on one. */
   | { kind: "end_frame_unsupported"; model: ModelKey }
+  /** A mask on a model that only redraws the whole image, with approximate area edits off in Settings. */
+  | { kind: "area_edit_off"; model: ModelKey; name: string }
   /** An edit with no mask: none painted in the node and none connected. */
   | { kind: "no_mask" }
   /**
