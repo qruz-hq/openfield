@@ -504,8 +504,13 @@ export class CanvasRunService {
         input.values.some((v) => v.kind === "asset" && !present.has(v.assetId)),
       );
       const upstreamBad = upstream.some((u) => u.blocked !== null || u.expectedOut === 0);
-      const blocked =
-        this.#modelBlock(item) ?? (missing ? "missing_asset" : upstreamBad ? "upstream_failed" : null);
+      // Images earlier nodes will make are only known at launch, where #advance checks them.
+      const given = (to: string) => this.#inputIds(item, to, () => []);
+      const blocked: CanvasBlockReason | null =
+        this.#modelBlock(item) ??
+        (missing ? "missing_asset" : null) ??
+        (upstreamBad ? "upstream_failed" : null) ??
+        (this.#maskStale(given("base"), given("mask")) ? "mask_stale" : null);
       if (blocked) {
         out.set(item.nodeId, { skipped: false, blocked, expectedOut: 0, jobs: 0, estimate: freeEstimate() });
         continue;
@@ -559,6 +564,25 @@ export class CanvasRunService {
     if (cached.assetIds.length === 0) return false;
     const live = getAssets(this.deps.db, cached.assetIds);
     return live.length === new Set(cached.assetIds).size && live.every((a) => a.fileState === "ok");
+  }
+
+  /** The images an item sends to one target (base, mask...), with what earlier nodes made as `made` says. */
+  #inputIds(item: CanvasRunPlanItem, to: string, made: (nodeId: string) => string[]): string[] {
+    return item.inputs
+      .filter((input) => input.to === to)
+      .flatMap((input) => input.values.flatMap((v) => (v.kind === "asset" ? [v.assetId] : made(v.nodeId))));
+  }
+
+  /**
+   * A saved mask fits only the image it was painted on, its parent. Over any other, as when an
+   * earlier node made a new image in this run, it would change the wrong place, so the node waits
+   * for the mask to be painted again. An image wired in as a mask is saved for each image it's
+   * sent with, so it always fits.
+   */
+  #maskStale(bases: readonly string[], masks: readonly string[]): boolean {
+    if (!bases.length || !masks.length) return false;
+    const saved = getAssets(this.deps.db, masks).filter((m) => m.kind === "mask");
+    return saved.some((m) => bases.some((base) => base !== m.parentAssetId));
   }
 
   /** Why a model can't run right now, or null. Checked for every call the node makes. */
@@ -715,6 +739,13 @@ export class CanvasRunService {
           broken.state.state === "canceled"
             ? { ...node.state, state: "canceled", total: 0 }
             : { ...node.state, state: "blocked", blocked: "upstream_failed", total: 0 };
+        run.dirty.add(node.item.nodeId);
+        continue;
+      }
+      const sent = (to: string) => this.#inputIds(node.item, to, (id) => this.#produced(run, id));
+      if (this.#maskStale(sent("base"), sent("mask"))) {
+        node.launched = true;
+        node.state = { ...node.state, state: "blocked", blocked: "mask_stale", total: 0 };
         run.dirty.add(node.item.nodeId);
         continue;
       }

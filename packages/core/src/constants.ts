@@ -480,6 +480,8 @@ export const CANVAS_BLOCK_REASONS = [
   /** An image it reads isn't in this library (an imported canvas, or deleted since). */
   "missing_asset",
   "upstream_failed",
+  /** An edit's saved mask was painted on another image than the one it would change now. */
+  "mask_stale",
 ] as const;
 export type CanvasBlockReason = (typeof CANVAS_BLOCK_REASONS)[number];
 /** Where an input's images go in a request. The frames are a video's start and end (`video.*Frame`). */

@@ -10,7 +10,7 @@ import { canvasRunResponseSchema, uploadResponseSchema } from "@openfield/core";
 import { type CanvasDocument, canvasDocumentSchema } from "@openfield/core/canvas";
 import { assetsForJobSets, getAsset, getCanvas, getJobSet } from "@openfield/db";
 import { serverEngineContext } from "../src/canvas/engine-context";
-import { finished, newCanvas } from "./canvas-helpers";
+import { call, finished, image, item, MODEL, newCanvas } from "./canvas-helpers";
 import { saveKey, startTestServer, type TestServer } from "./helpers";
 import { keptOutside, quarterMask, texture, whiteQuarter } from "./pixels";
 
@@ -222,6 +222,87 @@ describe("an image wired into the Mask input", () => {
     expect(done.nodes.find((n) => n.nodeId === edit)).toMatchObject({
       state: "failed",
       error: { code: "invalid_request", reason: expect.stringContaining("320 × 240") },
+    });
+  });
+});
+
+describe("a mask painted on another image", () => {
+  test("waits, without sending anything, when an earlier node makes a new image in the same run", async () => {
+    server = await ready();
+    const canvas = await newCanvas(server, { name: "Chain" });
+    const { aliases } = server.services.canvases.edit(
+      canvas.id,
+      [
+        {
+          op: "add_node",
+          as: "g",
+          type: "image.generate",
+          params: { model: MODEL, prompt: "A lighthouse at dusk", batch: 1 },
+        },
+        { op: "add_node", as: "e", type: "image.edit", params: { model: OPENAI, prompt: "a red door" } },
+        { op: "connect", source: "g", target: "e", targetHandle: "image" },
+      ],
+      tab,
+    );
+    const [gen, edit] = [aliases.g!, aliases.e!];
+    // Generate makes the image first; the Edit node has no mask yet, so it isn't sent.
+    const first = await server.services.canvasRuns.runScope(canvas.id, { scope: "all" });
+    expect(first.planned).toEqual([gen]);
+    expect((await finished(server, first.runId!)).status).toBe("succeeded");
+    const [painted] = savedDoc(canvas.id).nodes.find((n) => n.id === gen)!.result!.assetIds;
+    const { width, height } = getAsset(server.services.db, painted!)!;
+    const mask = await paint(painted!, width, height);
+    server.services.canvases.edit(
+      canvas.id,
+      [
+        { op: "update_node", id: edit, params: { maskAssetId: mask, maskFor: painted } },
+        // A new prompt, so Generate makes another image before the edit is sent.
+        { op: "update_node", id: gen, params: { prompt: "A lighthouse at dawn" } },
+      ],
+      tab,
+    );
+
+    const { run, done } = await post(canvas.id);
+    // Planned with the image Generate had, the edit fits until Generate makes a new one.
+    expect(run.nodes.map((n) => [n.nodeId, n.blocked])).toEqual([
+      [gen, null],
+      [edit, null],
+    ]);
+    expect(done.nodes.find((n) => n.nodeId === gen)!.assetIds).not.toContain(painted);
+    expect(done.nodes.find((n) => n.nodeId === edit)).toMatchObject({
+      state: "blocked",
+      blocked: "mask_stale",
+      jobSetIds: [],
+    });
+    expect(run.jobSets.map((j) => j.nodeId)).toEqual([gen]);
+  });
+
+  test("sent over another image of the same size, is refused before anything is spent", async () => {
+    server = await ready();
+    const painted = await upload(await texture(640, 480));
+    const other = await upload(await image("png", { width: 640, height: 480 }));
+    const canvas = await newCanvas(server);
+    const mask = await paint(painted, 640, 480);
+    const asset = (assetId: string) => ({ kind: "asset" as const, assetId });
+    const plan = [
+      item("n_edit", {
+        type: "image.edit",
+        model: OPENAI,
+        inputs: [
+          { port: "image", to: "base", arity: "single", values: [asset(other)] },
+          { port: "mask", to: "mask", arity: "single", values: [asset(mask)] },
+        ],
+        calls: [call({ model: OPENAI, op: "inpaint", size: { kind: "auto" } })],
+      }),
+    ];
+    const res = await server.json(`/api/canvases/${canvas.id}/run`, {
+      method: "POST",
+      body: { scope: "node", nodeIds: ["n_edit"], plan, dryRun: true },
+    });
+    expect(res.status).toBe(200);
+    expect(canvasRunResponseSchema.parse(res.body)).toMatchObject({
+      jobs: 0,
+      nodes: [{ nodeId: "n_edit", jobs: 0, blocked: "mask_stale" }],
     });
   });
 });
