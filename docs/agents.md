@@ -81,7 +81,7 @@ Agents build and run canvases with you. Say "add a variation of the selected nod
 - **Same rules as the editor.** Connections follow the port rules you see when dragging, nodes the agent doesn't place are put next to what they connect to, and runs skip nodes that are already up to date, for free.
 - **Locked nodes stay yours.** Lock a node (or a frame, which locks everything in it) with **⇧⌘L** or its menu, and it keeps its images: no run, yours or an agent's, makes new ones, and the nodes after it use the ones it has. Agents can read a locked node and connect to it, but can't change, move, run, delete, lock or unlock it, and can't restore a version that would change it. Only you can unlock it.
 
-A canvas is built from nodes: **Prompt** hands text on, **Generate** and **Variations** make images, **Upload** and **Assets** hand on images from the library, and **Note**, **Frame**, **Text** and **Shape** are for layout. Each node has input and output ports; a connection goes from an output to an input of the same kind, written `"node.port"`:
+A canvas is built from nodes: **Prompt** hands text on, **Generate** and **Variations** make images, **Edit** changes part of an image, **Upload** and **Assets** hand on images from the library, and **Note**, **Frame**, **Text** and **Shape** are for layout. Each node has input and output ports; a connection goes from an output to an input of the same kind, written `"node.port"`:
 
 ```json
 {
@@ -100,11 +100,14 @@ Edits apply to the canvas as it is when they arrive, so panning, zooming or chan
 
 New nodes go where they fit at the size they show: an image card at its aspect ratio, or its image's shape once it has one. A position given by hand that lands on another node moves to the nearest free spot, and the answer says by how much; `exact: true` keeps it. A frame grows to hold whatever an agent puts in it, reaching left or up when it has to without moving anything on screen.
 
+An **Edit** node changes the image on its `image` input where its mask says, and puts back the rest, like the Edit tab on an image. You paint its mask in the app; an agent gives it one with `set_node_mask`, from a file, a web address or a library image, read the same way as a mask for `generate_image` (see [Editing part of an image](#editing-part-of-an-image)). The mask is saved for the one image on the node's `image` input, so that has to be connected first. A mask fits only that image: if it changes, the node waits with "The image changed. Paint the mask again." until it gets a new mask. A node connected to the `mask` input gives its mask instead. `keepOriginal`, `expandPx` and `featherPx` are the node's own settings for putting the original back.
+
 | Tool | Does |
 |---|---|
 | `list_canvases`, `create_canvas`, `get_canvas` | Find, make (blank or from a template) and read canvases. `get_canvas` gives each node's box (where it sits and how big it is), its frame, its settings and whether it's done, out of date or needs something. |
 | `edit_canvas` | A batch of changes: add, change, move and remove nodes, connect and disconnect, rename. |
 | `add_nodes`, `connect`, `update_node`, `move_node`, `delete_nodes` | The same changes one kind at a time. |
+| `set_node_mask` | Gives an Edit node its mask, saved for the image it edits, or takes it off. |
 | `run_canvas`, `get_run`, `stop_run` | Run all of a canvas, one node, a node and what follows it, or a selection; follow the run; stop it or one node. Goes through the same limits as `generate_image`. |
 | `list_versions`, `save_version`, `restore_version` | Versions. Restoring saves what's there first, and open tabs show the restore live. |
 | `rename_canvas`, `duplicate_canvas`, `delete_canvas` | Tidy up. Deleting a canvas keeps its images in the library. |

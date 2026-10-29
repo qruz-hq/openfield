@@ -185,6 +185,7 @@ describe("the connection", () => {
         "add_nodes",
         "connect",
         "update_node",
+        "set_node_mask",
         "delete_nodes",
         "move_node",
         "run_canvas",

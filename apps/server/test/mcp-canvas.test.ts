@@ -5,10 +5,10 @@ import type { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { type CallToolResult, CallToolResultSchema } from "@modelcontextprotocol/sdk/types.js";
 import { canvasRunStateSchema, canvasUpdatedSchema } from "@openfield/core";
 import { type CanvasDocument, type CanvasNode, canvasDocumentSchema } from "@openfield/core/canvas";
-import { getCanvas, jobSetsOfRun } from "@openfield/db";
+import { getAsset, getCanvas, jobSetsOfRun } from "@openfield/db";
 import { gatedFetch, saveKey, startTestServer, type TestServer } from "./helpers";
 import { call, connectAgent, turnOnAgents } from "./mcp-helpers";
-import { texture } from "./pixels";
+import { keptOutside, quarterMask, texture, whiteQuarter } from "./pixels";
 
 // Canvases through /mcp (docs/agents.md): an agent builds, changes, runs and reads canvases with the
 // SDK's own client, as the person watches in an open tab. Fake companies answer every call.
@@ -558,6 +558,139 @@ describe("Edit nodes", () => {
       state: "idle",
       needs: "Paint a mask or connect one to run this",
     });
+  });
+
+  test("set_node_mask saves a file as the mask of the image it edits, and the run keeps the rest", async () => {
+    const { server: s, client: c } = await ready();
+    const { canvasId, photo, e } = await photoToEdit(s, c, { prompt: "a red door" });
+    const file = join(s.home, "tmp", "mask.png");
+    writeFileSync(file, await quarterMask(640, 480));
+    const set = await call(c, "set_node_mask", { canvas: canvasId, id: e, mask: file });
+    expect(set.isError).toBe(false);
+    const node = j(set).changed[0];
+    expect(node.params.maskFor).toBe(photo);
+    expect(node.needs).toBeUndefined();
+    // Saved the way the editor saves a painted mask: for that image, and never in the library.
+    const maskId = node.params.maskAssetId as string;
+    expect(getAsset(s.services.db, maskId)).toMatchObject({ kind: "mask", parentAssetId: photo });
+    // The same mask again is the one already saved.
+    const again = j(await call(c, "set_node_mask", { canvas: canvasId, id: e, mask: file }));
+    expect(again.changed[0].params.maskAssetId).toBe(maskId);
+
+    const ran = j(await call(c, "run_canvas", { canvas: canvasId }));
+    expect(ran).toMatchObject({ status: "succeeded", nodes: [{ nodeId: e, state: "done" }] });
+    const made = getAsset(s.services.db, ran.nodes[0].images[0].assetId)!;
+    expect(made).toMatchObject({ kind: "edited", parentAssetId: photo, maskAssetId: maskId });
+    const fileOf = (id: string) => s.services.ingest.fileOf(getAsset(s.services.db, id)!.path);
+    expect(await keptOutside(fileOf(photo), fileOf(made.id), 4 + 8)).toMatchObject({
+      sameShape: true,
+      outside: 0,
+    });
+    // It read the mask it holds, so the next run has nothing to do.
+    expect(j(await call(c, "run_canvas", { canvas: canvasId }))).toMatchObject({ ran: false, upToDate: [e] });
+  });
+
+  test("set_node_mask takes a library image or another image's mask, takes it off, and says what's wrong", async () => {
+    const { server: s, client: c } = await ready();
+    const { canvasId, photo, u, e } = await photoToEdit(s, c, { prompt: "a red door" });
+    const write = async (name: string, bytes: Promise<Uint8Array>) => {
+      const file = join(s.home, "tmp", name);
+      writeFileSync(file, await bytes);
+      return file;
+    };
+    const imported = async (name: string, bytes: Promise<Uint8Array>) =>
+      j(await call(c, "import_image", { source: await write(name, bytes) })).assetId as string;
+    const maskOf = (r: { json: unknown }) => j(r).changed[0].params.maskAssetId as string;
+
+    // A library image, white where it changes, is saved as a mask of the photo.
+    const white = await imported("white.png", whiteQuarter(640, 480));
+    const mask = maskOf(await call(c, "set_node_mask", { canvas: canvasId, id: e, mask: white }));
+    expect(mask).not.toBe(white);
+    expect(getAsset(s.services.db, mask)).toMatchObject({ kind: "mask", parentAssetId: photo });
+
+    // That mask given to an Edit node of another photo the same size is saved again for that one.
+    const other = await imported("other.jpg", texture(640, 480, { format: "jpeg" }));
+    const second = j(
+      await call(c, "edit_canvas", {
+        canvas: canvasId,
+        edits: [
+          { op: "add_node", as: "u2", type: "image.upload", params: { assetIds: [other] } },
+          { op: "add_node", as: "e2", type: "image.edit", params: { prompt: "a blue door" } },
+          { connect: "u2.images", to: "e2.image" },
+          { op: "add_node", as: "lone", type: "image.edit" },
+        ],
+      }),
+    ).created as { e2: string; lone: string };
+    const copied = await call(c, "set_node_mask", { canvas: canvasId, id: second.e2, mask });
+    expect(j(copied).changed[0].params.maskFor).toBe(other);
+    expect(getAsset(s.services.db, maskOf(copied))).toMatchObject({ kind: "mask", parentAssetId: other });
+    expect(j(copied).changed[0].needs).toBeUndefined();
+
+    // null takes it off, and the node waits for one again.
+    const off = j(await call(c, "set_node_mask", { canvas: canvasId, id: e, mask: null })).changed[0];
+    expect(off.params.maskAssetId).toBeUndefined();
+    expect(off.params.maskFor).toBeUndefined();
+    expect(off.needs).toBe("Paint a mask or connect one to run this");
+
+    const refused = async (id: string, mask: string) => {
+      const res = await call(c, "set_node_mask", { canvas: canvasId, id, mask });
+      expect(res.isError).toBe(true);
+      return res.text;
+    };
+    const small = await write("small.png", quarterMask(320, 240));
+    expect(await refused(e, small)).toBe(
+      "This mask is 320 × 240 and the image is 640 × 480. Draw the mask over the image itself, then try again. " +
+        "A mask is the image's exact size and transparent where the image should change. In a mask with no transparency, white changes and black stays.",
+    );
+    expect(await refused(u, white)).toBe("Upload isn't an Edit node. Only Edit nodes take a mask.");
+    expect(await refused(second.lone, white)).toStartWith("Nothing is connected to its image input.");
+    expect(await refused("n_nope", white)).toBe("There's no node n_nope on this canvas.");
+    // A mask connected to its mask input is the one it uses.
+    await call(c, "edit_canvas", {
+      canvas: canvasId,
+      edits: [
+        { op: "add_node", as: "m", type: "image.asset", params: { assetIds: [white] } },
+        { connect: "m.images", to: `${e}.mask` },
+      ],
+    });
+    expect(await refused(e, white)).toBe(
+      "Edit uses the mask from Assets, connected to its mask input. Disconnect that first to give it its own.",
+    );
+    // A locked node is refused before anything is saved.
+    const detail = s.services.canvases.get(canvasId);
+    s.services.canvases.save(canvasId, {
+      graphVersion: detail.graphVersion,
+      graph: {
+        ...detail.graph,
+        nodes: detail.graph.nodes.map((n) => (n.id === e ? { ...n, locked: true } : n)),
+      },
+    });
+    const masks = () =>
+      (
+        s.services.db.$client.query("SELECT count(*) AS n FROM assets WHERE kind = 'mask'").get() as {
+          n: number;
+        }
+      ).n;
+    const before = masks();
+    expect(await refused(e, await write("fresh.png", quarterMask(640, 480)))).toStartWith("Edit is locked");
+    expect(masks()).toBe(before);
+  });
+
+  test("set_node_mask is a change to a canvas, and asks when the person wants that", async () => {
+    const { server: s, client: c } = await ready();
+    const { canvasId, e } = await photoToEdit(s, c);
+    const file = join(s.home, "tmp", "mask.png");
+    writeFileSync(file, await quarterMask(640, 480));
+    await s.json("/api/settings", {
+      method: "PATCH",
+      body: { agentPermissions: { change_canvases: "ask" } },
+    });
+    const asked = await call(c, "set_node_mask", { canvas: canvasId, id: e, mask: file });
+    expect(asked.isError).toBe(true);
+    expect(asked.text).toContain("change a canvas");
+    expect(asked.text).toContain("set_node_mask again with the same arguments and confirm: true");
+    const read = j(await call(c, "get_canvas", { canvas: canvasId })).nodes.find((n: Json) => n.id === e);
+    expect(read.params.maskAssetId).toBeUndefined();
   });
 });
 

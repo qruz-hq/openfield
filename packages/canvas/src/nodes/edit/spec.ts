@@ -141,8 +141,11 @@ export const editModelKeyOf = (key: ModelKey | undefined, ctx: EngineContext): M
 export const editPrompt = (node: EngineNode<EditParams>, inputs: ResolvedInputs): string =>
   joinPrompt([...textOf(inputs, "prompt"), node.params.prompt]);
 
-/** The images the image input stands for now: its own, or those its node has before it runs again. */
-const baseNow = (inputs: ResolvedInputs): string[] =>
+/**
+ * The images the image input stands for now: its own, or those its node has before it runs again.
+ * A mask is made for one of them, painted in the editor or set by an agent.
+ */
+export const editBaseNow = (inputs: ResolvedInputs): string[] =>
   imagesOf(inputs, "image").flatMap((v) => (v.kind === "asset" ? [v.assetId] : [...(v.current ?? [])]));
 
 /** The Mask input holds the node's own painted mask: nothing is connected there. */
@@ -162,7 +165,7 @@ function painted(node: EngineNode<EditParams>, inputs: ResolvedInputs): boolean 
  */
 export function paintedMaskFits(node: EngineNode<EditParams>, inputs: ResolvedInputs): boolean {
   if (!painted(node, inputs) || !node.params.maskFor) return true;
-  const now = baseNow(inputs);
+  const now = editBaseNow(inputs);
   return now.length === 1 && now[0] === node.params.maskFor;
 }
 

@@ -60,6 +60,7 @@ const TOOLS: Record<string, AgentAction> = {
   add_nodes: "change_canvases",
   connect: "change_canvases",
   update_node: "change_canvases",
+  set_node_mask: "change_canvases",
   move_node: "change_canvases",
   rename_canvas: "change_canvases",
   save_version: "versions",

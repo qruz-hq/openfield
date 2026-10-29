@@ -19,7 +19,7 @@ import {
   t,
 } from "@openfield/core";
 import { type CanvasEdit, canvasEditSchema } from "@openfield/core/canvas";
-import { getCanvas } from "@openfield/db";
+import { getAsset, getCanvas } from "@openfield/db";
 import { z } from "zod";
 import { readDocument } from "../../canvas/documents";
 import { serverEngineContext } from "../../canvas/engine-context";
@@ -31,12 +31,14 @@ import {
   canvasUrl,
   describeCanvas,
   lastSeen,
+  maskTarget,
   reading,
   resolveCanvas,
   restoreOps,
   saw,
 } from "../canvas";
 import { guarded, Refusal, reply, type ToolContext } from "../kit";
+import { IMAGE_REF_HINT, MASK_RULE, resolveMask } from "../refs";
 import { changesSince } from "../since";
 
 // Building canvases: find, make, read, change, and go back to an earlier version. Every change goes
@@ -66,8 +68,8 @@ const SETTINGS: Partial<Record<string, Record<string, string>>> = {
       "A model key from list_models that can edit an image. One with masks: true takes the mask itself; any other edits the whole image, then Openfield puts back everything outside the mask. Leave out for the default.",
     prompt: `What to change. A connected Prompt node's text comes first, then this; together at most ${GENERATE_PROMPT_MAX} characters.`,
     maskAssetId:
-      "The mask for the image on its image input: where that image may change. A mask connected to its mask input is used instead.",
-    maskFor: "The image the mask was made for. The mask fits only that image.",
+      "The mask for the image on its image input: where that image may change. Set it with set_node_mask, which saves it for that image. A mask connected to its mask input is used instead.",
+    maskFor: "The image the mask was made for, which set_node_mask sets. The mask fits only that image.",
     keepOriginal:
       "true (default): put the original back everywhere outside the mask, so only that area changes. false keeps the model's whole result.",
     expandPx: `Grow the area to change by this many pixels first, 0 to ${MASK_COMPOSITE_MAX_PX}.`,
@@ -660,6 +662,45 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
     guarded(ctx, "update_node", ({ canvas, ...edit }) =>
       applyEdits(ctx, canvas, [{ op: "update_node", ...edit }], { label: () => `Node ${edit.id}` }),
     ),
+  );
+
+  server.registerTool(
+    "set_node_mask",
+    {
+      title: "Give an Edit node its mask",
+      description:
+        "Sets the area an Edit node changes, as painting its mask in Openfield does. The mask is saved for the one image on the node's image input now, so connect that first, and set the mask again if that image changes. " +
+        `${MASK_RULE} A mask connected to the node's mask input is used instead of one set here.`,
+      inputSchema: {
+        canvas: z.string().describe(canvasField),
+        id: z.string().describe("The Edit node's id."),
+        mask: z
+          .string()
+          .nullable()
+          .describe(
+            `A saved mask's id, or an image to save as one: ${IMAGE_REF_HINT.toLowerCase()} null takes the mask off.`,
+          ),
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: true },
+    },
+    guarded(ctx, "set_node_mask", async ({ canvas: ref, id, mask }) => {
+      const canvas = resolveCanvas(ctx, ref);
+      const target = await maskTarget(ctx, canvas.id, id);
+      let params: Record<string, unknown> = { maskAssetId: null, maskFor: null };
+      if (mask !== null) {
+        if (target.wiredFrom) {
+          throw new Refusal(
+            `${target.title} uses the mask from ${target.wiredFrom}, connected to its mask input. Disconnect that first to give it its own.`,
+          );
+        }
+        if ("why" in target.base) throw new Refusal(target.base.why);
+        const base = getAsset(ctx.svc.db, target.base.assetId);
+        if (!base) throw new Refusal("The image on its image input isn't in the library any more.");
+        const saved = await resolveMask(ctx, mask, base);
+        params = { maskAssetId: saved.id, maskFor: base.id };
+      }
+      return applyEdits(ctx, canvas.id, [{ op: "update_node", id, params }], { label: () => `Node ${id}` });
+    }),
   );
 
   server.registerTool(
