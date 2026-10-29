@@ -62,6 +62,7 @@ import { reopenEdit } from "./edit/reopen";
 import { useEditRunner } from "./edit/runner";
 import { cancelLeave, confirmLeave, DEFAULT_TOOL, leaveEdit, useEditSession } from "./edit/session";
 import {
+  addedCaption,
   BACKDROP_RUNG,
   type FrozenSettings,
   frozenSettings,
@@ -362,7 +363,12 @@ function DetailContent({
   // Only an image in the library can be edited; a link to anything else on Edit shows Info.
   const editable = !isVideo && !trashed;
   const editing = editable && tab === "edit";
-  const caption = trashed && deletedAt ? inTrashCaption(deletedAt) : relativeTime(item.createdAt);
+  const caption =
+    trashed && deletedAt
+      ? inTrashCaption(deletedAt)
+      : item.kind === "uploaded"
+        ? addedCaption(item.createdAt)
+        : relativeTime(item.createdAt);
   const favourite = data?.isFavourite ?? item.isFavourite;
   const canReplay = item.jobSetId !== null;
   const speed: RunSpeedInfo | null = jobSet

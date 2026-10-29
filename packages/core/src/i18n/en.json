@@ -2071,6 +2071,10 @@
       "zoomReset": "Fit to screen",
       "showDetails": "Show details",
       "momentAgo": "A moment ago",
+      "added": "Added {when}",
+      "source": "Source",
+      "uploaded": "Uploaded",
+      "uploadedNoPrompt": "You uploaded this, so there's no prompt to recreate.",
       "otherFolders": "Other folders",
       "notMadeHere": "This image wasn't made here, so there are no settings to use.",
       "editedFrom": {

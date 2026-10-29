@@ -94,7 +94,7 @@ export interface RunSpeedInfo {
 interface DetailPanelProps {
   id: string;
   /** What the Details rows read. The list's copy until the details arrive. */
-  asset: Pick<AssetListItem, "providerId" | "modelId" | "width" | "height" | "createdAt">;
+  asset: Pick<AssetListItem, "kind" | "providerId" | "modelId" | "width" | "height" | "createdAt">;
   title: string;
   caption: string;
   /** The prompt as written. */
@@ -150,6 +150,8 @@ export function DetailPanel({
   editedFrom,
   tabs,
 }: DetailPanelProps) {
+  // A photo uploaded as it is has no words to show (design epAPf9QTJL): Details says where it came from.
+  const uploadedOnly = asset.kind === "uploaded" && !prompt.trim();
   const header = (
     // Detail / Panel header
     <div className="flex w-full shrink-0 items-center justify-between gap-12">
@@ -175,7 +177,7 @@ export function DetailPanel({
             onOpen={onOpenReference}
             onEditAgain={editedFrom.onEditAgain}
           />
-        ) : (
+        ) : uploadedOnly ? null : (
           <PromptSection
             key={id}
             prompt={prompt}
@@ -200,7 +202,11 @@ export function DetailPanel({
           </div>
         ) : null}
       </div>
-      {trashed ? <TrashActions actions={actions} /> : <LibraryActions id={id} actions={actions} />}
+      {trashed ? (
+        <TrashActions actions={actions} />
+      ) : (
+        <LibraryActions id={id} uploaded={asset.kind === "uploaded"} actions={actions} />
+      )}
     </>
   );
   const panelClass = "absolute top-8 right-8 bottom-8 mac-window:top-36 other-window:top-52";
@@ -566,6 +572,10 @@ function DetailsSection({
     <Surface variant="block" className="w-full shrink-0">
       <SectionLabel>{t("assets.detail.details")}</SectionLabel>
       <KeyValueList>
+        {/* An upload has no model; the first row says where it came from instead. */}
+        {asset.kind === "uploaded" && !modelName ? (
+          <KeyValueRow label={t("assets.detail.source")} value={t("assets.detail.uploaded")} />
+        ) : null}
         {modelName ? (
           <KeyValueRow
             label={t("assets.detail.model")}
@@ -677,16 +687,31 @@ function Hint({ content, shortcut, children }: { content?: string; shortcut?: st
   );
 }
 
-/** Detail / Actions / Assets, With Edit (design AtTwE, CIfbbd5WMA). */
-function LibraryActions({ id, actions }: { id: string; actions: DetailActions }) {
+/** Detail / Actions / Assets, With Edit and Uploaded (design AtTwE, CIfbbd5WMA, smL0PuARml). */
+function LibraryActions({
+  id,
+  uploaded,
+  actions,
+}: {
+  id: string;
+  uploaded: boolean;
+  actions: DetailActions;
+}) {
   const [filing, setFiling] = useState(false);
   const replayHint = actions.canReplay ? undefined : t("assets.detail.notMadeHere");
+  const recreateHint = actions.canReplay
+    ? actions.recreateInexact
+      ? t("feed.tile.recreateInexact")
+      : undefined
+    : uploaded
+      ? t("assets.detail.uploadedNoPrompt")
+      : replayHint;
   const favouriteLabel = actions.favourite ? t("assets.detail.unfavorite") : t("assets.detail.favorite");
   return (
     <div className="flex w-full shrink-0 flex-col gap-8">
       {/* Recreate row: Recreate, and Edit beside it, which stays on even when Recreate can't. */}
       <div className="flex w-full gap-8">
-        <Hint content={replayHint ?? (actions.recreateInexact ? t("feed.tile.recreateInexact") : undefined)}>
+        <Hint content={recreateHint}>
           <Button
             icon={RefreshCw}
             price={actions.canReplay ? actions.recreatePrice : undefined}

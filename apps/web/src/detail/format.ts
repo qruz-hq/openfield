@@ -26,21 +26,38 @@ const MINUTE = 60;
 const HOUR = 3600;
 const DAY = 86_400;
 
-/** "2 hours ago", "Yesterday", "A moment ago", then the date once it's more than a week old. */
-export function relativeTime(value: string, now: number = Date.now()): string {
+/**
+ * "2 hours ago", "Yesterday", "A moment ago", then the date once it's more than a week old.
+ * `midSentence` leaves the first letter as it falls ("yesterday"), for a caption that leads with
+ * its own word.
+ */
+export function relativeTime(
+  value: string,
+  now: number = Date.now(),
+  { midSentence = false }: { midSentence?: boolean } = {},
+): string {
   const seconds = Math.max(0, Math.round((now - Date.parse(value)) / 1000));
-  if (seconds < 45) return t("assets.detail.momentAgo");
+  const locale = formatLocale();
+  if (seconds < 45) {
+    const text = t("assets.detail.momentAgo");
+    return midSentence ? text.charAt(0).toLocaleLowerCase(locale) + text.slice(1) : text;
+  }
   if (seconds >= 7 * DAY) return formatDate(value);
-  const format = new Intl.RelativeTimeFormat(formatLocale(), { numeric: "auto" });
+  const format = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   const text =
     seconds < HOUR
       ? format.format(-Math.max(1, Math.round(seconds / MINUTE)), "minute")
       : seconds < DAY
         ? format.format(-Math.round(seconds / HOUR), "hour")
         : format.format(-Math.round(seconds / DAY), "day");
+  if (midSentence) return text;
   // It opens the caption, so it reads in sentence case ("Yesterday", not "yesterday").
-  return text.charAt(0).toLocaleUpperCase(formatLocale()) + text.slice(1);
+  return text.charAt(0).toLocaleUpperCase(locale) + text.slice(1);
 }
+
+/** An upload's caption: "Added 2 hours ago" (design epAPf9QTJL). */
+export const addedCaption = (value: string, now: number = Date.now()) =>
+  t("assets.detail.added", { when: relativeTime(value, now, { midSentence: true }) });
 
 /** One line for the header: the prompt's first line, else the model's name (§4.0). */
 export function titleOf(prompt: string, modelName: string | undefined): string {

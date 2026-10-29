@@ -115,6 +115,46 @@ test("Edit opens the Edit tab from a feed tile, at every zoom step, the library'
   await expect(toolbar(page)).toBeVisible();
 });
 
+test("an uploaded photo says so: no prompt to recreate, and Edit stays on", async ({ page }) => {
+  const token = await sessionToken(page.request);
+  await page.goto("/assets");
+  const png = await page.evaluate(() => {
+    const canvas = document.createElement("canvas");
+    canvas.width = 96;
+    canvas.height = 128;
+    const context = canvas.getContext("2d")!;
+    context.fillStyle = "#e8d4d0";
+    context.fillRect(0, 0, 96, 128);
+    return canvas.toDataURL("image/png").split(",")[1]!;
+  });
+  const res = await page.request.post("/api/uploads", {
+    headers: { [SESSION_HEADER]: token },
+    multipart: {
+      file: { name: "IMG_2210.png", mimeType: "image/png", buffer: Buffer.from(png, "base64") },
+    },
+  });
+  expect(res.ok(), await res.text()).toBe(true);
+  const { asset } = (await res.json()) as { asset: { id: string } };
+
+  await page.goto(`/assets?asset=${asset.id}`);
+  const view = detail(page);
+  const info = view.getByRole("tabpanel", { name: "Info" });
+  await expect(view.getByText(/^Added /)).toBeVisible();
+  await expect(info.getByText("Prompt", { exact: true })).toHaveCount(0);
+  await expect(info.getByRole("definition").first()).toHaveText("Uploaded");
+  await expect(info.getByRole("term").first()).toHaveText("Source");
+
+  // Recreate and Reuse rest, and Recreate says why; Edit beside it goes to the Edit tab.
+  const recreate = info.getByRole("button", { name: /^Recreate/ });
+  await expect(recreate).toHaveAttribute("aria-disabled", "true");
+  await expect(info.getByRole("button", { name: "Reuse" })).toHaveAttribute("aria-disabled", "true");
+  await recreate.hover();
+  await expect(page.getByRole("tooltip")).toHaveText("You uploaded this, so there's no prompt to recreate.");
+  await info.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`\\?asset=${asset.id}&tab=edit$`));
+  await expect(toolbar(page)).toBeVisible();
+});
+
 test("the Edit tab paints a mask, and its tools undo, redo, invert and clear it", async ({ page }) => {
   const prompt = unique("berries in a vase");
   const id = await openOnEdit(page, prompt);
