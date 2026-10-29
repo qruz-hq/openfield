@@ -53,7 +53,8 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   const picked = useEditSession((s) => s.model);
   const values = useEditSession((s) => s.values);
   const batch = useEditSession((s) => s.batch);
-  const masked = useEditSession((s) => !s.mask.empty);
+  // Painted enough for the server to change something, as it reads the mask.
+  const masked = useEditSession((s) => s.mask.changes);
   const prompt = useEditSession((s) => s.prompt);
   const references = useEditSession((s) => s.references);
   const turned = useTurnedPhoto(item, true);

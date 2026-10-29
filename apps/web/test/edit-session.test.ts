@@ -134,7 +134,7 @@ describe("the edit session", () => {
     expect(editor?.mask.width).toBe(1152);
     expect(editor?.mask.height).toBe(1536);
     expect(brushSize).toBe(92);
-    expect(mask).toEqual({ empty: true, canUndo: false, canRedo: false });
+    expect(mask).toEqual({ empty: true, changes: false, canUndo: false, canRedo: false });
     expect(tool).toBe("brush");
     expect(defaultBrushSize(10_000, 8_000)).toBe(512);
     expect(defaultBrushSize(8, 8)).toBe(1);
@@ -161,9 +161,19 @@ describe("the edit session", () => {
       editor.apply({ type: "rect", mode: "paint", from: { x: 4, y: 4 }, to: { x: 20, y: 12 } }),
     );
     expect(changed).toEqual([{ x: 4, y: 4, width: 16, height: 8 }]);
-    expect(useEditSession.getState().mask).toEqual({ empty: false, canUndo: true, canRedo: false });
+    expect(useEditSession.getState().mask).toEqual({
+      empty: false,
+      changes: true,
+      canUndo: true,
+      canRedo: false,
+    });
     useEditSession.getState().undo();
-    expect(useEditSession.getState().mask).toEqual({ empty: true, canUndo: false, canRedo: true });
+    expect(useEditSession.getState().mask).toEqual({
+      empty: true,
+      changes: false,
+      canUndo: false,
+      canRedo: true,
+    });
     useEditSession.getState().redo();
     useEditSession.getState().invert();
     expect(useEditSession.getState().editor?.mask.data[0]).toBe(255);
@@ -180,7 +190,54 @@ describe("the edit session", () => {
     changeMask((editor) => editor.beginStroke(brush, { x: 10, y: 10 }));
     expect(useEditSession.getState().mask.empty).toBe(true);
     changeMask((editor) => editor.endStroke({ x: 30, y: 10 }));
-    expect(useEditSession.getState().mask).toEqual({ empty: false, canUndo: true, canRedo: false });
+    expect(useEditSession.getState().mask).toEqual({
+      empty: false,
+      changes: true,
+      canUndo: true,
+      canRedo: false,
+    });
+  });
+
+  test("only a change to the pixels is a new mask, so the one saved for a run still goes by id", () => {
+    useEditSession.getState().start("a", 64, 64);
+    const session = () => useEditSession.getState();
+    session().setSavedMask("mask-1", session().maskVersion);
+    // Nothing to undo, redo or clear: the same mask.
+    session().undo();
+    session().redo();
+    session().clear();
+    expect(session().maskVersion).toBe(0);
+    // A point with no stroke going, as after a tool switch mid-drag.
+    session().changeMask((editor) => editor.strokeTo({ x: 5, y: 5 }));
+    expect(session().maskVersion).toBe(0);
+    expect(session().savedMask).toEqual({ assetId: "mask-1", version: 0 });
+    session().changeMask((editor) =>
+      editor.apply({ type: "rect", mode: "paint", from: { x: 4, y: 4 }, to: { x: 20, y: 12 } }),
+    );
+    expect(session().maskVersion).toBe(1);
+    // The same box again changes no pixel.
+    session().changeMask((editor) =>
+      editor.apply({ type: "rect", mode: "paint", from: { x: 4, y: 4 }, to: { x: 20, y: 12 } }),
+    );
+    expect(session().maskVersion).toBe(1);
+  });
+
+  test("a faint edge left by the eraser is painted, but not enough to Generate", () => {
+    useEditSession.getState().start("a", 200, 120);
+    const { changeMask } = useEditSession.getState();
+    const path = [
+      { x: 40, y: 60 },
+      { x: 160, y: 60 },
+    ];
+    changeMask((editor) =>
+      editor.apply({ type: "stroke", brush: { mode: "paint", size: 92, hardness: 80 }, points: path }),
+    );
+    changeMask((editor) =>
+      editor.apply({ type: "stroke", brush: { mode: "erase", size: 92, hardness: 80 }, points: path }),
+    );
+    expect(useEditSession.getState().mask).toMatchObject({ empty: false, changes: false });
+    // Still something to lose by leaving, as it shows.
+    expect(editHasWork()).toBe(true);
   });
 
   test("leaving asks only when a mask, a prompt or a reference would be lost", () => {

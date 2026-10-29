@@ -35,18 +35,20 @@ export const sizeOfSlider = (value: number) =>
 
 export interface MaskState {
   empty: boolean;
+  /** Painted enough somewhere for the server to change it: what Generate waits for. */
+  changes: boolean;
   canUndo: boolean;
   canRedo: boolean;
 }
 
-const NO_MASK: MaskState = { empty: true, canUndo: false, canRedo: false };
+const NO_MASK: MaskState = { empty: true, changes: false, canUndo: false, canRedo: false };
 
 export interface EditSessionState extends ReferenceSlice {
   /** The image being edited, or null when no edit is open. */
   assetId: string | null;
   /** The mask at the image's stored size, with its undo history. */
   editor: MaskEditor | null;
-  /** Goes up whenever the mask changes. */
+  /** Goes up whenever the mask's pixels change. */
   maskVersion: number;
   mask: MaskState;
   tool: MaskTool;
@@ -118,10 +120,17 @@ export function subscribeMask(listener: MaskListener): () => void {
 }
 
 const maskStateOf = (editor: MaskEditor | null): MaskState =>
-  editor ? { empty: editor.isEmpty(), canUndo: editor.canUndo, canRedo: editor.canRedo } : NO_MASK;
+  editor
+    ? {
+        empty: editor.isEmpty(),
+        changes: editor.hasChange(),
+        canUndo: editor.canUndo,
+        canRedo: editor.canRedo,
+      }
+    : NO_MASK;
 
 const sameMask = (a: MaskState, b: MaskState) =>
-  a.empty === b.empty && a.canUndo === b.canUndo && a.canRedo === b.canRedo;
+  a.empty === b.empty && a.changes === b.changes && a.canUndo === b.canUndo && a.canRedo === b.canRedo;
 
 const FRESH = {
   assetId: null,
@@ -150,7 +159,11 @@ export const useEditSession = create<EditSessionState>()((set, get) => {
     // Mid-stroke the flags wait for the stroke's end: erasing would otherwise rescan the whole
     // mask for emptiness on every pointer move.
     const next = editor.stroking ? mask : maskStateOf(editor);
-    set({ maskVersion: maskVersion + 1, ...(sameMask(mask, next) ? {} : { mask: next }) });
+    // Only a change to the pixels is a new mask: an undo with nothing to undo keeps the saved one.
+    set({
+      ...(rect && { maskVersion: maskVersion + 1 }),
+      ...(sameMask(mask, next) ? {} : { mask: next }),
+    });
     if (rect) for (const listener of maskListeners) listener(rect);
     return rect;
   };

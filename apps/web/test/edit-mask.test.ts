@@ -1,5 +1,6 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
+import { isEmptyMask } from "@openfield/core";
 import {
   applyMaskOp,
   type Brush,
@@ -11,6 +12,7 @@ import {
   MaskEditor,
   type MaskOp,
   maskBounds,
+  maskHasChange,
   maskRgba,
   normalizeBrush,
   overlayRgba,
@@ -987,6 +989,37 @@ describe("reading the mask", () => {
     expect(editor.isEmpty()).toBe(true);
     editor.undo();
     expect(editor.isEmpty()).toBe(false);
+  });
+
+  test("a change needs a pixel painted past halfway, as the server reads the mask", () => {
+    const mask = createMask(9, 7);
+    expect(maskHasChange(mask)).toBe(false);
+    mask.data[mask.data.length - 1] = 127;
+    mask.data[3] = 90;
+    expect(isMaskEmpty(mask)).toBe(false);
+    expect(maskHasChange(mask)).toBe(false);
+    mask.data[mask.data.length - 1] = 128;
+    expect(maskHasChange(mask)).toBe(true);
+  });
+
+  test("erasing along a soft stroke leaves a faint edge that changes nothing, and the editor knows", () => {
+    const editor = new MaskEditor(200, 120);
+    const path = [centre(40, 60), centre(160, 60)];
+    editor.apply({ type: "stroke", brush: brush(92, 80), points: path });
+    expect(editor.hasChange()).toBe(true);
+    editor.apply({ type: "stroke", brush: brush(92, 80, "erase"), points: path });
+    expect(editor.isEmpty()).toBe(false);
+    expect(editor.hasChange()).toBe(false);
+    // The server agrees: the PNG it would get keeps every pixel.
+    const rgba = maskRgba(editor.mask);
+    const alpha = new Uint8Array(rgba.length / 4).map((_, i) => rgba[i * 4 + 3]!);
+    expect(isEmptyMask(alpha)).toBe(true);
+    editor.undo();
+    expect(editor.hasChange()).toBe(true);
+    editor.apply({ type: "clear" });
+    expect(editor.hasChange()).toBe(false);
+    editor.apply({ type: "invert" });
+    expect(editor.hasChange()).toBe(true);
   });
 });
 

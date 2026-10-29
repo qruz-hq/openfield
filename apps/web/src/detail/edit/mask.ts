@@ -8,6 +8,8 @@
 // 8.3MB at 3840x2160, 16.8MB at 4096x4096. Undo holds one more copy, and for older snapshots only
 // what changed, packed (MaskEditor).
 
+import { MASK_CHANGE_BELOW } from "@openfield/core";
+
 /** Image pixels, continuous: pixel (i, j) covers [i, i + 1) × [j, j + 1), so its centre is i + 0.5. */
 export interface Point {
   x: number;
@@ -441,6 +443,24 @@ export function isMaskEmpty(mask: Mask): boolean {
   return true;
 }
 
+/** Coverage from which a pixel changes: the server changes where alpha (255 - coverage) is under MASK_CHANGE_BELOW. */
+const CHANGES_FROM = 256 - MASK_CHANGE_BELOW;
+
+/**
+ * Some pixel is painted enough for the server to change it. Erasing along a soft stroke can leave a
+ * faint edge that shows on screen yet changes nothing, and an edit needs more than that.
+ */
+export function maskHasChange(mask: Mask): boolean {
+  const { data } = mask;
+  const { words: view, tail } = words(data);
+  for (let i = 0; i < view.length; i++) {
+    if (view[i] === 0) continue;
+    for (let b = i << 2; b < (i << 2) + 4; b++) if (data[b]! >= CHANGES_FROM) return true;
+  }
+  for (let i = tail; i < data.length; i++) if (data[i]! >= CHANGES_FROM) return true;
+  return false;
+}
+
 /** The smallest rectangle holding every painted pixel, or null when nothing is. */
 export function maskBounds(mask: Mask): Rect | null {
   const { width, height, data } = mask;
@@ -777,6 +797,8 @@ export class MaskEditor {
   #stroke: LiveStroke | null = null;
   /** Cached answer to isEmpty(), null when it needs a scan. */
   #empty: boolean | null;
+  /** Cached answer to hasChange(), the same way. */
+  #changes: boolean | null = null;
   #version = 0;
 
   constructor(width: number, height: number, options: MaskEditorOptions = {}) {
@@ -831,6 +853,12 @@ export class MaskEditor {
   isEmpty(): boolean {
     this.#empty ??= isMaskEmpty(this.mask);
     return this.#empty;
+  }
+
+  /** Painted enough somewhere for the server to change it (maskHasChange). */
+  hasChange(): boolean {
+    this.#changes ??= !this.isEmpty() && maskHasChange(this.mask);
+    return this.#changes;
   }
 
   bounds(): Rect | null {
@@ -985,6 +1013,10 @@ export class MaskEditor {
     ) {
       this.#empty = null;
     }
+    // Painting only adds coverage and erasing only takes it away, so each keeps one answer.
+    if (effect === "clear") this.#changes = false;
+    else if (!(effect === "paint" && this.#changes) && !(effect === "erase" && this.#changes === false))
+      this.#changes = null;
   }
 
   #commit(op: MaskOp, rect: Rect, cost: number) {
