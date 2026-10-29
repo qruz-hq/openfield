@@ -1600,6 +1600,7 @@
         "collapse": "Collapse",
         "expand": "Expand",
         "rename": "Rename",
+        "edit": "Edit",
         "lock": "Lock",
         "unlock": "Unlock",
         "delete": "Delete",
