@@ -16,6 +16,9 @@ export const MASK_CHANGE_BELOW = 128;
  */
 export const MASK_COMPOSITE_DEFAULTS = { composite: true, expandPx: 4, featherPx: 8 } as const;
 
+/** The most a request may grow the mask or soften its edge, in pixels. */
+export const MASK_COMPOSITE_MAX_PX = 32;
+
 /**
  * The most pixels an image edited with a mask may have, so a 48 megapixel phone photo fits. The
  * composite holds several full-size copies of the image in memory at once, which past this would

@@ -57,8 +57,8 @@ function FallbackNote({ speed, tone }: { speed: GenerateSpeed | undefined; tone?
   );
 }
 
-/** How the estimate was worked out, how fresh the prices are, and the speed. */
-function tooltipFor(estimate: CostEstimate | undefined, speed: GenerateSpeed | undefined): ReactNode {
+/** How the estimate was worked out, how fresh the prices are, and the speed. The Edit tab's too. */
+export function tooltipFor(estimate: CostEstimate | undefined, speed: GenerateSpeed | undefined): ReactNode {
   const known = estimate && estimate.confidence !== "unknown";
   if (!known && !speed) return undefined;
   return (

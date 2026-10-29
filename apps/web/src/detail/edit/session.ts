@@ -1,4 +1,4 @@
-import { MASK_COMPOSITE_DEFAULTS, type ModelKey } from "@openfield/core";
+import { MASK_COMPOSITE_DEFAULTS, MASK_COMPOSITE_MAX_PX, type ModelKey } from "@openfield/core";
 import type { ComposerValues } from "@openfield/providers/manifest";
 import { create } from "zustand";
 import { type ReferenceSlice, referenceSlice } from "../../image/composer/store";
@@ -57,15 +57,22 @@ export interface EditSessionState extends ReferenceSlice {
   /** How strongly the painted area shows over the image, 0-100. */
   maskOpacity: number;
   prompt: string;
-  /** null until the person picks one. */
+  /** null until the person picks one. Like the size settings, it carries on to the next edit. */
   model: ModelKey | null;
-  /** The resolution and quality chips. The aspect always follows the image. */
+  /** Resolution and quality. The aspect always follows the image. */
   values: ComposerValues;
   batch: number;
   /** Keep the rest of the image: put the original back outside the mask. */
   composite: boolean;
   featherPx: number;
   expandPx: number;
+  /** The server turned the image away: a phone photo stored on its side (design 6YuF99zpGo). */
+  turned: boolean;
+  /**
+   * The mask as it was last saved for a run. While `maskVersion` still matches, Generate again
+   * sends it by id instead of saving it once more.
+   */
+  savedMask: { version: number; assetId: string } | null;
   /**
    * Set while "Leave this edit?" is asked: what leaving does once the person agrees. Every way out
    * of an edit with a mask or a prompt goes through leaveEdit, which sets it.
@@ -81,6 +88,15 @@ export interface EditSessionState extends ReferenceSlice {
   setHardness: (hardness: number) => void;
   setMaskOpacity: (opacity: number) => void;
   setPrompt: (prompt: string) => void;
+  setModel: (model: ModelKey) => void;
+  setValues: (values: ComposerValues) => void;
+  setBatch: (batch: number) => void;
+  setComposite: (composite: boolean) => void;
+  setFeatherPx: (px: number) => void;
+  setExpandPx: (px: number) => void;
+  setTurned: (turned: boolean) => void;
+  /** Remembers the mask saved for the current `maskVersion`. */
+  setSavedMask: (assetId: string, version: number) => void;
   /** Runs one change on the mask: a stroke's step, a shape, undo. `change` returns what it redrew. */
   changeMask: (change: (editor: MaskEditor) => Rect | null) => Rect | null;
   undo: () => void;
@@ -116,14 +132,15 @@ const FRESH = {
   // start() sizes it to the image.
   brushSize: 92,
   prompt: "",
-  model: null,
-  values: {},
-  batch: 1,
   composite: MASK_COMPOSITE_DEFAULTS.composite,
   featherPx: MASK_COMPOSITE_DEFAULTS.featherPx,
   expandPx: MASK_COMPOSITE_DEFAULTS.expandPx,
+  turned: false,
+  savedMask: null,
   leaving: null,
 } satisfies Partial<EditSessionState>;
+
+const clampPx = (px: number) => Math.round(Math.min(MASK_COMPOSITE_MAX_PX, Math.max(0, px)));
 
 export const useEditSession = create<EditSessionState>()((set, get) => {
   const changeMask = (change: (editor: MaskEditor) => Rect | null): Rect | null => {
@@ -140,9 +157,13 @@ export const useEditSession = create<EditSessionState>()((set, get) => {
 
   return {
     ...FRESH,
-    // Hardness and the overlay's strength are the person's taste, so they outlast an edit.
+    // Hardness, the overlay's strength, the model and its sizes are the person's taste, so they
+    // outlast an edit. Keep the rest starts on again with each one.
     hardness: 80,
     maskOpacity: 50,
+    model: null,
+    values: {},
+    batch: 1,
     ...referenceSlice(set),
     start: (assetId, width, height, initial) => {
       const { editor } = get();
@@ -166,6 +187,14 @@ export const useEditSession = create<EditSessionState>()((set, get) => {
     setMaskOpacity: (maskOpacity) =>
       set({ maskOpacity: Math.round(Math.min(100, Math.max(0, maskOpacity))) }),
     setPrompt: (prompt) => set({ prompt }),
+    setModel: (model) => set({ model }),
+    setValues: (values) => set((state) => ({ values: { ...state.values, ...values } })),
+    setBatch: (batch) => set({ batch: Math.max(1, Math.round(batch)) }),
+    setComposite: (composite) => set({ composite }),
+    setFeatherPx: (px) => set({ featherPx: clampPx(px) }),
+    setExpandPx: (px) => set({ expandPx: clampPx(px) }),
+    setTurned: (turned) => set({ turned }),
+    setSavedMask: (assetId, version) => set({ savedMask: { assetId, version } }),
     changeMask,
     undo: () => void changeMask((editor) => editor.undo()),
     redo: () => void changeMask((editor) => editor.redo()),

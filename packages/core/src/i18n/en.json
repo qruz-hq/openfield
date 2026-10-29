@@ -2135,8 +2135,72 @@
     },
     "generate": {
       "paintFirst": "Paint over the part you want to change.",
-      "describeFirst": "Describe the change."
+      "describeFirst": "Describe the change.",
+      "label": "Generate",
+      "again": "Generate again",
+      "working": "Generating {count, plural, one {# image} other {# images}}",
+      "stop": "Stop",
+      "open": "Open new image",
+      "failed": "Couldn't make this edit. Your mask is still here."
+    },
+    "prompt": {
+      "placeholder": "Describe the change",
+      "label": "What to change"
+    },
+    "model": {
+      "label": "Model",
+      "masked": "Change only what you paint",
+      "whole": "Redraw the whole image",
+      "wholeKept": "{model} redraws the whole image, then everything outside your mask is put back.",
+      "wholeNotKept": "{model} redraws the whole image, so anything can change.",
+      "needsKey": "Needs {vowel, select, yes {an} other {a}} {company} key"
+    },
+    "size": {
+      "resolution": "Resolution",
+      "quality": "Quality",
+      "images": "Images",
+      "aspect": "Aspect ratio",
+      "aspectValue": "{ratio}, same as the image",
+      "keepsSize": "New image keeps the original size, {width} × {height}.",
+      "comesOut": "New image comes out at {width} × {height}."
+    },
+    "keep": {
+      "label": "Keep the rest of the image",
+      "on": "Everything outside your mask stays exactly the same.",
+      "off": "The model may change other parts too.",
+      "feather": "Feather",
+      "featherHint": "Softens the edge so the change blends in.",
+      "featherNext": "Softens the edge on your next Generate.",
+      "expand": "Expand",
+      "expandHint": "Grows the mask a little past what you painted.",
+      "expandNext": "Grows the mask on your next Generate."
+    },
+    "saved": {
+      "done": "Saved as {count, plural, one {# new image} other {# new images}}. The original stays as it is.",
+      "someFailed": "Saved {saved, plural, one {# new image} other {# new images}}. {failed} didn't work. Try again.",
+      "notKept": "Saved {count, plural, one {# new image} other {# new images}}, but the rest couldn't be kept exactly. Try again."
+    },
+    "results": {
+      "label": "New images",
+      "original": "Original",
+      "image": "New image {index}",
+      "working": "New image {index}, on its way",
+      "failed": "New image {index} didn't work"
+    },
+    "status": {
+      "generating": "Generating"
+    },
+    "turned": {
+      "title": "This photo can't be edited yet",
+      "body": "Your phone saved it sideways, so what you paint wouldn't line up with the photo.",
+      "useAsReference": "Use as reference"
     }
+  },
+  "spendGuard": {
+    "title": "This run costs about {cost}",
+    "body": "It would pass your monthly limit of {limit}.",
+    "cancel": "Cancel",
+    "confirm": "Run anyway"
   },
   "video": {
     "placeholder": "Describe the video you want",

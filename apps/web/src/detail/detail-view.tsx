@@ -58,6 +58,7 @@ import { type DetailActions, DetailPanel, type RunSpeedInfo } from "./detail-pan
 import { ImageMedia, type ImageMediaHandle } from "./edit/edit-media";
 import { EditPanel } from "./edit/edit-panel";
 import { editKey } from "./edit/keys";
+import { useEditRunner } from "./edit/runner";
 import { cancelLeave, confirmLeave, DEFAULT_TOOL, leaveEdit, useEditSession } from "./edit/session";
 import {
   BACKDROP_RUNG,
@@ -173,13 +174,18 @@ function DetailContent({
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [pending, setPending] = useState<PendingStep | null>(null);
   const leaving = useEditSession((s) => s.leaving !== null);
+  // The Edit tab's runs, held here so one carries on while Info is open.
+  const runner = useEditRunner();
+  const { reset: resetRunner } = runner;
 
-  // An edit lasts while its image is open: stepping to another image or closing the view drops it.
-  // Both ask first (leaveEdit) when there's a mask or a prompt to lose.
+  // An edit lasts while its image is open: stepping to another image or closing the view drops it,
+  // and lets its run go on in the feed. Both ask first (leaveEdit) when there's a mask or a prompt
+  // to lose.
   useEffect(() => {
     const editing = useEditSession.getState().assetId;
     if (editing !== null && editing !== id) useEditSession.getState().end();
-  }, [id]);
+    resetRunner();
+  }, [id, resetRunner]);
   useEffect(() => () => useEditSession.getState().end(), []);
 
   const detail = useAssetDetail(id);
@@ -654,7 +660,29 @@ function DetailContent({
         actions={actions}
         hidden={expanded}
         tabs={
-          editable ? { tab: editing ? "edit" : "info", onTabChange: setTab, edit: <EditPanel /> } : undefined
+          editable
+            ? {
+                tab: editing ? "edit" : "info",
+                onTabChange: setTab,
+                edit: (
+                  <EditPanel
+                    item={item}
+                    runner={runner}
+                    // Open new image: the result on Info. It asks first only when the edit has
+                    // moved on since the run, as the run's mask and prompt are in the library.
+                    onOpen={(assetId) => {
+                      const open = () => {
+                        setPending(null);
+                        show(assetId);
+                      };
+                      if (!runner.settled()) return leaveEdit(open);
+                      useEditSession.getState().end();
+                      open();
+                    }}
+                  />
+                ),
+              }
+            : undefined
         }
       />
       {expanded ? (

@@ -62,7 +62,7 @@ test("the Edit tab paints a mask, and its tools undo, redo, invert and clear it"
   await expect(tool(page, "Undo")).toBeDisabled();
   await expect(tool(page, "Redo")).toBeDisabled();
   await expect(view.getByText("Paint over the part you want to change.")).toBeVisible();
-  await expect(view.getByText(/^\d+ px$/)).toBeVisible();
+  await expect(view.getByRole("group", { name: "Brush options" }).getByText(/^\d+ px$/)).toBeVisible();
 
   // A stroke across the middle.
   const layer = maskLayer(page);

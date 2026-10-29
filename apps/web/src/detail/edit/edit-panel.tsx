@@ -1,17 +1,225 @@
-import { t } from "@openfield/core";
+import { type AssetListItem, newId, t } from "@openfield/core";
+import {
+  type EditBase,
+  type EditPlan,
+  editBody,
+  editOpFor,
+  editState,
+  referenceInputsFor,
+  resolveValues,
+} from "@openfield/providers/manifest";
+import { Button, cn, Divider, Spinner, Tooltip } from "@openfield/ui";
+import { ArrowUpRight, CircleAlert, CircleCheck, Sparkles, Square } from "lucide-react";
+import { useState } from "react";
+import { useProviders } from "../../api/hooks/keys";
+import { useModels } from "../../api/hooks/models";
+import { useRunSpeed } from "../../api/hooks/provider-settings";
+import { useSettings } from "../../api/hooks/settings";
+import { type GenerateSpeed, tooltipFor } from "../../image/composer/generate-button";
+import { speedFallbackHint, tightCost } from "../../lib/cost";
+import { notifyError } from "../../lib/notify";
+import { companyName } from "../../lib/provider";
+import { askedPrice } from "../../lib/remote-price";
+import { KeepRest } from "./keep-rest";
+import { encodeMaskPng } from "./mask-png";
+import { ModelField } from "./model-field";
+import { pickEditModel, type SavedNote, savedNote } from "./plan";
+import { PromptCard } from "./prompt-card";
+import type { EditRunner } from "./runner";
 import { useEditSession } from "./session";
+import { SizeFields } from "./size-fields";
+import { useSpendGuard } from "./spend-guard";
 
-// The Edit tab's side of the panel (design gpRcEBbVNM, Image edit / Panel), under the tabs. Its
-// footer sits at the bottom and says what the edit still needs.
+// The Edit tab's side of the panel (design gpRcEBbVNM, Image edit / Panel), under the tabs: the
+// prompt card, the model, the size fields, a divider, Keep the rest, then the footer at the bottom
+// with what became of the last run and Generate. While a run goes the form rests at 45% and
+// Generate gives way to its progress and Stop.
 
-export function EditPanel() {
-  const empty = useEditSession((s) => s.mask.empty);
-  const described = useEditSession((s) => s.prompt.trim() !== "");
-  const hint = empty ? t("edit.generate.paintFirst") : described ? null : t("edit.generate.describeFirst");
+export interface EditPanelProps {
+  item: AssetListItem;
+  runner: EditRunner;
+  /** Shows a new image in the view: Open new image. */
+  onOpen: (assetId: string) => void;
+}
+
+export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
+  const models = useModels().data ?? [];
+  const settings = useSettings().data;
+  const providers = useProviders().data;
+  const runSpeedFor = useRunSpeed();
+  const picked = useEditSession((s) => s.model);
+  const values = useEditSession((s) => s.values);
+  const batch = useEditSession((s) => s.batch);
+  const masked = useEditSession((s) => !s.mask.empty);
+  const prompt = useEditSession((s) => s.prompt);
+  const references = useEditSession((s) => s.references);
+  const guard = useSpendGuard();
+  // Reading the mask into a PNG, before the run is asked for.
+  const [preparing, setPreparing] = useState(false);
+
+  const model = pickEditModel(models, picked, settings?.defaultModel, providers);
+  const resolved = model ? resolveValues(model.capabilities, values, batch) : undefined;
+  const base: EditBase = { assetId: item.id, width: item.width, height: item.height };
+  const plan: EditPlan = { base, masked };
+  const run = model ? runSpeedFor(model, editOpFor(model.capabilities, masked)) : undefined;
+  const speed = run?.speed ?? "standard";
+  const refs = model ? referenceInputsFor(model.capabilities, references) : [];
+  const state = editState({
+    model,
+    anyReady: models.some((m) => m.ready),
+    prompt,
+    resolved,
+    edit: plan,
+    references: refs.length,
+    speed,
+    askPrice: askedPrice,
+  });
+  const generateSpeed: GenerateSpeed | undefined =
+    !model || !run
+      ? undefined
+      : run.fellBack
+        ? { fallback: run.name, tip: speedFallbackHint(model, run) }
+        : run.speed !== "standard"
+          ? {
+              name: run.name,
+              tip: t("speed.tooltip", { speed: run.name, company: companyName(providers, model.providerId) }),
+            }
+          : undefined;
+
+  const busy = runner.busy || preparing;
+  const saved = runner.outcome.kind === "saved";
+
+  const submit = () => {
+    if (state.kind !== "ready" || !model || !resolved || busy) return;
+    const session = useEditSession.getState();
+    const editor = session.editor;
+    if (!editor) return;
+    // What the button showed is what runs, whatever changes while the limit is asked about.
+    const settled = {
+      composite: session.composite,
+      expandPx: session.expandPx,
+      featherPx: session.featherPx,
+    };
+    const words = session.prompt;
+    void guard.check(state.estimate, async () => {
+      const { maskVersion, savedMask } = useEditSession.getState();
+      setPreparing(true);
+      let mask: Blob | string;
+      try {
+        // The mask saved for the last run goes again by id while it hasn't changed.
+        mask = savedMask?.version === maskVersion ? savedMask.assetId : await encodeMaskPng(editor.mask);
+      } catch {
+        notifyError(t("edit.generate.failed"));
+        return;
+      } finally {
+        setPreparing(false);
+      }
+      runner.generate({
+        input: {
+          baseAssetId: item.id,
+          mask,
+          body: (maskAssetId) =>
+            editBody(model, resolved, words, newId(), {
+              base,
+              ...(maskAssetId && { mask: { assetId: maskAssetId, ...settled } }),
+              references: refs,
+            }),
+        },
+        count: resolved.batch,
+        prompt: words,
+        maskVersion,
+        composite: settled.composite,
+      });
+    });
+  };
+
+  const note = savedNote(runner.outcome, runner.notKept);
+  const hint = busy
+    ? null
+    : state.kind === "blocked"
+      ? state.reason
+      : state.kind === "no-key" || state.kind === "needs-key"
+        ? t("composer.generate.addKeyFirst")
+        : null;
+  const opened = runner.shown ?? runner.slots.find((s) => s.state === "done")?.assetId ?? null;
+  const ready = state.kind === "ready";
+  const estimate = state.kind === "ready" ? state.estimate : undefined;
+  const tip = ready ? tooltipFor(estimate, generateSpeed) : undefined;
+  const generate = (
+    <Button
+      icon={Sparkles}
+      price={ready && estimate ? tightCost(estimate) : undefined}
+      disabled={!ready || preparing}
+      onClick={submit}
+      className="w-full"
+    >
+      {t(saved ? "edit.generate.again" : "edit.generate.label")}
+    </Button>
+  );
+
   return (
-    // Footer: a column at the panel's bottom, gap 10.
-    <div className="flex w-full flex-1 flex-col justify-end gap-10">
-      {hint ? <p className="w-full text-center text-caption font-normal text-text-tertiary">{hint}</p> : null}
+    <>
+      <PromptCard model={model} resting={busy} />
+      <ModelField models={models} selected={model} base={base} resting={busy} />
+      <SizeFields model={model} resolved={resolved} plan={plan} speed={speed} resting={busy} />
+      <Divider className="w-full" />
+      <KeepRest resting={busy} afterRun={saved} />
+      {/* Footer: a column at the panel's bottom, 10 apart. */}
+      <div className="flex w-full flex-1 flex-col justify-end gap-10">
+        {note && !busy ? <SavedNoteRow note={note} /> : null}
+        {hint ? (
+          <p className="w-full text-center text-caption font-normal text-text-tertiary">{hint}</p>
+        ) : null}
+        {saved && opened && !busy ? (
+          <Button
+            variant="secondary"
+            size="l"
+            icon={ArrowUpRight}
+            onClick={() => onOpen(opened)}
+            className="w-full"
+          >
+            {t("edit.generate.open")}
+          </Button>
+        ) : null}
+        {runner.busy ? (
+          <Working count={runner.slots.length} onStop={runner.stop} />
+        ) : tip ? (
+          <Tooltip content={tip}>{generate}</Tooltip>
+        ) : (
+          generate
+        )}
+      </div>
+      {guard.dialog}
+    </>
+  );
+}
+
+/** Image edit / Saved note: the check, or the alert in danger when not all of it went as asked. */
+function SavedNoteRow({ note }: { note: SavedNote }) {
+  const Icon = note.tone === "done" ? CircleCheck : CircleAlert;
+  return (
+    <div role="status" className="flex w-full items-center gap-8 px-2">
+      <Icon
+        size={14}
+        aria-hidden
+        className={cn("shrink-0", note.tone === "done" ? "text-text-secondary" : "text-danger")}
+      />
+      <p className="min-w-0 flex-1 text-caption text-text-secondary">{note.text}</p>
+    </div>
+  );
+}
+
+/** Image edit / Generate / Working: the spinner, how many are on their way, and Stop. */
+function Working({ count, onStop }: { count: number; onStop: () => void }) {
+  return (
+    <div className="flex h-40 w-full items-center gap-10">
+      <Spinner size={16} className="text-text-secondary" />
+      <span role="status" className="min-w-0 flex-1 text-small font-medium text-text-secondary">
+        {t("edit.generate.working", { count })}
+      </span>
+      <Button variant="secondary" size="m" icon={Square} onClick={onStop}>
+        {t("edit.generate.stop")}
+      </Button>
     </div>
   );
 }

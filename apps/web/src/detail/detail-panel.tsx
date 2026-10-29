@@ -204,7 +204,8 @@ export function DetailPanel({
         <TabsContent value="info" className={body}>
           {info}
         </TabsContent>
-        <TabsContent value="edit" className={body}>
+        {/* Edit's settings scroll when the window is too short for them, footer and all. */}
+        <TabsContent value="edit" className={cn(body, "overflow-y-auto")}>
           {tabs.edit}
         </TabsContent>
       </Surface>
