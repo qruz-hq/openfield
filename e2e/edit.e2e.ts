@@ -804,6 +804,25 @@ test("while it runs the form rests and Stop stops it; a run that fails keeps the
   await expect(generateIn(page)).toBeEnabled({ timeout: 15_000 });
   await expect(detail(page).getByRole("group", { name: "New images" })).toHaveCount(0);
 
+  // Stop while the edit is still being asked for: the run stops as soon as it has an id.
+  let release: () => void = () => {};
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route("**/api/edit", async (route) => {
+    await held;
+    await route.continue();
+  });
+  await generateIn(page).click();
+  await expect(panel.getByRole("button", { name: "Stop" })).toBeVisible();
+  await panel.getByRole("button", { name: "Stop" }).click();
+  const cancelled = page.waitForRequest((r) => /\/api\/job-sets\/[^/]+\/cancel$/.test(r.url()));
+  release();
+  await cancelled;
+  await expect(generateIn(page)).toBeEnabled({ timeout: 15_000 });
+  await expect(panel.getByText(/^Saved as/)).toHaveCount(0);
+  await page.unroute("**/api/edit");
+
   // The fake refuses: none of it worked, the toast says the mask is still here, and Try again
   // sends it once more.
   await panel.getByRole("textbox", { name: "What to change" }).fill("Pale berries #fake:refused");

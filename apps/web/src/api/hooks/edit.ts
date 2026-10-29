@@ -17,7 +17,7 @@ import { useLive } from "../../lib/live";
 import { api, call } from "../client";
 import { subscribeEvents } from "../events";
 import { ApiError } from "../raw";
-import { addJobSet } from "./job-sets";
+import { addJobSet, useCancelJobSet } from "./job-sets";
 
 // The detail view's Edit tab (§0.9): save the painted area once (POST /api/masks), run the edit by
 // the saved mask's id (POST /api/edit), then follow that run on the event stream, as the canvas
@@ -251,6 +251,40 @@ async function fetchRecentJobSet(jobSetId: string): Promise<JobSetWithJobs | und
   return res.items.find((s) => s.jobSet.id === jobSetId);
 }
 
+export interface PendingStop {
+  /** A new run is being asked for: a Stop pressed for the last one doesn't carry over. */
+  begin(): void;
+  /** The 202 named the run. */
+  accept(jobSetId: string): void;
+  stop(): void;
+}
+
+/**
+ * Stop for a run that may not have its id yet. Pressed while the mask is saving or the edit is
+ * being asked for, it's kept, and the run stops as soon as the 202 names it rather than going on.
+ */
+export function pendingStop(cancel: (jobSetId: string) => void): PendingStop {
+  let named: string | null = null;
+  let asked = false;
+  return {
+    begin() {
+      named = null;
+      asked = false;
+    },
+    accept(jobSetId) {
+      named = jobSetId;
+      if (asked) {
+        asked = false;
+        cancel(jobSetId);
+      }
+    },
+    stop() {
+      if (named) cancel(named);
+      else asked = true;
+    },
+  };
+}
+
 /** While the stream is down, the run is asked for this often, as the feed polls. */
 const POLL_MS = 2000;
 
@@ -259,14 +293,21 @@ const POLL_MS = 2000;
  * that run as it goes, from the stream (or polled while the stream is down). A new start follows
  * the new run instead.
  */
-export function useEditRun() {
+export function useEditRun({ onStopFailed }: { onStopFailed?: (error: unknown) => void } = {}) {
   const [run, setRun] = useState<JobSetWithJobs>();
   const follower = useRef<RunFollower | undefined>(undefined);
   const connected = useLive((s) => s.connected);
+  const { mutate: cancel } = useCancelJobSet();
+  const stopFailed = useRef(onStopFailed);
+  stopFailed.current = onStopFailed;
+  const [stops] = useState(() =>
+    pendingStop((jobSetId) => cancel(jobSetId, { onError: (error) => stopFailed.current?.(error) })),
+  );
 
   const mutation = useMutation({
     mutationFn: async (input: EditInput) => {
       follower.current?.stop();
+      stops.begin();
       setRun(undefined);
       const following = followRun({ onChange: setRun });
       follower.current = following;
@@ -274,6 +315,7 @@ export function useEditRun() {
         const started = await runEdit(input);
         following.accept(started.accepted);
         addJobSet(started.accepted);
+        if (follower.current === following) stops.accept(started.accepted.jobSet.id);
         return started;
       } catch (error) {
         following.stop();
@@ -296,9 +338,10 @@ export function useEditRun() {
   const reset = useCallback(() => {
     follower.current?.stop();
     follower.current = undefined;
+    stops.begin();
     setRun(undefined);
     resetMutation();
-  }, [resetMutation]);
+  }, [resetMutation, stops]);
 
   return {
     run,
@@ -307,6 +350,8 @@ export function useEditRun() {
     error: mutation.error,
     /** Takes onSuccess and onError like any mutation; onSuccess gets the saved mask's id. */
     start: mutation.mutate,
+    /** Stops the run, or, while it's still being asked for, as soon as it has an id. */
+    stop: stops.stop,
     reset,
   };
 }

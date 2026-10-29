@@ -2,7 +2,6 @@ import { editOpParamsSchema, t } from "@openfield/core";
 import { useQueries } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type EditInput, isTurnedPhoto, useEditRun } from "../../api/hooks/edit";
-import { useCancelJobSet } from "../../api/hooks/job-sets";
 import { assetDetailQuery } from "../../api/hooks/library";
 import { errorMessage } from "../../api/raw";
 import { notify, notifyError } from "../../lib/notify";
@@ -54,8 +53,13 @@ export interface EditRunner {
 }
 
 export function useEditRunner(): EditRunner {
-  const { run, starting, start, reset: resetRun } = useEditRun();
-  const { mutate: cancel } = useCancelJobSet();
+  const {
+    run,
+    starting,
+    start,
+    stop,
+    reset: resetRun,
+  } = useEditRun({ onStopFailed: (error) => notifyError(errorMessage(error)) });
   const last = useRef<EditRequest | null>(null);
   // Undefined until the person picks: the first new image. Null is the original.
   const [picked, setPicked] = useState<string | null | undefined>(undefined);
@@ -133,11 +137,6 @@ export function useEditRunner(): EditRunner {
     setPicked(undefined);
     resetRun();
   }, [resetRun]);
-
-  const runId = run?.jobSet.id;
-  const stop = useCallback(() => {
-    if (runId) cancel(runId, { onError: (error) => notifyError(errorMessage(error)) });
-  }, [runId, cancel]);
 
   const shown = picked === undefined ? done[0] : picked;
   return {

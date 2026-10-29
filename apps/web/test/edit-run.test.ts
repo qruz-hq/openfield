@@ -13,6 +13,7 @@ import {
   followRun,
   isTurnedPhoto,
   mergeJobSet,
+  pendingStop,
   runEdit,
   saveMask,
 } from "../src/api/hooks/edit";
@@ -319,5 +320,30 @@ describe("the follower", () => {
     await following.refresh();
     expect(seen).toEqual([run]);
     following.stop();
+  });
+});
+
+describe("Stop", () => {
+  test("pressed while the edit is still being asked for, it stops the run once the 202 names it", () => {
+    const cancelled: string[] = [];
+    const stops = pendingStop((id) => cancelled.push(id));
+    stops.begin();
+    stops.stop();
+    expect(cancelled).toEqual([]);
+    stops.accept("set-1");
+    expect(cancelled).toEqual(["set-1"]);
+    // Once named, Stop stops it at once.
+    stops.stop();
+    expect(cancelled).toEqual(["set-1", "set-1"]);
+  });
+
+  test("a Stop for one run doesn't carry over to the next", () => {
+    const cancelled: string[] = [];
+    const stops = pendingStop((id) => cancelled.push(id));
+    stops.begin();
+    stops.stop();
+    stops.begin();
+    stops.accept("set-2");
+    expect(cancelled).toEqual([]);
   });
 });
