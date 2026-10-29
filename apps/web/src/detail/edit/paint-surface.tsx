@@ -40,7 +40,12 @@ interface SurfaceOptions {
   panning: boolean;
   /** The Edit tab is open, so the layer is on screen. */
   enabled: boolean;
+  /** A run is going: the mask can't change and shows fainter (design DFd2yqIj0C, 35% at 50). */
+  resting?: boolean;
 }
+
+/** How much of its strength the mask keeps while a run goes. */
+const RESTING_STRENGTH = 0.7;
 
 export interface PaintSurface {
   layer: ReactNode;
@@ -141,7 +146,14 @@ interface Box {
 const pathOf = (points: readonly Point[]) =>
   points.map((p, i) => `${i === 0 ? "M" : "L"}${p.x} ${p.y}`).join(" ");
 
-export function usePaintSurface({ width, height, zoom, panning, enabled }: SurfaceOptions): PaintSurface {
+export function usePaintSurface({
+  width,
+  height,
+  zoom,
+  panning,
+  enabled,
+  resting = false,
+}: SurfaceOptions): PaintSurface {
   const tool = useEditSession((s) => s.tool);
   const brushSize = useEditSession((s) => s.brushSize);
   const maskOpacity = useEditSession((s) => s.maskOpacity);
@@ -327,7 +339,7 @@ export function usePaintSurface({ width, height, zoom, panning, enabled }: Surfa
         aria-hidden
         data-mask-layer
         className="absolute inset-0 size-full text-accent"
-        style={{ opacity: maskOpacity / 100 }}
+        style={{ opacity: (maskOpacity / 100) * (resting ? RESTING_STRENGTH : 1) }}
       />
       <svg
         aria-hidden

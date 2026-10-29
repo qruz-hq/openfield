@@ -59,6 +59,8 @@ interface MediaProps {
   panAnywhere?: boolean;
   /** Drawn over the image, inside its zoomed and panned box: the Edit tab's mask. */
   layer?: ReactNode;
+  /** Over the image where it sits at fit, unzoomed: labels on its corners (Generating). */
+  pinned?: ReactNode;
   /** Over the whole media area, above the image: what takes the Edit tab's strokes. */
   children?: ReactNode;
   ref?: Ref<MediaHandle>;
@@ -97,6 +99,7 @@ export function Media({
   inset = expanded ? EDGE_TO_EDGE : INSET,
   panAnywhere = false,
   layer,
+  pinned,
   children,
   ref,
 }: MediaProps) {
@@ -254,6 +257,14 @@ export function Media({
               ) : null,
             )}
             {layer}
+          </div>
+        ) : null}
+        {pinned && fitZoom > 0 ? (
+          <div
+            className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2"
+            style={{ width: fitW, height: fitH }}
+          >
+            {pinned}
           </div>
         ) : null}
       </div>

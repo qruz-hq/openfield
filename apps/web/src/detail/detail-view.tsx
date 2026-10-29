@@ -178,6 +178,15 @@ function DetailContent({
   const runner = useEditRunner();
   const { reset: resetRunner } = runner;
 
+  // Generate gives way to Stop and back, and the form goes out of reach while a run goes. Focus on
+  // any of them would fall to the page, out of reach of the view's keys, so it comes back here.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when a run starts or ends.
+  useEffect(() => {
+    const active = document.activeElement;
+    if (!active || active === document.body || active.closest("[inert]"))
+      content.current?.focus({ preventScroll: true });
+  }, [runner.busy]);
+
   // An edit lasts while its image is open: stepping to another image or closing the view drops it,
   // and lets its run go on in the feed. Both ask first (leaveEdit) when there's a mask or a prompt
   // to lose.
@@ -494,10 +503,13 @@ function DetailContent({
     const edit = editing ? editKey(event) : null;
     if (edit) {
       const session = useEditSession.getState();
-      if (edit.kind === "tool") session.setTool(edit.tool);
-      else if (edit.kind === "undo") session.undo();
-      else if (edit.kind === "redo") session.redo();
-      else if (edit.kind === "download") actions.onDownload();
+      // While a run goes the mask and its tools rest, as the toolbar shows: their keys do nothing.
+      if (edit.kind === "download") actions.onDownload();
+      else if (!runner.busy) {
+        if (edit.kind === "tool") session.setTool(edit.tool);
+        else if (edit.kind === "undo") session.undo();
+        else if (edit.kind === "redo") session.redo();
+      }
       event.preventDefault();
       event.stopPropagation();
       return;
@@ -590,6 +602,7 @@ function DetailContent({
               expanded={expanded}
               label={title}
               editing={editing}
+              runner={runner}
               onZoomedChange={setZoomed}
             />
           )}

@@ -1,5 +1,5 @@
 import { type MessageKey, t } from "@openfield/core";
-import { Divider, IconButton, Slider, Tooltip } from "@openfield/ui";
+import { cn, Divider, IconButton, Slider, Tooltip } from "@openfield/ui";
 import {
   Brush,
   Contrast,
@@ -75,8 +75,11 @@ function ToolButton({
   );
 }
 
-/** Image edit / Toolbar: Pan | Brush, Eraser, Lasso, Rectangle | Invert, Clear | Undo, Redo. */
-export function EditToolbar() {
+/**
+ * Image edit / Toolbar: Pan | Brush, Eraser, Lasso, Rectangle | Invert, Clear | Undo, Redo. It rests
+ * at 40% while a run goes or the photo can't take a mask (design DFd2yqIj0C, 6YuF99zpGo).
+ */
+export function EditToolbar({ resting = false }: { resting?: boolean }) {
   const tool = useEditSession((s) => s.tool);
   const mask = useEditSession((s) => s.mask);
   const { setTool, invert, clear, undo, redo } = useEditSession.getState();
@@ -95,7 +98,11 @@ export function EditToolbar() {
     <div
       role="toolbar"
       aria-label={t("edit.tools.label")}
-      className="absolute bottom-16 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-12 bg-elevated p-4 inset-ring inset-ring-border"
+      inert={resting}
+      className={cn(
+        "absolute bottom-16 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-12 bg-elevated p-4 inset-ring inset-ring-border",
+        resting && "opacity-40",
+      )}
     >
       {pick("pan")}
       <Divider orientation="vertical" size={20} />

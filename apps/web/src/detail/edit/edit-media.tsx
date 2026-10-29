@@ -3,6 +3,8 @@ import { type Ref, useEffect, useImperativeHandle, useRef, useState } from "reac
 import { Media, type MediaHandle, type MediaInset } from "../media";
 import { BrushOptions, EditToolbar, ShapeOptions, ZoomControl } from "./chrome";
 import { usePaintSurface, useSpaceHeld } from "./paint-surface";
+import { GeneratingLabel, ResultsStrip } from "./results";
+import type { EditRunner } from "./runner";
 import { useEditSession } from "./session";
 
 // An image in the detail view, on either tab. On Info it's Media as it always was. On Edit the same
@@ -26,17 +28,30 @@ interface ImageMediaProps {
   label: string;
   /** The Edit tab is open on this image. */
   editing: boolean;
+  /** The Edit tab's runs: the results strip and the Generating label show them. */
+  runner: EditRunner;
   onZoomedChange: (zoomed: boolean) => void;
   ref?: Ref<ImageMediaHandle>;
 }
 
-export function ImageMedia({ item, expanded, label, editing, onZoomedChange, ref }: ImageMediaProps) {
+export function ImageMedia({ item, expanded, label, editing, runner, onZoomedChange, ref }: ImageMediaProps) {
   const media = useRef<MediaHandle>(null);
   const [zoom, setZoom] = useState(0);
   const tool = useEditSession((s) => s.tool);
   const spaceHeld = useSpaceHeld(editing);
-  const panning = editing && (tool === "pan" || spaceHeld);
-  const paint = usePaintSurface({ width: item.width, height: item.height, zoom, panning, enabled: editing });
+  // While a run goes the mask stays as it is.
+  const resting = runner.busy;
+  const panning = editing && (tool === "pan" || spaceHeld || resting);
+  const paint = usePaintSurface({
+    width: item.width,
+    height: item.height,
+    zoom,
+    panning,
+    enabled: editing,
+    resting: runner.busy,
+  });
+  // The strip shows a run on its way and what it made; one that came to nothing leaves it out.
+  const results = runner.busy || runner.outcome.kind === "saved";
 
   // The mask is the image's stored size; an edit already open on it carries on.
   useEffect(() => {
@@ -63,8 +78,9 @@ export function ImageMedia({ item, expanded, label, editing, onZoomedChange, ref
         inset={editing ? EDIT_INSET : undefined}
         panAnywhere={panning}
         layer={editing ? paint.layer : null}
+        pinned={editing && runner.busy ? <GeneratingLabel /> : null}
       >
-        {editing ? paint.input : null}
+        {editing && !resting ? paint.input : null}
       </Media>
       {editing ? (
         <>
@@ -73,12 +89,20 @@ export function ImageMedia({ item, expanded, label, editing, onZoomedChange, ref
             onZoomIn={() => media.current?.zoomIn()}
             onZoomOut={() => media.current?.zoomOut()}
           />
-          {tool === "brush" || tool === "eraser" ? (
+          {resting ? null : tool === "brush" || tool === "eraser" ? (
             <BrushOptions />
           ) : tool === "lasso" || tool === "rect" ? (
             <ShapeOptions tool={tool} />
           ) : null}
-          <EditToolbar />
+          <EditToolbar resting={resting} />
+          {results ? (
+            <ResultsStrip
+              originalId={item.id}
+              slots={runner.slots}
+              shown={runner.shown}
+              onShow={runner.show}
+            />
+          ) : null}
         </>
       ) : null}
     </>
