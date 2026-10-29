@@ -189,6 +189,75 @@ describe("strokes", () => {
     );
   });
 
+  test("a stroke that turns or doubles back inside the spacing still reaches as far as the pointer went", () => {
+    /** The pointer moving from `from` to `to` in steps of about `step` px, `to` included. */
+    const drag = (from: Point, to: Point, step: number) => {
+      const n = Math.max(1, Math.round(Math.hypot(to.x - from.x, to.y - from.y) / step));
+      return Array.from({ length: n }, (_, k) => ({
+        x: from.x + ((to.x - from.x) * (k + 1)) / n,
+        y: from.y + ((to.y - from.y) * (k + 1)) / n,
+      }));
+    };
+    for (const size of [24, 128, 512]) {
+      const side = size + 160;
+      const c = centre(80, 80);
+      // Each turn is inside the spacing, so none of these points would pass it on its own.
+      const a = 0.9 * strokeSpacing(size);
+      const step = size < 512 ? 1 : 2;
+      const out = { x: c.x + a, y: c.y };
+      const down = { x: c.x + a, y: c.y + a / 2 };
+      const zigzag = [0, 1, 2, 3, 4, 5].map((k) => ({
+        x: c.x + ((k + 1) * a) / 3,
+        y: c.y + (k % 2 ? 0 : 0.6 * a),
+      }));
+      const paths = {
+        scrub: [c, ...drag(c, out, step), ...drag(out, c, step)],
+        "U-turn": [
+          c,
+          ...drag(c, out, step),
+          ...drag(out, down, step),
+          ...drag(down, { x: c.x, y: down.y }, step),
+        ],
+        zigzag: [c, ...zigzag.flatMap((to, k) => drag(k ? zigzag[k - 1]! : c, to, step))],
+      };
+      for (const [name, path] of Object.entries(paths)) {
+        for (const hardness of [100, 40]) {
+          const editor = new MaskEditor(side, side);
+          editor.beginStroke(brush(size, hardness), path[0]!);
+          for (const point of path.slice(1, -1)) editor.strokeTo(point);
+          editor.endStroke(path.at(-1));
+          const whole = applied(side, side, [{ type: "stroke", brush: brush(size, hardness), points: path }]);
+          if (!editor.mask.data.every((v, i) => v === whole[i])) {
+            throw new Error(`${name} with a ${size}px brush at hardness ${hardness} fell short`);
+          }
+          // Undo and redo replay the points the stroke kept, and land on the same bytes.
+          editor.undo();
+          editor.redo();
+          expect(editor.mask.data).toEqual(whole);
+        }
+      }
+    }
+  });
+
+  test("a slow drag still keeps points about a spacing apart", () => {
+    // Pointer positions arrive in whole screen pixels, so even a straight drag zigzags in image px.
+    for (const [size, zoom] of [
+      [512, 1],
+      [512, 0.25],
+      [128, 1],
+    ] as const) {
+      const editor = new MaskEditor(2200, 1200);
+      editor.beginStroke(brush(size, 100), { x: 100, y: 100 });
+      let segments = 0;
+      for (let t = 1; t <= 1500 * zoom; t++) {
+        const point = { x: 100 + Math.round(t * 0.94) / zoom, y: 100 + Math.round(t * 0.34) / zoom };
+        if (editor.strokeTo(point)) segments++;
+      }
+      editor.endStroke();
+      expect(segments).toBeLessThanOrEqual(Math.ceil(1500 / strokeSpacing(size)) + 2);
+    }
+  });
+
   test("a stroke that starts or wanders off the image paints only what's on it", () => {
     const mask = createMask(40, 40);
     const rect = applyMaskOp(mask, {

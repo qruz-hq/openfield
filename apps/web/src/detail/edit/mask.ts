@@ -111,6 +111,57 @@ export function brushCoverage(distance: number, brush: Brush): number {
 export const strokeSpacing = (size: number) => Math.max(1, clamp(size, MIN_BRUSH_SIZE, MAX_BRUSH_SIZE) / 8);
 
 /**
+ * Image px a skipped point may sit off the kept path before it's kept anyway, so a stroke that turns
+ * or doubles back inside the spacing still reaches as far as the pointer went. Half a pixel up to a
+ * 32px brush, then a sixty-fourth of it. Pointer positions come in whole screen pixels, so a slow
+ * diagonal drag zigzags by half a pixel even at 100% and by more zoomed out: a fixed half pixel
+ * would keep nearly every point of it, and a 512px brush would repaint 260k pixels for each.
+ */
+export const strokeTolerance = (size: number) =>
+  Math.max(0.5, clamp(size, MIN_BRUSH_SIZE, MAX_BRUSH_SIZE) / 64);
+
+/** Points skipped between two kept ones are held to check for turns; past this many the newest is kept. */
+const MAX_SKIPPED = 128;
+
+/** Squared distance from p to the segment a-b. */
+function segmentDistance2(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const length2 = dx * dx + dy * dy;
+  let t = length2 > 0 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / length2 : 0;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const ex = p.x - a.x - t * dx;
+  const ey = p.y - a.y - t * dy;
+  return ex * ex + ey * ey;
+}
+
+/**
+ * Douglas-Peucker: the indexes, in order, of the points strictly between the first and the last
+ * that a path through them needs so every point stays within the tolerance of it. The farthest
+ * point goes in first, so a stroke that doubles back keeps its exact turning point.
+ */
+function corners(points: readonly Point[], tolerance2: number): number[] {
+  const keep: number[] = [];
+  const split = (from: number, to: number) => {
+    let far = -1;
+    let farthest = tolerance2;
+    for (let i = from + 1; i < to; i++) {
+      const d2 = segmentDistance2(points[i]!, points[from]!, points[to]!);
+      if (d2 > farthest) {
+        farthest = d2;
+        far = i;
+      }
+    }
+    if (far < 0) return;
+    split(from, far);
+    keep.push(far);
+    split(far, to);
+  };
+  split(0, points.length - 1);
+  return keep;
+}
+
+/**
  * One capsule of a stroke: every pixel within the brush radius of the segment a-b (a dot when a = b).
  * Painting keeps the higher coverage and erasing the lower, so the joints between segments never
  * build up and painting a stroke in pieces gives the same bytes as painting it whole. Touches only
@@ -487,8 +538,12 @@ interface Snapshot {
 interface LiveStroke {
   brush: Brush;
   tip: Tip;
+  /** The kept points: what gets painted and what the undo step replays. */
   points: Point[];
+  /** Pointer points since the last kept one, too close to it to paint yet. */
+  skipped: Point[];
   spacing: number;
+  tolerance2: number;
   rect: Rect | null;
   cost: number;
 }
@@ -580,11 +635,14 @@ export class MaskEditor {
     const normal = normalizeBrush(brush);
     const tip = tipOf(normal);
     const rect = paintSegment(this.mask, tip, at, at);
+    const tolerance = strokeTolerance(normal.size);
     this.#stroke = {
       brush: normal,
       tip,
       points: [{ x: at.x, y: at.y }],
+      skipped: [],
       spacing: strokeSpacing(normal.size),
+      tolerance2: tolerance * tolerance,
       rect,
       cost: area(rect),
     };
@@ -592,22 +650,25 @@ export class MaskEditor {
     return rect;
   }
 
-  /** Extends the stroke to `at`, unless it's closer to the last point than the brush's spacing. */
+  /**
+   * Extends the stroke to `at`. A point closer to the last kept one than the brush's spacing waits
+   * until a later one shows whether the stroke turned there. Returns the pixels to redraw.
+   */
   strokeTo(at: Point): Rect | null {
     const stroke = this.#stroke;
-    const last = stroke?.points.at(-1);
-    if (!stroke || !last || !finite(at) || Math.hypot(at.x - last.x, at.y - last.y) < stroke.spacing) {
-      return null;
-    }
-    return this.#segment(stroke, at);
+    if (!stroke || !finite(at)) return null;
+    return this.#follow(stroke, { x: at.x, y: at.y }, false);
   }
 
-  /** Ends the stroke, at `at` when given so it finishes where the pointer did, and makes it one undo step. */
+  /**
+   * Ends the stroke at `at`, where the pointer let go, or at the last point it was given, and makes
+   * it one undo step. Returns the pixels to redraw.
+   */
   endStroke(at?: Point): Rect | null {
     const stroke = this.#stroke;
     if (!stroke) return null;
-    const last = stroke.points.at(-1)!;
-    const rect = at && finite(at) && (at.x !== last.x || at.y !== last.y) ? this.#segment(stroke, at) : null;
+    const end = at && finite(at) ? { x: at.x, y: at.y } : stroke.skipped.at(-1);
+    const rect = end ? this.#follow(stroke, end, true) : null;
     this.#stroke = null;
     if (stroke.rect) {
       this.#commit({ type: "stroke", brush: stroke.brush, points: stroke.points }, stroke.rect, stroke.cost);
@@ -659,10 +720,35 @@ export class MaskEditor {
     return step.rect;
   }
 
-  #segment(stroke: LiveStroke, at: Point): Rect | null {
+  /**
+   * One pointer point. Points between kept ones are dropped only while they lie within the
+   * tolerance of the straight line from the last kept point to the newest, so straight runs stay
+   * sparse and a turn or a scrub back keeps the corners it needs.
+   */
+  #follow(stroke: LiveStroke, point: Point, end: boolean): Rect | null {
+    let rect: Rect | null = null;
+    let last = stroke.points.at(-1)!;
+    if (stroke.skipped.some((p) => segmentDistance2(p, last, point) > stroke.tolerance2)) {
+      const run = [last, ...stroke.skipped, point];
+      const kept = corners(run, stroke.tolerance2);
+      for (const i of kept) rect = unionRect(rect, this.#segment(stroke, run[i]!));
+      // The ones after the last corner are within the tolerance of the line from it to `point`.
+      stroke.skipped = run.slice(kept.at(-1)! + 1, -1);
+      last = stroke.points.at(-1)!;
+    }
+    const gap = Math.hypot(point.x - last.x, point.y - last.y);
+    if (end ? gap === 0 : gap < stroke.spacing) {
+      const newest = stroke.skipped.at(-1);
+      if (!end && (newest?.x !== point.x || newest.y !== point.y)) stroke.skipped.push(point);
+      if (stroke.skipped.length < MAX_SKIPPED) return rect;
+    }
+    return unionRect(rect, this.#segment(stroke, point));
+  }
+
+  #segment(stroke: LiveStroke, point: Point): Rect | null {
     const from = stroke.points.at(-1)!;
-    const point = { x: at.x, y: at.y };
     stroke.points.push(point);
+    stroke.skipped = [];
     const rect = paintSegment(this.mask, stroke.tip, from, point);
     stroke.rect = unionRect(stroke.rect, rect);
     stroke.cost += area(rect);
