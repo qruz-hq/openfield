@@ -10,6 +10,7 @@ import {
   resultSlots,
   runOutcome,
   savedNote,
+  tooLargeToMask,
 } from "../src/detail/edit/plan";
 import { useEditSession } from "../src/detail/edit/session";
 import { at, banana, flare, flareEdit, jobSet, lite, pro } from "./fixtures";
@@ -215,5 +216,13 @@ describe("a key for a model that can edit", () => {
     const keyless = [flareEdit, lite].map((m) => ({ ...m, ready: false }));
     expect(anyEditReady([noEdit, ...keyless])).toBe(false);
     expect(anyEditReady([noEdit, ...keyless, { ...lite, ready: true }])).toBe(true);
+  });
+});
+
+describe("an image too large for a mask", () => {
+  test("past 50 megapixels, as the server refuses (masks.tooManyPixels)", () => {
+    expect(tooLargeToMask({ width: 9500, height: 6300 })).toBe(true);
+    expect(tooLargeToMask({ width: 10_000, height: 5000 })).toBe(false);
+    expect(tooLargeToMask({ width: 1152, height: 1536 })).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import { type AssetListItem, newId, type PixelSize, t } from "@openfield/core";
+import { type AssetListItem, MASK_MAX_PIXELS, newId, type PixelSize, t } from "@openfield/core";
 import {
   type EditBase,
   type EditPlan,
@@ -10,7 +10,16 @@ import {
 } from "@openfield/providers/manifest";
 import { Button, cn, Divider, Spinner, Tooltip } from "@openfield/ui";
 import { useQueries } from "@tanstack/react-query";
-import { ArrowUpRight, CircleAlert, CircleCheck, Smartphone, Sparkles, Square } from "lucide-react";
+import {
+  ArrowUpRight,
+  CircleAlert,
+  CircleCheck,
+  ImageOff,
+  type LucideIcon,
+  Smartphone,
+  Sparkles,
+  Square,
+} from "lucide-react";
 import { useState } from "react";
 import { useProviders } from "../../api/hooks/keys";
 import { assetDetailQuery } from "../../api/hooks/library";
@@ -26,7 +35,7 @@ import { askedPrice } from "../../lib/remote-price";
 import { KeepRest } from "./keep-rest";
 import { encodeMaskPng } from "./mask-png";
 import { ModelField } from "./model-field";
-import { anyEditReady, pickEditModel, type SavedNote, savedNote } from "./plan";
+import { anyEditReady, pickEditModel, type SavedNote, savedNote, tooLargeToMask } from "./plan";
 import { PromptCard } from "./prompt-card";
 import type { EditRunner } from "./runner";
 import { useEditSession } from "./session";
@@ -37,7 +46,7 @@ import { useTurnedPhoto } from "./turned";
 // prompt card, the model, the size fields, a divider, Keep the rest, then the footer at the bottom
 // with what became of the last run and Generate. While a run goes the form rests at 45% and
 // Generate gives way to its progress and Stop. A phone photo stored on its side gets a note in
-// place of the form (Image edit / Rotated photo).
+// place of the form (Image edit / Rotated photo), and so does an image too large for a mask.
 
 export interface EditPanelProps {
   item: AssetListItem;
@@ -59,6 +68,9 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   const prompt = useEditSession((s) => s.prompt);
   const references = useEditSession((s) => s.references);
   const turned = useTurnedPhoto(item, true);
+  const tooLarge = tooLargeToMask(item);
+  // A note stands in for the form: the image can't take a mask.
+  const noted = turned || tooLarge;
   // Reading the mask into a PNG, before the run is asked for.
   const [preparing, setPreparing] = useState(false);
 
@@ -104,7 +116,7 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   const saved = runner.outcome.kind === "saved";
 
   const submit = () => {
-    if (state.kind !== "ready" || !model || !resolved || busy || turned) return;
+    if (state.kind !== "ready" || !model || !resolved || busy || noted) return;
     const session = useEditSession.getState();
     const editor = session.editor;
     if (!editor) return;
@@ -153,7 +165,7 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
 
   const note = savedNote(runner.outcome, runner.notKept);
   const hint =
-    busy || turned
+    busy || noted
       ? null
       : state.kind === "blocked"
         ? state.reason
@@ -161,7 +173,7 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
           ? t("composer.generate.addKeyFirst")
           : null;
   const opened = runner.shown ?? runner.slots.find((s) => s.state === "done")?.assetId ?? null;
-  const ready = state.kind === "ready" && !turned;
+  const ready = state.kind === "ready" && !noted;
   const estimate = state.kind === "ready" ? state.estimate : undefined;
   const tip = ready ? tooltipFor(estimate, generateSpeed) : undefined;
   const generate = (
@@ -179,7 +191,23 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   return (
     <>
       {turned ? (
-        <RotatedPhoto assetId={item.id} />
+        <CantMaskNote
+          assetId={item.id}
+          icon={Smartphone}
+          title={t("edit.turned.title")}
+          body={t("edit.turned.body")}
+        />
+      ) : tooLarge ? (
+        <CantMaskNote
+          assetId={item.id}
+          icon={ImageOff}
+          title={t("edit.tooLarge.title")}
+          body={t("edit.tooLarge.body", {
+            width: item.width,
+            height: item.height,
+            megapixels: MASK_MAX_PIXELS / 1_000_000,
+          })}
+        />
       ) : (
         <>
           <PromptCard model={model} resting={busy} />
@@ -191,11 +219,11 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
       )}
       {/* Footer: a column at the panel's bottom, 10 apart. */}
       <div className="flex w-full flex-1 flex-col justify-end gap-10">
-        {note && !busy && !turned ? <SavedNoteRow note={note} /> : null}
+        {note && !busy && !noted ? <SavedNoteRow note={note} /> : null}
         {hint ? (
           <p className="w-full text-center text-caption font-normal text-text-tertiary">{hint}</p>
         ) : null}
-        {saved && opened && !busy && !turned ? (
+        {saved && opened && !busy && !noted ? (
           <Button
             variant="secondary"
             size="l"
@@ -250,22 +278,31 @@ function Working({ count, onStop }: { count: number; onStop: () => void }) {
 
 /**
  * Image edit / Rotated photo, in place of the form: a phone photo stored on its side can't take a
- * mask yet (masks.turned), though it can still go into a new image as a reference.
+ * mask yet (masks.turned), though it can still go into a new image as a reference. An image past
+ * the mask's size limit says so the same way.
  */
-function RotatedPhoto({ assetId }: { assetId: string }) {
+function CantMaskNote({
+  assetId,
+  icon: Icon,
+  title,
+  body,
+}: {
+  assetId: string;
+  icon: LucideIcon;
+  title: string;
+  body: string;
+}) {
   const addReference = useAddReference();
   return (
     <div className="flex w-full shrink-0 flex-col items-center rounded-14 bg-surface px-16 py-28">
       {/* Message */}
       <div className="flex w-full flex-col items-center gap-12">
         <div className="flex size-40 items-center justify-center rounded-full bg-elevated-2">
-          <Smartphone size={18} aria-hidden className="text-text-tertiary" />
+          <Icon size={18} aria-hidden className="text-text-tertiary" />
         </div>
         <div className="flex w-full flex-col items-center gap-4">
-          <p className="w-full text-center text-body-strong text-text-primary">{t("edit.turned.title")}</p>
-          <p className="w-full text-center text-small leading-[1.45] text-text-secondary">
-            {t("edit.turned.body")}
-          </p>
+          <p className="w-full text-center text-body-strong text-text-primary">{title}</p>
+          <p className="w-full text-center text-small leading-[1.45] text-text-secondary">{body}</p>
         </div>
         <Button variant="ghost" size="s" onClick={() => addReference(assetId)}>
           {t("edit.turned.useAsReference")}

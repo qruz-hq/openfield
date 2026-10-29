@@ -13,6 +13,7 @@ import {
   SplitPins,
 } from "./compare";
 import { usePaintSurface, useSpaceHeld } from "./paint-surface";
+import { tooLargeToMask } from "./plan";
 import { GeneratingLabel, ResultsStrip } from "./results";
 import type { EditRunner } from "./runner";
 import { useEditSession } from "./session";
@@ -52,28 +53,30 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
   const tool = useEditSession((s) => s.tool);
   const spaceHeld = useSpaceHeld(editing);
   const turned = useTurnedPhoto(item, editing);
+  const tooLarge = tooLargeToMask(item);
   // A new image picked in the results strip: Before and after, or Difference, in place of the mask.
   const compared = editing ? runner.compared : null;
   const [mode, setMode] = useState<CompareMode>("split");
   const [split, setSplit] = useState(SPLIT_START);
-  // While a run goes, and on a photo that can't take a mask, the mask stays as it is.
-  const resting = runner.busy || turned;
+  // While a run goes, and on an image that can't take a mask, the mask stays as it is.
+  const resting = runner.busy || turned || tooLarge;
   const panning = editing && !compared && (tool === "pan" || spaceHeld || resting);
   const paint = usePaintSurface({
     width: item.width,
     height: item.height,
     zoom,
     panning,
-    enabled: editing,
+    enabled: editing && !tooLarge,
     resting: runner.busy,
   });
   // The strip shows a run on its way and what it made; one that came to nothing leaves it out.
   const results = runner.busy || runner.outcome.kind === "saved";
 
-  // The mask is the image's stored size; an edit already open on it carries on.
+  // The mask is the image's stored size; an edit already open on it carries on. One too large
+  // for a mask never gets one.
   useEffect(() => {
-    if (editing) useEditSession.getState().start(item.id, item.width, item.height);
-  }, [editing, item.id, item.width, item.height]);
+    if (editing && !tooLarge) useEditSession.getState().start(item.id, item.width, item.height);
+  }, [editing, tooLarge, item.id, item.width, item.height]);
 
   useImperativeHandle(ref, () => ({
     zoomIn: () => media.current?.zoomIn(),
@@ -101,7 +104,7 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
             ) : (
               <DifferenceLayer item={item} resultId={compared} />
             )
-          ) : editing && !turned ? (
+          ) : editing && !turned && !tooLarge ? (
             paint.layer
           ) : null
         }

@@ -4,6 +4,7 @@ import {
   isEarly,
   isTerminalState,
   type JobSetWithJobs,
+  MASK_MAX_PIXELS,
   type ModelKey,
   type ModelListItem,
   type ProviderSummary,
@@ -43,6 +44,13 @@ export function anyEditReady(models: readonly ModelListItem[]): boolean {
   const { masked, whole } = modelsForEdit(models);
   return [...masked, ...whole].some((m) => m.ready);
 }
+
+/**
+ * Past the server's limit for a mask (masks.tooManyPixels): the Edit tab says so up front rather
+ * than after the mask is painted, and never holds a mask that size.
+ */
+export const tooLargeToMask = (image: { width: number; height: number }) =>
+  image.width * image.height > MASK_MAX_PIXELS;
 
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
 

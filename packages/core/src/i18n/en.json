@@ -2228,6 +2228,10 @@
       "title": "This photo can't be edited yet",
       "body": "Your phone saved it sideways, so what you paint wouldn't line up with the photo.",
       "useAsReference": "Use as reference"
+    },
+    "tooLarge": {
+      "title": "This image is too large to edit",
+      "body": "It's {width} × {height}. Edits with a mask take images up to {megapixels} megapixels."
     }
   },
   "spendGuard": {
