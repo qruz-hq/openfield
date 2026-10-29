@@ -587,14 +587,42 @@ describe("history", () => {
     return { type: "clear" };
   }
 
-  for (const options of [
+  /**
+   * A stroke as the pointer paints it: its points thinned to at least the spacing apart, which the
+   * editor keeps, and a couple of points on the way to each, inside the spacing, which it skips.
+   * The thinned stroke is what the layer should match.
+   */
+  function pointerPath(op: MaskOp & { type: "stroke" }, next: () => number) {
+    const spacing = strokeSpacing(normalizeBrush(op.brush).size);
+    const kept: Point[] = [op.points[0]!];
+    for (const p of op.points.slice(1)) {
+      const last = kept.at(-1)!;
+      if (Math.hypot(p.x - last.x, p.y - last.y) >= spacing) kept.push(p);
+    }
+    const pointer: Point[] = [kept[0]!];
+    for (let k = 1; k < kept.length; k++) {
+      const a = kept[k - 1]!;
+      const b = kept[k]!;
+      const length = Math.hypot(b.x - a.x, b.y - a.y);
+      const along = [next(), next()].map((u) => (u * 0.99 * spacing) / length).sort((p, q) => p - q);
+      for (const t of along) pointer.push({ x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) });
+      pointer.push(b);
+    }
+    return { stroke: { ...op, points: kept }, pointer };
+  }
+
+  const histories = [
     {},
     { checkpointSteps: 3, maxSnapshots: 2 },
     { checkpointSteps: 4, checkpointPixels: 4000, maxSnapshots: 3 },
     { checkpointSteps: 2, checkpointPixels: 1, maxSnapshots: 2 },
-  ]) {
-    test(`undo and redo land on the same bytes as applying the steps directly ${JSON.stringify(options)}`, () => {
-      const next = random(7 + JSON.stringify(options).length);
+  ];
+  // Several seeds, so passing never hangs on one lucky sequence.
+  for (const [options, seed] of histories.flatMap((options) =>
+    [7, 1001, 3003].map((seed) => [options, seed] as const),
+  )) {
+    test(`undo and redo land on the same bytes as applying the steps directly ${JSON.stringify(options)} seed ${seed}`, () => {
+      const next = random(seed + JSON.stringify(options).length);
       const editor = new MaskEditor(W, H, options);
       // What the layer should hold: every step applied so far, from the very start.
       const done: MaskOp[] = [];
@@ -611,13 +639,14 @@ describe("history", () => {
           rect = editor.redo();
           done.push(undone.pop()!);
         } else {
-          const op = randomOp(next);
+          let op = randomOp(next);
           if (op.type === "stroke" && next() < 0.5) {
-            // Live, the way the pointer paints it.
-            const [first, ...rest] = op.points;
-            rect = editor.beginStroke(op.brush, first!);
-            for (const point of rest) rect = unionOf(rect, editor.strokeTo(point));
-            editor.endStroke();
+            // Live, the way the pointer paints it, ending where the pointer lets go.
+            const { stroke, pointer } = pointerPath(op, next);
+            op = stroke;
+            rect = editor.beginStroke(op.brush, pointer[0]!);
+            for (const point of pointer.slice(1, -1)) rect = unionOf(rect, editor.strokeTo(point));
+            rect = unionOf(rect, editor.endStroke(pointer.at(-1)));
           } else {
             rect = editor.apply(op);
           }
