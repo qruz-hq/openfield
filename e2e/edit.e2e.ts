@@ -243,19 +243,26 @@ test("on Edit the view's own keys stay quiet, and Esc drops the tool before it a
   await page.goto(`/assets?asset=${id}&tab=edit`);
   await expect(toolbar(page)).toBeVisible();
 
-  // F would favourite and D download on Info; here F does nothing and D is the brush.
+  // F would favourite and D download on Info; here F does nothing and D is the brush. Nothing
+  // asks to favourite it, and no download starts.
   await page.keyboard.press("h");
   await expect(tool(page, "Pan")).toHaveAttribute("aria-pressed", "true");
-  let downloaded = false;
-  page.on("download", () => {
-    downloaded = true;
+  const favourited: string[] = [];
+  page.on("request", (r) => {
+    if (r.method() !== "GET" && r.url().includes("/api/assets")) favourited.push(r.url());
   });
+  const download = page.waitForEvent("download", { timeout: 1500 }).then(
+    () => true,
+    () => false,
+  );
   await page.keyboard.press("f");
   await page.keyboard.press("d");
   await expect(tool(page, "Brush")).toHaveAttribute("aria-pressed", "true");
+  expect(await download).toBe(false);
+  // A round trip after the keys, so a request they sent would be in by now.
   const asset = await api<{ isFavourite: boolean }>(page.request, token, "GET", `/api/assets/${id}`);
   expect(asset.isFavourite).toBe(false);
-  expect(downloaded).toBe(false);
+  expect(favourited).toEqual([]);
 
   // Space held pans the image whatever the tool, and painting while it's held paints nothing.
   const layer = maskLayer(page);
@@ -422,6 +429,18 @@ test("Generate runs the painted edit at its price, and the new image comes from 
   await expect(generate).toBeEnabled();
   await expect(generate).toContainText(/~\$\d/);
 
+  // Feather and Expand start at 8 and 4; a step up each goes with the edit.
+  const feather = panel.getByRole("slider", { name: "Feather" });
+  const expand = panel.getByRole("slider", { name: "Expand" });
+  await expect(feather).toHaveAttribute("aria-valuenow", "8");
+  await expect(expand).toHaveAttribute("aria-valuenow", "4");
+  await feather.focus();
+  await page.keyboard.press("ArrowRight");
+  await expand.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(feather).toHaveAttribute("aria-valuenow", "9");
+  await expect(expand).toHaveAttribute("aria-valuenow", "5");
+
   // It saves the mask, then asks for the edit with it, kept to the painted area.
   const masks = page.waitForResponse(
     (r) => r.url().endsWith("/api/masks") && r.request().method() === "POST",
@@ -439,7 +458,7 @@ test("Generate runs the painted edit at its price, and the new image comes from 
     op: "inpaint",
     source: "detail_editor",
     base: { assetId: id },
-    mask: { assetId: saved.asset.id, composite: true, featherPx: 8, expandPx: 4 },
+    mask: { assetId: saved.asset.id, composite: true, featherPx: 9, expandPx: 5 },
   });
 
   // The new image lands in the results strip, and the note says the original is untouched.
@@ -483,7 +502,7 @@ test("Generate runs the painted edit at its price, and the new image comes from 
   await expect(info.getByText("Edited from", { exact: true })).toBeVisible();
   await expect(info.getByText("Prompt", { exact: true })).toHaveCount(0);
   await expect(info.getByText("The original, unchanged")).toBeVisible();
-  await expect(info.getByText("Feather 8 px · Expand 4 px")).toBeVisible();
+  await expect(info.getByText("Feather 9 px · Expand 5 px")).toBeVisible();
   await expect(info.getByText("Make the berries pale and dried", { exact: true })).toBeVisible();
   await expect(page.locator("[data-mask-thumb]")).toBeVisible();
 
@@ -503,7 +522,11 @@ test("Generate runs the painted edit at its price, and the new image comes from 
   await expect(panel.getByRole("textbox", { name: "What to change" })).toHaveValue(
     "Make the berries pale and dried",
   );
-  await expect(panel.getByRole("slider", { name: "Feather" })).toHaveAttribute("aria-valuenow", "8");
+  // The settings that made it, not the defaults.
+  await expect(feather).toHaveAttribute("aria-valuenow", "9");
+  await expect(expand).toHaveAttribute("aria-valuenow", "5");
+  await expect(panel.getByRole("switch", { name: "Keep the rest of the image" })).toBeChecked();
+  await expect(panel.getByRole("button", { name: "Model" })).toContainText(picked);
 
   // The mask is already saved, so Generate sends it by its id.
   resaved = false;
@@ -609,7 +632,8 @@ test("from a feed tile: a box and a stroke, the words, the price, and the new im
   const token = await sessionToken(page.request);
   await api(page.request, token, "PUT", "/api/settings/keys/openai", { apiKey: FAKE_KEY });
   const prompt = unique("a linen dress");
-  const id = await makeImage(page.request, token, prompt);
+  // A portrait, so a mask with its width and height the wrong way round can't pass.
+  const id = await makeImage(page.request, token, prompt, "3:4");
   const base = await api<{ asset: { width: number; height: number } }>(
     page.request,
     token,
@@ -646,19 +670,28 @@ test("from a feed tile: a box and a stroke, the words, the price, and the new im
   await expect.poll(() => tintAt(page, 0.25, 0.25)).toBe(255);
   expect(await tintAt(page, 0.7, 0.25)).toBe(0);
 
+  // The image's own shape and size.
+  const { width, height } = base.asset;
+  expect(height).toBeGreaterThan(width);
+  await expect(panel.getByText("3:4, same as the image")).toBeVisible();
+  await expect(
+    panel.getByText(`New image keeps the original size, ${width} × ${height}.`, { exact: true }),
+  ).toBeVisible();
+
   // The words, typed: their letters stay in the prompt and leave the box in hand.
   const words = unique("Make the dress deep red");
   await panel.getByRole("textbox", { name: "What to change" }).pressSequentially(words);
   await expect(panel.getByRole("textbox", { name: "What to change" })).toHaveValue(words);
   await expect(tool(page, "Rectangle")).toHaveAttribute("aria-pressed", "true");
 
-  // GPT Image 2.5 Sunburst takes the mask. Medium at 1:1 and 1K is 439 output tokens at $30 per
-  // million, and the 768 px image going in counts as 1,024 tokens at $8 per million: about $0.021.
+  // GPT Image 2.5 Sunburst takes the mask. Medium at 3:4 and 1K is 768 × 1024, 301 output tokens
+  // at $30 per million, and the 576 × 768 image going in counts as 768 tokens at $8 per million:
+  // about $0.015.
   await expect(panel.getByRole("button", { name: "Model" })).toContainText("GPT Image 2.5 Sunburst");
   const generate = generateIn(page);
-  await expect(generate).toHaveText(/^Generate\s*~\$0\.021$/);
+  await expect(generate).toHaveText(/^Generate\s*~\$0\.015$/);
   await generate.hover();
-  await expect(page.getByRole("tooltip")).toContainText("1 × $0.013 + the image you're editing ($0.008)");
+  await expect(page.getByRole("tooltip")).toContainText("1 × $0.009 + the image you're editing ($0.006)");
 
   // The mask goes up as a PNG the image's exact size: alpha 0 where painted, 255 everywhere else.
   const savedMask = page.waitForResponse(
