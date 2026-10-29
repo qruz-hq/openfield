@@ -987,17 +987,23 @@ test("while it runs the form rests and Stop stops it; a run that fails keeps the
   await again;
 });
 
-/** A JPEG that says it's stored turned (EXIF orientation 6), as a phone saves a portrait photo. */
-async function turnedJpeg(page: Page): Promise<Buffer> {
-  const base64 = await page.evaluate(() => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 64;
-    canvas.height = 48;
-    const context = canvas.getContext("2d")!;
-    context.fillStyle = "#c87850";
-    context.fillRect(0, 0, 64, 48);
-    return canvas.toDataURL("image/jpeg").split(",")[1]!;
-  });
+/**
+ * A JPEG that says it's stored turned (EXIF orientation 6), as a phone saves a portrait photo.
+ * `padding` puts that many bytes of comments ahead of the tag, past where the Edit tab reads.
+ */
+async function turnedJpeg(page: Page, { width = 64, height = 48, padding = 0 } = {}): Promise<Buffer> {
+  const base64 = await page.evaluate(
+    ([w, h]) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = w!;
+      canvas.height = h!;
+      const context = canvas.getContext("2d")!;
+      context.fillStyle = "#c87850";
+      context.fillRect(0, 0, w!, h!);
+      return canvas.toDataURL("image/jpeg").split(",")[1]!;
+    },
+    [width, height],
+  );
   const jpeg = Buffer.from(base64, "base64");
   // TIFF, big-endian: one IFD entry, Orientation (0x0112), SHORT, 1, value 6.
   const tiff = Buffer.from([
@@ -1008,22 +1014,33 @@ async function turnedJpeg(page: Page): Promise<Buffer> {
     Buffer.from([0xff, 0xe1, (payload.length + 2) >> 8, (payload.length + 2) & 0xff]),
     payload,
   ]);
-  return Buffer.concat([jpeg.subarray(0, 2), app1, jpeg.subarray(2)]);
+  // Comment segments (COM), each at most 64 KB.
+  const comments: Buffer[] = [];
+  for (let left = padding; left > 0; left -= 60_000) {
+    const size = Math.min(left, 60_000);
+    comments.push(Buffer.from([0xff, 0xfe, (size + 2) >> 8, (size + 2) & 0xff]), Buffer.alloc(size, 0x20));
+  }
+  return Buffer.concat([jpeg.subarray(0, 2), ...comments, app1, jpeg.subarray(2)]);
+}
+
+/** Uploads a file through the API, as the library's Upload does. Returns the new image's id. */
+async function upload(page: Page, name: string, buffer: Buffer): Promise<string> {
+  const token = await sessionToken(page.request);
+  const res = await page.request.post("/api/uploads", {
+    headers: { [SESSION_HEADER]: token },
+    multipart: { file: { name, mimeType: "image/jpeg", buffer } },
+  });
+  expect(res.ok(), await res.text()).toBe(true);
+  return ((await res.json()) as { asset: { id: string } }).asset.id;
 }
 
 test("a phone photo stored on its side says it can't be edited yet, and can still be a reference", async ({
   page,
 }) => {
-  const token = await sessionToken(page.request);
   await page.goto("/assets");
-  const res = await page.request.post("/api/uploads", {
-    headers: { [SESSION_HEADER]: token },
-    multipart: { file: { name: "IMG_4821.jpg", mimeType: "image/jpeg", buffer: await turnedJpeg(page) } },
-  });
-  expect(res.ok(), await res.text()).toBe(true);
-  const { asset } = (await res.json()) as { asset: { id: string } };
+  const id = await upload(page, "IMG_4821.jpg", await turnedJpeg(page));
 
-  await page.goto(`/assets?asset=${asset.id}&tab=edit`);
+  await page.goto(`/assets?asset=${id}&tab=edit`);
   const panel = panelOf(page);
   await expect(panel.getByText("This photo can't be edited yet")).toBeVisible();
   // Stored 64 × 48 on its side, it shows upright, in a box the same way round.
@@ -1042,4 +1059,33 @@ test("a phone photo stored on its side says it can't be edited yet, and can stil
   await expect(toolbar(page)).toHaveCSS("opacity", "0.4");
   await panel.getByRole("button", { name: "Use as reference" }).click();
   await expect(page.getByText("Added as a reference.")).toBeVisible();
+});
+
+test("a turned photo the Edit tab can't read ahead is turned away by the server, and says so the same way", async ({
+  page,
+}) => {
+  const token = await sessionToken(page.request);
+  await api(page.request, token, "PUT", "/api/settings/keys/openai", { apiKey: FAKE_KEY });
+  await api(page.request, token, "PUT", "/api/settings/keys/google", { apiKey: FAKE_KEY });
+  await page.goto("/assets");
+  // Its tag sits past the first 128 KB, where the Edit tab stops reading.
+  const id = await upload(
+    page,
+    "IMG_5120.jpg",
+    await turnedJpeg(page, { width: 320, height: 240, padding: 150_000 }),
+  );
+
+  await page.goto(`/assets?asset=${id}&tab=edit`);
+  await expect(toolbar(page)).toBeVisible();
+  const panel = panelOf(page);
+  await paintAndDescribe(page, "A warmer orange");
+  const refused = page.waitForResponse((r) => r.url().endsWith("/api/masks") && r.status() === 400);
+  await generateIn(page).click();
+  await refused;
+  await expect(panel.getByText("This photo can't be edited yet")).toBeVisible();
+  await expect(panel.getByRole("textbox", { name: "What to change" })).toHaveCount(0);
+  await expect(generateIn(page)).toBeDisabled();
+  await expect(toolbar(page)).toHaveCSS("opacity", "0.4");
+  // The note says it, not a toast.
+  await expect(page.getByText(/saved on its side/)).toHaveCount(0);
 });
