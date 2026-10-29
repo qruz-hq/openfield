@@ -81,9 +81,10 @@ function ToolButton({
 
 /**
  * Image edit / Toolbar: Pan | Brush, Eraser, Lasso, Rectangle | Invert, Clear | Undo, Redo. It rests
- * at 40% while a run goes or the photo can't take a mask (design DFd2yqIj0C, 6YuF99zpGo).
+ * at 40% while a run goes or the photo can't take a mask (design DFd2yqIj0C, 6YuF99zpGo). The
+ * canvas's mask window places it 12 from its stage's bottom (`className`).
  */
-export function EditToolbar({ resting = false }: { resting?: boolean }) {
+export function EditToolbar({ resting = false, className }: { resting?: boolean; className?: string }) {
   const tool = useEditSession((s) => s.tool);
   const mask = useEditSession((s) => s.mask);
   const { setTool, invert, clear, undo, redo } = useEditSession.getState();
@@ -106,6 +107,7 @@ export function EditToolbar({ resting = false }: { resting?: boolean }) {
       className={cn(
         "absolute bottom-16 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-12 bg-elevated p-4 inset-ring inset-ring-border",
         resting && "opacity-40",
+        className,
       )}
     >
       {pick("pan")}
@@ -242,18 +244,24 @@ export function ZoomControl({
   zoom,
   onZoomIn,
   onZoomOut,
+  className,
 }: {
   /** Screen px per image px. */
   zoom: number;
   onZoomIn: () => void;
   onZoomOut: () => void;
+  /** Where it sits, when not 16 from the bottom left. */
+  className?: string;
 }) {
   const overlayButton =
     "text-overlay-fg-muted not-disabled:hover:bg-overlay-line not-disabled:hover:text-overlay-fg";
   return (
     <fieldset
       aria-label={t("edit.zoom.label")}
-      className="absolute bottom-16 left-16 flex h-36 items-center rounded-10 bg-overlay px-4 inset-ring inset-ring-overlay-line backdrop-blur-panel"
+      className={cn(
+        "absolute bottom-16 left-16 flex h-36 items-center rounded-10 bg-overlay px-4 inset-ring inset-ring-overlay-line backdrop-blur-panel",
+        className,
+      )}
     >
       <IconButton
         icon={Minus}

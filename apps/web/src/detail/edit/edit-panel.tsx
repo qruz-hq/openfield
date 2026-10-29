@@ -1,4 +1,11 @@
-import { type AssetListItem, MASK_MAX_PIXELS, newId, type PixelSize, t } from "@openfield/core";
+import {
+  type AssetListItem,
+  MASK_MAX_PIXELS,
+  type ModelListItem,
+  newId,
+  type PixelSize,
+  t,
+} from "@openfield/core";
 import {
   type EditBase,
   type EditPlan,
@@ -21,6 +28,7 @@ import {
   Square,
 } from "lucide-react";
 import { useState } from "react";
+import { useNavigate } from "react-router";
 import { useProviders } from "../../api/hooks/keys";
 import { assetDetailQuery } from "../../api/hooks/library";
 import { useModels } from "../../api/hooks/models";
@@ -38,7 +46,7 @@ import { ModelField } from "./model-field";
 import { anyEditReady, pickEditModel, type SavedNote, savedNote, tooLargeToMask } from "./plan";
 import { PromptCard } from "./prompt-card";
 import type { EditRunner } from "./runner";
-import { useEditSession } from "./session";
+import { leaveEdit, useEditSession } from "./session";
 import { SizeFields } from "./size-fields";
 import { useTurnedPhoto } from "./turned";
 
@@ -67,6 +75,10 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   const masked = useEditSession((s) => s.mask.changes);
   const prompt = useEditSession((s) => s.prompt);
   const references = useEditSession((s) => s.references);
+  const composite = useEditSession((s) => s.composite);
+  const featherPx = useEditSession((s) => s.featherPx);
+  const expandPx = useEditSession((s) => s.expandPx);
+  const navigate = useNavigate();
   const turned = useTurnedPhoto(item, true);
   const tooLarge = tooLargeToMask(item);
   // A note stands in for the form: the image can't take a mask.
@@ -114,6 +126,14 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
 
   const busy = runner.busy || preparing;
   const saved = runner.outcome.kind === "saved";
+  const session = useEditSession.getState();
+
+  const pickModel = (next: ModelListItem) => {
+    // A model whose company has no key leads to where the key goes, as in the composer (§3.4.1).
+    // That leaves the edit, so it asks first when a mask or a prompt would be lost.
+    if (!next.ready) leaveEdit(() => navigate("/settings/api-keys", { state: { focusKey: true } }));
+    else session.setModel(next.key);
+  };
 
   const submit = () => {
     if (state.kind !== "ready" || !model || !resolved || busy || noted) return;
@@ -211,10 +231,36 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
       ) : (
         <>
           <PromptCard model={model} resting={busy} />
-          <ModelField models={models} selected={model} base={base} resting={busy} />
-          <SizeFields model={model} resolved={resolved} plan={plan} speed={speed} resting={busy} />
+          <ModelField
+            models={models}
+            selected={model}
+            base={base}
+            composite={composite}
+            resting={busy}
+            onPick={pickModel}
+          />
+          <SizeFields
+            model={model}
+            resolved={resolved}
+            base={base}
+            masked={masked}
+            composite={composite}
+            speed={speed}
+            resting={busy}
+            onValues={session.setValues}
+            onBatch={session.setBatch}
+          />
           <Divider className="w-full" />
-          <KeepRest resting={busy} afterRun={saved} />
+          <KeepRest
+            composite={composite}
+            featherPx={featherPx}
+            expandPx={expandPx}
+            resting={busy}
+            afterRun={saved}
+            onComposite={session.setComposite}
+            onFeatherPx={session.setFeatherPx}
+            onExpandPx={session.setExpandPx}
+          />
         </>
       )}
       {/* Footer: a column at the panel's bottom, 10 apart. */}

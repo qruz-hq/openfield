@@ -1,17 +1,33 @@
 import { MASK_COMPOSITE_MAX_PX, t } from "@openfield/core";
 import { cn, Field, SliderRow, Switch } from "@openfield/ui";
-import { useEditSession } from "./session";
 
 // Image edit / Keep the rest (design ZwaJzzNsbg, and / Off): put the original back outside the mask,
 // on by default, with how far to grow the mask and soften its edge. Off, the model's whole result
 // is kept and Feather and Expand rest at 40%. Once new images are in, their words say they apply
-// to the next Generate.
+// to the next Generate. The canvas Edit node's settings use it too (design MZI3JqbHJr).
 
-export function KeepRest({ resting, afterRun }: { resting: boolean; afterRun: boolean }) {
-  const composite = useEditSession((s) => s.composite);
-  const featherPx = useEditSession((s) => s.featherPx);
-  const expandPx = useEditSession((s) => s.expandPx);
-  const { setComposite, setFeatherPx, setExpandPx } = useEditSession.getState();
+export interface KeepRestProps {
+  composite: boolean;
+  featherPx: number;
+  expandPx: number;
+  resting: boolean;
+  /** New images are in: Feather and Expand say they apply to the next Generate. */
+  afterRun: boolean;
+  onComposite: (composite: boolean) => void;
+  onFeatherPx: (px: number) => void;
+  onExpandPx: (px: number) => void;
+}
+
+export function KeepRest({
+  composite,
+  featherPx,
+  expandPx,
+  resting,
+  afterRun,
+  onComposite,
+  onFeatherPx,
+  onExpandPx,
+}: KeepRestProps) {
   // Named by its field's label.
   const slider = (value: number, onChange: (px: number) => void) => (
     <SliderRow
@@ -35,21 +51,21 @@ export function KeepRest({ resting, afterRun }: { resting: boolean; afterRun: bo
         description={t(composite ? "edit.keep.on" : "edit.keep.off")}
         className="px-2 py-4"
       >
-        <Switch checked={composite} onCheckedChange={setComposite} />
+        <Switch checked={composite} onCheckedChange={onComposite} />
       </Field>
       <Field
         label={t("edit.keep.feather")}
         description={t(afterRun ? "edit.keep.featherNext" : "edit.keep.featherHint")}
         className={cn("px-2 py-4", !composite && "opacity-40")}
       >
-        {slider(featherPx, setFeatherPx)}
+        {slider(featherPx, onFeatherPx)}
       </Field>
       <Field
         label={t("edit.keep.expand")}
         description={t(afterRun ? "edit.keep.expandNext" : "edit.keep.expandHint")}
         className={cn("px-2 py-4", !composite && "opacity-40")}
       >
-        {slider(expandPx, setExpandPx)}
+        {slider(expandPx, onExpandPx)}
       </Field>
     </div>
   );

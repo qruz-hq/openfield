@@ -2193,6 +2193,7 @@
       "images": "Images",
       "aspect": "Aspect ratio",
       "aspectValue": "{ratio}, same as the image",
+      "aspectSame": "Same as the image",
       "keepsSize": "New image keeps the original size, {width} × {height}.",
       "comesOut": "New image comes out at {width} × {height}."
     },
