@@ -70,6 +70,8 @@ export interface PortSpec {
    * puts them and don't move when it ships (Generate's style input, design Y5jjx).
    */
   keepSlot?: boolean;
+  /** Drawn with the Images icon rather than its type's own: Edit's references (design BDnK6). */
+  glyph?: "images";
 }
 
 /** Compatibility (§7.6). "coerce" is image into mask: luminance becomes alpha, white is the edit area. */

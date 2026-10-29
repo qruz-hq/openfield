@@ -3,7 +3,7 @@ import { wouldCreateCycle } from "@openfield/canvas/store/graph";
 import { t } from "@openfield/core";
 import { cn, Tooltip } from "@openfield/ui";
 import { Handle, Position } from "@xyflow/react";
-import { Film, Image, type LucideIcon, Palette, SquareDashed, Type } from "lucide-react";
+import { Film, Image, Images, type LucideIcon, Palette, SquareDashed, Type } from "lucide-react";
 import { memo } from "react";
 import { useCanvas } from "../../store/context";
 import type { CanvasState } from "../../store/types";
@@ -89,7 +89,7 @@ export interface PortProps {
 
 export const Port = memo(function Port({ nodeId, port, offset, off, stacked, connectable }: PortProps) {
   const look = useCanvas((s) => lookFor(s, nodeId, port));
-  const Icon = ICONS[port.type] ?? Image;
+  const Icon = port.glyph === "images" ? Images : (ICONS[port.type] ?? Image);
   const name = portName(port);
   const input = port.direction === "in";
   return (

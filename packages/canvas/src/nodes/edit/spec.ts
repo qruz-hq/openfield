@@ -121,6 +121,7 @@ export const EDIT_PORTS: readonly PortSpec[] = [
     items: "one",
     required: false,
     binding: { to: "references", role: "subject" },
+    glyph: "images",
   },
   {
     id: "images",
