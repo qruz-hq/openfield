@@ -155,13 +155,23 @@ export function weightsFromAlpha(
 /**
  * The edit laid over the original by `weights` (one per pixel, from weightsFromAlpha). Both images
  * are raw pixels of the same size, layout and depth, `channels` values per pixel. Where the weight
- * is 0 the original's values are copied as they are, and where it's 255 the edit's.
+ * is 0 the original's values are copied as they are, and where it's 255 the edit's. With `alpha`,
+ * the last channel is straight (unpremultiplied) alpha, and colours in between are mixed by how
+ * opaque each side is, so an edit fading over a transparent original keeps its own colour rather
+ * than darkening towards the black under the transparency.
  */
-export function blendPixels<T extends Pixels>(base: T, result: T, weights: Uint8Array, channels: number): T {
+export function blendPixels<T extends Pixels>(
+  base: T,
+  result: T,
+  weights: Uint8Array,
+  channels: number,
+  opts: { alpha?: boolean } = {},
+): T {
   checkLength(base.length, weights.length, 1, channels);
   if (result.length !== base.length)
     throw new RangeError(`The edit has ${result.length} values, the original ${base.length}`);
   const out = base.slice() as T;
+  const colours = opts.alpha ? channels - 1 : channels;
   for (let p = 0, i = 0; p < weights.length; p++, i += channels) {
     const w = weights[p]!;
     if (w === 0) continue;
@@ -170,8 +180,16 @@ export function blendPixels<T extends Pixels>(base: T, result: T, weights: Uint8
       continue;
     }
     const keep = 255 - w;
-    for (let c = 0; c < channels; c++)
-      out[i + c] = Math.round((base[i + c]! * keep + result[i + c]! * w) / 255);
+    // Each side's colour counts as much as it shows. Where neither shows, a plain mix.
+    const shownBase = opts.alpha ? base[i + colours]! * keep : 0;
+    const shownResult = opts.alpha ? result[i + colours]! * w : 0;
+    const shown = shownBase + shownResult;
+    for (let c = 0; c < colours; c++)
+      out[i + c] =
+        shown > 0
+          ? Math.round((base[i + c]! * shownBase + result[i + c]! * shownResult) / shown)
+          : Math.round((base[i + c]! * keep + result[i + c]! * w) / 255);
+    if (opts.alpha) out[i + colours] = Math.round(shown / 255);
   }
   return out;
 }

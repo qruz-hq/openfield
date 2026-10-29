@@ -176,6 +176,42 @@ describe("blendPixels", () => {
     }
   });
 
+  test("an edit fading over a transparent original keeps its own colour", () => {
+    // A cut-out: transparent, with black under the transparency. The edit is opaque red.
+    const weights = new Uint8Array([0, 64, 128, 192, 255]);
+    for (const deep of [false, true]) {
+      const max = deep ? 65_535 : 255;
+      const make = (px: number[]) => (deep ? new Uint16Array(px) : new Uint8Array(px));
+      const base = make(Array.from({ length: 5 }, () => [0, 0, 0, 0]).flat());
+      const result = make(Array.from({ length: 5 }, () => [max, 0, 0, max]).flat());
+      const out = blendPixels(base, result, weights, 4, { alpha: true });
+      for (let p = 0; p < 5; p++) {
+        const px = [...out.subarray(p * 4, p * 4 + 4)];
+        if (p === 0) expect(px).toEqual([0, 0, 0, 0]);
+        else expect(px).toEqual([max, 0, 0, Math.round((max * weights[p]!) / 255)]);
+      }
+    }
+    // Grey and alpha the same way.
+    const grey = blendPixels(
+      new Uint8Array([0, 0, 0, 0]),
+      new Uint8Array([200, 255, 200, 255]),
+      new Uint8Array([0, 128]),
+      2,
+      { alpha: true },
+    );
+    expect([...grey]).toEqual([0, 0, 200, 128]);
+  });
+
+  test("with alpha, opaque pixels mix exactly as without it", () => {
+    const base = pixels(64, 1, 4, 5);
+    const result = pixels(64, 1, 4, 6);
+    for (let i = 3; i < base.length; i += 4) base[i] = result[i] = 255;
+    const weights = Uint8Array.from({ length: 64 }, (_, i) => i * 4);
+    expect(blendPixels(base, result, weights, 4, { alpha: true })).toEqual(
+      blendPixels(base, result, weights, 4),
+    );
+  });
+
   test("works on 16-bit pixels too", () => {
     const base = new Uint16Array([0, 65_535, 1000, 1000]);
     const result = new Uint16Array([65_535, 0, 2000, 2000]);

@@ -152,7 +152,7 @@ async function compositeFiles(
   const shown = (await sharp(files.result).metadata()).autoOrient;
   const result = await resultPixels(sharp, ingest, files.result, layout, width, height, icc);
   const channels = (layout.grey ? 1 : 3) + (layout.alpha ? 1 : 0);
-  const blended = blendPixels(base, result, weights, channels);
+  const blended = blendPixels(base, result, weights, channels, { alpha: layout.alpha });
 
   const space = layout.grey ? (layout.deep ? "grey16" : "b-w") : layout.deep ? "rgb16" : "srgb";
   const png = new Uint8Array(

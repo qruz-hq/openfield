@@ -264,6 +264,34 @@ describe("compositeEdit", () => {
     }
   });
 
+  test("an edit fading out over a cut-out keeps its colour, with no dark edge", async () => {
+    // Transparent everywhere with black underneath, as background removal leaves it.
+    const base = new Uint8Array(
+      await sharp(new Uint8Array(100 * 100 * 4), { raw: { width: 100, height: 100, channels: 4 } })
+        .png()
+        .toBuffer(),
+    );
+    const hole = { x: 30, y: 30, w: 20, h: 40 };
+    const { call } = await masked(base, hole);
+    const red = new Uint8Array(
+      await sharp({ create: { width: 100, height: 100, channels: 4, background: "#ff0000ff" } })
+        .png()
+        .toBuffer(),
+    );
+    const out = await compositeEdit(server.services, call(), await stage(red));
+    expect(out?.edit.composite.applied).toBe(true);
+    const { values } = await decoded(fileOf(out!.staged));
+    let faded = 0;
+    for (let x = 50; x < 70; x++) {
+      const i = (50 * 100 + x) * 4;
+      const [r, g, b, a] = [...values.subarray(i, i + 4)];
+      if (a === 0) continue;
+      expect({ x, r, g, b }).toEqual({ x, r: 255, g: 0, b: 0 });
+      if (a! < 255) faded++;
+    }
+    expect(faded).toBeGreaterThan(3);
+  });
+
   test("a CMYK JPEG comes back as RGB that shows the same outside the mask", async () => {
     const raw = noise(320 * 240 * 3, 11);
     const base = new Uint8Array(
