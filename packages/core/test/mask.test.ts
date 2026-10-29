@@ -42,7 +42,10 @@ function random(seed: number): () => number {
   };
 }
 
-/** Raw pixels that differ from `noise` everywhere, so a copied byte is never a lucky match. */
+/**
+ * Seeded random pixels. Two seeds can share values by chance, but the checks compare against the
+ * base or the result directly, so a chance match can't hide a wrong copy.
+ */
 function pixels(width: number, height: number, channels: number, seed: number): Uint8Array {
   const out = new Uint8Array(width * height * channels);
   const next = random(seed);

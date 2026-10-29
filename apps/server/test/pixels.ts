@@ -3,7 +3,8 @@ import sharp from "sharp";
 // Images for masked edit tests, and the check that an edit kept the original outside its mask.
 
 /**
- * Coarse noise, so a pixel copied from the wrong place never matches the base by luck. 16 levels
+ * Coarse seeded noise. A value may match the base by chance, but the checks compare against the
+ * base directly, so chance matches can't hide a pixel copied from the wrong place. 16 levels
  * keep a 4K PNG under the upload limit; `cell` repeats each value over a square of pixels, for
  * bigger images still.
  */

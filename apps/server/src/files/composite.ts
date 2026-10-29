@@ -18,7 +18,9 @@ import { loadSharp, type Sharp } from "./sharp";
 // base's exact size and laid over the base through the mask, grown by expandPx and softened over
 // featherPx; past that edge every value is copied from the base as it's stored. The composite
 // keeps the base's channels, bit depth and colour profile and is saved as a PNG, so those pixels
-// decode exactly as the base's do.
+// decode exactly as the server decodes the base. For a JPEG or lossy WebP base that's libvips's
+// decode: other decoders (the macOS webview's ImageIO, say) read the same JPEG a few values apart,
+// so anything comparing before and after should compare against the server's decode.
 
 export interface CompositeDeps {
   db: Db;

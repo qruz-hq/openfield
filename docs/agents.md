@@ -136,9 +136,9 @@ Agents can't change settings, keys, their own limits or what they're allowed to 
 
 ### Editing part of an image
 
-`generate_image` with `edit: { image, mask }` changes only the area in the mask. The mask is the image's exact size and transparent where it should change; an image with no transparency works too, white where it should change and black where it stays. It's saved as a mask of that image, the way the editor saves one, so it never shows in the library, and the edit asks for the image's own size unless the agent sets one.
+`generate_image` with `edit: { image, mask }` changes only the area in the mask. The mask is the image's exact size and transparent where it should change; an image with no transparency works too, white where it should change and black where it stays. It's saved as a mask of that image, the way the editor saves one, so it never shows in the library. A masked edit always keeps the image's own shape, and unless the agent sets a `resolution` it takes the smallest tier that covers the image, which can cost more than the model's usual tier. Images up to 50 megapixels can be edited with a mask.
 
-Once the model is done, Openfield puts the original back everywhere outside the mask, so those pixels stay exactly as they were. Three settings tune this:
+Once the model is done, Openfield puts the original back everywhere outside the mask, so those pixels keep the original's values as Openfield reads them. (JPEG decoders differ slightly, so another app may show a JPEG original a value or two apart from the edit.) Three settings tune this:
 
 - `composite` (default on): put the original back outside the mask. Off keeps the model's whole result.
 - `expandPx` (default 4): grow the area to change by this many pixels first.

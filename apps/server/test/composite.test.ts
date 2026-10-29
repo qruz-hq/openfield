@@ -34,7 +34,11 @@ function distance(x: number, y: number, b: Box): number {
   return Math.sqrt(dx * dx + dy * dy);
 }
 
-/** Noise, so a value copied from the wrong place or rounded on the way never matches by luck. */
+/**
+ * Seeded noise against a smooth gradient, so a value copied from the wrong place or rounded on the
+ * way is very unlikely to match. Chance matches can't hide a wrong copy: the checks compare each
+ * pixel with the base or the result directly.
+ */
 function noise(
   length: number,
   seed: number,
