@@ -1364,3 +1364,101 @@ test("Edit on an image node adds a wired Edit node, and its mask is painted in a
   await page.keyboard.press("ControlOrMeta+z");
   await expect(edit.getByText("Paint where the image should change.")).toBeVisible();
 });
+
+test("an Edit node runs its painted mask on OpenAI, shows what it made, and Keep the rest can be off", async ({
+  page,
+  request,
+}) => {
+  const token = await sessionToken(request);
+  const home = await libraryRoot(request, token);
+  // OpenAI's fake key too, so the node starts on a model that takes the mask itself.
+  await api(request, token, "PUT", "/api/settings/keys/openai", { apiKey: FAKE_KEY });
+  try {
+    const photo = await makeImage(request, token, "a blue door in a white wall", "3:4");
+    const { id, aliases } = await canvasOf(request, "Front door", [
+      {
+        op: "add_node",
+        as: "u",
+        type: "image.upload",
+        position: { x: 0, y: 0 },
+        params: { assetIds: [photo] },
+      },
+    ]);
+    const requested: string[] = [];
+    page.on("request", (r) => requested.push(r.url()));
+    await page.goto(`/canvas/${id}`);
+    const upload = pane(page).locator(`.react-flow__node[data-id="${aliases.u}"]`);
+    await expect(upload).toBeVisible();
+
+    // Right-click, Edit: a new Edit node wired to the photo.
+    await upload.click({ button: "right", position: { x: 140, y: 120 } });
+    await page.getByRole("menuitem", { name: "Edit", exact: true }).click();
+    const edit = pane(page).locator(".react-flow__node-image\\.edit");
+    await expect(edit).toHaveCount(1);
+    const settings = page.getByRole("complementary", { name: "Edit" });
+
+    // Paint the mask and save it.
+    await edit.getByRole("button", { name: "Paint mask" }).click();
+    const window = page.getByRole("dialog", { name: "Paint the mask" });
+    const surface = window.locator("[data-paint-input]");
+    const box = (await surface.boundingBox())!;
+    const from = { x: box.x + box.width / 3, y: box.y + box.height / 3 };
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(from.x + i * 6, from.y + i * 6);
+    await page.mouse.up();
+    await window.getByRole("button", { name: "Save mask" }).click();
+    await expect(window).toBeHidden();
+
+    // Words, then Run: the photo shows until the edit takes its place.
+    await settings.getByRole("textbox", { name: "What to change" }).fill("a red door");
+    const run = settings.getByRole("button", { name: /^Run/ });
+    await expect(run).toBeEnabled();
+    const image = edit.locator("img.of-card-image");
+    const before = await image.getAttribute("src");
+    await run.click();
+    await expect(edit.locator('.of-card[data-phase="done"]')).toBeVisible({ timeout: 20_000 });
+
+    // Inpainted at OpenAI with the painted mask, the rest put back, and shown on the card.
+    const sets = () =>
+      queryDb<{ provider_id: string; op: string; request_json: string; asset: string; op_params: string }>(
+        home,
+        `select job_sets.provider_id, job_sets.op, job_sets.request_json, assets.id as asset, assets.op_params
+         from job_sets left join assets on assets.job_set_id = job_sets.id
+         where job_sets.canvas_id = ? order by job_sets.created_at`,
+        id,
+      );
+    const { graph } = await api<CanvasDetail>(request, token, "GET", `/api/canvases/${id}`);
+    const node = graph.nodes.find((n) => n.type === "image.edit")!;
+    const [first] = sets();
+    expect(first).toMatchObject({ provider_id: "openai", op: "inpaint" });
+    expect(JSON.parse(first!.request_json)).toMatchObject({
+      base: { assetId: photo },
+      mask: { assetId: node.params.maskAssetId, composite: true, expandPx: 4, featherPx: 8 },
+    });
+    expect(JSON.parse(first!.op_params)).toMatchObject({ edit: { composite: { applied: true } } });
+    expect(node.result?.assetIds).toEqual([first!.asset]);
+    await expect.poll(() => requested.some((url) => url.includes(`/files/thumb/${first!.asset}`))).toBe(true);
+    await expect.poll(() => image.getAttribute("src")).not.toBe(before);
+    await expectImages(edit, 1);
+
+    // The inspector still shows the mask it painted.
+    await expect(settings.getByText("Painted on the input image")).toBeVisible();
+
+    // Keep the rest, off: the node is out of date, and its next run keeps the model's whole result.
+    const keep = settings.getByRole("switch", { name: "Keep the rest of the image" });
+    await expect(keep).toBeChecked();
+    await expect(settings.getByText("Everything outside your mask stays exactly the same.")).toBeVisible();
+    await keep.click();
+    await expect(keep).not.toBeChecked();
+    await expect(settings.getByText("The model may change other parts too.")).toBeVisible();
+    await expect(edit.locator('.of-card[data-phase="changed"]')).toBeVisible();
+    await settings.getByRole("button", { name: /^Run/ }).click();
+    await expect(edit.locator('.of-card[data-phase="done"]')).toBeVisible({ timeout: 20_000 });
+    const [, second] = sets();
+    expect(JSON.parse(second!.request_json).mask).toMatchObject({ composite: false });
+    expect(JSON.parse(second!.op_params)).toMatchObject({ edit: { composite: { applied: false } } });
+  } finally {
+    await request.delete("/api/settings/keys/openai", { headers: { [SESSION_HEADER]: token } });
+  }
+});
