@@ -13,6 +13,7 @@ import {
   lockedTargets,
   lockProblem,
   nodeTitle,
+  ownAssetIds,
   specRegistry,
   toDocument,
   toWireOps,
@@ -733,11 +734,8 @@ export class CanvasService {
         });
       }
     }
-    // Images a node was given have to be in this library.
-    const named = doc.nodes.flatMap((node) => {
-      const ids = touched.includes(node.id) ? node.params.assetIds : undefined;
-      return Array.isArray(ids) ? ids.filter((v): v is string => typeof v === "string") : [];
-    });
+    // Images a node was given, an Edit node's painted mask among them, have to be in this library.
+    const named = doc.nodes.flatMap((node) => (touched.includes(node.id) ? ownAssetIds(node.params) : []));
     if (!named.length) return;
     const here = new Set(
       getAssets(this.deps.db, named)

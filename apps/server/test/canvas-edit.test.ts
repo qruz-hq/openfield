@@ -6,7 +6,7 @@ import {
   resolveFingerprints,
   specRegistry,
 } from "@openfield/canvas";
-import { canvasRunResponseSchema, uploadResponseSchema } from "@openfield/core";
+import { canvasDetailSchema, canvasRunResponseSchema, newId, uploadResponseSchema } from "@openfield/core";
 import { type CanvasDocument, canvasDocumentSchema } from "@openfield/core/canvas";
 import { assetsForJobSets, getAsset, getCanvas, getJobSet } from "@openfield/db";
 import { serverEngineContext } from "../src/canvas/engine-context";
@@ -304,5 +304,26 @@ describe("a mask painted on another image", () => {
       jobs: 0,
       nodes: [{ nodeId: "n_edit", jobs: 0, blocked: "mask_stale" }],
     });
+  });
+});
+
+describe("a painted mask the library doesn't have", () => {
+  test("can't be given to a node, and one deleted since shows as missing and isn't sent", async () => {
+    server = await ready();
+    const { canvasId, mask, edit } = await editCanvas();
+    const nowhere = newId();
+    expect(() =>
+      server!.services.canvases.edit(
+        canvasId,
+        [{ op: "update_node", id: edit, params: { maskAssetId: nowhere } }],
+        tab,
+      ),
+    ).toThrow(`No asset ${nowhere}`);
+
+    server.services.library.trash([mask]);
+    const detail = canvasDetailSchema.parse((await server.json(`/api/canvases/${canvasId}`)).body);
+    expect(detail.missingAssetIds).toEqual([mask]);
+    const dry = await server.services.canvasRuns.runScope(canvasId, { scope: "all", dryRun: true });
+    expect(dry.nodes).toEqual([expect.objectContaining({ nodeId: edit, jobs: 0, blocked: "missing_asset" })]);
   });
 });
