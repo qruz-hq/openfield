@@ -42,6 +42,12 @@ export function relativeTime(value: string, now: number = Date.now()): string {
   return text.charAt(0).toLocaleUpperCase(formatLocale()) + text.slice(1);
 }
 
+/** One line for the header: the prompt's first line, else the model's name (§4.0). */
+export function titleOf(prompt: string, modelName: string | undefined): string {
+  const line = prompt.trim().split("\n")[0]?.trim();
+  return line || modelName || t("assets.detail.label");
+}
+
 /** "In the trash since today" (design JSKpv), by the day it was deleted. */
 export function inTrashCaption(deletedAt: string, now: Date = new Date()): string {
   const day = localDayKey(deletedAt);

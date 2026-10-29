@@ -370,6 +370,19 @@ test("Generate runs the painted edit at its price, and the new image comes from 
     `/api/assets/${shown}`,
   );
   expect(detailOf.asset).toMatchObject({ parentAssetId: id, maskAssetId: saved.asset.id, op: "inpaint" });
+
+  // Its Info says where it came from in place of the prompt: the original, the mask and the words.
+  const info = detail(page).getByRole("tabpanel", { name: "Info" });
+  await expect(info.getByText("Edited from", { exact: true })).toBeVisible();
+  await expect(info.getByText("Prompt", { exact: true })).toHaveCount(0);
+  await expect(info.getByText("The original, unchanged")).toBeVisible();
+  await expect(info.getByText("Feather 8 px · Expand 4 px")).toBeVisible();
+  await expect(info.getByText("Make the berries pale and dried", { exact: true })).toBeVisible();
+  await expect(page.locator("[data-mask-thumb]")).toBeVisible();
+
+  // Open shows the original.
+  await info.getByRole("button", { name: "Open", exact: true }).click();
+  await expect(page).toHaveURL(new RegExp(`\\?asset=${id}$`));
 });
 
 /** The Difference view's mark at a point given as fractions of the image: 0 where nothing changed. */

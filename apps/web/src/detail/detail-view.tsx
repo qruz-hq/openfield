@@ -67,7 +67,9 @@ import {
   inTrashCaption,
   relativeTime,
   thumbAt,
+  titleOf,
 } from "./format";
+import { editedFrom } from "./lineage";
 import {
   afterLeaving,
   type Nav,
@@ -142,12 +144,6 @@ interface ContentProps extends DetailViewProps {
 function listItemOf(asset: Asset): AssetListItem {
   const { deletedAt, ...rest } = asset;
   return deletedAt ? { ...rest, deletedAt } : rest;
-}
-
-/** One line for the header: the prompt's first line, else the model's name (§4.0). */
-function titleOf(prompt: string, modelName: string | undefined): string {
-  const line = prompt.trim().split("\n")[0]?.trim();
-  return line || modelName || t("assets.detail.label");
 }
 
 function DetailContent({
@@ -354,7 +350,10 @@ function DetailContent({
       ? allModels?.find((m) => m.providerId === item.providerId && m.modelId === item.modelId)
       : undefined;
   const prompt = jobSet?.promptOriginal ?? data?.asset.prompt ?? item.prompt;
-  const title = titleOf(prompt, model?.displayName ?? item.modelId ?? undefined);
+  const modelName = model?.displayName ?? item.modelId ?? undefined;
+  const title = titleOf(prompt, modelName);
+  // An edited image's original, mask and references (design Detail / Section / Edited from).
+  const from = data && !isVideo ? editedFrom(data, modelName) : null;
   const deletedAt = item.deletedAt ?? data?.asset.deletedAt ?? null;
   const trashed = query.view === "trash" || deletedAt !== null;
   // Only an image in the library can be edited; a link to anything else on Edit shows Info.
@@ -674,6 +673,7 @@ function DetailContent({
         }
         actions={actions}
         hidden={expanded}
+        editedFrom={from ? { from } : undefined}
         tabs={
           editable
             ? {

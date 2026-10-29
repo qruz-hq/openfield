@@ -2073,6 +2073,19 @@
       "momentAgo": "A moment ago",
       "otherFolders": "Other folders",
       "notMadeHere": "This image wasn't made here, so there are no settings to use.",
+      "editedFrom": {
+        "label": "Edited from",
+        "original": "The original, unchanged",
+        "open": "Open",
+        "mask": "Mask",
+        "settings": "Feather {feather} px · Expand {expand} px",
+        "wholeImage": "Redrawn by {model}, the rest put back",
+        "notKept": "Rest of the image not kept",
+        "notKeptExactly": "Couldn't keep the rest exactly. Try again.",
+        "references": "References",
+        "referenceCount": "{count, plural, one {# image from your library} other {# images from your library}}",
+        "editAgain": "Edit the original with this mask"
+      },
       "reused": "Loaded the prompt and settings.",
       "copyFailed": "Couldn't copy the image.",
       "loadFailed": "Couldn't load this image."
