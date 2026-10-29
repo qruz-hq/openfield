@@ -742,6 +742,7 @@ function DetailContent({
           />
         </ModalClose>
       ) : null}
+      {runner.dialog}
       <ConfirmDialog
         kind={confirm ?? (leaving ? "leave" : null)}
         retention={settings.data?.trashRetentionDays ?? null}

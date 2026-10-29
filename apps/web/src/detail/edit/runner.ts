@@ -1,16 +1,18 @@
-import { editOpParamsSchema, t } from "@openfield/core";
+import { type CostEstimate, editOpParamsSchema, isTerminalState, t } from "@openfield/core";
 import { useQueries } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type EditInput, isTurnedPhoto, useEditRun } from "../../api/hooks/edit";
 import { assetDetailQuery } from "../../api/hooks/library";
 import { errorMessage } from "../../api/raw";
 import { notify, notifyError } from "../../lib/notify";
 import { comparedResult, type ResultSlot, type RunOutcome, resultSlots, runOutcome } from "./plan";
 import { useEditSession } from "./session";
+import { useSpendGuard } from "./spend-guard";
 
 // The Edit tab's runs, held by the detail view so a run carries on while the person looks at Info
 // and comes back. The panel starts them; the media area shows them (the results strip, the
-// Generating label); this keeps the last request, so Try again sends it once more.
+// Generating label); this keeps the last request, so Try again sends it once more. Both go past
+// the monthly spending limit first, and only one goes at a time.
 
 export interface EditRequest {
   input: EditInput;
@@ -22,6 +24,8 @@ export interface EditRequest {
   prompt: string;
   /** Keep the rest of the image was asked for. */
   composite: boolean;
+  /** What Generate showed, for the spending limit. */
+  estimate: CostEstimate | undefined;
 }
 
 export interface EditRunner {
@@ -40,11 +44,17 @@ export interface EditRunner {
   show: (assetId: string | null) => void;
   /** The new image the media area compares with the original; null while it paints. */
   compared: string | null;
-  generate: (request: EditRequest) => void;
+  /**
+   * Generate: past the spending limit with `estimate`, then `prepare` builds the request (it reads
+   * the mask), and the run is asked for. Does nothing while another is on its way or running.
+   */
+  submit: (estimate: CostEstimate | undefined, prepare: () => Promise<EditRequest | null>) => void;
   retry: () => void;
   stop: () => void;
   /** Forgets the run, as when another image is shown. */
   reset: () => void;
+  /** The spending limit's dialog, for the view to render. */
+  dialog: ReactNode;
   /**
    * The last run made new images from the mask and prompt as they are now, so leaving loses
    * nothing that isn't in the library.
@@ -60,9 +70,14 @@ export function useEditRunner(): EditRunner {
     stop,
     reset: resetRun,
   } = useEditRun({ onStopFailed: (error) => notifyError(errorMessage(error)) });
+  const guard = useSpendGuard();
   const last = useRef<EditRequest | null>(null);
   // Undefined until the person picks: the first new image. Null is the original.
   const [picked, setPicked] = useState<string | null | undefined>(undefined);
+  // From Generate (or Try again) to the end of its run, so a second click does nothing. A ref, as
+  // that click can land before any render. The button stays as it is meanwhile: turning it off
+  // would drop its focus to the page.
+  const inFlight = useRef(false);
 
   const generate = useCallback(
     (request: EditRequest) => {
@@ -74,6 +89,7 @@ export function useEditRunner(): EditRunner {
           if (maskAssetId) useEditSession.getState().setSavedMask(maskAssetId, request.maskVersion);
         },
         onError: (error) => {
+          inFlight.current = false;
           // A phone photo stored on its side: the panel says so in place of the form.
           if (isTurnedPhoto(error)) useEditSession.getState().setTurned(true);
           else notifyError(errorMessage(error));
@@ -83,14 +99,42 @@ export function useEditRunner(): EditRunner {
     [start],
   );
 
+  const { check } = guard;
+  const submit = useCallback(
+    (estimate: CostEstimate | undefined, prepare: () => Promise<EditRequest | null>) => {
+      if (inFlight.current) return;
+      inFlight.current = true;
+      void check(
+        estimate,
+        async () => {
+          const request = await prepare().catch(() => null);
+          if (request) generate(request);
+          else inFlight.current = false;
+        },
+        () => {
+          inFlight.current = false;
+        },
+      );
+    },
+    [check, generate],
+  );
+
   // The same request again, by the mask it saved while the mask hasn't changed.
   const retry = useCallback(() => {
     const request = last.current;
     if (!request) return;
     const saved = useEditSession.getState().savedMask;
     const mask = saved && saved.version === request.maskVersion ? saved.assetId : request.input.mask;
-    generate({ ...request, input: { ...request.input, ...(mask !== undefined && { mask }) } });
-  }, [generate]);
+    submit(request.estimate, async () => ({
+      ...request,
+      input: { ...request.input, ...(mask !== undefined && { mask }) },
+    }));
+  }, [submit]);
+
+  // The run has ended: Generate can go again.
+  useEffect(() => {
+    if (run && isTerminalState(run.jobSet.status)) inFlight.current = false;
+  }, [run]);
 
   const count = last.current?.count ?? 0;
   const slots = useMemo(
@@ -134,6 +178,7 @@ export function useEditRunner(): EditRunner {
 
   const reset = useCallback(() => {
     last.current = null;
+    inFlight.current = false;
     setPicked(undefined);
     resetRun();
   }, [resetRun]);
@@ -147,10 +192,11 @@ export function useEditRunner(): EditRunner {
     shown,
     show: setPicked,
     compared: comparedResult(outcome, shown),
-    generate,
+    submit,
     retry,
     stop,
     reset,
+    dialog: guard.dialog,
     settled: () => {
       const request = last.current;
       const { maskVersion, prompt } = useEditSession.getState();

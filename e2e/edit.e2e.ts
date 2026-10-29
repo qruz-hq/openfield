@@ -728,31 +728,31 @@ test("the new image is compared with the original, before and after or by what c
 test("a whole-image model says so, Keep the rest can be turned off, and the monthly limit asks first", async ({
   page,
 }) => {
-  const { token } = await editable(page, unique("red berries"));
-  const panel = panelOf(page);
-
-  await panel.getByRole("button", { name: "Model" }).click();
-  await page.getByRole("option", { name: /Nano Banana 2 Lite/ }).click();
-  await expect(panel.getByRole("button", { name: "Model" })).toContainText("Nano Banana 2 Lite");
-  await expect(
-    panel.getByText(
-      "Nano Banana 2 Lite redraws the whole image, then everything outside your mask is put back.",
-    ),
-  ).toBeVisible();
-
-  // Off, the model may change anything, and Feather and Expand rest.
-  await panel.getByRole("switch", { name: "Keep the rest of the image" }).click();
-  await expect(
-    panel.getByText("Nano Banana 2 Lite redraws the whole image, so anything can change."),
-  ).toBeVisible();
-  await expect(panel.getByText("The model may change other parts too.")).toBeVisible();
-  await expect(panel.getByRole("slider", { name: "Feather" })).toHaveAttribute("data-disabled", "");
-
-  // A limit of a cent: Generate asks first, and Cancel sends nothing.
+  // A limit of a cent, set before the page opens so the edit set up below is the one that runs.
+  const token = await sessionToken(page.request);
   await api(page.request, token, "PATCH", "/api/settings", { spendGuardUsd: 0.01 });
   try {
-    await page.reload();
-    await expect(toolbar(page)).toBeVisible();
+    await editable(page, unique("red berries"));
+    const panel = panelOf(page);
+
+    await panel.getByRole("button", { name: "Model" }).click();
+    await page.getByRole("option", { name: /Nano Banana 2 Lite/ }).click();
+    await expect(panel.getByRole("button", { name: "Model" })).toContainText("Nano Banana 2 Lite");
+    await expect(
+      panel.getByText(
+        "Nano Banana 2 Lite redraws the whole image, then everything outside your mask is put back.",
+      ),
+    ).toBeVisible();
+
+    // Off, the model may change anything, and Feather and Expand rest.
+    await panel.getByRole("switch", { name: "Keep the rest of the image" }).click();
+    await expect(
+      panel.getByText("Nano Banana 2 Lite redraws the whole image, so anything can change."),
+    ).toBeVisible();
+    await expect(panel.getByText("The model may change other parts too.")).toBeVisible();
+    await expect(panel.getByRole("slider", { name: "Feather" })).toHaveAttribute("data-disabled", "");
+
+    // Generate asks first, and Cancel sends nothing.
     await paintAndDescribe(page, "Dry the berries");
     let sent = false;
     page.on("request", (r) => {
@@ -765,15 +765,60 @@ test("a whole-image model says so, Keep the rest can be turned off, and the mont
     await expect(ask).toHaveCount(0);
     expect(sent).toBe(false);
 
-    // Run anyway runs it.
+    // Run anyway runs it on the model picked, with the rest of the image left to the model.
     await generateIn(page).click();
     const edits = page.waitForRequest((r) => r.url().endsWith("/api/edit") && r.method() === "POST");
-    await page
-      .getByRole("dialog", { name: /^This run costs about/ })
-      .getByRole("button", { name: "Run anyway" })
-      .click();
-    await edits;
+    await ask.getByRole("button", { name: "Run anyway" }).click();
+    expect((await edits).postDataJSON()).toMatchObject({
+      model: "google:gemini-3.1-flash-lite-image",
+      op: "inpaint",
+      mask: { composite: false },
+    });
     await expect(panelOf(page).getByText(/^Saved as 1 new image/)).toBeVisible({ timeout: 20_000 });
+  } finally {
+    await api(page.request, token, "PATCH", "/api/settings", { spendGuardUsd: null });
+  }
+});
+
+test("with a monthly limit, a double click runs once, and Try again asks first too", async ({ page }) => {
+  const token = await sessionToken(page.request);
+  // Well under the limit: Generate runs without asking, once however fast it's clicked.
+  await api(page.request, token, "PATCH", "/api/settings", { spendGuardUsd: 1000 });
+  try {
+    await editable(page, unique("plums"));
+    await paintAndDescribe(page, "Ripe plums");
+    // The month's spending answers slowly, so a second click lands while it's checked.
+    await page.route("**/api/usage**", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      // Already let through if the route was taken away meanwhile.
+      await route.continue().catch(() => {});
+    });
+    const edits: string[] = [];
+    page.on("request", (r) => {
+      if (r.url().endsWith("/api/edit") && r.method() === "POST") edits.push(r.url());
+    });
+    await generateIn(page).dblclick();
+    await expect(panelOf(page).getByText(/^Saved as 1 new image/)).toBeVisible({ timeout: 20_000 });
+    expect(edits).toHaveLength(1);
+    await page.unrouteAll({ behavior: "ignoreErrors" });
+
+    // A cent: a run that fails, then Try again asks before it spends again.
+    await api(page.request, token, "PATCH", "/api/settings", { spendGuardUsd: 0.01 });
+    await page.reload();
+    await expect(toolbar(page)).toBeVisible();
+    await paintAndDescribe(page, "Ripe plums #fake:refused");
+    const ask = page.getByRole("dialog", { name: /^This run costs about/ });
+    await generateIn(page).click();
+    await ask.getByRole("button", { name: "Run anyway" }).click();
+    await expect(page.getByText("Couldn't make this edit. Your mask is still here.")).toBeVisible({
+      timeout: 20_000,
+    });
+    const before = edits.length;
+    await page.getByRole("button", { name: "Try again" }).click();
+    await expect(ask).toBeVisible();
+    await ask.getByRole("button", { name: "Cancel" }).click();
+    await expect(ask).toHaveCount(0);
+    expect(edits).toHaveLength(before);
   } finally {
     await api(page.request, token, "PATCH", "/api/settings", { spendGuardUsd: null });
   }

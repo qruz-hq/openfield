@@ -12,28 +12,37 @@ interface Ask {
   cost: number;
   limit: number;
   go: () => void;
+  cancel: () => void;
 }
 
 export function useSpendGuard() {
   const limit = useSettings().data?.spendGuardUsd ?? null;
+  // Read when asked, not when the check was made: a toast's Try again can be pressed much later.
+  const limitNow = useRef(limit);
+  limitNow.current = limit;
   const [ask, setAsk] = useState<Ask | null>(null);
 
+  /** Runs `go` when the run stays under the limit or the person agrees, else `cancel`. */
   const check = useCallback(
-    async (estimate: CostEstimate | undefined, go: () => void) => {
+    async (estimate: CostEstimate | undefined, go: () => void, cancel: () => void = () => {}) => {
+      const limit = limitNow.current;
       if (limit === null) return go();
       // An unknown price counts as nothing on top, as on the canvas.
       const cost = estimate && estimate.confidence !== "unknown" ? estimate.max : 0;
       const spent = await fetchSpentThisMonth().catch(() => 0);
-      if (spent + cost >= limit) setAsk({ cost, limit, go });
+      if (spent + cost >= limit) setAsk({ cost, limit, go, cancel });
       else go();
     },
-    [limit],
+    [],
   );
 
   const dialog = (
     <SpendGuardDialog
       ask={ask}
-      onClose={() => setAsk(null)}
+      onClose={() => {
+        ask?.cancel();
+        setAsk(null);
+      }}
       onConfirm={() => {
         ask?.go();
         setAsk(null);

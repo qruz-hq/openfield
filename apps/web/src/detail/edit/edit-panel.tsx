@@ -29,7 +29,6 @@ import { PromptCard } from "./prompt-card";
 import type { EditRunner } from "./runner";
 import { useEditSession } from "./session";
 import { SizeFields } from "./size-fields";
-import { useSpendGuard } from "./spend-guard";
 import { useTurnedPhoto } from "./turned";
 
 // The Edit tab's side of the panel (design gpRcEBbVNM, Image edit / Panel), under the tabs: the
@@ -58,7 +57,6 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   const prompt = useEditSession((s) => s.prompt);
   const references = useEditSession((s) => s.references);
   const turned = useTurnedPhoto(item, true);
-  const guard = useSpendGuard();
   // Reading the mask into a PNG, before the run is asked for.
   const [preparing, setPreparing] = useState(false);
 
@@ -106,7 +104,8 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
       featherPx: session.featherPx,
     };
     const words = session.prompt;
-    void guard.check(state.estimate, async () => {
+    const estimate = state.estimate;
+    runner.submit(estimate, async () => {
       const { maskVersion, savedMask } = useEditSession.getState();
       setPreparing(true);
       let mask: Blob | string;
@@ -115,11 +114,11 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
         mask = savedMask?.version === maskVersion ? savedMask.assetId : await encodeMaskPng(editor.mask);
       } catch {
         notifyError(t("edit.generate.failed"));
-        return;
+        return null;
       } finally {
         setPreparing(false);
       }
-      runner.generate({
+      return {
         input: {
           baseAssetId: item.id,
           mask,
@@ -134,7 +133,8 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
         prompt: words,
         maskVersion,
         composite: settled.composite,
-      });
+        estimate,
+      };
     });
   };
 
@@ -201,7 +201,6 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
           generate
         )}
       </div>
-      {guard.dialog}
     </>
   );
 }
