@@ -305,7 +305,6 @@ function BrushSettings({ resting }: { resting: boolean }) {
           onValueChange={([value]) => value !== undefined && setBrushSize(brushSizeAt(value, size))}
           thumbValueText={t("edit.options.px", { value: size })}
           valueLabel={t("edit.options.px", { value: size })}
-          valueClassName="w-48"
         />
       </Field>
       <Divider />
@@ -321,7 +320,6 @@ function BrushSettings({ resting }: { resting: boolean }) {
           step={1}
           onValueChange={([value]) => value !== undefined && setHardness(value)}
           valueLabel={t("edit.options.percent", { value: hardness })}
-          valueClassName="w-48"
         />
       </Field>
       <Divider />
@@ -337,7 +335,6 @@ function BrushSettings({ resting }: { resting: boolean }) {
           step={1}
           onValueChange={([value]) => value !== undefined && setMaskOpacity(value)}
           valueLabel={t("edit.options.percent", { value: opacity })}
-          valueClassName="w-48"
         />
       </Field>
     </div>
