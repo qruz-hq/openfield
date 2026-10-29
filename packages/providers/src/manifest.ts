@@ -62,7 +62,7 @@ export {
   referenceInputsFor,
   resolveValues,
 } from "./manifest/controls";
-export { type EstimateRequest, estimate } from "./manifest/estimate";
+export { type EstimateRequest, editPricing, estimate } from "./manifest/estimate";
 export {
   checkSettingsPatch,
   conditionHolds,

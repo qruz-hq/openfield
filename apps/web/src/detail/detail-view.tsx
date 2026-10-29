@@ -1,6 +1,5 @@
 import "./detail.css";
 import {
-  type Asset,
   type AssetDetailResponse,
   type AssetListItem,
   type LibraryQuery,
@@ -68,6 +67,7 @@ import {
   type FrozenSettings,
   frozenSettings,
   inTrashCaption,
+  listItemOf,
   relativeTime,
   thumbAt,
   titleOf,
@@ -141,12 +141,6 @@ interface ContentProps extends DetailViewProps {
   show: (id: string | null, tab?: DetailTab) => void;
   setTab: (tab: DetailTab) => void;
   close: () => void;
-}
-
-/** The list's own copy of the image, or the one the details carry. */
-function listItemOf(asset: Asset): AssetListItem {
-  const { deletedAt, ...rest } = asset;
-  return deletedAt ? { ...rest, deletedAt } : rest;
 }
 
 function DetailContent({

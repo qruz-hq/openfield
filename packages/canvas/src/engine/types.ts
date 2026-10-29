@@ -1,4 +1,5 @@
 import type {
+  AdapterOp,
   AspectRatio,
   CANVAS_PORT_TYPES,
   CanvasBlockReason,
@@ -7,6 +8,7 @@ import type {
   CanvasRunNodeResult,
   CanvasRunNodeState,
   CanvasRunState,
+  CompositeSettings,
   CostEstimate,
   ErrorCode,
   MessageKey,
@@ -68,6 +70,8 @@ export interface PortSpec {
    * puts them and don't move when it ships (Generate's style input, design Y5jjx).
    */
   keepSlot?: boolean;
+  /** Drawn with the Images icon rather than its type's own: Edit's references (design BDnK6). */
+  glyph?: "images";
 }
 
 /** Compatibility (§7.6). "coerce" is image into mask: luminance becomes alpha, white is the edit area. */
@@ -108,6 +112,13 @@ export interface EngineContext {
   defaultModel: ModelKey | null;
   /** The first video model with a key, else the first video model. The Video node starts on it. */
   defaultVideoModel?: ModelKey | null;
+  /** The model the Edit node starts on: one that takes a mask where it can (defaultEditModel). */
+  defaultEditModel?: ModelKey | null;
+  /**
+   * settings.regionalFallback: a mask can go to a model that only redraws the whole image, with the
+   * rest put back afterwards. On when absent.
+   */
+  regionalFallback?: boolean;
   /** settings.defaultBatch: how many images a new Generate node makes. */
   defaultBatch?: number;
   /** settings.defaultAspect: written into a new node. A node without a size uses the model's default. */
@@ -116,8 +127,16 @@ export interface EngineContext {
   companyOff?(providerId: string): boolean;
   /** Images the canvas names that aren't in this library: drawn as placeholders, never sent. */
   missing?: ReadonlySet<string>;
-  /** The speed a run of this model gets from its company's settings (§0.3). Standard when absent. */
-  runSpeed?(model: ModelListItem): RunSpeed;
+  /**
+   * An image's stored size, where it's known. An edit is priced at the size the server asks for,
+   * which follows its base's shape.
+   */
+  imageSize?(assetId: string): { width: number; height: number } | undefined;
+  /**
+   * The speed a run of this model gets from its company's settings (§0.3), for an op (generate
+   * when left out): some speeds are offered for generating only. Standard when absent.
+   */
+  runSpeed?(model: ModelListItem, op?: AdapterOp): RunSpeed;
   /**
    * Prices a model its company prices per request (Higgsfield, §6.9). The web app asks through the
    * server; without it those models are priced from their manifest.
@@ -141,8 +160,19 @@ export type PortValue =
   | { kind: "text"; text: string }
   /** `prompt`: the text that made it, when a node here made it (Variations reuses it). */
   | { kind: "asset"; assetId: string; model?: ModelKey | null; prompt?: string }
-  /** A runnable node in the same run. Its images arrive later; `expected` is for fan-out and cost. */
-  | { kind: "pending"; nodeId: string; port: string; expected: number; prompt?: string };
+  /**
+   * A runnable node in the same run. Its images arrive later; `expected` is for fan-out and cost.
+   * `current`: the images that node has now (its card shows them), which it hands on if it doesn't
+   * run again. Set by evaluateGraph.
+   */
+  | {
+      kind: "pending";
+      nodeId: string;
+      port: string;
+      expected: number;
+      prompt?: string;
+      current?: readonly string[];
+    };
 
 /** By input port id, values in edge order. */
 export type ResolvedInputs = Readonly<Record<string, readonly PortValue[]>>;
@@ -164,6 +194,17 @@ export type NodeBlocker =
   | { kind: "too_many_references"; model: ModelKey; max: number }
   /** An end frame is connected, and this video model can't end on one. */
   | { kind: "end_frame_unsupported"; model: ModelKey }
+  /** A mask on a model that only redraws the whole image, with approximate area edits off in Settings. */
+  | { kind: "area_edit_off"; model: ModelKey; name: string }
+  /** An edit with no mask: none painted in the node and none connected. */
+  | { kind: "no_mask" }
+  /**
+   * The mask painted in the node was painted on another image than the one coming in now. `several`:
+   * more than one comes in, and a painted mask fits one.
+   */
+  | { kind: "mask_stale"; several?: boolean }
+  /** An edit with nothing said about the change, upstream or in the node. */
+  | { kind: "no_description" }
   /** Variations in Prompts or Models mode needs at least `min` entries. */
   | { kind: "needs_more"; what: "prompts" | "models"; min: number }
   /** A fan-out that would make more images than a run can (CANVAS_RUN_MAX_JOBS). */
@@ -219,6 +260,11 @@ export interface RunCall {
   /** null: the server picks seeds, only on models that take them (§0.11). */
   seed: number | null;
   providerOptions?: Record<string, unknown>;
+  /**
+   * With a mask among the inputs: whether the original is put back outside it, and how far the mask
+   * grows and softens first (core MaskInput). The mask itself is an input.
+   */
+  mask?: CompositeSettings;
   /** Caption for this call's images in the result grid, e.g. the prompt line. */
   label?: string;
 }
@@ -268,6 +314,11 @@ export interface NodeEngine<P = Record<string, unknown>> {
   fingerprintParams(node: EngineNode<P>, ctx: EngineContext): FingerprintParams;
   /** Values handed downstream: text for Prompt, assets for sources and finished runs, pending otherwise. */
   outputs(node: EngineNode<P>, inputs: ResolvedInputs, ctx: EngineContext, willRun: boolean): OutputValues;
+  /**
+   * Values the node holds in its own params, by input port: the Edit node's painted mask. Each
+   * fills its port only while nothing is connected to it.
+   */
+  inlineInputs?(node: EngineNode<P>, ctx: EngineContext): Readonly<Record<string, readonly PortValue[]>>;
   /** Why the node can't run right now, or null. */
   blocker(node: EngineNode<P>, inputs: ResolvedInputs, ctx: EngineContext): NodeBlocker | null;
   /** Runnable types only. */

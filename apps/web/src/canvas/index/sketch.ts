@@ -55,6 +55,7 @@ const DEFAULT_SIZES: Record<string, { w: number; h: number }> = {
   "image.upload": { w: 280, h: 280 },
   "image.asset": { w: 280, h: 280 },
   "image.generate": { w: 320, h: 400 },
+  "image.edit": { w: 320, h: 320 },
   "image.variations": { w: 320, h: 360 },
   note: { w: 240, h: 240 },
   frame: { w: 640, h: 420 },
@@ -64,13 +65,14 @@ const FALLBACK_SIZE = { w: 280, h: 280 };
 const COLLAPSED_HEIGHT = 56;
 
 // Visible ports in rail order (canvas plan §1); null is a slot kept empty for a port still to
-// come (Generate's style input). Types this build doesn't define (Edit, Style) take their ports
-// from the edges that touch them.
+// come (Generate's style input). Types this build doesn't define (Style) take their ports from the
+// edges that touch them.
 const PORTS: Record<string, { in: readonly (string | null)[]; out: readonly (string | null)[] }> = {
   prompt: { in: ["text"], out: ["text"] },
   "image.upload": { in: [], out: ["images"] },
   "image.asset": { in: [], out: ["images"] },
   "image.generate": { in: ["prompt", "input_images", null], out: ["images"] },
+  "image.edit": { in: ["image", "mask", "prompt", "input_images"], out: ["images"] },
   "image.variations": { in: ["image", "prompt"], out: ["images"] },
   note: { in: [], out: [] },
   frame: { in: [], out: [] },
@@ -175,7 +177,8 @@ function parts(p: Placed): SketchShape[] {
         { kind: "rect", x: 8, y: 8, w: w - 16, h: h - 16, r: 12, fill: "surface" },
         ...textBars(str(node.params.text), 48).map((f, i) => bar(20, 24 + i * 18, f * w)),
       ];
-    case "image.generate": {
+    case "image.generate":
+    case "image.edit": {
       const image = h - 90;
       return [
         { kind: "rect", x: 0, y: 0, w, h: image, r: [r, r, 0, 0], fill: "surface" },

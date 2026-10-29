@@ -1512,6 +1512,27 @@
         "referencesHint": "The model gets them in this order. Drag an image to move everything from its node.",
         "referenceItem": "{name}, {images, plural, one {# image} other {# images}}, {index} of {count}"
       },
+      "edit": {
+        "label": "Edit",
+        "description": "Change an image with words or a mask",
+        "paintMask": "Paint mask",
+        "editMask": "Edit mask",
+        "paintHint": "Paint where the image should change.",
+        "mask": "Mask",
+        "maskPainted": "Painted on the input image",
+        "maskNone": "Not painted yet. Paint it to run.",
+        "maskLinked": "From the Mask input",
+        "paint": "Paint",
+        "fromPrompt": "From the {name} node",
+        "maskWindow": {
+          "title": "Paint the mask",
+          "hint": "Paint over what should change. Everything else stays as it is.",
+          "brushSize": "Brush size",
+          "hardnessHint": "Lower is softer at the edge of each stroke.",
+          "maskHint": "How strongly the mask shows over the photo.",
+          "save": "Save mask"
+        }
+      },
       "variations": {
         "label": "Variations",
         "description": "Try several takes at once",
@@ -1557,7 +1578,8 @@
         "noReferences": "This model doesn't take reference images",
         "startFrame": "Start frame",
         "endFrame": "End frame",
-        "video": "Video"
+        "video": "Video",
+        "mask": "Mask"
       },
       "connect": {
         "mismatch": "{from, select, text {Text} image {An image} mask {A mask} preset {A style} other {This}} can't go into {to, select, text {a text} image {an image} mask {a mask} preset {a style} other {this}} input on {node}.",
@@ -1578,6 +1600,7 @@
         "collapse": "Collapse",
         "expand": "Expand",
         "rename": "Rename",
+        "edit": "Edit",
         "lock": "Lock",
         "unlock": "Unlock",
         "delete": "Delete",
@@ -1624,7 +1647,11 @@
         "upstreamFailed": "An earlier node didn't finish",
         "upstreamBlocked": "An earlier node can't run yet",
         "loop": "This node is in a loop, or reads from one. Remove a connection to run it.",
-        "noEndFrame": "This model can't end on a chosen frame. Pick another model."
+        "noEndFrame": "This model can't end on a chosen frame. Pick another model.",
+        "noMask": "Paint a mask or connect one to run this",
+        "maskStale": "The image changed. Paint the mask again.",
+        "maskSeveral": "A painted mask fits one image. Connect one image, or connect a mask.",
+        "noDescription": "Describe the change to run this"
       },
       "collapsed": {
         "expand": "Expand {name}",
@@ -1769,6 +1796,8 @@
       "lockedFrame": "{frame} is locked, so nothing new can go in it. Only the person can unlock it.",
       "lockOnlyPerson": "Only the person can lock {node}.",
       "missingAsset": "There's no image {id} in your library.",
+      "notMask": "{id} isn't a saved mask. Give an Edit node its mask with set_node_mask.",
+      "maskFor": "Mask {id} wasn't painted on the image in maskFor. Give an Edit node its mask with set_node_mask, which sets both.",
       "invalid": "That would leave the canvas broken. {reason}",
       "nudged": "Nudged {node} {shift} to clear {others}.",
       "nudge": {
@@ -1797,6 +1826,7 @@
       "limits": {
         "promptText": "A Prompt node holds at most {max} characters. This text has {count}.",
         "generatePrompt": "A Generate prompt can be at most {max} characters. This one has {count}.",
+        "editPrompt": "An Edit prompt can be at most {max} characters. This one has {count}.",
         "takes": "New takes makes {min} to {max} images. This asks for {count}.",
         "prompts": "Variations takes at most {max} prompts. This has {count}.",
         "promptLine": "Each Variations prompt can be at most {max} characters. Prompt {index} has {count}.",
@@ -2184,6 +2214,7 @@
       "images": "Images",
       "aspect": "Aspect ratio",
       "aspectValue": "{ratio}, same as the image",
+      "aspectSame": "Same as the image",
       "keepsSize": "New image keeps the original size, {width} × {height}.",
       "comesOut": "New image comes out at {width} × {height}."
     },

@@ -894,6 +894,8 @@ describe("crash recovery (§8.4.5)", () => {
 
     // What the database holds when Openfield stops right after recording Generate's launch.
     const { generate, variations } = chain();
+    // As #plan records it: the call's settings, with no mask to bind them to.
+    const { mask: _mask, ...settings } = generate.calls[0]!;
     const runId = newId();
     const key = newId();
     const record: CanvasRunRecord = {
@@ -905,7 +907,7 @@ describe("crash recovery (§8.4.5)", () => {
           call: 0,
           source: 0,
           request: {
-            ...generate.calls[0]!,
+            ...settings,
             seed: undefined,
             idempotencyKey: key,
             source: "canvas",

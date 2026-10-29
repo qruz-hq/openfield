@@ -23,6 +23,14 @@ export function blockerMessage(blocker: NodeBlocker, providers: readonly Provide
       return t("canvas.nodes.blocked.tooManyReferences", { max: blocker.max });
     case "end_frame_unsupported":
       return t("canvas.nodes.blocked.noEndFrame");
+    case "area_edit_off":
+      return t("composer.areaEditOff", { model: blocker.name });
+    case "no_mask":
+      return t("canvas.nodes.blocked.noMask");
+    case "mask_stale":
+      return t(blocker.several ? "canvas.nodes.blocked.maskSeveral" : "canvas.nodes.blocked.maskStale");
+    case "no_description":
+      return t("canvas.nodes.blocked.noDescription");
     case "no_prompt":
       return t("canvas.nodes.blocked.noPrompt");
     case "missing_input":

@@ -36,6 +36,9 @@ export const readModel = (value: unknown): ModelKey | undefined => {
 export const readModels = (value: unknown): ModelKey[] =>
   Array.isArray(value) ? value.flatMap((v) => (readModel(v) ? [readModel(v)!] : [])) : [];
 
+export const readAssetId = (value: unknown): string | undefined =>
+  ulidSchema.safeParse(value).success ? (value as string) : undefined;
+
 export const readAssetIds = (value: unknown): string[] =>
   Array.isArray(value) ? value.filter((v): v is string => ulidSchema.safeParse(v).success) : [];
 

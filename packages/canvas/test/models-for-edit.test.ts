@@ -1,6 +1,7 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
-import type { ModelListItem } from "@openfield/core";
+import type { ModelKey, ModelListItem } from "@openfield/core";
+import { buildEngineContext } from "../src/engine/context-base";
 import { modelsForEdit } from "../src/engine/inputs";
 import { banana } from "./fixtures";
 
@@ -43,5 +44,37 @@ describe("modelsForEdit", () => {
   test("a model that can't edit, or makes video, isn't offered", () => {
     const video = model("seedance", { inpaint: false, imageEdit: true }, { modality: "video" });
     expect(modelsForEdit([textOnly, video])).toEqual({ masked: [], whole: [] });
+  });
+});
+
+describe("the model a new Edit node starts on", () => {
+  const flare = model("flare", { inpaint: true, imageEdit: true });
+  const pro = model("pro", { inpaint: false, imageEdit: true });
+  const lite = model("lite", { inpaint: true, imageEdit: true });
+  const start = (
+    models: ModelListItem[],
+    defaultModel: ModelKey | null = null,
+    providers?: Parameters<typeof buildEngineContext>[2],
+  ) =>
+    buildEngineContext(models, { defaultModel, defaultBatch: 1, defaultAspect: null }, providers)
+      .defaultEditModel;
+
+  test("one that takes a mask, the default model when it does", () => {
+    expect(start([pro, flare, lite])).toBe(flare.key);
+    expect(start([pro, flare, lite], lite.key)).toBe(lite.key);
+    // The default image model redraws the whole image, so it isn't where an edit starts.
+    expect(start([pro, flare], pro.key)).toBe(flare.key);
+  });
+
+  test("a whole-image model when nothing ready takes a mask, and one with no key over none", () => {
+    expect(start([{ ...flare, ready: false }, pro])).toBe(pro.key);
+    expect(start([{ ...flare, ready: false }])).toBe(flare.key);
+    expect(start([model("text-only", { inpaint: false, imageEdit: false })])).toBeNull();
+  });
+
+  test("never an early company's model unless it's the default", () => {
+    const early = [{ id: flare.providerId, enabled: true, meta: { stable: false } }] as never;
+    expect(start([flare, pro], null, early)).toBeNull();
+    expect(start([flare, pro], flare.key, early)).toBe(flare.key);
   });
 });

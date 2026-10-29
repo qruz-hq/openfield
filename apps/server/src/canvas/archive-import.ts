@@ -33,6 +33,7 @@ import {
   type Executor,
   findLiveAssetBySha256,
   getAsset,
+  getAssets,
   getCanvas,
   insertAsset,
   insertAssetEdges,
@@ -48,6 +49,7 @@ import { ApiFailure } from "../http/errors";
 import type { Logger } from "../log/logger";
 import { toAssetListItem } from "../mappers/asset";
 import type { SettingsService } from "../services/settings";
+import { paintedMasks } from "./archive";
 import { type ArchiveSource, CANVAS_FILE, MANIFEST_FILE, notArchive } from "./archive-source";
 import type { CanvasService } from "./canvases";
 import { readDocument } from "./documents";
@@ -134,31 +136,51 @@ export async function importArchive(
   const reused = new Set<string>();
   const missing = new Set<string>();
   const wanted: { entry: CanvasArchiveAsset; id: string }[] = [];
-  for (const id of documentAssetRefs(original).shown) {
+  /** `onCanvas`: the canvas shows it, so one that can't come in counts as missing. */
+  const consider = (id: string, onCanvas: boolean) => {
     const entry = entries.get(id);
     const here = getAsset(db, id);
-    if (here && (!entry || here.sha256 === entry.sha256)) {
+    if (here && (!entry || here.sha256 === entry.sha256) && !reparented(here, entry)) {
       reused.add(id);
-      continue;
+      return;
     }
     if (!entry) {
-      missing.add(id);
-      continue;
+      if (onCanvas) missing.add(id);
+      return;
     }
     const same = liveCopy(db, entry.sha256);
     if (same) {
       moved.set(id, same.id);
       reused.add(same.id);
-      continue;
+      return;
     }
     if (source.size(entry.file) === null) {
-      missing.add(id);
-      continue;
+      if (onCanvas) missing.add(id);
+      return;
     }
     // The id is free unless an image in the Trash (or other bytes) holds it.
     const taken = getAsset(db, id, { includeDeleted: true });
     wanted.push({ entry, id: taken ? newId() : id });
-  }
+  };
+  /**
+   * A mask here fits the image it was painted on. When that image comes in under another id (its
+   * old row sits in the Trash), the mask comes in again with it, so the two still match.
+   */
+  const goesTo = (id: string) => moved.get(id) ?? wanted.find((w) => w.entry.id === id)?.id ?? id;
+  const reparented = (here: AssetRow, entry: CanvasArchiveAsset | undefined) =>
+    here.kind === "mask" && !!entry?.parentAssetId && here.parentAssetId !== goesTo(entry.parentAssetId);
+  const maskish = (id: string) => (entries.get(id)?.kind ?? getAsset(db, id)?.kind) === "mask";
+  const shown = documentAssetRefs(original).shown;
+  // Images first, so a mask knows where the image it was painted on went.
+  for (const id of shown.filter((id) => !maskish(id))) consider(id, true);
+  for (const id of shown.filter(maskish)) consider(id, true);
+  // The masks new edits were made with come along, so each keeps the one its details show. An
+  // edit already here has its own.
+  const masks = archivedMasks(
+    shown,
+    wanted.map((w) => w.entry),
+  );
+  for (const id of masks) consider(id, false);
   const sizeOf = (name: string | undefined) => (name ? (source.size(name) ?? 0) : 0);
   progress.sized(
     wanted.length,
@@ -237,7 +259,9 @@ export async function importArchive(
       const folderId = filed.length ? createFolder(tx, { id: newId(), name }).id : null;
       const canvasId = newId();
       const rows: AssetRow[] = [];
-      for (const s of staged) {
+      // Masks first: an edit's row can only name its mask once the mask is a row (a foreign key).
+      const ordered = [...staged].sort((a, b) => Number(isMask(b)) - Number(isMask(a)));
+      for (const s of ordered) {
         rows.push(insertAsset(tx, assetRow(tx, s, moved, inserted, { archiveCanvasId, canvasId, nodeIds })));
       }
       insertAssetEdges(tx, edgesFor(tx, manifest?.edges ?? [], moved, inserted));
@@ -256,14 +280,21 @@ export async function importArchive(
   }
   committed.created.settle();
   announce(deps, committed.folderId, committed.rows);
+  // Counted as images, as the new folder lists them: masks come along but aren't images to show.
+  const painted = paintedMasks(original);
+  const maskRows = new Set(
+    getAssets(db, [...reused])
+      .filter((a) => a.kind === "mask")
+      .map((a) => a.id),
+  );
   return {
     kind: "import",
     canvasId: committed.created.detail.id,
     name: committed.created.detail.name,
     folderId: committed.folderId,
-    imported: staged.length,
-    reused: reused.size,
-    missing: missing.size,
+    imported: staged.filter((s) => !isMask(s)).length,
+    reused: [...reused].filter((id) => !maskRows.has(id)).length,
+    missing: [...missing].filter((id) => !painted.has(id) && entries.get(id)?.kind !== "mask").length,
   };
 }
 
@@ -323,6 +354,21 @@ async function readManifest(source: ArchiveSource): Promise<Manifest | null> {
     assets: each(parsed.assets, canvasArchiveAssetSchema),
     edges: each(parsed.edges, canvasArchiveEdgeSchema),
   };
+}
+
+const isMask = (s: Staged) => s.entry.kind === "mask";
+
+/**
+ * The masks of images coming in that the canvas doesn't show itself: those its edits were made
+ * with. The folder import asks for the same files (archive-jobs needed).
+ */
+export function archivedMasks(
+  shown: readonly string[],
+  incoming: readonly Pick<CanvasArchiveAsset, "maskAssetId">[],
+): string[] {
+  const onCanvas = new Set(shown);
+  const masks = incoming.flatMap((entry) => (entry.maskAssetId ? [entry.maskAssetId] : []));
+  return [...new Set(masks)].filter((id) => !onCanvas.has(id));
 }
 
 /** The library's own copy of these bytes, if it has one. Masks aren't images to show. */

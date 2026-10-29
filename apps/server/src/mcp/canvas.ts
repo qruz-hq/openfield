@@ -1,8 +1,12 @@
 import type { ImageContent } from "@modelcontextprotocol/sdk/types.js";
 import {
+  blockerFromReason,
   type DocSlice,
+  editBaseNow,
+  editSpec,
   evaluateGraph,
   fromDocument,
+  incomingEdges,
   lockedBy,
   nodeRect,
   nodeTitle,
@@ -17,6 +21,8 @@ import {
   type ErrorCode,
   errorCopy,
   isTerminalState,
+  type ModelKey,
+  t,
 } from "@openfield/core";
 import type { CanvasDocument, CanvasNode, CanvasNodeResult } from "@openfield/core/canvas";
 import { getAssets, getCanvas, getJobSet, listCanvases } from "@openfield/db";
@@ -117,6 +123,19 @@ const SHOWN_PARAMS: Partial<Record<string, readonly string[]>> = {
   "image.upload": ["assetIds"],
   "image.asset": ["assetIds"],
   "image.generate": ["model", "prompt", "size", "resolution", "quality", "batch", "seed"],
+  "image.edit": [
+    "model",
+    "prompt",
+    "maskAssetId",
+    "maskFor",
+    "keepOriginal",
+    "expandPx",
+    "featherPx",
+    "resolution",
+    "quality",
+    "batch",
+    "seed",
+  ],
   "image.variations": ["strategy", "count", "model", "models", "prompts", "size", "resolution", "quality"],
   "video.generate": ["model", "prompt", "size", "resolution", "seconds", "sound", "cameraFixed", "seed"],
   note: ["text"],
@@ -170,24 +189,11 @@ export async function describeCanvas(
   const row = getCanvas(ctx.svc.db, canvasId);
   if (!row) return missing(canvasId);
   const doc = readDocument(row.graph);
-  const { slice } = fromDocument(doc);
-  const named = doc.nodes.flatMap((n) => n.result?.assetIds ?? []);
-  const assets = getAssets(ctx.svc.db, named);
-  const here = new Set(assets.map((a) => a.id));
-  const engine = { ...serverEngineContext(ctx.svc), missing: new Set(named.filter((id) => !here.has(id))) };
+  const { slice, assets, engine, fingerprints, evaluation } = await evaluateCanvas(ctx, doc);
   // Image cards at their images' shape, as edits place them (edits/place.ts).
   const sizes = Object.fromEntries(
     assets.filter((a) => a.width > 0 && a.height > 0).map((a) => [a.id, { w: a.width, h: a.height }]),
   );
-  const fingerprints = await resolveFingerprints(planFingerprints(slice, specRegistry, engine), new Map());
-  // As if everything ran, so each node's blockers and inputs are worked out as a Run all would.
-  const evaluation = evaluateGraph({
-    doc: slice,
-    registry: specRegistry,
-    ctx: engine,
-    fingerprints,
-    runs: () => true,
-  });
   const busy = ctx.svc.canvasRuns.busyNodes(canvasId);
   const providers = providerSummaries(ctx.svc);
 
@@ -240,6 +246,82 @@ export async function describeCanvas(
   };
 }
 
+/**
+ * A canvas worked out as if everything ran, so each node's blockers and inputs are what a Run all
+ * would find. Images its nodes made, or an Edit node's painted mask, that the library no longer
+ * has count as missing.
+ */
+async function evaluateCanvas(ctx: ToolContext, doc: CanvasDocument) {
+  const { slice } = fromDocument(doc);
+  const named = doc.nodes.flatMap((n) => [
+    ...(n.result?.assetIds ?? []),
+    ...(typeof n.params.maskAssetId === "string" ? [n.params.maskAssetId] : []),
+  ]);
+  const assets = getAssets(ctx.svc.db, named);
+  const here = new Set(assets.map((a) => a.id));
+  const engine = { ...serverEngineContext(ctx.svc), missing: new Set(named.filter((id) => !here.has(id))) };
+  const fingerprints = await resolveFingerprints(planFingerprints(slice, specRegistry, engine), new Map());
+  const evaluation = evaluateGraph({
+    doc: slice,
+    registry: specRegistry,
+    ctx: engine,
+    fingerprints,
+    runs: () => true,
+  });
+  return { slice, assets, engine, fingerprints, evaluation };
+}
+
+/** An Edit node an agent gives a mask, as set_node_mask needs it. */
+export interface MaskTarget {
+  title: string;
+  /** The node connected to its mask input, whose mask it uses instead of its own. */
+  wiredFrom: string | null;
+  /** The one image on its image input now, which a mask is made for, or why there's none. */
+  base: { assetId: string } | { why: string };
+}
+
+/**
+ * Reads an Edit node for set_node_mask, refusing anything else and a locked node before a mask is
+ * saved. Its image is the one the editor paints on: the single image on its image input now,
+ * which a node upstream still has before it runs again.
+ */
+export async function maskTarget(ctx: ToolContext, canvasId: string, nodeId: string): Promise<MaskTarget> {
+  const row = getCanvas(ctx.svc.db, canvasId);
+  if (!row) return missing(canvasId);
+  const doc = readDocument(row.graph);
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node) throw new Refusal(t("canvas.edits.noNode", { id: nodeId }));
+  const title = nodeTitle(node, specRegistry);
+  if (node.type !== editSpec.type)
+    throw new Refusal(`${title} isn't an Edit node. Only Edit nodes take a mask.`);
+  const { slice, evaluation } = await evaluateCanvas(ctx, doc);
+  const titleOf = (id: string) => nodeTitle(slice.nodes[id]!, specRegistry);
+  const by = lockedBy(slice, nodeId);
+  if (by !== null) {
+    throw new Refusal(
+      by === nodeId
+        ? t("canvas.edits.locked", { node: title })
+        : t("canvas.edits.lockedByFrame", { node: title, frame: titleOf(by) }),
+    );
+  }
+  const masked = incomingEdges(slice, nodeId, "mask")[0];
+  const fed = incomingEdges(slice, nodeId, "image")[0];
+  const inputs = evaluation.nodes.get(nodeId)?.inputs ?? {};
+  const now = editBaseNow(inputs);
+  const why = !fed
+    ? "Nothing is connected to its image input. Connect the image to edit first: a mask is made for that one image."
+    : now.length === 0
+      ? `${titleOf(fed.source)} has no image to hand on yet. Run it first, then set the mask.`
+      : now.length > 1
+        ? `${now.length} images come in on its image input, and a mask fits only one. Connect a node with just the image to edit, such as an Assets node holding it.`
+        : null;
+  return {
+    title,
+    wiredFrom: masked ? titleOf(masked.source) : null,
+    base: why ? { why } : { assetId: now[0]! },
+  };
+}
+
 function stateOf(result: CanvasNodeResult | null, current: boolean): NodeState {
   if (!result) return "idle";
   if (result.state === "failed" || result.state === "canceled") return current ? result.state : "idle";
@@ -289,6 +371,8 @@ export interface CanvasRunView {
     total: number;
     images: ImageInfo[];
     error?: string;
+    /** Why it didn't start, as its band says it. */
+    blocked?: string;
     costUsd: number | null;
   }[];
   next?: string;
@@ -308,6 +392,11 @@ export async function describeCanvasRun(
   const blocks: ImageContent[] = [];
   let previews = opts.maxPreviews ?? 8;
   const nodes: CanvasRunView["nodes"] = [];
+  const providers = providerSummaries(ctx.svc);
+  const modelOf = (nodeId: string) => () => {
+    const params = doc?.nodes.find((n) => n.id === nodeId)?.params;
+    return typeof params?.model === "string" ? (params.model as ModelKey) : null;
+  };
   for (const node of state.nodes) {
     const described = await describeImages(ctx, getAssets(ctx.svc.db, node.assetIds), {
       previews: opts.previews && previews > 0,
@@ -316,6 +405,10 @@ export async function describeCanvasRun(
     previews -= described.blocks.length;
     blocks.push(...described.blocks);
     const error = errorText(node.error);
+    // A node held back at launch (its mask no longer fits a new image) says why and what to do.
+    const blocked = node.blocked
+      ? blockerMessage(blockerFromReason(node.blocked, modelOf(node.nodeId)), providers)
+      : null;
     nodes.push({
       nodeId: node.nodeId,
       title: title(node.nodeId),
@@ -324,6 +417,7 @@ export async function describeCanvasRun(
       total: node.total,
       images: described.images,
       ...(error && { error }),
+      ...(blocked && { blocked }),
       costUsd: node.costUsd,
     });
   }

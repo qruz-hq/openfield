@@ -1,9 +1,9 @@
 import { heldBack } from "@openfield/canvas/engine/compile";
 import { roundToCents, sumEstimates } from "@openfield/canvas/engine/cost";
 import { evaluateGraph, isRunnable } from "@openfield/canvas/engine/evaluate";
-import { imageCount, imagesOf, joinPrompt, textOf } from "@openfield/canvas/engine/inputs";
+import { imageCount, imagesNow, imagesOf, joinPrompt, textOf } from "@openfield/canvas/engine/inputs";
 import type { EngineContext, NodeBlocker } from "@openfield/canvas/engine/types";
-import { isLocked } from "@openfield/canvas/store/graph";
+import { incomingEdges, isLocked } from "@openfield/canvas/store/graph";
 import type { DocSlice } from "@openfield/canvas/store/ops";
 import type { CostEstimate } from "@openfield/core";
 import type { NodeRegistry } from "../nodes/registry";
@@ -49,6 +49,18 @@ export interface NodeAnalysis {
    * lists them (and reorders by link) from the same lists the strip is built from.
    */
   imageLinks: readonly ImageLink[];
+  /**
+   * The images coming in to be edited (an Edit node's image input), as the engine reads them
+   * (editBaseNow): each image there, or those its node upstream has now. A mask is painted on the
+   * one there is; the engine judges it against the same list. Empty with none yet.
+   */
+  baseImages: readonly string[];
+  /** Something is connected to its image input. */
+  baseLinked: boolean;
+  /** The images on a Mask input that has a link into it. Empty with nothing connected there. */
+  maskImages: readonly (string | null)[];
+  /** Something is connected to its Mask input, which then stands in for a painted mask. */
+  maskLinked: boolean;
 }
 
 export interface GraphAnalysis {
@@ -84,6 +96,10 @@ const LOOP_ANALYSIS: NodeAnalysis = {
   references: 0,
   referenceImages: [],
   imageLinks: [],
+  baseImages: [],
+  baseLinked: false,
+  maskImages: [],
+  maskLinked: false,
 };
 
 const sameEstimate = (a: CostEstimate | null, b: CostEstimate | null) =>
@@ -113,6 +129,10 @@ const sameNode = (a: NodeAnalysis, b: NodeAnalysis) =>
   sameLinks(a.imageLinks, b.imageLinks) &&
   a.references === b.references &&
   sameList(a.referenceImages, b.referenceImages) &&
+  sameList(a.baseImages, b.baseImages) &&
+  a.baseLinked === b.baseLinked &&
+  sameList(a.maskImages, b.maskImages) &&
+  a.maskLinked === b.maskLinked &&
   a.fanOut === b.fanOut &&
   a.jobs === b.jobs &&
   a.upToDate === b.upToDate &&
@@ -149,10 +169,14 @@ export function analyzeGraph(
     const locked = !node.runs && isRunnable(doc, registry, id) && isLocked(doc, id);
     if (!node.runs && !locked) continue;
     if (node.runs) runnable++;
-    const refPorts = (node.definition?.ports ?? []).filter(
-      (port) => port.direction === "in" && port.binding?.to === "references",
-    );
-    const links = refPorts.flatMap((port) => imageLinks(doc, evaluation.nodes, id, port.id));
+    const portsTo = (to: string) =>
+      (node.definition?.ports ?? []).filter((port) => port.direction === "in" && port.binding?.to === to);
+    const linksTo = (to: string) =>
+      portsTo(to).flatMap((port) => imageLinks(doc, evaluation.nodes, id, port.id));
+    const refPorts = portsTo("references");
+    const links = linksTo("references");
+    const maskLinks = linksTo("mask");
+    const basePorts = portsTo("base");
     const next: NodeAnalysis = {
       blocker: node.blocker,
       fanOut: node.compiled?.fanOut ?? 1,
@@ -174,6 +198,10 @@ export function analyzeGraph(
         ),
       ),
       imageLinks: links,
+      baseImages: basePorts.flatMap((port) => imagesNow(imagesOf(node.inputs, port.id))),
+      baseLinked: basePorts.some((port) => incomingEdges(doc, id, port.id).length > 0),
+      maskImages: maskLinks.flatMap((link) => link.images),
+      maskLinked: maskLinks.length > 0,
     };
     const before = previous.nodes[id];
     nodes[id] = before && sameNode(before, next) ? before : next;

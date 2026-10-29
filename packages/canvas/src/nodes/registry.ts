@@ -14,8 +14,8 @@ import type { NodeFrame, Point, Size } from "../store/ops";
 // The node type registry, without React: one spec per type says everything the engine and the
 // server need, its ports, its params and defaults, its engine half and where it sits in the add-node
 // menu. The web app adds each type's icon and components on top (apps/web nodes/registry.ts). A
-// type without a spec (Edit, Style, Upscale and the v1.1 nodes in this build) still loads and
-// saves: the editor draws a labelled placeholder and keeps its data.
+// type without a spec (Style, Upscale and the v1.1 nodes in this build) still loads and saves: the
+// editor draws a labelled placeholder and keeps its data.
 
 export type NodeCategory = "reference" | "generate" | "edit" | "utility" | "annotation";
 

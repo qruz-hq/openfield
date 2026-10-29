@@ -8,9 +8,11 @@ import {
   outputTokensFor,
   type PerImagePrice,
   type PriceModel,
+  type ResolutionTier,
   type SpeedId,
   t,
 } from "@openfield/core";
+import { editSizeFor } from "./size";
 import { pricedOp, priceFor, resolveSpeed } from "./speed";
 import { resolveVideo, videoRate, videoSize, videoSizes, videoTokens } from "./video";
 
@@ -373,4 +375,32 @@ function moneyRange(low: number, high: number, currency: string): string {
 
 function qualityLabel(manifest: ModelManifest, id: string): string {
   return manifest.capabilities.quality?.levels.find((l) => l.id === id)?.label ?? id;
+}
+
+/**
+ * How an edit sent with an "auto" size is priced (a canvas Edit node): at the size the server asks
+ * for, its base's shape at the tier (editSizeFor, as the runner's withEditSize does), with the base
+ * named as the image being edited. `base.assetId` only marks the request as an edit, and may stand
+ * in for an image still to come; without the base's size, the model's default size is priced.
+ */
+export function editPricing(
+  manifest: Pick<ModelManifest, "capabilities">,
+  base: { assetId: string; width?: number | undefined; height?: number | undefined },
+  tier: ResolutionTier | undefined,
+): Pick<EstimateRequest, "size" | "resolution" | "base" | "inputImageSizes"> {
+  const ref = { base: { assetId: base.assetId, role: "base" as const } };
+  if (!base.width || !base.height) return { ...ref, ...(tier && { resolution: tier }) };
+  const fit = editSizeFor(manifest, { width: base.width, height: base.height }, tier);
+  const size =
+    fit.size.kind === "pixels"
+      ? { width: fit.size.width, height: fit.size.height }
+      : fit.size.kind === "aspect"
+        ? { aspect: fit.size.ratio }
+        : undefined;
+  return {
+    ...ref,
+    ...(size && { size }),
+    ...(fit.resolution && { resolution: fit.resolution }),
+    inputImageSizes: [{ width: base.width, height: base.height }],
+  };
 }

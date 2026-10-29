@@ -226,6 +226,12 @@ describe("graph sketch", () => {
     }
   });
 
+  test("an Edit node shows its four inputs and its output, connected or not", () => {
+    const layout = sketchLayout([node("e", { type: "image.edit", position: { x: 0, y: 0 } })], [], box);
+    expect(layout.shapes.filter((s) => s.kind === "port")).toHaveLength(5);
+    expect(layout.shapes.some((s) => s.kind === "mark")).toBe(true);
+  });
+
   test("an empty canvas is only dots", () => {
     expect(sketchLayout([], [], box).shapes).toEqual([]);
   });

@@ -103,6 +103,8 @@ export interface CanvasUiState {
   shortcutsOpen: boolean;
   /** A node whose label is being renamed in place. */
   renamingNodeId: string | null;
+  /** The Edit node whose mask is being painted (Canvas / Mask window). */
+  maskNodeId: string | null;
   /** A version preview: every document change is refused. */
   readOnly: boolean;
 }

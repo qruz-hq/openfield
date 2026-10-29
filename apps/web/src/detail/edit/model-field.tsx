@@ -16,42 +16,53 @@ import {
 } from "@openfield/ui";
 import { ChevronDown, Info } from "lucide-react";
 import { useRef, useState } from "react";
-import { useNavigate } from "react-router";
 import { useProviders } from "../../api/hooks/keys";
 import { useRunSpeed } from "../../api/hooks/provider-settings";
 import { speedFallbackHint, tightCost } from "../../lib/cost";
 import { focusSelected, Listbox } from "../../lib/listbox";
 import { companyName, logoFor } from "../../lib/provider";
 import { askedPrice, isPricePending } from "../../lib/remote-price";
-import { leaveEdit, useEditSession } from "./session";
 
 // Image edit / Model field and Model picker (design klZQahlnqa, LEObnHCnKu): the Form / Field /
 // Select look, opening the composer's picker to the left of the panel. Models that take a mask come
 // first ("Change only what you paint"); the ones that redraw the whole image follow, and picking one
 // says so under the field. A model whose company has no key stays listed, dimmed, with Add a key.
+// The Edit tab and the canvas Edit node's settings (design MZI3JqbHJr) both use it, each with its
+// own values.
 
 /** The picker sits 8 left of the panel: 22 from the trigger, inset 14 in it (design JYJSUrM1XY). */
 const PICKER_OFFSET = 22;
+
+export interface ModelFieldProps {
+  models: readonly ModelListItem[];
+  selected: ModelListItem | undefined;
+  /** The image being edited, for each model's price. Null while there's none: no prices. */
+  base: EditBase | null;
+  /** Keep the rest of the image is on, which the whole-image note says. */
+  composite: boolean;
+  resting: boolean;
+  /** A model was picked. One whose company has no key is the caller's to send to Settings. */
+  onPick: (model: ModelListItem) => void;
+  /** For the field's label, where the surface sets its own (a canvas node's settings). */
+  labelClassName?: string;
+}
 
 export function ModelField({
   models,
   selected,
   base,
+  composite,
   resting,
-}: {
-  models: readonly ModelListItem[];
-  selected: ModelListItem | undefined;
-  base: EditBase;
-  resting: boolean;
-}) {
-  const composite = useEditSession((s) => s.composite);
+  onPick,
+  labelClassName,
+}: ModelFieldProps) {
   // A model without a mask input runs over the whole image (§0.9), so the field says what happens.
   const whole = selected && !selected.capabilities.ops.inpaint;
   return (
     // Image edit / Model field: the field, then the note, 6 apart.
     <div inert={resting} className={cn("flex w-full shrink-0 flex-col gap-6", resting && "opacity-45")}>
-      <Field label={t("edit.model.label")} className="px-2 py-4">
-        <ModelPicker models={models} selected={selected} base={base} />
+      <Field label={t("edit.model.label")} labelClassName={labelClassName} className="px-2 py-4">
+        <ModelPicker models={models} selected={selected} base={base} onPick={onPick} />
       </Field>
       {whole ? (
         <div className="flex w-full items-center gap-6 px-2">
@@ -71,12 +82,8 @@ function ModelPicker({
   models,
   selected,
   base,
-}: {
-  models: readonly ModelListItem[];
-  selected: ModelListItem | undefined;
-  base: EditBase;
-}) {
-  const navigate = useNavigate();
+  onPick,
+}: Pick<ModelFieldProps, "models" | "selected" | "base" | "onPick">) {
   const field = useFieldControl();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -99,14 +106,12 @@ function ModelPicker({
 
   const pick = (model: ModelListItem) => {
     setOpen(false);
-    // A model whose company has no key leads to where the key goes, as in the composer (§3.4.1).
-    // That leaves the edit, so it asks first when a mask or a prompt would be lost.
-    if (!model.ready) leaveEdit(() => navigate("/settings/api-keys", { state: { focusKey: true } }));
-    else useEditSession.getState().setModel(model.key);
+    onPick(model);
   };
 
   /** One image of this edit at the model's own settings and its company's speed. */
   const priceOf = (model: ModelListItem) => {
+    if (!base) return {};
     const run = runSpeed(model, editOpFor(model.capabilities, true));
     const estimate = estimateRun(
       model,

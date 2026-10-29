@@ -256,6 +256,7 @@ async function boot(
   // become job sets here; like everything else, they wait for start() to be sent.
   const canvasRuns = new CanvasRunService({
     db,
+    ingest,
     runner,
     models,
     prices,

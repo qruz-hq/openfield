@@ -21,7 +21,7 @@ import { ApiFailure } from "../http/errors";
 import type { Logger } from "../log/logger";
 import type { SettingsService } from "../services/settings";
 import { type ArchivePlan, archiveStream, planExport } from "./archive";
-import { CANVAS_JSON_MAX, importArchive, MANIFEST_MAX } from "./archive-import";
+import { archivedMasks, CANVAS_JSON_MAX, importArchive, MANIFEST_MAX } from "./archive-import";
 import { type ArchiveSource, CANVAS_FILE, MANIFEST_FILE, openArchiveSource } from "./archive-source";
 import type { CanvasService } from "./canvases";
 import { readDocument } from "./documents";
@@ -261,10 +261,10 @@ export class CanvasArchiveService {
     const text = await archive.text(MANIFEST_FILE, MANIFEST_MAX);
     const doc = await archive.text(CANVAS_FILE, CANVAS_JSON_MAX);
     if (!text || !doc) return [];
-    let shown: Set<string>;
+    let shown: string[];
     let assets: CanvasArchiveAsset[];
     try {
-      shown = new Set(documentAssetRefs(readDocument(JSON.parse(doc))).shown);
+      shown = documentAssetRefs(readDocument(JSON.parse(doc))).shown;
       const listed: unknown = JSON.parse(text).assets;
       assets = (Array.isArray(listed) ? listed : []).flatMap((item) => {
         const one = canvasArchiveAssetSchema.safeParse(item);
@@ -275,13 +275,19 @@ export class CanvasArchiveService {
       return [];
     }
     const { db } = this.deps;
+    /** This library lacks it, so importArchive will want its file. */
+    const lacks = (asset: CanvasArchiveAsset) => {
+      if (getAsset(db, asset.id)?.sha256 === asset.sha256) return false;
+      const same = findLiveAssetBySha256(db, asset.sha256);
+      return !(same && same.kind !== "mask");
+    };
+    const onCanvas = new Set(shown);
+    const coming = assets.filter((a) => onCanvas.has(a.id) && lacks(a));
+    const masks = new Set(archivedMasks(shown, coming));
+    const sent = new Set([...coming, ...assets.filter((a) => masks.has(a.id) && lacks(a))]);
     const files: string[] = [];
     for (const asset of assets) {
-      if (!shown.has(asset.id)) continue;
-      const here = getAsset(db, asset.id);
-      if (here?.sha256 === asset.sha256) continue;
-      const same = findLiveAssetBySha256(db, asset.sha256);
-      if (same && same.kind !== "mask") continue;
+      if (!sent.has(asset)) continue;
       files.push(`${archive.prefix}${asset.file}`);
       if (asset.poster) files.push(`${archive.prefix}${asset.poster}`);
     }

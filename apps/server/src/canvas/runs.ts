@@ -1,4 +1,5 @@
 import {
+  blockerFromReason,
   compileRun,
   type EngineContext,
   fromDocument,
@@ -58,6 +59,7 @@ import {
   canvasRunsSince,
   createFolder,
   type Db,
+  getAsset,
   getAssets,
   getCanvas,
   getCanvasRun,
@@ -70,8 +72,10 @@ import {
   setCanvasFolder,
   updateCanvasRun,
 } from "@openfield/db";
-import { estimate, pricedOp, resolveProviderSettings } from "@openfield/providers/manifest";
+import { editPricing, estimate, pricedOp, resolveProviderSettings } from "@openfield/providers/manifest";
 import type { EventHub } from "../events/hub";
+import type { Ingest } from "../files/ingest";
+import { saveMask } from "../files/mask";
 import { ApiFailure } from "../http/errors";
 import type { Logger } from "../log/logger";
 import type { Runner } from "../runner/runner";
@@ -110,6 +114,8 @@ const TRACKED = new Set(["job.started", "job.output", "job.failed", "job.cancele
 
 export interface CanvasRunDeps {
   db: Db;
+  /** Saves an image wired into a mask input as a mask for the image it edits. */
+  ingest: Ingest;
   runner: Runner;
   models: ModelService;
   /** Prices a company answers per request (§6.9). Without it those nodes are priced as unknown. */
@@ -180,6 +186,9 @@ interface ActiveRun {
   filed: Set<string>;
   folderId?: string;
 }
+
+/** An edit's base as it's priced: the image, or a stand-in for one still to come, and its size. */
+type EditBase = { assetId: string; width?: number; height?: number };
 
 interface Analysis {
   skipped: boolean;
@@ -374,6 +383,18 @@ export class CanvasRunService {
         versionId,
       });
     }
+    // What only the server can tell (a mask that no longer fits the image it would go with) blocks
+    // a planned node too, and says why, as the engine's blockers do.
+    const modelOf = (nodeId: string) => () =>
+      outcome.items.find((c) => c.item.nodeId === nodeId)?.item.calls[0]?.model ?? null;
+    for (const node of response.nodes) {
+      if (!node.blocked || blocked.some((b) => b.nodeId === node.nodeId)) continue;
+      blocked.push({
+        nodeId: node.nodeId,
+        reason: node.blocked,
+        message: blockerMessage(blockerFromReason(node.blocked, modelOf(node.nodeId)), providers),
+      });
+    }
     return {
       outcome: "plan",
       runId: response.runId,
@@ -458,7 +479,8 @@ export class CanvasRunService {
         item.calls.flatMap((call) => {
           const manifest = this.deps.models.get(call.model);
           if (!manifest || !asksForPrice(manifest)) return [];
-          const { model: _model, label: _label, ...body } = call;
+          // A mask is never priced, and no model priced per request takes one.
+          const { model: _model, label: _label, mask: _mask, ...body } = call;
           const ask = prices.estimateFor(manifest, { ...body, seed: body.seed ?? null });
           return [Promise.race([ask, late]).then((cost) => void asked.set(call, cost))];
         }),
@@ -498,8 +520,13 @@ export class CanvasRunService {
         input.values.some((v) => v.kind === "asset" && !present.has(v.assetId)),
       );
       const upstreamBad = upstream.some((u) => u.blocked !== null || u.expectedOut === 0);
-      const blocked =
-        this.#modelBlock(item) ?? (missing ? "missing_asset" : upstreamBad ? "upstream_failed" : null);
+      // Images earlier nodes will make are only known at launch, where #advance checks them.
+      const given = (to: string) => this.#inputIds(item, to, () => []);
+      const blocked: CanvasBlockReason | null =
+        this.#modelBlock(item) ??
+        (missing ? "missing_asset" : null) ??
+        (upstreamBad ? "upstream_failed" : null) ??
+        (this.#maskStale(given("base"), given("mask")) ? "mask_stale" : null);
       if (blocked) {
         out.set(item.nodeId, { skipped: false, blocked, expectedOut: 0, jobs: 0, estimate: freeEstimate() });
         continue;
@@ -513,6 +540,8 @@ export class CanvasRunService {
       // single one. Each is billed on top of the images it makes, at its own size where it's known.
       let inputImages = 0;
       const known: { width: number; height: number }[] = [];
+      // An edit's base, priced as the image being edited at the size asked for from its shape.
+      let base: EditBase | undefined;
       for (const input of item.inputs) {
         if (input.to !== "references" && input.to !== "base") continue;
         if (input.arity === "multi") {
@@ -525,14 +554,15 @@ export class CanvasRunService {
           inputImages += 1;
           // A fanned-out input sends a different image each launch; only a lone one has one size.
           const [only] = input.values;
-          const size =
-            input.values.length === 1 && only?.kind === "asset" ? sizes.get(only.assetId) : undefined;
+          const lone = input.values.length === 1 && only?.kind === "asset" ? only.assetId : null;
+          const size = lone ? sizes.get(lone) : undefined;
           if (size) known.push(size);
+          if (input.to === "base") base = { assetId: lone ?? item.nodeId, ...size };
         }
       }
       const perRun = item.calls.reduce((sum, call) => sum + call.batch, 0);
       const cost = scaleCostEstimate(
-        sumCostEstimates(item.calls.map((c) => asked.get(c) ?? this.#estimate(c, inputImages, known))),
+        sumCostEstimates(item.calls.map((c) => asked.get(c) ?? this.#estimate(c, inputImages, known, base))),
         fanOut,
       );
       out.set(item.nodeId, {
@@ -555,6 +585,25 @@ export class CanvasRunService {
     return live.length === new Set(cached.assetIds).size && live.every((a) => a.fileState === "ok");
   }
 
+  /** The images an item sends to one target (base, mask...), with what earlier nodes made as `made` says. */
+  #inputIds(item: CanvasRunPlanItem, to: string, made: (nodeId: string) => string[]): string[] {
+    return item.inputs
+      .filter((input) => input.to === to)
+      .flatMap((input) => input.values.flatMap((v) => (v.kind === "asset" ? [v.assetId] : made(v.nodeId))));
+  }
+
+  /**
+   * A saved mask fits only the image it was painted on, its parent. Over any other, as when an
+   * earlier node made a new image in this run, it would change the wrong place, so the node waits
+   * for the mask to be painted again. An image wired in as a mask is saved for each image it's
+   * sent with, so it always fits.
+   */
+  #maskStale(bases: readonly string[], masks: readonly string[]): boolean {
+    if (!bases.length || !masks.length) return false;
+    const saved = getAssets(this.deps.db, masks).filter((m) => m.kind === "mask");
+    return saved.some((m) => bases.some((base) => base !== m.parentAssetId));
+  }
+
   /** Why a model can't run right now, or null. Checked for every call the node makes. */
   #modelBlock(item: CanvasRunPlanItem): CanvasBlockReason | null {
     for (const call of item.calls) {
@@ -573,10 +622,25 @@ export class CanvasRunService {
     call: CanvasRunCall,
     inputImages = 0,
     inputImageSizes: readonly { width: number; height: number }[] = [],
+    base?: EditBase,
   ): CostEstimate {
     const manifest = this.deps.models.get(call.model);
     if (!manifest) return { ...freeEstimate(), confidence: "unknown" };
     const size = call.size;
+    // An edit's "auto" is its base's shape at the tier, as the runner asks for it (withEditSize).
+    if (base && size.kind === "auto" && !call.video) {
+      const { inputImageSizes: _base, ...edit } = editPricing(manifest, base, call.resolution);
+      return estimate(manifest, {
+        batch: call.batch,
+        prompt: call.prompt,
+        op: call.op,
+        speed: this.#speed(manifest, call),
+        inputImages,
+        inputImageSizes,
+        ...(call.quality && { quality: call.quality }),
+        ...edit,
+      });
+    }
     return estimate(manifest, {
       batch: call.batch,
       prompt: call.prompt,
@@ -712,6 +776,13 @@ export class CanvasRunService {
         run.dirty.add(node.item.nodeId);
         continue;
       }
+      const sent = (to: string) => this.#inputIds(node.item, to, (id) => this.#produced(run, id));
+      if (this.#maskStale(sent("base"), sent("mask"))) {
+        node.launched = true;
+        node.state = { ...node.state, state: "blocked", blocked: "mask_stale", total: 0 };
+        run.dirty.add(node.item.nodeId);
+        continue;
+      }
       node.launched = true;
       starting.push(this.#launch(run, node));
     }
@@ -770,14 +841,15 @@ export class CanvasRunService {
       const startFrame = bound.find((b) => b.input.to === "start_frame");
       const endFrame = bound.find((b) => b.input.to === "end_frame");
       item.calls.forEach((call, callIndex) => {
-        const { label: _label, seed, video, ...settings } = call;
+        const { label: _label, seed, video, mask: composite, ...settings } = call;
         const request: GenerateRequest = {
           ...settings,
           idempotencyKey: newId(),
           ...(seed !== null && seed !== undefined && { seed }),
           ...(references.length && { references }),
           ...(base && { base: { assetId: base.assetId, role: base.input.role ?? "base" } }),
-          ...(mask && { mask: { assetId: mask.assetId } }),
+          // The keep-the-rest settings go with the mask; without them the server's defaults apply.
+          ...(mask && { mask: { ...composite, assetId: mask.assetId } }),
           ...((video || startFrame) && {
             video: {
               ...video,
@@ -821,7 +893,8 @@ export class CanvasRunService {
       return;
     }
     try {
-      const accepted = await this.deps.runner.createJobSet(launch.request, {
+      const request = await this.#withSavedMask(launch.request);
+      const accepted = await this.deps.runner.createJobSet(request, {
         priority: run.priority,
         canvasRunId: run.id,
         agent: run.record.agent,
@@ -845,6 +918,23 @@ export class CanvasRunService {
         });
       }
     }
+  }
+
+  /**
+   * An image wired into a mask input (§7.6) goes as a mask saved for the image this launch edits,
+   * the way POST /api/masks saves one: by its transparency, or by brightness when it has none
+   * (white changes). The launch keeps the image it was given, so the node's result names what it
+   * read, and the same image saved again for the same base comes back as the same mask.
+   */
+  async #withSavedMask(request: GenerateRequest): Promise<GenerateRequest> {
+    const { mask, base } = request;
+    if (!mask || !base) return request;
+    const row = getAsset(this.deps.db, mask.assetId);
+    // A saved mask goes as it is, and one that's gone is the runner's to refuse.
+    if (!row || row.kind === "mask") return request;
+    const file = Bun.file(this.deps.ingest.fileOf(row.path));
+    const saved = await saveMask(this.deps, file, { baseAssetId: base.assetId });
+    return { ...request, mask: { ...mask, assetId: saved.asset.id } };
   }
 
   /** Marks a node for recomputing and processes the run soon, once per task. */

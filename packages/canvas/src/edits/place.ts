@@ -108,11 +108,15 @@ export interface PlaceRequest {
   viewport?: CanvasViewport;
   /** Where image cards' real boxes come from. Without it, every node counts at its saved size. */
   source?: BoxSource;
+  /** From `near`'s edge, PLACE_GAP when left out. */
+  gap?: number;
+  /** Off: the spot beside `near` keeps its top exactly, rather than the nearest grid line. */
+  grid?: boolean;
 }
 
 /** The top-left corner, in canvas coordinates, of a free spot for a node of this size. */
 export function placeNode(doc: DocSlice, specs: NodeRegistry, request: PlaceRequest): Point {
-  const { size, parentId = null, source } = request;
+  const { size, parentId = null, source, gap = PLACE_GAP, grid = true } = request;
   const around = framesAround(doc, parentId);
   const rectOf = (id: string) => nodeRect(doc, specs, id, source);
   const obstacles = doc.order
@@ -122,7 +126,7 @@ export function placeNode(doc: DocSlice, specs: NodeRegistry, request: PlaceRequ
       return rect ? [rect] : [];
     });
   const free = (at: Point) => !obstacles.some((o) => overlaps({ ...at, ...size }, o));
-  const at = (x: number, y: number): Point => ({ x: snap(x), y: snap(y) });
+  const at = (x: number, y: number): Point => (grid ? { x: snap(x), y: snap(y) } : { x, y });
 
   // Down a column, then the next column over, from a starting point. A spot that's taken moves
   // down to just under whatever took it, so a column packs as tight as the nodes in it are tall.
@@ -143,8 +147,8 @@ export function placeNode(doc: DocSlice, specs: NodeRegistry, request: PlaceRequ
   const near = request.near ? rectOf(request.near) : null;
   if (near) {
     const left = request.side === "left";
-    const start = { x: left ? near.x - PLACE_GAP - size.w : near.x + near.w + PLACE_GAP, y: near.y };
-    const found = scan(start, (left ? -1 : 1) * (size.w + PLACE_GAP));
+    const start = { x: left ? near.x - gap - size.w : near.x + near.w + gap, y: near.y };
+    const found = scan(start, (left ? -1 : 1) * (size.w + gap));
     if (found) return found;
   }
 

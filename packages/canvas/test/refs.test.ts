@@ -2,7 +2,13 @@
 import { describe, expect, test } from "bun:test";
 import type { CanvasDocument, CanvasNode, CanvasNodeResult } from "@openfield/core/canvas";
 import { emptyDocument } from "../src/store/document";
-import { documentAssetRefs, remapDocument, remapDocumentAssets, remapDocumentIds } from "../src/store/refs";
+import {
+  documentAssetRefs,
+  ownAssetIds,
+  remapDocument,
+  remapDocumentAssets,
+  remapDocumentIds,
+} from "../src/store/refs";
 
 // Which images a document names, and the id rewrites an import makes (§7.8).
 
@@ -10,6 +16,7 @@ const A = "01K6BQ8000000000000000000A";
 const B = "01K6BQ8000000000000000000B";
 const C = "01K6BQ8000000000000000000C";
 const D = "01K6BQ8000000000000000000D";
+const E = "01K6BQ8000000000000000000E";
 const F = "01K6BQ800000000000000000FF";
 
 function node(id: string, type: CanvasNode["type"], extra: Partial<CanvasNode> = {}): CanvasNode {
@@ -76,6 +83,35 @@ function doc(): CanvasDocument {
 describe("documentAssetRefs", () => {
   test("names what nodes were given and what runs made, apart from what runs read", () => {
     expect(documentAssetRefs(doc())).toEqual({ shown: [A, B, C, D], read: [B, A] });
+  });
+});
+
+describe("an Edit node's painted mask", () => {
+  const withEdit = (): CanvasDocument => {
+    const d = doc();
+    const edit = node("edit", "image.edit", { params: { prompt: "a red door", maskAssetId: E, maskFor: A } });
+    return { ...d, nodes: [...d.nodes, edit] };
+  };
+
+  test("is an image the canvas shows; the image it was painted on isn't named again", () => {
+    expect(documentAssetRefs(withEdit()).shown).toEqual([A, B, C, D, E]);
+    expect(ownAssetIds({ maskAssetId: E, maskFor: A })).toEqual([E]);
+    expect(ownAssetIds({ assetIds: [A, 7] })).toEqual([A]);
+  });
+
+  test("moves with its image, so it still fits the one it was painted on", () => {
+    const moved = remapDocumentAssets(
+      withEdit(),
+      new Map([
+        [A, B],
+        [E, C],
+      ]),
+    );
+    expect(moved.nodes[4]!.params).toEqual({ prompt: "a red door", maskAssetId: C, maskFor: B });
+    // Ids the map doesn't name stay as they are.
+    expect(remapDocumentAssets(withEdit(), new Map([[D, C]])).nodes[4]!.params).toEqual(
+      withEdit().nodes[4]!.params,
+    );
   });
 });
 

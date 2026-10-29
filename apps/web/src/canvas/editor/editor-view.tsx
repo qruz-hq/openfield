@@ -2,6 +2,7 @@ import { cn } from "@openfield/ui";
 import { ReactFlowProvider } from "@xyflow/react";
 import { useEffect } from "react";
 import { AddNodeMenu } from "../nodes/add-node-menu";
+import { MaskWindow } from "../nodes/edit/mask-window";
 import { NodeInspector } from "../nodes/inspector";
 import { CanvasStoreProvider, useCanvas, useCanvasStoreApi, useReadOnly, useUi } from "../store";
 import { AgentPill, FollowFrame } from "./chrome/agent-pill";
@@ -78,12 +79,25 @@ function EditorSurface({ previewing }: { previewing: boolean }) {
       {previewing ? null : <Toolbar commands={commands} />}
       <ZoomCluster commands={commands} />
       <DrawerHost previewing={previewing} />
+      {previewing ? null : <MaskWindowHost />}
       {addMenu && !readOnly ? <AddNodeMenu /> : null}
       <FrameDeleteDialog commands={commands} />
       <DeleteCanvasDialog />
       <SaveVersionDialog />
       <ShortcutsDialog />
     </div>
+  );
+}
+
+/** Canvas / Mask window, over the live canvas, for the Edit node whose mask is being painted. */
+function MaskWindowHost() {
+  const session = useSession();
+  const nodeId = useMain((s) => s.ui.maskNodeId);
+  if (!nodeId) return null;
+  return (
+    <CanvasStoreProvider store={session.main}>
+      <MaskWindow nodeId={nodeId} />
+    </CanvasStoreProvider>
   );
 }
 

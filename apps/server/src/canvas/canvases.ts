@@ -13,6 +13,7 @@ import {
   lockedTargets,
   lockProblem,
   nodeTitle,
+  ownAssetIds,
   specRegistry,
   toDocument,
   toWireOps,
@@ -88,6 +89,7 @@ import {
 import type { ModelService } from "../services/models";
 import type { SettingsService } from "../services/settings";
 import {
+  defaultEditModelKey,
   defaultModel,
   documentAssetIds,
   documentCounts,
@@ -230,7 +232,10 @@ export class CanvasService {
       { ...graph, meta: { ...graph.meta, previewPath: null } },
       { id, name, updatedAt: at, createdAt: at },
     );
-    doc = fillModels(doc, defaultModel(this.deps.models, this.deps.settings));
+    doc = fillModels(doc, {
+      image: defaultModel(this.deps.models, this.deps.settings),
+      edit: defaultEditModelKey(this.deps.models, this.deps.settings),
+    });
     const row = insertCanvas(db, {
       id,
       name,
@@ -567,7 +572,7 @@ export class CanvasService {
         updatedAt: at,
         createdAt: row.createdAt,
       });
-      this.#checkDocument(next, built.touched);
+      this.#checkDocument(next, built.touched, before);
       this.#checkLimits(built.doc, built.touched);
       this.#checkRunnable(built.doc, built.touched);
       const versionId = this.#agentVersion(id, actor, before, at);
@@ -714,7 +719,7 @@ export class CanvasService {
    * The document the edits leave must be one the editor opens. Only what the edits touched is
    * checked: an older canvas can carry settings this build reads leniently.
    */
-  #checkDocument(doc: CanvasDocument, touched: readonly string[]): void {
+  #checkDocument(doc: CanvasDocument, touched: readonly string[], before: CanvasDocument): void {
     const parsed = canvasDocumentSchema.safeParse(doc);
     if (!parsed.success) {
       const mine = new Set(touched);
@@ -729,22 +734,43 @@ export class CanvasService {
         });
       }
     }
-    // Images a node was given have to be in this library.
-    const named = doc.nodes.flatMap((node) => {
-      const ids = touched.includes(node.id) ? node.params.assetIds : undefined;
-      return Array.isArray(ids) ? ids.filter((v): v is string => typeof v === "string") : [];
+    // Images a node is given, an Edit node's painted mask among them, have to be in this library.
+    // Only the ones this edit gives it: one it already had and that has since gone (emptied from
+    // the Trash) shows as missing and stops a run, but mustn't stop the node being moved or changed.
+    const was = new Map(before.nodes.map((node) => [node.id, node]));
+    const mine = doc.nodes.filter((node) => touched.includes(node.id));
+    const named = mine.flatMap((node) => {
+      const had = new Set(ownAssetIds(was.get(node.id)?.params ?? {}));
+      return ownAssetIds(node.params).filter((assetId) => !had.has(assetId));
     });
-    if (!named.length) return;
-    const here = new Set(
+    const rows = new Map(
       getAssets(this.deps.db, named)
         .filter((a) => a.fileState === "ok")
-        .map((a) => a.id),
+        .map((a) => [a.id, a]),
     );
-    const missing = named.find((assetId) => !here.has(assetId));
+    const missing = named.find((assetId) => !rows.has(assetId));
     if (missing) {
       throw new ApiFailure(400, "bad_request", `No asset ${missing}`, {
         userMessage: t("canvas.edits.missingAsset", { id: missing }),
       });
+    }
+    // A painted mask fits the image it was painted on (its parent), and maskFor has to say that
+    // image: the editor decides from maskFor, a run from the mask's parent.
+    for (const node of mine) {
+      const { maskAssetId: mask, maskFor } = node.params;
+      const prior = was.get(node.id)?.params;
+      if (typeof mask !== "string" || (prior?.maskAssetId === mask && prior?.maskFor === maskFor)) continue;
+      const row = rows.get(mask) ?? getAssets(this.deps.db, [mask])[0];
+      if (row?.kind !== "mask") {
+        throw new ApiFailure(400, "bad_request", `${mask} isn't a mask`, {
+          userMessage: t("canvas.edits.notMask", { id: mask }),
+        });
+      }
+      if (row.parentAssetId !== maskFor) {
+        throw new ApiFailure(400, "bad_request", `${mask} wasn't painted on ${String(maskFor)}`, {
+          userMessage: t("canvas.edits.maskFor", { id: mask }),
+        });
+      }
     }
   }
 

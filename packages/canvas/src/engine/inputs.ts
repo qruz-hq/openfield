@@ -33,6 +33,13 @@ export function imagesOf(inputs: ResolvedInputs, port: string): ImageValue[] {
 export const imageCount = (values: readonly ImageValue[]): number =>
   values.reduce((sum, v) => sum + (v.kind === "asset" ? 1 : Math.max(0, v.expected)), 0);
 
+/**
+ * The images values stand for now: an asset's own, and those a node upstream has before it runs
+ * again (what its card shows). An Edit node's mask is painted on one of them.
+ */
+export const imagesNow = (values: readonly ImageValue[]): string[] =>
+  values.flatMap((v) => (v.kind === "asset" ? [v.assetId] : [...(v.current ?? [])]));
+
 /** The run plan's form of an image value. */
 export const planValue = (v: ImageValue) =>
   v.kind === "asset"
@@ -81,6 +88,8 @@ export const STANDING_BLOCKERS: ReadonlySet<NodeBlocker["kind"]> = new Set([
   "references_unsupported",
   "too_many_references",
   "end_frame_unsupported",
+  "area_edit_off",
+  "mask_stale",
   "too_many_jobs",
   "loop",
 ]);
@@ -105,6 +114,26 @@ export function modelsForEdit(models: readonly ModelListItem[]): EditModels {
     else if (m.capabilities.ops.imageEdit) out.whole.push(m);
   }
   return out;
+}
+
+/**
+ * The model an edit starts on (§0.9): the preferred one when it takes a mask and has its key, else
+ * the first usable model that takes a mask, else the first usable one that redraws the whole image,
+ * unless `wholeImage` is off (approximate area edits turned off in Settings). `usable` keeps out
+ * what mustn't be picked for the person, such as an early company's models.
+ */
+export function defaultEditModel(
+  models: readonly ModelListItem[],
+  preferred: ModelKey | null | undefined,
+  usable: (model: ModelListItem) => boolean = (m) => m.ready,
+  wholeImage = true,
+): ModelListItem | undefined {
+  const { masked, whole } = modelsForEdit(models);
+  return (
+    masked.find((m) => m.key === preferred && m.ready) ??
+    masked.find(usable) ??
+    (wholeImage ? whole.find(usable) : undefined)
+  );
 }
 
 /**

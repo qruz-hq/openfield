@@ -143,7 +143,7 @@ describe("flow adapter", () => {
   });
 
   test("a type this build doesn't know renders the placeholder at a default size", () => {
-    const s = slice([node("x", { type: "image.edit", size: undefined })]);
+    const s = slice([node("x", { type: "image.upscale", size: undefined })]);
     const [flow] = createNodeCache()(inputs(s));
     expect(flow!.type).toBe(UNKNOWN_NODE_TYPE);
     expect(flow!.width).toBe(UNKNOWN_NODE_SIZE.w);

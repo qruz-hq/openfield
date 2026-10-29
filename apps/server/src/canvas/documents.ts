@@ -1,5 +1,5 @@
-import { documentAssetRefs, specRegistry } from "@openfield/canvas";
-import { canonicalJson, type ModelKey, t } from "@openfield/core";
+import { defaultEditModel, documentAssetRefs, specRegistry } from "@openfield/canvas";
+import { canonicalJson, type ModelKey, type ModelListItem, t } from "@openfield/core";
 import {
   CANVAS_SCHEMA,
   type CanvasDocument,
@@ -14,8 +14,12 @@ import type { SettingsService } from "../services/settings";
 // Small rules every canvas route shares: what a saved document must say about itself, what the
 // index keeps beside it, and which model a new node starts on.
 
-/** Node types whose params.model a new canvas fills in when it's missing. */
-const MODEL_NODE_TYPES = new Set(["image.generate", "image.variations"]);
+/** Node types whose params.model a new canvas fills in when it's missing, and which default each takes. */
+const MODEL_NODE_TYPES: Readonly<Record<string, keyof NewCanvasModels>> = {
+  "image.generate": "image",
+  "image.variations": "image",
+  "image.edit": "edit",
+};
 /** How many result images to look through for a card's cover. */
 const COVER_CANDIDATES = 200;
 
@@ -107,20 +111,40 @@ export function documentCounts(doc: CanvasDocument): { nodeCount: number; edgeCo
   return { nodeCount: doc.nodes.length, edgeCount: doc.edges.length };
 }
 
+/** A model that can run right now and that a new canvas may pick for the person. */
+const canRun = (models: ModelService) => (m: ModelListItem) =>
+  m.ready && m.enabled && !models.early(m.providerId);
+
 /** The Defaults setting, else the first model that can run right now, else none. */
 export function defaultModel(models: ModelService, settings: SettingsService): ModelKey | null {
   const chosen = settings.get().defaultModel;
   if (chosen && models.get(chosen)) return chosen;
-  const ready = models.list().models.find((m) => m.ready && m.enabled && !models.early(m.providerId));
-  return ready?.key ?? null;
+  return models.list().models.find(canRun(models))?.key ?? null;
 }
 
-/** Gives Generate and Variations nodes without a model the default one, so a new canvas can run. */
-export function fillModels(doc: CanvasDocument, model: ModelKey | null): CanvasDocument {
-  if (!model) return doc;
+/**
+ * The model an Edit node starts on, as the Edit tab picks it: the default when it takes a mask,
+ * else the first that can run and takes one, else the first that can run and redraws the whole image.
+ */
+export function defaultEditModelKey(models: ModelService, settings: SettingsService): ModelKey | null {
+  const list = models.list().models;
+  const { defaultModel, regionalFallback } = settings.get();
+  return defaultEditModel(list, defaultModel, canRun(models), regionalFallback)?.key ?? null;
+}
+
+export interface NewCanvasModels {
+  /** For Generate and Variations. */
+  image: ModelKey | null;
+  edit: ModelKey | null;
+}
+
+/** Gives Generate, Variations and Edit nodes without a model a default one, so a new canvas can run. */
+export function fillModels(doc: CanvasDocument, defaults: NewCanvasModels): CanvasDocument {
   let changed = false;
   const nodes = doc.nodes.map((node) => {
-    if (!MODEL_NODE_TYPES.has(node.type) || typeof node.params.model === "string") return node;
+    const kind = MODEL_NODE_TYPES[node.type];
+    const model = kind ? defaults[kind] : null;
+    if (!model || typeof node.params.model === "string") return node;
     changed = true;
     return { ...node, params: { ...node.params, model } };
   });

@@ -3,13 +3,14 @@ import { type InternalNode, Position, useStoreApi } from "@xyflow/react";
 import { useEffect, useRef } from "react";
 import { imagesLoading } from "../../../api/hooks/images";
 import { onThemeChange, resolveColors } from "../../../lib/theme";
-import { cardMedia } from "../../nodes/generate/card-media";
+import { cardMedia, type EditorCardMedia } from "../../nodes/generate/card-media";
 import { type CanvasState, useCanvasStoreApi } from "../../store";
 import type { FlowEdge, FlowNode } from "./adapter";
 import { createTileBitmaps, type Drawable, type TileBitmaps } from "./tile-bitmaps";
 
 // Zoomed out (level of detail "canvas", below about 40%), every node is painted on this one canvas
-// as a plain tile, Figma-style: image cards as their image, Assets and Upload as a 2×2 grid of
+// as a plain tile, Figma-style: image cards as their image (an Edit card with none of its own yet
+// as the image coming in, as it shows it), Assets and Upload as a 2×2 grid of
 // their first images, notes, prompts and shapes as their fill, frames as their tint and line. Links
 // are simple curves that fade out between 25% and 20%. Selection and running outlines are painted
 // here too. React Flow keeps its own box around each node (empty, node-types.tsx), so selecting,
@@ -66,7 +67,12 @@ const stringIds = (value: unknown): readonly string[] =>
   Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : NO_IDS;
 
 /** What a node looks like zoomed out. Null: nothing here (text stays in the DOM, frames go first). */
-function tileOf(c: CanvasState, id: string, type: string, shown: Record<string, string>): Tile | null {
+function tileOf(
+  c: CanvasState,
+  id: string,
+  type: string,
+  media: Pick<EditorCardMedia, "shown" | "bases">,
+): Tile | null {
   const node = c.doc.nodes[id];
   if (!node) return null;
   switch (type) {
@@ -82,10 +88,12 @@ function tileOf(c: CanvasState, id: string, type: string, shown: Record<string, 
   if (node.collapsed) return panel;
   switch (type) {
     case "image.generate":
+    case "image.edit":
     case "video.generate": {
       const made = c.doc.results[id]?.assetIds ?? NO_IDS;
-      if (!made.length) return panel;
-      const pick = shown[id];
+      const base = type === "image.edit" ? media.bases[id] : undefined;
+      if (!made.length) return base ? { kind: "image", assetIds: [base], grid: false } : panel;
+      const pick = media.shown[id];
       return { kind: "image", assetIds: [pick && made.includes(pick) ? pick : made[0]!], grid: false };
     }
     case "image.variations": {
@@ -244,7 +252,7 @@ export function CanvasLayer() {
       const inView = (x: number, y: number, w: number, h: number) =>
         x < view.r && x + w > view.x && y < view.b && y + h > view.y;
       const over = mode === "over";
-      const shown = cardMedia.getState().shown;
+      const media = cardMedia.getState();
       const clipCorners = CARD_RADIUS * zoom >= 1.5;
 
       // Frames first: everything else sits on top of them.
@@ -284,7 +292,7 @@ export function CanvasLayer() {
         const h = node.measured.height ?? node.height ?? 0;
         const { x, y } = node.internals.positionAbsolute;
         if (!w || !h || !inView(x, y, w, h)) continue;
-        const tile = tileOf(c, node.id, node.type, shown);
+        const tile = tileOf(c, node.id, node.type, media);
         if (!tile) continue;
         if (tile.kind === "fill") {
           if (over) continue;
@@ -425,7 +433,7 @@ export function CanvasLayer() {
       const halfW = (s.width / zoom / 2) * grow;
       const halfH = (s.height / zoom / 2) * grow;
       const dpr = window.devicePixelRatio || 1;
-      const shown = cardMedia.getState().shown;
+      const media = cardMedia.getState();
       const wanted: { assetId: string; pixels: number; d: number }[] = [];
       for (const node of s.nodeLookup.values()) {
         if (node.hidden || !node.type) continue;
@@ -433,7 +441,7 @@ export function CanvasLayer() {
         const h = node.measured.height ?? node.height ?? 0;
         const { x, y } = node.internals.positionAbsolute;
         if (x > cx + halfW || x + w < cx - halfW || y > cy + halfH || y + h < cy - halfH) continue;
-        const tile = tileOf(c, node.id, node.type, shown);
+        const tile = tileOf(c, node.id, node.type, media);
         if (tile?.kind !== "image") continue;
         const d = Math.hypot(x + w / 2 - cx, y + h / 2 - cy);
         for (const cell of cellsOf(tile, x, y, w, h)) {

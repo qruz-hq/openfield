@@ -39,8 +39,9 @@ export async function resolveImage(ctx: ToolContext, ref: string): Promise<Asset
 }
 
 /**
- * The area of `base` an edit may change, as a saved mask. A saved mask's id is used as it is; any
- * other image, from the library, a file or an address, is saved as a mask of `base` first.
+ * The area of `base` an edit may change, as a saved mask. A mask saved for `base` is used as it is;
+ * any other image, from the library, a file or an address, is saved as a mask of `base` first.
+ * So is a mask saved for another image of the same size, since a mask fits only its own image.
  */
 export async function resolveMask(ctx: ToolContext, ref: string, base: AssetRow): Promise<AssetRow> {
   const value = ref.trim();
@@ -48,7 +49,7 @@ export async function resolveMask(ctx: ToolContext, ref: string, base: AssetRow)
   if (ULID_RE.test(value)) {
     const row = getAsset(ctx.svc.db, value);
     if (!row) throw new Refusal(`There's no mask or image with the id ${value} in the library.`);
-    if (row.kind === "mask") return row;
+    if (row.kind === "mask" && row.parentAssetId === base.id) return row;
     if (row.modality === "video") throw new Refusal(`${value} is a video, not a mask.`);
     file = Bun.file(ctx.svc.ingest.fileOf(row.path));
   } else {

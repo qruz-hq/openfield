@@ -1,6 +1,6 @@
 import { buildEngineContext, type EngineContext } from "@openfield/canvas";
 import type { ProviderSettingsResponse } from "@openfield/core";
-import type { Db } from "@openfield/db";
+import { type Db, getAsset } from "@openfield/db";
 import type { Provider } from "@openfield/providers/server";
 import type { CredentialService } from "../services/credentials";
 import type { ModelService } from "../services/models";
@@ -28,5 +28,12 @@ export function serverEngineContext(deps: EngineContextDeps): EngineContext {
   const speeds = new Map<string, ProviderSettingsResponse>(
     providers.map((p) => [p.id, deps.providerSettings.view(p.id)]),
   );
-  return buildEngineContext(models, deps.settings.get(), providers, speeds);
+  return {
+    ...buildEngineContext(models, deps.settings.get(), providers, speeds),
+    // From the library, as the runner reads a base's size to ask for its shape.
+    imageSize: (assetId) => {
+      const row = getAsset(deps.db, assetId);
+      return row ? { width: row.width, height: row.height } : undefined;
+    },
+  };
 }

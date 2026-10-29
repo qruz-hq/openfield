@@ -1,6 +1,7 @@
 import { type ErrorCode, errorCopy, t } from "@openfield/core";
 import { Menu, MenuContent, MenuItem, MenuSeparator, MenuTrigger } from "@openfield/ui";
 import {
+  Brush,
   ClipboardCopy,
   Copy,
   Download,
@@ -21,7 +22,17 @@ import { useNavigate } from "react-router";
 import { errorMessage } from "../../../api/raw";
 import { notify, notifyError } from "../../../lib/notify";
 import { toolKey } from "../../editor/shortcuts";
-import { useCanvasActions, useCanvasShallow, useCanvasStoreApi, useLocked } from "../../store/context";
+import { useCanvasEngineContext } from "../../engine/engine-store";
+import {
+  useCanvas,
+  useCanvasActions,
+  useCanvasShallow,
+  useCanvasStoreApi,
+  useLocked,
+  useReadOnly,
+} from "../../store/context";
+import { editableOutput, planEditFromCard } from "../edit/edit-from";
+import { nodeRegistry } from "../registry";
 import { downloadAssets } from "./download";
 import { useLockActions } from "./use-lock";
 
@@ -30,6 +41,7 @@ import { useLockActions } from "./use-lock";
 // pointer; its trigger is a point portaled to the page, since the node itself sits inside the
 // pane's zoom transform. Holding ⌥ on a run item makes new images even when nothing changed (§7.7).
 // Locked (design NoE6t), Lock reads Unlock, and Run, Run from here and Delete wait for it at 40%.
+// A node with an image to edit has Edit (design UgTpM6ixP2), which adds an Edit node wired to it.
 
 export interface NodeMenuProps {
   id: string;
@@ -68,6 +80,15 @@ function useDownloadable(id: string): string[] {
   });
 }
 
+/** The node has an image to edit, and something can edit it. */
+function useEditable(id: string): boolean {
+  const ctx = useCanvasEngineContext();
+  const readOnly = useReadOnly();
+  const output = useCanvas((s) => editableOutput(s.doc, nodeRegistry, id) !== null);
+  const edit = nodeRegistry.get("image.edit");
+  return output && !readOnly && !!edit && (edit.listed?.(ctx) ?? true);
+}
+
 export function NodeMenu({
   id,
   name,
@@ -85,6 +106,8 @@ export function NodeMenu({
   const locked = useLocked(id);
   const lock = useLockActions(id);
   const navigate = useNavigate();
+  const editable = useEditable(id);
+  const ctx = useCanvasEngineContext();
   // Items are picked on pointer up or a key; either says whether ⌥ was held.
   const alt = useRef(false);
   const noteAlt = (event: SyntheticEvent) => {
@@ -103,6 +126,24 @@ export function NodeMenu({
       () => notify(t("toast.copied"), { tone: "success" }),
       () => notifyError(t("errors.transport.internal")),
     );
+  };
+  const editFromHere = () => {
+    const state = store.getState();
+    const plan = planEditFromCard(state.doc, nodeRegistry, ctx, id);
+    if (!plan) return;
+    const result = actions.apply(plan.ops, {
+      label: "edit",
+      select: { nodeIds: [plan.editId], edgeIds: [] },
+    });
+    if (!result.ok) return;
+    // Its settings open beside it, where the mask is painted (design blc5dYrGqG).
+    actions.openInspector(plan.editId);
+    // Picked on pointer up, the click that follows lands on whatever was under the menu, so the
+    // new node is selected after it. The drawer brings it into view.
+    requestAnimationFrame(() => {
+      const next = store.getState();
+      if (next.doc.nodes[plan.editId]) next.actions.setSelection({ nodeIds: [plan.editId], edgeIds: [] });
+    });
   };
   const remove = () => {
     const result = actions.deleteNodes([id]);
@@ -146,6 +187,11 @@ export function NodeMenu({
               {t("canvas.nodes.menu.runFromHere")}
             </MenuItem>
           </>
+        ) : null}
+        {editable ? (
+          <MenuItem icon={Brush} onSelect={editFromHere}>
+            {t("canvas.nodes.menu.edit")}
+          </MenuItem>
         ) : null}
         {inspectable ? (
           <MenuItem icon={SlidersHorizontal} onSelect={() => actions.openInspector(id)}>

@@ -43,14 +43,16 @@ export function Slider({ className, thumbLabel, thumbValueText, ...props }: Slid
 export interface SliderRowProps extends SliderProps {
   /** The value as people read it, such as "0.6" or "82". */
   valueLabel: ReactNode;
+  /** For the value, such as a fixed width so the track doesn't move as it changes. */
+  valueClassName?: string;
 }
 
 /** The control row of Form / Field / Slider: the track and its value in mono. */
-export function SliderRow({ valueLabel, className, ...props }: SliderRowProps) {
+export function SliderRow({ valueLabel, valueClassName, className, ...props }: SliderRowProps) {
   return (
     <div className="flex h-18 w-full items-center gap-12">
       <Slider {...props} className={cn("w-auto flex-1", className)} />
-      <span className="shrink-0 text-mono-12 text-text-primary">{valueLabel}</span>
+      <span className={cn("shrink-0 text-mono-12 text-text-primary", valueClassName)}>{valueLabel}</span>
     </div>
   );
 }

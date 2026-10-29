@@ -8,8 +8,9 @@ import { newEdgeId, newNodeId } from "./graph";
 
 export interface DocumentAssetRefs {
   /**
-   * The images the canvas shows: what nodes were given (params.assetIds on Upload and Assets) and
-   * what their runs made (result.assetIds and outputs). No repeats, in document order.
+   * The images the canvas shows: what nodes were given (params.assetIds on Upload and Assets, an
+   * Edit node's painted mask) and what their runs made (result.assetIds and outputs). No repeats,
+   * in document order.
    */
   shown: string[];
   /**
@@ -19,10 +20,15 @@ export interface DocumentAssetRefs {
   read: string[];
 }
 
-const ownAssetIds = (params: Record<string, unknown>): string[] => {
+/** The library images a node holds in its own params: its images, and an Edit node's painted mask. */
+export function ownAssetIds(params: Record<string, unknown>): string[] {
   const own = params.assetIds;
-  return Array.isArray(own) ? own.filter((id): id is string => typeof id === "string") : [];
-};
+  const images = Array.isArray(own) ? own.filter((id): id is string => typeof id === "string") : [];
+  return typeof params.maskAssetId === "string" ? [...images, params.maskAssetId] : images;
+}
+
+/** Params that name one image, moved as a whole. maskFor is the image a mask was painted on. */
+const SINGLE_ASSET_PARAMS = ["maskAssetId", "maskFor"] as const;
 
 export function documentAssetRefs(doc: CanvasDocument): DocumentAssetRefs {
   const shown = new Set<string>();
@@ -46,9 +52,13 @@ export function remapDocumentAssets(doc: CanvasDocument, map: ReadonlyMap<string
     ...doc,
     nodes: doc.nodes.map((node) => {
       const own = node.params.assetIds;
-      const params = Array.isArray(own)
+      let params = Array.isArray(own)
         ? { ...node.params, assetIds: own.map((id) => (typeof id === "string" ? to(id) : id)) }
         : node.params;
+      for (const key of SINGLE_ASSET_PARAMS) {
+        const id = params[key];
+        if (typeof id === "string" && map.has(id)) params = { ...params, [key]: to(id) };
+      }
       return { ...node, params, result: node.result && remapResult(node.result, to) };
     }),
   };

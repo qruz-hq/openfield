@@ -1,6 +1,7 @@
 import { nodeTitle } from "@openfield/canvas/engine/describe";
 import type { CanvasOp } from "@openfield/canvas/store/ops";
 import { t } from "@openfield/core";
+import { cn } from "@openfield/ui";
 import { type DragEvent, type KeyboardEvent, useMemo, useState } from "react";
 import { useNodeAnalysis } from "../../engine/engine-store";
 import { useCanvas, useCanvasStoreApi, useLocked, useReadOnly } from "../../store/context";
@@ -28,7 +29,10 @@ interface Item {
   images: readonly (string | null)[];
 }
 
-export function ReferenceOrder({ nodeId }: { nodeId: string }) {
+/** Thumbnail sides: Generate's 32 (iy0ZN), Edit's 56 (Composer / Reference thumb, MZI3JqbHJr). */
+export type ReferenceThumbSize = 32 | 56;
+
+export function ReferenceOrder({ nodeId, size = 32 }: { nodeId: string; size?: ReferenceThumbSize }) {
   const store = useCanvasStoreApi();
   const readOnly = useReadOnly();
   const locked = useLocked(nodeId);
@@ -74,6 +78,7 @@ export function ReferenceOrder({ nodeId }: { nodeId: string }) {
           index={index}
           count={items.length}
           orderable={orderable}
+          size={size}
           over={over === item.edgeId}
           onOver={setOver}
           onMove={move}
@@ -89,6 +94,7 @@ function ReferenceLink({
   index,
   count,
   orderable,
+  size,
   over,
   onOver,
   onMove,
@@ -97,6 +103,7 @@ function ReferenceLink({
   index: number;
   count: number;
   orderable: boolean;
+  size: ReferenceThumbSize;
   over: boolean;
   onOver: (edgeId: string | null) => void;
   onMove: (edgeId: string, to: number) => void;
@@ -153,10 +160,13 @@ function ReferenceLink({
             // biome-ignore lint/suspicious/noArrayIndexKey: positions are the model's order; the same image can come twice.
             key={i}
             data-reference-thumb
-            className="block size-32 shrink-0 overflow-hidden rounded-8 outline-1 -outline-offset-1 outline-border"
+            className={cn(
+              "block shrink-0 overflow-hidden rounded-8 outline-1 -outline-offset-1 outline-border",
+              size === 56 ? "size-56" : "size-32",
+            )}
           >
             {assetId ? (
-              <AssetImage assetId={assetId} height={32} className="size-full" />
+              <AssetImage assetId={assetId} height={size} className="size-full" />
             ) : (
               <span className="block size-full bg-elevated-2" />
             )}

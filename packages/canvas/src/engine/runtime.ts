@@ -28,6 +28,8 @@ export function blockerFromReason(reason: RunBlockReason, modelOf: () => ModelKe
       return { kind: "missing_asset" };
     case "upstream_failed":
       return { kind: "upstream_failed", nodeId: "" };
+    case "mask_stale":
+      return { kind: "mask_stale" };
   }
 }
 

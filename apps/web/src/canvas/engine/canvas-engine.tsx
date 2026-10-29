@@ -6,6 +6,7 @@ import {
   planFingerprints,
   resolveFingerprints,
 } from "@openfield/canvas/engine/fingerprint";
+import { ownAssetIds } from "@openfield/canvas/store/refs";
 import { t } from "@openfield/core";
 import { useEffect, useMemo, useRef } from "react";
 import { subscribeEvents } from "../../api/events";
@@ -19,7 +20,8 @@ import { useSettings } from "../../api/hooks/settings";
 import { fetchSpentThisMonth } from "../../api/hooks/usage";
 import { useLive } from "../../lib/live";
 import { notify } from "../../lib/notify";
-import { cardMedia, rememberImageSize } from "../nodes/generate/card-media";
+import { syncBases } from "../nodes/edit/card-media";
+import { cardMedia, exactSize, rememberImageSize } from "../nodes/generate/card-media";
 import { nodeRegistry } from "../nodes/registry";
 import { useCanvas, useCanvasStoreApi } from "../store/context";
 import { analyzeGraph, geometryOnly } from "./analysis";
@@ -49,7 +51,7 @@ export function CanvasEngine() {
   const base = useEngineContextState();
   const missing = useCanvas((s) => s.missingAssets);
   const ready = base.ready;
-  const ctx = useMemo(() => ({ ...base.ctx, missing }), [base.ctx, missing]);
+  const ctx = useMemo(() => ({ ...base.ctx, missing, imageSize: exactSize }), [base.ctx, missing]);
   const settings = useSettings().data;
   const ctxRef = useRef(ctx);
   ctxRef.current = ctx;
@@ -76,9 +78,16 @@ export function CanvasEngine() {
     const analyse = (fingerprints: Readonly<Record<string, string>>) => {
       const { doc, runtime } = store.getState();
       const engine = useEngineStore.getState();
-      engine.setAnalysis(
-        analyzeGraph(doc, nodeRegistry, ctx, fingerprints, engine.analysis, busyNodes(runtime)),
+      const analysis = analyzeGraph(
+        doc,
+        nodeRegistry,
+        ctx,
+        fingerprints,
+        engine.analysis,
+        busyNodes(runtime),
       );
+      engine.setAnalysis(analysis);
+      syncBases(doc, analysis);
     };
     const run = () => {
       frame = 0;
@@ -101,6 +110,13 @@ export function CanvasEngine() {
       if (!frame) frame = requestAnimationFrame(run);
     };
     run();
+    // An edit is priced at its base's size (exactSize): once that's known, it's priced again.
+    const stopSizes = cardMedia.subscribe((next, prev) => {
+      if (next.dims === prev.dims) return;
+      const bases = Object.values(useEngineStore.getState().analysis.nodes).flatMap((n) => n.baseImages);
+      const exact = (dims: typeof next.dims, id: string) => !!dims[id] && !dims[id]!.approx;
+      if (bases.some((id) => exact(next.dims, id) && !exact(prev.dims, id))) schedule();
+    });
     let busy = busyKey(busyNodes(store.getState().runtime));
     const unsubscribe = store.subscribe((state, previous) => {
       // A move or resize changes nothing the analysis reads: a drag skips the pass every frame.
@@ -113,6 +129,7 @@ export function CanvasEngine() {
     });
     return () => {
       unsubscribe();
+      stopSizes();
       cancelAnimationFrame(frame);
       pass++;
     };
@@ -179,15 +196,15 @@ export function CanvasEngine() {
         rememberImageSize(asset.id, asset.width, asset.height);
       }
       if (event.event === "asset.deleted") {
-        // Images deleted while the canvas is open turn into placeholders and stay out of runs.
+        // Images deleted while the canvas is open turn into placeholders and stay out of runs. A
+        // painted mask counts too: its Edit node can't run without it.
         const { doc, missingAssets, actions } = store.getState();
         const named = event.data.assetIds.filter(
           (id) =>
             !missingAssets.has(id) &&
-            doc.order.some((n) => {
-              const own = doc.params[n]?.assetIds;
-              return (Array.isArray(own) && own.includes(id)) || doc.results[n]?.assetIds.includes(id);
-            }),
+            doc.order.some(
+              (n) => ownAssetIds(doc.params[n] ?? {}).includes(id) || doc.results[n]?.assetIds.includes(id),
+            ),
         );
         if (named.length) actions.setMissingAssets(new Set([...missingAssets, ...named]));
         return;

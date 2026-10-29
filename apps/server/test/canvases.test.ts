@@ -4,6 +4,7 @@ import { join } from "node:path";
 import {
   CANVAS_AUTO_VERSION_MS,
   CANVAS_PREVIEW_MAX_NODES,
+  type CanvasDetail,
   canvasConflictResponseSchema,
   canvasDetailSchema,
   canvasesListResponseSchema,
@@ -19,6 +20,7 @@ import {
 } from "@openfield/core";
 import { type CanvasDocument, canvasDocumentSchema } from "@openfield/core/canvas";
 import { getCanvas, listCanvasVersions, pruneVersions } from "@openfield/db";
+import { serverEngineContext } from "../src/canvas/engine-context";
 import { image, libraryImages, MODEL, newCanvas } from "./canvas-helpers";
 import { saveKey, startTestServer, type TestServer } from "./helpers";
 
@@ -262,6 +264,52 @@ describe("canvas documents", () => {
     expect(res.status).toBe(200);
     const after = canvasDetailSchema.parse((await server.json(`/api/canvases/${canvas.id}`)).body);
     expect(after.graph).toMatchObject({ id: canvas.id, name: "Mine" });
+  });
+
+  test("a new canvas gives its Edit nodes a model that can edit, one that takes a mask first", async () => {
+    server = await startTestServer();
+    await saveKey(server);
+    await server.json("/api/settings", { method: "PATCH", body: { defaultModel: MODEL } });
+    const withEdit = (): CanvasDocument => {
+      const doc = withNodes(
+        canvasDocumentSchema.parse({
+          schema: "openfield.canvas/1",
+          id: newId(),
+          name: "Edits",
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          viewport: { x: 0, y: 0, zoom: 1 },
+          nodes: [],
+          edges: [],
+          meta: {},
+        }),
+      );
+      const edit = { ...doc.nodes[1]!, id: "n_edit", type: "image.edit" as const, params: { prompt: "" } };
+      return { ...doc, nodes: [...doc.nodes, edit] };
+    };
+    const modelOf = (canvas: CanvasDetail, id: string) =>
+      canvas.graph.nodes.find((n) => n.id === id)!.params.model;
+
+    // Only Google's key: its models redraw the whole image. The node gets the one the editor would
+    // start it on.
+    const google = await newCanvas(server, { graph: withEdit() });
+    expect(modelOf(google, "n_gen")).toBe(MODEL);
+    expect(modelOf(google, "n_edit")).toBe("google:gemini-3-pro-image");
+    expect(serverEngineContext(server.services).defaultEditModel).toBe("google:gemini-3-pro-image");
+
+    // With a model that takes a mask ready, that one comes first.
+    await server.json("/api/settings/keys/openai", {
+      method: "PUT",
+      body: { apiKey: "sk-test-0123456789abcdefghijklmnop" },
+    });
+    const both = await newCanvas(server, { graph: withEdit() });
+    expect(modelOf(both, "n_gen")).toBe(MODEL);
+    expect(modelOf(both, "n_edit")).toBe("openai:gpt-image-2.5-sunburst");
+    expect(serverEngineContext(server.services).defaultEditModel).toBe("openai:gpt-image-2.5-sunburst");
+    // A model already chosen stays.
+    const chosen = withEdit();
+    chosen.nodes[2]!.params.model = MODEL;
+    expect(modelOf(await newCanvas(server, { graph: chosen }), "n_edit")).toBe(MODEL);
   });
 
   test("a new canvas and an import get the default model on their generators", async () => {
