@@ -18,7 +18,7 @@ import {
 import type { MouseEvent } from "react";
 import { isMac } from "../../canvas/editor/shortcuts";
 import { toolShortcut } from "./keys";
-import { BRUSH_SLIDER_STEPS, type MaskTool, sizeOfSlider, sliderOfSize, useEditSession } from "./session";
+import { BRUSH_SLIDER_STEPS, brushSizeAt, type MaskTool, sliderOfSize, useEditSession } from "./session";
 
 // The Edit tab's floating chrome over the media area (design f90S4YuAoH and friends): the toolbar
 // (Image edit / Toolbar), the bar above it with the tool's options (Image edit / Brush options and
@@ -203,11 +203,7 @@ export function BrushOptions() {
         value={sliderOfSize(size)}
         max={BRUSH_SLIDER_STEPS}
         shown={t("edit.options.px", { value: size })}
-        onChange={(value) => {
-          // Near 1 px several slider steps round to one size; an arrow key still moves it a pixel.
-          const next = sizeOfSlider(value);
-          setBrushSize(next !== size ? next : size + Math.sign(value - sliderOfSize(size)));
-        }}
+        onChange={(value) => setBrushSize(brushSizeAt(value, size))}
       />
       <Divider orientation="vertical" size={20} />
       <OptionSlider

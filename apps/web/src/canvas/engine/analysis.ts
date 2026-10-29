@@ -49,6 +49,15 @@ export interface NodeAnalysis {
    * lists them (and reorders by link) from the same lists the strip is built from.
    */
   imageLinks: readonly ImageLink[];
+  /**
+   * The images coming in to be edited (an Edit node's image input), every one of them: more than
+   * one runs the node once each. An asset id, or null for one still to come.
+   */
+  baseImages: readonly (string | null)[];
+  /** The images on a Mask input that has a link into it. Empty with nothing connected there. */
+  maskImages: readonly (string | null)[];
+  /** Something is connected to its Mask input, which then stands in for a painted mask. */
+  maskLinked: boolean;
 }
 
 export interface GraphAnalysis {
@@ -84,6 +93,9 @@ const LOOP_ANALYSIS: NodeAnalysis = {
   references: 0,
   referenceImages: [],
   imageLinks: [],
+  baseImages: [],
+  maskImages: [],
+  maskLinked: false,
 };
 
 const sameEstimate = (a: CostEstimate | null, b: CostEstimate | null) =>
@@ -113,6 +125,9 @@ const sameNode = (a: NodeAnalysis, b: NodeAnalysis) =>
   sameLinks(a.imageLinks, b.imageLinks) &&
   a.references === b.references &&
   sameList(a.referenceImages, b.referenceImages) &&
+  sameList(a.baseImages, b.baseImages) &&
+  sameList(a.maskImages, b.maskImages) &&
+  a.maskLinked === b.maskLinked &&
   a.fanOut === b.fanOut &&
   a.jobs === b.jobs &&
   a.upToDate === b.upToDate &&
@@ -149,10 +164,13 @@ export function analyzeGraph(
     const locked = !node.runs && isRunnable(doc, registry, id) && isLocked(doc, id);
     if (!node.runs && !locked) continue;
     if (node.runs) runnable++;
-    const refPorts = (node.definition?.ports ?? []).filter(
-      (port) => port.direction === "in" && port.binding?.to === "references",
-    );
-    const links = refPorts.flatMap((port) => imageLinks(doc, evaluation.nodes, id, port.id));
+    const portsTo = (to: string) =>
+      (node.definition?.ports ?? []).filter((port) => port.direction === "in" && port.binding?.to === to);
+    const linksTo = (to: string) =>
+      portsTo(to).flatMap((port) => imageLinks(doc, evaluation.nodes, id, port.id));
+    const refPorts = portsTo("references");
+    const links = linksTo("references");
+    const maskLinks = linksTo("mask");
     const next: NodeAnalysis = {
       blocker: node.blocker,
       fanOut: node.compiled?.fanOut ?? 1,
@@ -174,6 +192,9 @@ export function analyzeGraph(
         ),
       ),
       imageLinks: links,
+      baseImages: linksTo("base").flatMap((link) => link.images),
+      maskImages: maskLinks.flatMap((link) => link.images),
+      maskLinked: maskLinks.length > 0,
     };
     const before = previous.nodes[id];
     nodes[id] = before && sameNode(before, next) ? before : next;

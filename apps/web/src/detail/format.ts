@@ -1,6 +1,7 @@
 import {
   ASPECT_RATIOS,
   type AspectRatio,
+  type Asset,
   type AssetListItem,
   aspectRatioSchema,
   DETAIL_PREVIEW_EDGE,
@@ -75,6 +76,12 @@ export function inTrashCaption(deletedAt: string, now: Date = new Date()): strin
 
 /** The rung the backdrop blurs, and the first thing the media area paints (§4.0). */
 export const BACKDROP_RUNG = 360;
+
+/** An image's details as the list's own copy of it, for views that take one. */
+export function listItemOf(asset: Asset): AssetListItem {
+  const { deletedAt, ...rest } = asset;
+  return deletedAt ? { ...rest, deletedAt } : rest;
+}
 
 /**
  * One size of an image's thumbnail, built on the URL the server sent so its own flags stay on (an

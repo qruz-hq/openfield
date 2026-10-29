@@ -58,6 +58,7 @@ const initialUi = (readOnly: boolean): CanvasUiState => ({
   minimapOpen: false,
   shortcutsOpen: false,
   renamingNodeId: null,
+  maskNodeId: null,
   readOnly,
 });
 

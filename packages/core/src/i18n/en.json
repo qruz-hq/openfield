@@ -1514,7 +1514,15 @@
       },
       "edit": {
         "label": "Edit",
-        "description": "Change an image with words or a mask"
+        "description": "Change an image with words or a mask",
+        "maskWindow": {
+          "title": "Paint the mask",
+          "hint": "Paint over what should change. Everything else stays as it is.",
+          "brushSize": "Brush size",
+          "hardnessHint": "Lower is softer at the edge of each stroke.",
+          "maskHint": "How strongly the mask shows over the photo.",
+          "save": "Save mask"
+        }
       },
       "variations": {
         "label": "Variations",

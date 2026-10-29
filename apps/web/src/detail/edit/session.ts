@@ -33,6 +33,12 @@ export const sliderOfSize = (size: number) =>
 export const sizeOfSlider = (value: number) =>
   Math.round(MIN_BRUSH_SIZE + (MAX_BRUSH_SIZE - MIN_BRUSH_SIZE) * (value / BRUSH_SLIDER_STEPS) ** 2);
 
+/** The brush size the slider moved to. Near 1 px several steps round to one size; a key still moves it a pixel. */
+export function brushSizeAt(value: number, size: number): number {
+  const next = sizeOfSlider(value);
+  return next !== size ? next : size + Math.sign(value - sliderOfSize(size));
+}
+
 export interface MaskState {
   empty: boolean;
   /** Painted enough somewhere for the server to change it: what Generate waits for. */
