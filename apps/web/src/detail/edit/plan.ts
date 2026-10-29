@@ -35,6 +35,15 @@ export function pickEditModel(
   return fallback ?? masked.find(usable) ?? whole.find(usable);
 }
 
+/**
+ * A model that can edit has its company's key. A key only for companies whose models can't edit
+ * (Higgsfield, BytePlus) leaves nothing to pick, so the panel says to add a key.
+ */
+export function anyEditReady(models: readonly ModelListItem[]): boolean {
+  const { masked, whole } = modelsForEdit(models);
+  return [...masked, ...whole].some((m) => m.ready);
+}
+
 const gcd = (a: number, b: number): number => (b === 0 ? a : gcd(b, a % b));
 
 /** Ratios read as themselves up to this term; past it a photo's shape reads as the nearest common one. */

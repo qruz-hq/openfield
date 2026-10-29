@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import type { ModelListItem } from "@openfield/core";
 import { isTurnedOrientation, jpegOrientation } from "../src/detail/edit/exif";
 import {
+  anyEditReady,
   aspectText,
   comparedResult,
   pickEditModel,
@@ -197,5 +198,22 @@ describe("a photo stored on its side", () => {
     expect(isTurnedOrientation(null)).toBe(false);
     expect(isTurnedOrientation(6)).toBe(true);
     expect(isTurnedOrientation(2)).toBe(true);
+  });
+});
+
+describe("a key for a model that can edit", () => {
+  test("a ready model that can't edit doesn't count, so the hint is to add a key", () => {
+    const noEdit: ModelListItem = {
+      ...lite,
+      key: "higgsfield:soul",
+      ready: true,
+      capabilities: {
+        ...lite.capabilities,
+        ops: { ...lite.capabilities.ops, imageEdit: false, inpaint: false },
+      },
+    };
+    const keyless = [flareEdit, lite].map((m) => ({ ...m, ready: false }));
+    expect(anyEditReady([noEdit, ...keyless])).toBe(false);
+    expect(anyEditReady([noEdit, ...keyless, { ...lite, ready: true }])).toBe(true);
   });
 });

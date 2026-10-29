@@ -26,7 +26,7 @@ import { askedPrice } from "../../lib/remote-price";
 import { KeepRest } from "./keep-rest";
 import { encodeMaskPng } from "./mask-png";
 import { ModelField } from "./model-field";
-import { pickEditModel, type SavedNote, savedNote } from "./plan";
+import { anyEditReady, pickEditModel, type SavedNote, savedNote } from "./plan";
 import { PromptCard } from "./prompt-card";
 import type { EditRunner } from "./runner";
 import { useEditSession } from "./session";
@@ -79,7 +79,7 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   });
   const state = editState({
     model,
-    anyReady: models.some((m) => m.ready),
+    anyReady: anyEditReady(models),
     prompt,
     resolved,
     edit: plan,
