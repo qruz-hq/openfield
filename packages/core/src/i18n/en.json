@@ -216,6 +216,7 @@
         "recreate": "Recreate",
         "reuse": "Reuse",
         "useAsReference": "Use as reference",
+        "edit": "Edit",
         "copyPrompt": "Copy prompt",
         "copyImage": "Copy image",
         "addToFolder": "Add to folder",
@@ -393,6 +394,7 @@
     "basis": "{count} × {each}",
     "basisWith": "{count} × {each} ({detail})",
     "withInputs": "{basis} + {count, plural, one {# reference image} other {# reference images}} ({cost})",
+    "withBase": "{basis} + the image you're editing{references, plural, =0 {} one { and # reference image} other { and # reference images}} ({cost})",
     "unknown": "Cost unknown",
     "free": "Free",
     "credits": "{credits, plural, one {# credit} other {# credits}}",
@@ -2023,6 +2025,10 @@
     "detail": {
       "label": "Image details",
       "labelVideo": "Video details",
+      "tabs": {
+        "info": "Info",
+        "edit": "Edit"
+      },
       "previous": "Previous image",
       "previousVideo": "Previous video",
       "next": "Next image",
@@ -2050,6 +2056,7 @@
       "noFolders": "None",
       "moreFolders": "+{count}",
       "recreate": "Recreate",
+      "edit": "Edit",
       "reuse": "Reuse",
       "copyImage": "Copy image",
       "download": "Download",
@@ -2064,8 +2071,25 @@
       "zoomReset": "Fit to screen",
       "showDetails": "Show details",
       "momentAgo": "A moment ago",
+      "added": "Added {when}",
+      "source": "Source",
+      "uploaded": "Uploaded",
+      "uploadedNoPrompt": "You uploaded this, so there's no prompt to recreate.",
       "otherFolders": "Other folders",
       "notMadeHere": "This image wasn't made here, so there are no settings to use.",
+      "editedFrom": {
+        "label": "Edited from",
+        "original": "The original, unchanged",
+        "open": "Open",
+        "mask": "Mask",
+        "settings": "Feather {feather} px · Expand {expand} px",
+        "wholeImage": "Redrawn by {model}, the rest put back",
+        "notKept": "Rest of the image not kept",
+        "notKeptExactly": "Couldn't keep the rest exactly. Try again.",
+        "references": "References",
+        "referenceCount": "{count, plural, one {# image from your library} other {# images from your library}}",
+        "editAgain": "Edit the original with this mask"
+      },
       "reused": "Loaded the prompt and settings.",
       "copyFailed": "Couldn't copy the image.",
       "loadFailed": "Couldn't load this image."
@@ -2091,6 +2115,130 @@
     "tooManyPixels": "This image is {width} × {height}, too large to edit with a mask. Masked edits take images up to {megapixels} megapixels.",
     "turned": "This photo is saved on its side, so it can't be edited with a mask yet. Save an upright copy, add it to your library and try again.",
     "cantOpen": "Openfield can't open images on this computer, so it can't save this mask."
+  },
+  "edit": {
+    "reopen": {
+      "back": "Your mask and prompt are back. Change anything, then Generate.",
+      "maskFailed": "Couldn't load the mask. Your prompt is back, so paint the area to change again."
+    },
+    "tools": {
+      "label": "Mask tools",
+      "pan": "Pan",
+      "brush": "Brush",
+      "eraser": "Eraser",
+      "lasso": "Lasso",
+      "rectangle": "Rectangle",
+      "invert": "Invert",
+      "clear": "Clear the mask",
+      "undo": "Undo",
+      "redo": "Redo"
+    },
+    "options": {
+      "brush": "Brush options",
+      "shape": "Shape options",
+      "size": "Size",
+      "hardness": "Hardness",
+      "mask": "Mask",
+      "px": "{value} px",
+      "percent": "{value}%",
+      "lassoHint": "Drag to draw, or click to add points. Double-click to close.",
+      "rectangleHint": "Drag to draw a box."
+    },
+    "zoom": {
+      "label": "Zoom",
+      "out": "Zoom out",
+      "in": "Zoom in",
+      "percent": "{value}%"
+    },
+    "leave": {
+      "title": "Leave this edit?",
+      "body": "Your mask and prompt will be lost.",
+      "keep": "Keep editing",
+      "confirm": "Leave"
+    },
+    "generate": {
+      "paintFirst": "Paint over the part you want to change.",
+      "describeFirst": "Describe the change.",
+      "label": "Generate",
+      "again": "Generate again",
+      "working": "Generating {count, plural, one {# image} other {# images}}",
+      "stop": "Stop",
+      "open": "Open new image",
+      "failed": "Couldn't make this edit. Your mask is still here."
+    },
+    "prompt": {
+      "placeholder": "Describe the change",
+      "label": "What to change"
+    },
+    "model": {
+      "label": "Model",
+      "masked": "Change only what you paint",
+      "whole": "Redraw the whole image",
+      "wholeKept": "{model} redraws the whole image, then everything outside your mask is put back.",
+      "wholeNotKept": "{model} redraws the whole image, so anything can change.",
+      "needsKey": "Needs {vowel, select, yes {an} other {a}} {company} key"
+    },
+    "size": {
+      "resolution": "Resolution",
+      "quality": "Quality",
+      "images": "Images",
+      "aspect": "Aspect ratio",
+      "aspectValue": "{ratio}, same as the image",
+      "keepsSize": "New image keeps the original size, {width} × {height}.",
+      "comesOut": "New image comes out at {width} × {height}."
+    },
+    "keep": {
+      "label": "Keep the rest of the image",
+      "on": "Everything outside your mask stays exactly the same.",
+      "off": "The model may change other parts too.",
+      "feather": "Feather",
+      "featherHint": "Softens the edge so the change blends in.",
+      "featherNext": "Softens the edge on your next Generate.",
+      "expand": "Expand",
+      "expandHint": "Grows the mask a little past what you painted.",
+      "expandNext": "Grows the mask on your next Generate."
+    },
+    "saved": {
+      "done": "Saved as {count, plural, one {# new image} other {# new images}}. The original stays as it is.",
+      "someFailed": "Saved {saved, plural, one {# new image} other {# new images}}. {failed} didn't work. Try again.",
+      "notKept": "Saved {count, plural, one {# new image} other {# new images}}, but the rest couldn't be kept exactly. Try again."
+    },
+    "results": {
+      "label": "New images",
+      "original": "Original",
+      "image": "New image {index}",
+      "working": "New image {index}, on its way",
+      "failed": "New image {index} didn't work"
+    },
+    "status": {
+      "generating": "Generating"
+    },
+    "compare": {
+      "label": "Compare",
+      "split": "Before and after",
+      "difference": "Difference",
+      "before": "Before",
+      "after": "After",
+      "handle": "Drag to compare",
+      "changed": "Changed",
+      "same": "Same as the original",
+      "editMask": "Edit the mask"
+    },
+    "turned": {
+      "title": "This photo can't be edited yet",
+      "body": "Your phone saved it sideways, so what you paint wouldn't line up with the photo.",
+      "useAsReference": "Use as reference"
+    },
+    "tooLarge": {
+      "title": "This image is too large to edit",
+      "body": "It's {width} × {height}. Edits with a mask take images up to {megapixels} megapixels."
+    }
+  },
+  "spendGuard": {
+    "title": "This run costs about {cost}",
+    "body": "It would pass your monthly limit of {limit}.",
+    "cancel": "Cancel",
+    "confirm": "Run anyway"
   },
   "video": {
     "placeholder": "Describe the video you want",

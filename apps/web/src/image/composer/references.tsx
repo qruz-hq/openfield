@@ -22,13 +22,15 @@ import { UPLOAD_ACCEPT, uploadImages } from "../../api/hooks/uploads";
 import { errorMessage } from "../../api/raw";
 import { LibraryPicker } from "../../canvas/nodes/assets/library-picker";
 import { notifyError } from "../../lib/notify";
-import { useComposer } from "./store";
+import type { ReferenceSlice } from "./store";
 
 // The composer's reference images (§3.2): a row above the prompt, the images in the order the
 // model gets them, then the + (upload, or pick with the same library picker the canvas uses).
 // Tiles are 56 square, radius 8, 6 apart; the first is the primary reference and carries the
 // accent ring. Drag a tile, or Alt and an arrow key, to move it; the others slide out of its way.
 // Past the model's limit tiles dim, and the note above the composer says how many will go.
+// The row keeps no list of its own: it edits the store it's given, so the Edit view can show one
+// over its own references without touching the composer's.
 
 const THUMB = 56;
 const GAP = 6;
@@ -71,28 +73,38 @@ const isImageFile = (file: File) =>
   (UPLOAD_MIME_TYPES as readonly string[]).includes(file.type) ||
   UPLOAD_EXTENSIONS.some((ext) => file.name.toLowerCase().endsWith(ext));
 
+/** The part of a store the row reads and changes. */
+export type ReferenceStore = Pick<
+  ReferenceSlice,
+  "references" | "setReferences" | "removeReference" | "moveReference"
+>;
+
 /**
  * Uploads files as references, in order. `pending` has one id per file still going up, so the
- * row can hold their places. Files that aren't images are turned away by name.
+ * row can hold their places. Files that aren't images are turned away by name. `add` is a store
+ * action, so the uploads land on the list as it is when they finish.
  */
-export function useReferenceUploads() {
+export function useReferenceUploads(add: ReferenceSlice["addReferences"]) {
   const [pending, setPending] = useState<readonly string[]>([]);
-  const upload = useCallback(async (files: readonly File[]) => {
-    const images = files.filter(isImageFile);
-    for (const file of files) {
-      if (!isImageFile(file)) notifyError(t("composer.rejectedFile", { name: file.name }));
-    }
-    if (!images.length) return;
-    const ids = images.map(() => newId());
-    setPending((now) => [...now, ...ids]);
-    try {
-      const { assetIds, failed } = await uploadImages(images);
-      for (const { error } of failed) notifyError(errorMessage(error));
-      useComposer.getState().addReferences(assetIds);
-    } finally {
-      setPending((now) => now.filter((id) => !ids.includes(id)));
-    }
-  }, []);
+  const upload = useCallback(
+    async (files: readonly File[]) => {
+      const images = files.filter(isImageFile);
+      for (const file of files) {
+        if (!isImageFile(file)) notifyError(t("composer.rejectedFile", { name: file.name }));
+      }
+      if (!images.length) return;
+      const ids = images.map(() => newId());
+      setPending((now) => [...now, ...ids]);
+      try {
+        const { assetIds, failed } = await uploadImages(images);
+        for (const { error } of failed) notifyError(errorMessage(error));
+        add(assetIds);
+      } finally {
+        setPending((now) => now.filter((id) => !ids.includes(id)));
+      }
+    },
+    [add],
+  );
   return { pending, upload };
 }
 
@@ -147,16 +159,18 @@ interface Drag {
   dx: number;
 }
 
-export function ComposerReferences({
+export function ReferenceRow({
+  store,
   model,
   pending,
   onUpload,
 }: {
+  store: ReferenceStore;
   model: ModelListItem | undefined;
   pending: readonly string[];
   onUpload: (files: File[]) => void;
 }) {
-  const references = useComposer((s) => s.references);
+  const { references } = store;
   const files = useRef<HTMLInputElement>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -177,11 +191,11 @@ export function ComposerReferences({
 
   const move = (id: string, index: number) => {
     remember();
-    useComposer.getState().moveReference(id, index);
+    store.moveReference(id, index);
   };
   const remove = (id: string) => {
     remember();
-    useComposer.getState().removeReference(id);
+    store.removeReference(id);
   };
 
   const onPointerDown = (event: PointerEvent<HTMLButtonElement>, id: string, from: number) => {
@@ -306,7 +320,7 @@ export function ComposerReferences({
         initial={references}
         max={Number.isFinite(max) ? max : undefined}
         onOpenChange={setPickerOpen}
-        onPick={(ids) => useComposer.getState().setReferences(ids)}
+        onPick={(ids) => store.setReferences(ids)}
       />
     </div>
   );

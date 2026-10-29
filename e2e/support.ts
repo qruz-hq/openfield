@@ -77,15 +77,23 @@ export async function restartServer(
 
 export const sha256File = (file: string) => createHash("sha256").update(readFileSync(file)).digest("hex");
 
-/** Adds the fake key and makes one image through the API. Returns the new image's row id. */
-export async function makeImage(request: APIRequestContext, token: string, prompt: string): Promise<string> {
+/**
+ * Adds the fake key and makes one image through the API, square unless `ratio` says otherwise.
+ * Returns the new image's row id.
+ */
+export async function makeImage(
+  request: APIRequestContext,
+  token: string,
+  prompt: string,
+  ratio = "1:1",
+): Promise<string> {
   await api(request, token, "PUT", "/api/settings/keys/google", { apiKey: FAKE_KEY });
   const accepted = await api<{ jobSet: { id: string } }>(request, token, "POST", "/api/generate", {
     idempotencyKey: newId(),
     model: "google:gemini-3.1-flash-lite-image",
     op: "generate",
     prompt,
-    size: { kind: "aspect", ratio: "1:1" },
+    size: { kind: "aspect", ratio },
     batch: 1,
     source: "api",
   });

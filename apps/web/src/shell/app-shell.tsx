@@ -6,7 +6,8 @@ import { Outlet, useLocation, useNavigate } from "react-router";
 import { Toaster } from "sonner";
 import { useEventStream } from "../api/events";
 import { fitOnOpen } from "../canvas/fit-on-open";
-import { useDesktopBridge } from "../lib/desktop";
+import { DETAIL_PARAM, PANEL_GUTTER, TAB_PARAM } from "../detail/use-detail";
+import { useDesktopBridge, windowPlatform } from "../lib/desktop";
 import { useLive } from "../lib/live";
 import { pathFor, useNavigateRequest, usePresence } from "../lib/presence";
 import { useReveal } from "../lib/reveal";
@@ -14,16 +15,24 @@ import { useThemeSync } from "../lib/theme";
 import { TopNav } from "./top-nav";
 import { ModalWindowBar, WindowStrip } from "./window-chrome";
 
+const EDIT_TOAST_TOP = 16;
+/** Where the detail view's image area starts in the desktop app (ModalWindowBar). */
+const WINDOW_BAR = { mac: 28, other: 44, none: 0 } as const;
+
 export function AppShell() {
   useEventStream();
   useDesktopBridge();
   usePresence();
   useThemeSync();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const navigate = useNavigate();
   const onImage = pathname.startsWith("/image");
   // The canvas editor brings its own top bar, and its toolbar owns the bottom 60 px.
   const inEditor = /^\/canvas\/[^/]+/.test(pathname);
+  const params = new URLSearchParams(search);
+  // The detail view's Edit tab keeps its tools along the bottom, so its toasts sit at the top of
+  // the image's area instead, centred left of the 360 panel (design WWx6tU4fem).
+  const onEditTab = params.has(DETAIL_PARAM) && params.get(TAB_PARAM) === "edit";
   const revealing = useReveal((s) => s.jobSetId);
   const openingCanvas = useReveal((s) => s.canvasId);
 
@@ -69,11 +78,21 @@ export function AppShell() {
         <ReconnectingBanner />
         <LiveRegion />
         <Toaster
-          position={toasterPosition.position}
+          position={onEditTab ? "top-center" : toasterPosition.position}
           gap={toasterPosition.gap}
           // On the Image page toasts sit 12 above the composer (bottom 170); in the canvas editor,
-          // 12 above its toolbar (bottom 72).
-          offset={onImage ? 170 : inEditor ? 72 : toasterPosition.offset}
+          // 12 above its toolbar (bottom 72). On the Edit tab, 16 below the top of the image's area,
+          // which in the desktop app starts under the window's own bar.
+          offset={
+            onEditTab
+              ? EDIT_TOAST_TOP + WINDOW_BAR[windowPlatform() ?? "none"]
+              : onImage
+                ? 170
+                : inEditor
+                  ? 72
+                  : toasterPosition.offset
+          }
+          style={onEditTab ? { left: `calc(50% - ${PANEL_GUTTER / 2}px)` } : undefined}
           // Every toast renders the design's Toast itself (lib/notify.tsx).
           toastOptions={{ unstyled: true }}
           containerAriaLabel={t("app.notifications")}

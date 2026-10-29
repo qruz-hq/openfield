@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { type AdapterOp, DIAGNOSTIC_LEVELS, EDIT_OPS, type Op } from "../constants";
 import { HASH_RE } from "../hash";
+import { MASK_COMPOSITE_MAX_PX } from "../image/mask";
 import {
   aspectRatioSchema,
   batchSchema,
@@ -51,9 +52,9 @@ export const maskInputSchema = z.object({
   /** Put the original back outside the mask. On unless false. */
   composite: z.boolean().optional(),
   /** Grow the mask by this many pixels before compositing. */
-  expandPx: z.int().min(0).max(32).optional(),
+  expandPx: z.int().min(0).max(MASK_COMPOSITE_MAX_PX).optional(),
   /** Soften the mask's edge over this many pixels, outside the expanded mask. */
-  featherPx: z.int().min(0).max(32).optional(),
+  featherPx: z.int().min(0).max(MASK_COMPOSITE_MAX_PX).optional(),
 });
 
 const edgePx = z.int().min(0).max(8192);

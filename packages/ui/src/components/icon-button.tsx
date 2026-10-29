@@ -39,7 +39,7 @@ const VARIANT = {
   overlay:
     "bg-overlay text-overlay-fg inset-ring inset-ring-overlay-line backdrop-blur-chip disabled:opacity-40",
   round: "bg-elevated-2 text-text-secondary not-disabled:hover:text-text-primary disabled:text-text-tertiary",
-  tool: "text-text-secondary not-data-active:not-disabled:hover:bg-elevated-2 data-active:bg-accent-soft data-active:text-accent disabled:text-text-tertiary",
+  tool: "text-text-secondary not-data-active:not-disabled:not-aria-disabled:hover:bg-elevated-2 data-active:bg-accent-soft data-active:text-accent disabled:text-text-tertiary",
   accent:
     "bg-accent text-accent-fg not-disabled:hover:bg-accent-hover disabled:bg-elevated-2 disabled:text-text-tertiary",
 } as const;

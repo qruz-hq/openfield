@@ -106,6 +106,7 @@ export function Feed({
                   rung={rung}
                   model={modelName(item.asset.providerId, item.asset.modelId)}
                   rerun={item.rerun}
+                  compact={rung === THUMB_RUNGS[0]}
                   actions={actions}
                   style={style}
                 />

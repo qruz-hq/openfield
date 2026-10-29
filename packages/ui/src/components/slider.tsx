@@ -7,10 +7,12 @@ import { useFieldControl } from "./field";
 export interface SliderProps extends ComponentProps<typeof RadixSlider.Root> {
   /** Accessible name for the thumb, when there's no Field label. */
   thumbLabel?: string;
+  /** The value as it's shown, for screen readers, when the slider's steps aren't that value. */
+  thumbValueText?: string;
 }
 
 /** Slider / Track: 4px track with a 12px thumb that sits proud of it, 140 wide unless you say otherwise. */
-export function Slider({ className, thumbLabel, ...props }: SliderProps) {
+export function Slider({ className, thumbLabel, thumbValueText, ...props }: SliderProps) {
   const field = useFieldControl({ "aria-labelledby": props["aria-labelledby"] });
   const thumbs = (props.value ?? props.defaultValue ?? [0]).length;
   return (
@@ -30,6 +32,7 @@ export function Slider({ className, thumbLabel, ...props }: SliderProps) {
           key={i}
           aria-label={thumbLabel}
           aria-labelledby={thumbLabel ? undefined : field["aria-labelledby"]}
+          aria-valuetext={thumbValueText}
           className="block size-12 rounded-full bg-text-primary"
         />
       ))}

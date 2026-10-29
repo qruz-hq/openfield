@@ -19,7 +19,7 @@ import {
   Spinner,
 } from "@openfield/ui";
 import { useQuery } from "@tanstack/react-query";
-import { ChevronLeft, ChevronRight, Maximize, Minimize, X, ZoomIn, ZoomOut } from "lucide-react";
+import { Brush, ChevronLeft, ChevronRight, Maximize, Minimize, X, ZoomIn, ZoomOut } from "lucide-react";
 import {
   type KeyboardEvent,
   type ReactNode,
@@ -46,6 +46,7 @@ import { ApiError, errorMessage } from "../api/raw";
 import { tightCost } from "../lib/cost";
 import { notify, notifyError } from "../lib/notify";
 import { asksForPrice } from "../lib/remote-price";
+import { useReturnFocus } from "../lib/return-focus";
 import {
   copyImage,
   downloadOriginal,
@@ -55,15 +56,23 @@ import {
   reuseVideoSettings,
 } from "./actions";
 import { type DetailActions, DetailPanel, type RunSpeedInfo } from "./detail-panel";
+import { ImageMedia, type ImageMediaHandle } from "./edit/edit-media";
+import { EditPanel } from "./edit/edit-panel";
+import { editKey } from "./edit/keys";
+import { reopenEdit } from "./edit/reopen";
+import { useEditRunner } from "./edit/runner";
+import { cancelLeave, confirmLeave, DEFAULT_TOOL, leaveEdit, useEditSession } from "./edit/session";
 import {
+  addedCaption,
   BACKDROP_RUNG,
   type FrozenSettings,
   frozenSettings,
   inTrashCaption,
   relativeTime,
   thumbAt,
+  titleOf,
 } from "./format";
-import { Media, type MediaHandle } from "./media";
+import { editedFrom, reopenedEdit } from "./lineage";
 import {
   afterLeaving,
   type Nav,
@@ -74,7 +83,14 @@ import {
   stepNext,
   stepPrevious,
 } from "./stepping";
-import { closeDetailView, findDetailTarget, registerDetailCloser, useDetail } from "./use-detail";
+import {
+  closeDetailView,
+  type DetailTab,
+  findDetailTarget,
+  PANEL_GUTTER,
+  registerDetailCloser,
+  useDetail,
+} from "./use-detail";
 import { VideoMedia, type VideoMediaHandle } from "./video-media";
 
 // The detail view (§4.0, design x7y6U): the image large on its blurred copy, the Info panel on the
@@ -101,26 +117,29 @@ export interface DetailViewProps {
  * detailTarget(id) on the element that opens it, so closing hands focus back there.
  */
 export function DetailView(props: DetailViewProps) {
-  const { assetId, show, close } = useDetail();
+  const { assetId, tab, show, setTab, close } = useDetail();
   return (
-    <Modal open={assetId !== null} onOpenChange={(open) => (open ? undefined : close())}>
-      {assetId ? <DetailContent {...props} id={assetId} show={show} close={close} /> : null}
+    // Every way out asks first when an edit would be lost (Esc, the close button).
+    <Modal open={assetId !== null} onOpenChange={(open) => (open ? undefined : leaveEdit(close))}>
+      {assetId ? (
+        <DetailContent {...props} id={assetId} tab={tab} show={show} setTab={setTab} close={close} />
+      ) : null}
     </Modal>
   );
 }
 
 const UNDO_MS = 8000;
-/** The panel's column: 352 wide, 8 from the window's edge (design x7y6U). */
-const PANEL_GUTTER = 360;
 /** How far the blurred copy reaches past the media area (1320×1060 at −120,−80). */
 const BACKDROP_BLEED_X = 120;
 const BACKDROP_BLEED_Y = 80;
 
-type Confirm = "delete" | "purge";
+type Confirm = "delete" | "purge" | "leave";
 
 interface ContentProps extends DetailViewProps {
   id: string;
-  show: (id: string | null) => void;
+  tab: DetailTab;
+  show: (id: string | null, tab?: DetailTab) => void;
+  setTab: (tab: DetailTab) => void;
   close: () => void;
 }
 
@@ -128,12 +147,6 @@ interface ContentProps extends DetailViewProps {
 function listItemOf(asset: Asset): AssetListItem {
   const { deletedAt, ...rest } = asset;
   return deletedAt ? { ...rest, deletedAt } : rest;
-}
-
-/** One line for the header: the prompt's first line, else the model's name (§4.0). */
-function titleOf(prompt: string, modelName: string | undefined): string {
-  const line = prompt.trim().split("\n")[0]?.trim();
-  return line || modelName || t("assets.detail.label");
 }
 
 function DetailContent({
@@ -144,18 +157,45 @@ function DetailContent({
   loadingMore,
   onLoadMore,
   loading = false,
+  tab,
   show,
+  setTab,
   close,
 }: ContentProps) {
   const navigate = useNavigate();
   const content = useRef<HTMLDivElement>(null);
   const mediaBox = useRef<HTMLDivElement>(null);
-  const media = useRef<MediaHandle>(null);
+  const media = useRef<ImageMediaHandle>(null);
   const videoMedia = useRef<VideoMediaHandle>(null);
   const [expanded, setExpanded] = useState(false);
   const [zoomed, setZoomed] = useState(false);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const [pending, setPending] = useState<PendingStep | null>(null);
+  const leaving = useEditSession((s) => s.leaving !== null);
+  // The Edit tab's runs, held here so one carries on while Info is open.
+  const runner = useEditRunner();
+  const { reset: resetRunner } = runner;
+
+  // Generate gives way to Stop and back, the form goes out of reach while a run goes, Edit the mask
+  // gives way to the toolbar, and a tool's options bar gives way to another's. Focus on any of them
+  // would fall to the page, out of reach of the view's keys, so it comes back here.
+  const tool = useEditSession((s) => s.tool);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: runs when a run starts or ends, the compare opens or closes, or the tool changes.
+  useEffect(() => {
+    const active = document.activeElement;
+    if (!active || active === document.body || active.closest("[inert]"))
+      content.current?.focus({ preventScroll: true });
+  }, [runner.busy, runner.compared, tool]);
+
+  // An edit lasts while its image is open: stepping to another image or closing the view drops it,
+  // and lets its run go on in the feed. Both ask first (leaveEdit) when there's a mask or a prompt
+  // to lose.
+  useEffect(() => {
+    const editing = useEditSession.getState().assetId;
+    if (editing !== null && editing !== id) useEditSession.getState().end();
+    resetRunner();
+  }, [id, resetRunner]);
+  useEffect(() => () => useEditSession.getState().end(), []);
 
   const detail = useAssetDetail(id);
   const models = useQuery({ ...modelsQuery("all"), select: (data) => data.models });
@@ -197,7 +237,7 @@ function DetailContent({
   }, [id]);
 
   useEffect(() => {
-    registerDetailCloser(close);
+    registerDetailCloser(() => leaveEdit(close));
     return () => registerDetailCloser(null);
   }, [close]);
 
@@ -268,12 +308,12 @@ function DetailContent({
   const previous = () => {
     const step = stepPrevious(nav);
     if (step.kind === "none") nudge(-1);
-    else go(step);
+    else leaveEdit(() => go(step));
   };
   const next = () => {
     const step = stepNext(nav, id);
     if (step.kind === "none") nudge(1);
-    else go(step);
+    else leaveEdit(() => go(step));
   };
 
   if (!item) {
@@ -314,10 +354,23 @@ function DetailContent({
       ? allModels?.find((m) => m.providerId === item.providerId && m.modelId === item.modelId)
       : undefined;
   const prompt = jobSet?.promptOriginal ?? data?.asset.prompt ?? item.prompt;
-  const title = titleOf(prompt, model?.displayName ?? item.modelId ?? undefined);
+  const modelName = model?.displayName ?? item.modelId ?? undefined;
+  const title = titleOf(prompt, modelName);
+  // An edited image's original, mask and references (design Detail / Section / Edited from).
+  const from = data && !isVideo ? editedFrom(data, modelName) : null;
   const deletedAt = item.deletedAt ?? data?.asset.deletedAt ?? null;
   const trashed = query.view === "trash" || deletedAt !== null;
-  const caption = trashed && deletedAt ? inTrashCaption(deletedAt) : relativeTime(item.createdAt);
+  // What "Edit the original with this mask" asks for again. Not from the Trash, where nothing edits.
+  const reopened = data && from && !trashed ? reopenedEdit(data, from, prompt) : null;
+  // Only an image in the library can be edited; a link to anything else on Edit shows Info.
+  const editable = !isVideo && !trashed;
+  const editing = editable && tab === "edit";
+  const caption =
+    trashed && deletedAt
+      ? inTrashCaption(deletedAt)
+      : item.kind === "uploaded"
+        ? addedCaption(item.createdAt)
+        : relativeTime(item.createdAt);
   const favourite = data?.isFavourite ?? item.isFavourite;
   const canReplay = item.jobSetId !== null;
   const speed: RunSpeedInfo | null = jobSet
@@ -420,6 +473,7 @@ function DetailContent({
         (error: unknown) => notifyError(errorMessage(error)),
       );
     },
+    onEdit: editable ? () => setTab("edit") : undefined,
     onReuse: () => {
       if (!canReplay) return;
       if (isVideo) reuseVideoSettings({ ...frozen, prompt });
@@ -456,6 +510,22 @@ function DetailContent({
     const target = event.target as HTMLElement;
     if (event.defaultPrevented || !content.current?.contains(target)) return;
     if (target.closest("input, textarea, select, [contenteditable='true']")) return;
+    // On the Edit tab its tool keys come first, and the view's own letters stay quiet (keys.ts).
+    const edit = editing ? editKey(event) : null;
+    if (edit) {
+      const session = useEditSession.getState();
+      // While a run goes the mask and its tools rest, as the toolbar shows, and while a new image is
+      // compared there's no toolbar: their keys do nothing.
+      if (edit.kind === "download") actions.onDownload();
+      else if (!runner.busy && !runner.compared) {
+        if (edit.kind === "tool") session.setTool(edit.tool);
+        else if (edit.kind === "undo") session.undo();
+        else if (edit.kind === "redo") session.redo();
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (event.metaKey || event.ctrlKey || event.altKey) return;
     const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
     let handled = true;
@@ -509,8 +579,17 @@ function DetailContent({
       contentRef={content}
       isVideo={isVideo}
       onKeyDown={onKeyDown}
-      // Esc leaves the expanded image first, then the view (§4.5).
+      // On the Edit tab Esc first drops what's being drawn, then puts the brush back in hand. Then it
+      // leaves the expanded image, then the view (§4.5), asking first if an edit would be lost.
       onEscape={() => {
+        if (editing && !runner.compared) {
+          if (media.current?.cancel()) return true;
+          const session = useEditSession.getState();
+          if (session.tool !== DEFAULT_TOOL) {
+            session.setTool(DEFAULT_TOOL);
+            return true;
+          }
+        }
         if (!expanded) return false;
         setExpanded(false);
         return true;
@@ -528,17 +607,20 @@ function DetailContent({
           {isVideo ? (
             <VideoMedia key={item.id} ref={videoMedia} item={item} expanded={expanded} label={title} />
           ) : (
-            <Media
+            <ImageMedia
               key={item.id}
               ref={media}
               item={item}
               expanded={expanded}
               label={title}
+              editing={editing}
+              runner={runner}
               onZoomedChange={setZoomed}
             />
           )}
         </div>
-        {!expanded && nav.previous ? (
+        {/* Stepping away would leave the edit, so the Edit tab has no arrows (design f90S4YuAoH). */}
+        {!expanded && !editing && nav.previous ? (
           <IconButton
             variant="overlay"
             size={38}
@@ -548,7 +630,7 @@ function DetailContent({
             className="absolute top-1/2 left-16 -translate-y-1/2"
           />
         ) : null}
-        {!expanded && (nav.next || nav.nextUnloaded) ? (
+        {!expanded && !editing && (nav.next || nav.nextUnloaded) ? (
           <IconButton
             variant="overlay"
             size={38}
@@ -558,9 +640,9 @@ function DetailContent({
             className="absolute top-1/2 right-16 -translate-y-1/2"
           />
         ) : null}
-        {/* Detail / Media chrome (design Rsrfa): Zoom (images only) and Expand. */}
+        {/* Detail / Media chrome (design Rsrfa): Zoom (images on Info only) and Expand. */}
         <div className="absolute right-38 bottom-20 flex items-center gap-6">
-          {isVideo ? null : (
+          {isVideo || editing ? null : (
             <IconButton
               variant="overlay"
               size={32}
@@ -574,6 +656,9 @@ function DetailContent({
             size={32}
             icon={expanded ? Minimize : Maximize}
             label={expanded ? t("assets.detail.showDetails") : t("assets.detail.expand")}
+            // Focus stays on the view, so holding Space pans the Edit tab's image after a click
+            // rather than pressing the button again.
+            onMouseDown={(event) => event.preventDefault()}
             onClick={() => setExpanded((e) => !e)}
           />
         </div>
@@ -593,13 +678,59 @@ function DetailContent({
         trashed={trashed}
         loadFailed={detail.isError && !data}
         onRetry={() => void detail.refetch()}
-        onOpenReference={(ref) => {
-          seen.current.set(ref.id, listItemOf(ref));
-          setPending(null);
-          show(ref.id);
-        }}
+        onOpenReference={(ref) =>
+          leaveEdit(() => {
+            seen.current.set(ref.id, listItemOf(ref));
+            setPending(null);
+            show(ref.id);
+          })
+        }
         actions={actions}
         hidden={expanded}
+        editedFrom={
+          from
+            ? {
+                from,
+                // The original on Edit, with this image's mask, words and settings back (design
+                // Q6PqHq5KHS). It asks first when the edit open here has work in it.
+                onEditAgain: reopened
+                  ? () =>
+                      leaveEdit(
+                        () =>
+                          void reopenEdit(reopened).then((painted) => {
+                            seen.current.set(reopened.original.id, listItemOf(reopened.original));
+                            setPending(null);
+                            show(reopened.original.id, "edit");
+                            if (painted) notify(t("edit.reopen.back"), { icon: Brush });
+                            else notifyError(t("edit.reopen.maskFailed"));
+                          }),
+                      )
+                  : undefined,
+              }
+            : undefined
+        }
+        tabs={
+          editable
+            ? {
+                tab: editing ? "edit" : "info",
+                onTabChange: setTab,
+                edit: (
+                  <EditPanel
+                    item={item}
+                    runner={runner}
+                    // Open new image: the result on Info. It asks first only when the edit has
+                    // moved on since the run, as the run's mask and prompt are in the library.
+                    onOpen={(assetId) =>
+                      leaveEdit(() => {
+                        setPending(null);
+                        show(assetId);
+                      })
+                    }
+                  />
+                ),
+              }
+            : undefined
+        }
       />
       {expanded ? (
         // The one way out that stays on screen while the image fills the window.
@@ -613,14 +744,16 @@ function DetailContent({
           />
         </ModalClose>
       ) : null}
+      {runner.dialog}
       <ConfirmDialog
-        kind={confirm}
+        kind={confirm ?? (leaving ? "leave" : null)}
         retention={settings.data?.trashRetentionDays ?? null}
-        onClose={() => setConfirm(null)}
+        onClose={() => (confirm ? setConfirm(null) : cancelLeave())}
         onConfirm={(kind) => {
           setConfirm(null);
           if (kind === "delete") runDelete();
-          else runPurge();
+          else if (kind === "purge") runPurge();
+          else confirmLeave();
         }}
       />
     </Shell>
@@ -703,7 +836,7 @@ function Backdrop({ item, expanded }: { item: AssetListItem; expanded: boolean }
   );
 }
 
-/** Delete (to the Trash) and Delete for good, asked on the library's Modal / Shell. */
+/** Delete (to the Trash), Delete for good and Leave this edit, asked on the library's Modal / Shell. */
 function ConfirmDialog({
   kind,
   retention,
@@ -716,25 +849,36 @@ function ConfirmDialog({
   onConfirm: (kind: Confirm) => void;
 }) {
   const cancel = useRef<HTMLButtonElement>(null);
+  const returnFocus = useReturnFocus(kind !== null);
   // The last one stays on screen while the dialog animates out.
   const [shown, setShown] = useState<Confirm | null>(null);
   if (kind && kind !== shown) setShown(kind);
   const current = kind ?? shown;
   const copy =
-    current === "purge"
-      ? {
-          title: t("assets.dialogs.deleteForGood.title", { count: 1 }),
-          body: t("assets.dialogs.deleteForGood.body", { count: 1 }),
-          confirm: t("assets.dialogs.deleteForGood.confirm"),
+    current === "leave"
+      ? // Dialog / Leave this edit (design UQwMF5Z1nm).
+        {
+          title: t("edit.leave.title"),
+          body: t("edit.leave.body"),
+          cancel: t("edit.leave.keep"),
+          confirm: t("edit.leave.confirm"),
         }
-      : {
-          title: t("feed.delete.title", { count: 1 }),
-          body:
-            retention === null
-              ? t("feed.delete.body", { count: 1 })
-              : t("feed.delete.bodyDays", { count: 1, days: retention }),
-          confirm: t("feed.delete.confirm"),
-        };
+      : current === "purge"
+        ? {
+            title: t("assets.dialogs.deleteForGood.title", { count: 1 }),
+            body: t("assets.dialogs.deleteForGood.body", { count: 1 }),
+            cancel: t("actions.cancel"),
+            confirm: t("assets.dialogs.deleteForGood.confirm"),
+          }
+        : {
+            title: t("feed.delete.title", { count: 1 }),
+            body:
+              retention === null
+                ? t("feed.delete.body", { count: 1 })
+                : t("feed.delete.bodyDays", { count: 1, days: retention }),
+            cancel: t("actions.cancel"),
+            confirm: t("feed.delete.confirm"),
+          };
 
   const onOpenChange = useCallback((open: boolean) => (open ? undefined : onClose()), [onClose]);
 
@@ -750,12 +894,15 @@ function ConfirmDialog({
             event.preventDefault();
             cancel.current?.focus();
           }}
+          // Opened by a key or a button, not a trigger: focus goes back where it was, so Keep
+          // editing leaves the Edit tab's keys working.
+          onCloseAutoFocus={returnFocus}
         >
           <ModalDescription>{copy.body}</ModalDescription>
           <ModalFooter>
             <ModalClose asChild>
               <Button ref={cancel} variant="secondary" size="m">
-                {t("actions.cancel")}
+                {copy.cancel}
               </Button>
             </ModalClose>
             <Button variant="danger" size="m" onClick={() => onConfirm(current)}>

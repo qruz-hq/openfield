@@ -1,6 +1,13 @@
 // biome-ignore lint/style/noRestrictedImports: tests run under Bun, never in the browser.
 import { describe, expect, test } from "bun:test";
-import { downloadName, frozenSettings, inTrashCaption, relativeTime, thumbAt } from "../src/detail/format";
+import {
+  addedCaption,
+  downloadName,
+  frozenSettings,
+  inTrashCaption,
+  relativeTime,
+  thumbAt,
+} from "../src/detail/format";
 import { afterLeaving, navFor, resolvePending, stepNext, stepPrevious } from "../src/detail/stepping";
 import { asset, at } from "./fixtures";
 
@@ -174,6 +181,14 @@ describe("format", () => {
     expect(relativeTime("2026-09-24T10:00:00Z", now)).toBe("2 hours ago");
     expect(relativeTime("2026-09-23T12:00:00Z", now)).toBe("Yesterday");
     expect(relativeTime("2026-09-01T12:00:00Z", now)).toBe("Sep 1, 2026");
+  });
+
+  test("an upload's caption says when it was added, mid-sentence", () => {
+    const now = Date.parse("2026-09-24T12:00:00Z");
+    expect(addedCaption("2026-09-24T11:59:40Z", now)).toBe("Added a moment ago");
+    expect(addedCaption("2026-09-24T10:00:00Z", now)).toBe("Added 2 hours ago");
+    expect(addedCaption("2026-09-23T12:00:00Z", now)).toBe("Added yesterday");
+    expect(addedCaption("2026-09-01T12:00:00Z", now)).toBe("Added Sep 1, 2026");
   });
 
   test("the Trash caption names the day it was deleted", () => {

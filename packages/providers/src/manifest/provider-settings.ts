@@ -134,10 +134,18 @@ export interface RunSpeed {
   requestedName: string;
 }
 
-/** The speed a run of `model` uses under its company's current settings. Standard until they load. */
-export function runSpeed(settings: ProviderSettingsResponse | undefined, model: ModelManifest): RunSpeed {
+/**
+ * The speed a run of `model` uses under its company's current settings. Standard until they load.
+ * `op` is what the run compiles to: a speed offered only for some ops (OpenAI's Batch makes images
+ * but doesn't edit them) runs the others at Standard.
+ */
+export function runSpeed(
+  settings: ProviderSettingsResponse | undefined,
+  model: ModelManifest,
+  op: AdapterOp = "generate",
+): RunSpeed {
   const resolved = settings
-    ? resolveProviderSettings(settings.schema, settings.values, model)
+    ? resolveProviderSettings(settings.schema, settings.values, model, op)
     : { speed: "standard" as const, speedRequested: "standard" as const };
   return {
     speed: resolved.speed,

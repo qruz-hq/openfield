@@ -16,7 +16,7 @@ import {
   libraryListParams,
   type SseEvent,
 } from "@openfield/core";
-import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
+import { queryOptions, useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
 import { notifyError } from "../../lib/notify";
 import { api, call, queryClient, queryKeys } from "../client";
 import { errorMessage, rawFetch, toApiError } from "../raw";
@@ -168,12 +168,15 @@ const clampCounts = (counts: LibrarySummary["counts"]): LibrarySummary["counts"]
 // Detail view
 
 /** Everything the Info panel shows. Also answers for an image in the Trash. */
-export function useAssetDetail(id: string | null) {
-  return useQuery({
-    queryKey: libraryKeys.detail(id ?? ""),
-    enabled: id !== null,
-    queryFn: ({ signal }) => call(api.api.assets[":id"].$get({ param: { id: id! } }, { init: { signal } })),
+/** One image's details: what it was made with, where it came from, its folders. */
+export const assetDetailQuery = (id: string) =>
+  queryOptions({
+    queryKey: libraryKeys.detail(id),
+    queryFn: ({ signal }) => call(api.api.assets[":id"].$get({ param: { id } }, { init: { signal } })),
   });
+
+export function useAssetDetail(id: string | null) {
+  return useQuery({ ...assetDetailQuery(id ?? ""), enabled: id !== null });
 }
 
 /**

@@ -77,6 +77,7 @@ export {
 export {
   FilterPill,
   type FilterPillProps,
+  MediaLabelPill,
   SettingSummaryPill,
   type SettingSummaryPillProps,
   SpendPill,

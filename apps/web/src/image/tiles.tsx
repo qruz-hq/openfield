@@ -38,6 +38,7 @@ import {
 } from "@openfield/ui";
 import {
   ArrowUpRight,
+  Brush,
   CircleAlert,
   Download,
   Eye,
@@ -87,8 +88,9 @@ import {
 
 // Feed / Tile / {Idle, Generating, Queued, Waiting at provider, Failed}. Radius 0: the image is the
 // tile (§2.4). Idle's hover (design sZjeU, Favorited FYmuP, badge nPfg4): favourite, download,
-// recreate, add to folder and Use as reference in one column, over a scrim, with the model caption. No cost in
-// the caption yet - a plain asset the feed lists doesn't carry what its run was billed.
+// recreate, add to folder and Use as reference in one column, over a scrim, then Edit and the model
+// caption along the bottom. No cost in the caption yet - a plain asset the feed lists doesn't carry
+// what its run was billed. Rows at the smallest zoom step take the Compact hover (IFVmcYsirn).
 
 export interface TileBox {
   style: CSSProperties;
@@ -109,6 +111,7 @@ export function AssetTile({
   rung,
   model,
   rerun = false,
+  compact = false,
   actions,
   style,
 }: TileBox & {
@@ -116,6 +119,11 @@ export function AssetTile({
   rung: number;
   model?: string;
   rerun?: boolean;
+  /**
+   * Feed / Tile / Hover / Compact, for rows 200 tall: 32px buttons, Edit as an icon and no caption,
+   * so the column and the bottom row both fit.
+   */
+  compact?: boolean;
   /** Favourite, download, recreate and Add to folder: the same actions every card in the app shares. */
   actions: LibraryActions;
 }) {
@@ -140,7 +148,7 @@ export function AssetTile({
     <li
       aria-label={name}
       data-job-set={asset.jobSetId ?? undefined}
-      className={`${box} group bg-elevated`}
+      className={`${box} @container group bg-elevated`}
       style={style}
     >
       {image.status === "ready" ? (
@@ -183,28 +191,53 @@ export function AssetTile({
       />
       {/*
        * Feed / Tile / Hover (design sZjeU, Favorited FYmuP): a scrim, the actions column (Use as
-       * reference last) and the model caption. The scrim never catches a click itself (it would block
-       * the button above for the plain "open" click); only its own buttons do.
+       * reference last), then the bottom row: Edit and the model caption. The scrim never catches a
+       * click itself (it would block the button above for the plain "open" click); only its own
+       * buttons do.
        */}
       <div className="pointer-events-none absolute inset-0 bg-scrim opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100">
-        <TileActions asset={asset} actions={actions}>
+        <TileActions asset={asset} actions={actions} size={compact ? 32 : 38}>
           <IconButton
             variant="overlay"
-            size={38}
+            size={compact ? 32 : 38}
             icon={ImagePlus}
             label={t("feed.tile.actions.useAsReference")}
             onClick={() => addReference(asset.id)}
           />
         </TileActions>
-        {modelLabel ? (
-          <div className="pointer-events-none absolute inset-x-10 bottom-20 flex flex-col items-start">
-            {logo ? (
-              <ModelCaption provider={logo} name={modelLabel} onImage />
-            ) : (
-              <span className="text-micro font-medium text-overlay-fg">{modelLabel}</span>
-            )}
-          </div>
-        ) : null}
+        {/* Bottom row: 10 from the edges, Edit then the caption, 10 apart. */}
+        <div className="absolute inset-x-10 bottom-10 flex h-32 items-center gap-10">
+          {compact ? (
+            <IconButton
+              variant="overlay"
+              size={32}
+              icon={Brush}
+              label={t("feed.tile.actions.edit")}
+              onClick={() => openDetail(asset.id, "edit")}
+              className="pointer-events-auto"
+            />
+          ) : (
+            <Button
+              variant="overlay"
+              size="s"
+              icon={Brush}
+              onClick={() => openDetail(asset.id, "edit")}
+              className="pointer-events-auto"
+            >
+              {t("feed.tile.actions.edit")}
+            </Button>
+          )}
+          {/* Edit always stays; the caption beside it needs room, so a narrow tile drops it. */}
+          {modelLabel && !compact ? (
+            <div className="flex min-w-0 overflow-hidden whitespace-nowrap @max-[230px]:hidden">
+              {logo ? (
+                <ModelCaption provider={logo} name={modelLabel} onImage />
+              ) : (
+                <span className="text-micro font-medium text-overlay-fg">{modelLabel}</span>
+              )}
+            </div>
+          ) : null}
+        </div>
       </div>
     </li>
   );
@@ -218,10 +251,13 @@ export function AssetTile({
 export function TileActions({
   asset,
   actions,
+  size = 38,
   children,
 }: {
   asset: AssetListItem;
   actions: LibraryActions;
+  /** 32 on the Compact hover, for rows too short for a column of 38s. */
+  size?: 32 | 38;
   children?: ReactNode;
 }) {
   const [filing, setFiling] = useState(false);
@@ -229,7 +265,7 @@ export function TileActions({
     <div className="pointer-events-auto absolute top-10 right-10 flex flex-col gap-4">
       <IconButton
         variant="overlay"
-        size={38}
+        size={size}
         icon={Heart}
         label={asset.isFavourite ? t("feed.tile.actions.unfavorite") : t("feed.tile.actions.favorite")}
         aria-pressed={asset.isFavourite}
@@ -239,7 +275,7 @@ export function TileActions({
       />
       <IconButton
         variant="overlay"
-        size={38}
+        size={size}
         icon={Download}
         label={t("feed.tile.actions.download")}
         onClick={() => void actions.download([asset])}
@@ -248,7 +284,7 @@ export function TileActions({
       {asset.jobSetId ? (
         <IconButton
           variant="overlay"
-          size={38}
+          size={size}
           icon={RefreshCw}
           label={t("feed.tile.actions.recreate")}
           onClick={() => actions.recreate(asset)}
@@ -257,7 +293,7 @@ export function TileActions({
       <AddToFolderPopover ids={[asset.id]} open={filing} onOpenChange={setFiling} side="left" align="start">
         <IconButton
           variant="overlay"
-          size={38}
+          size={size}
           icon={FolderPlus}
           label={t("feed.tile.actions.addToFolder")}
         />

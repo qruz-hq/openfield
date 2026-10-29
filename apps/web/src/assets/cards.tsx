@@ -12,6 +12,7 @@ import {
   ModelCaption,
 } from "@openfield/ui";
 import {
+  Brush,
   Copy,
   Download,
   Ellipsis,
@@ -30,7 +31,7 @@ import {
 import { type MouseEvent, memo, type PointerEvent, useCallback, useState } from "react";
 import { useAuthedImage } from "../api/hooks/images";
 import { useAuthedVideo } from "../api/hooks/videos";
-import { detailTarget } from "../detail/use-detail";
+import { detailTarget, useOpenDetail } from "../detail/use-detail";
 import { logoFor } from "../lib/provider";
 import type { LibraryActions } from "./actions";
 import { type DragPayload, useDragSource, useDropState, useIsDragged } from "./drag";
@@ -294,6 +295,7 @@ function CardMenu({
 }) {
   // The picker opens once the menu has closed and handed focus back, or it would close at once.
   const [filing, setFiling] = useState(false);
+  const openDetail = useOpenDetail();
   return (
     <Menu open={open} onOpenChange={onOpenChange}>
       <MenuTrigger asChild>
@@ -327,6 +329,12 @@ function CardMenu({
         <MenuItem icon={PencilLine} onSelect={() => actions.reuse(item)}>
           {t("feed.tile.menu.reuse")}
         </MenuItem>
+        {/* Only an image can be edited with a mask. */}
+        {item.modality === "image" ? (
+          <MenuItem icon={Brush} onSelect={() => openDetail(item.id, "edit")}>
+            {t("feed.tile.menu.edit")}
+          </MenuItem>
+        ) : null}
         <MenuItem icon={Copy} onSelect={() => void actions.copyPrompt(item)}>
           {t("feed.tile.menu.copyPrompt")}
         </MenuItem>

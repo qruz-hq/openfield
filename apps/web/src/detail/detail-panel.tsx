@@ -26,9 +26,14 @@ import {
   ProviderLogo,
   SectionLabel,
   Surface,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
   Tooltip,
 } from "@openfield/ui";
 import {
+  Brush,
   ChevronDown,
   ChevronUp,
   Copy,
@@ -48,9 +53,14 @@ import { useAuthedImage } from "../api/hooks/images";
 import { useSpeedName } from "../api/hooks/provider-settings";
 import { AddToFolderPopover } from "../assets/add-to-folder";
 import { logoFor } from "../lib/provider";
+import { titleOf } from "./format";
+import type { EditedFrom } from "./lineage";
+import type { DetailTab } from "./use-detail";
 
 // Detail / Panel / Assets and / Trash (design sb8P2, JSKpv): header, PROMPT, DETAILS, a spacer,
-// then the footer at the bottom. No tabs until Edit and History ship (§4.0).
+// then the footer at the bottom. An image in the library also gets the Info and Edit tabs under the
+// header (design oH7EH35br4, Detail / Tabs / Info / Two tabs); History waits for its own work. An
+// edited image shows EDITED FROM in PROMPT's place (design Ma9PL8X7rV, Detail / Panel / Info / Edited).
 
 export interface DetailActions {
   /** Recreate's estimate, "~$0.04", when the price is known. */
@@ -63,6 +73,8 @@ export interface DetailActions {
   favourite: boolean;
   restoring: boolean;
   onRecreate: () => void;
+  /** Opens the Edit tab. Left out for what can't be edited (a video). */
+  onEdit?: (() => void) | undefined;
   onReuse: () => void;
   /** Left out for a video: it can't go on the clipboard the way an image can. */
   onCopyImage?: () => void;
@@ -82,7 +94,7 @@ export interface RunSpeedInfo {
 interface DetailPanelProps {
   id: string;
   /** What the Details rows read. The list's copy until the details arrive. */
-  asset: Pick<AssetListItem, "providerId" | "modelId" | "width" | "height" | "createdAt">;
+  asset: Pick<AssetListItem, "kind" | "providerId" | "modelId" | "width" | "height" | "createdAt">;
   title: string;
   caption: string;
   /** The prompt as written. */
@@ -105,6 +117,16 @@ interface DetailPanelProps {
   actions: DetailActions;
   /** Out of sight while the image is expanded, keeping its state for when it comes back. */
   hidden?: boolean;
+  /**
+   * An edited image's original, mask and references, shown in place of Prompt. onEditAgain opens
+   * the original on Edit with the same mask; left out where that can't happen (the Trash).
+   */
+  editedFrom?: { from: EditedFrom; onEditAgain?: (() => void) | undefined } | undefined;
+  /**
+   * The Info and Edit tabs, and what Edit shows. Left out for what can't be edited here (a video,
+   * an image in the trash), which keeps the panel as it was, with no tabs.
+   */
+  tabs?: { tab: DetailTab; onTabChange: (tab: DetailTab) => void; edit: ReactNode } | undefined;
 }
 
 export function DetailPanel({
@@ -125,31 +147,44 @@ export function DetailPanel({
   onOpenReference,
   actions,
   hidden = false,
+  editedFrom,
+  tabs,
 }: DetailPanelProps) {
-  return (
-    <Surface
-      variant="panel"
-      hidden={hidden}
-      className="absolute top-8 right-8 bottom-8 mac-window:top-36 other-window:top-52"
-    >
-      {/* Detail / Panel header */}
-      <div className="flex w-full shrink-0 items-center justify-between gap-12">
-        <div className="flex min-w-0 flex-col gap-2">
-          <span className="truncate text-body-strong text-text-primary">{title}</span>
-          <span className="truncate text-caption text-text-tertiary">{caption}</span>
-        </div>
-        <ModalClose asChild>
-          <IconButton variant="round" size={30} icon={X} label={t("assets.detail.close")} />
-        </ModalClose>
+  // A photo uploaded as it is has no words to show (design epAPf9QTJL): Details says where it came from.
+  const uploadedOnly = asset.kind === "uploaded" && !prompt.trim();
+  const header = (
+    // Detail / Panel header
+    <div className="flex w-full shrink-0 items-center justify-between gap-12">
+      <div className="flex min-w-0 flex-col gap-2">
+        <span className="truncate text-body-strong text-text-primary">{title}</span>
+        <span className="truncate text-caption text-text-tertiary">{caption}</span>
       </div>
+      <ModalClose asChild>
+        <IconButton variant="round" size={30} icon={X} label={t("assets.detail.close")} />
+      </ModalClose>
+    </div>
+  );
+  const info = (
+    <>
       {/* The blocks scroll when an open prompt is long, so the footer stays put. */}
       <div className="flex min-h-0 w-full flex-1 flex-col gap-12 overflow-y-auto">
-        <PromptSection
-          key={id}
-          prompt={prompt}
-          references={references ?? []}
-          onOpenReference={onOpenReference}
-        />
+        {editedFrom ? (
+          <EditedFromSection
+            id={id}
+            from={editedFrom.from}
+            prompt={prompt}
+            models={models}
+            onOpen={onOpenReference}
+            onEditAgain={editedFrom.onEditAgain}
+          />
+        ) : uploadedOnly ? null : (
+          <PromptSection
+            key={id}
+            prompt={prompt}
+            references={references ?? []}
+            onOpenReference={onOpenReference}
+          />
+        )}
         <DetailsSection
           asset={asset}
           folders={folders}
@@ -167,14 +202,72 @@ export function DetailPanel({
           </div>
         ) : null}
       </div>
-      {trashed ? <TrashActions actions={actions} /> : <LibraryActions id={id} actions={actions} />}
-    </Surface>
+      {trashed ? (
+        <TrashActions actions={actions} />
+      ) : (
+        <LibraryActions id={id} uploaded={asset.kind === "uploaded"} actions={actions} />
+      )}
+    </>
+  );
+  const panelClass = "absolute top-8 right-8 bottom-8 mac-window:top-36 other-window:top-52";
+
+  if (!tabs) {
+    return (
+      <Surface variant="panel" hidden={hidden} className={panelClass}>
+        {header}
+        {info}
+      </Surface>
+    );
+  }
+  // Each tab's body fills the rest of the panel's column, as the blocks after the tabs would.
+  const body = "flex min-h-0 w-full flex-1 flex-col gap-12 focus-visible:outline-none";
+  return (
+    <Tabs asChild value={tabs.tab} onValueChange={(value) => tabs.onTabChange(value as DetailTab)}>
+      <Surface variant="panel" hidden={hidden} className={panelClass}>
+        {header}
+        {/* Detail / Tabs / Info and / Edit, Two tabs */}
+        <TabsList variant="segmented" className="shrink-0">
+          <TabsTrigger value="info">{t("assets.detail.tabs.info")}</TabsTrigger>
+          <TabsTrigger value="edit">{t("assets.detail.tabs.edit")}</TabsTrigger>
+        </TabsList>
+        {/* Not tab stops of their own: Tab goes from the tabs straight to the first control. */}
+        <TabsContent value="info" tabIndex={-1} className={body}>
+          {info}
+        </TabsContent>
+        {/* Edit's settings scroll when the window is too short for them, footer and all. */}
+        <TabsContent value="edit" tabIndex={-1} className={cn(body, "overflow-y-auto")}>
+          {tabs.edit}
+        </TabsContent>
+      </Surface>
+    </Tabs>
   );
 }
 
 // PROMPT (design O0zG8)
 
 const COPIED_MS = 1200;
+
+/** Chip / Mini with Copy: puts the prompt on the clipboard, then says Copied for a moment. */
+function CopyChip({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), COPIED_MS);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const copy = () =>
+    void navigator.clipboard.writeText(text).then(
+      () => setCopied(true),
+      () => undefined,
+    );
+  return (
+    <MiniChip
+      icon={Copy}
+      label={copied ? t("assets.detail.copied") : t("assets.detail.copy")}
+      onClick={copy}
+    />
+  );
+}
 
 function PromptSection({
   prompt,
@@ -185,17 +278,10 @@ function PromptSection({
   references: readonly Asset[];
   onOpenReference: (asset: Asset) => void;
 }) {
-  const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
   const [clamped, setClamped] = useState(false);
   const text = useRef<HTMLParagraphElement>(null);
   const hasPrompt = prompt.trim().length > 0;
-
-  useEffect(() => {
-    if (!copied) return;
-    const timer = setTimeout(() => setCopied(false), COPIED_MS);
-    return () => clearTimeout(timer);
-  }, [copied]);
 
   // See all shows only when six lines don't hold the prompt.
   // biome-ignore lint/correctness/useExhaustiveDependencies: measure again when the prompt changes.
@@ -205,23 +291,11 @@ function PromptSection({
     setClamped(el.scrollHeight > el.clientHeight + 1);
   }, [prompt, open]);
 
-  const copy = () =>
-    void navigator.clipboard.writeText(prompt).then(
-      () => setCopied(true),
-      () => undefined,
-    );
-
   return (
     <Surface variant="block" className="w-full shrink-0">
       <div className="flex w-full items-center justify-between">
         <SectionLabel>{t("assets.detail.prompt")}</SectionLabel>
-        {hasPrompt ? (
-          <MiniChip
-            icon={Copy}
-            label={copied ? t("assets.detail.copied") : t("assets.detail.copy")}
-            onClick={copy}
-          />
-        ) : null}
+        {hasPrompt ? <CopyChip text={prompt} /> : null}
       </div>
       {references.length ? (
         // One row, as in the design; more than fit scroll sideways (§4.3).
@@ -262,7 +336,10 @@ function PromptSection({
   );
 }
 
-/** Detail / Reference thumb / Primary and / Default: 54px, radius 8, the first ringed in accent. */
+/**
+ * Detail / Reference thumb / Primary and / Default: 54px, radius 8, the first ringed in accent.
+ * Without `onOpen` it's only a picture, for a row that has its own Open.
+ */
 function ReferenceThumb({
   asset,
   primary,
@@ -271,17 +348,12 @@ function ReferenceThumb({
 }: {
   asset: Asset;
   primary: boolean;
-  label: string;
-  onOpen: () => void;
+  label?: string;
+  onOpen?: () => void;
 }) {
   const image = useAuthedImage(assetThumbUrl(asset.id, { h: 200 }));
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onClick={onOpen}
-      className="relative size-54 shrink-0 cursor-pointer overflow-hidden rounded-8 bg-elevated-2"
-    >
+  const inner = (
+    <>
       {image.status === "ready" ? (
         <img src={image.src} alt="" draggable={false} className="size-full object-cover" />
       ) : null}
@@ -293,7 +365,170 @@ function ReferenceThumb({
           primary ? "inset-ring-2 inset-ring-accent" : "inset-ring-border",
         )}
       />
+    </>
+  );
+  const box = "relative size-54 shrink-0 overflow-hidden rounded-8 bg-elevated-2";
+  if (!onOpen)
+    return (
+      <div aria-hidden className={box}>
+        {inner}
+      </div>
+    );
+  return (
+    <button type="button" aria-label={label} onClick={onOpen} className={cn(box, "cursor-pointer")}>
+      {inner}
     </button>
+  );
+}
+
+// EDITED FROM (design Detail / Section / Edited from, and its Whole image, Rest not kept and Not
+// kept exactly variants, which only change the Mask row's second line)
+
+function EditedFromSection({
+  id,
+  from,
+  prompt,
+  models,
+  onOpen,
+  onEditAgain,
+}: {
+  /** The edited image, under its mask when the original has gone. */
+  id: string;
+  from: EditedFrom;
+  prompt: string;
+  models: readonly ModelListItem[] | undefined;
+  onOpen: (asset: Asset) => void;
+  onEditAgain: (() => void) | undefined;
+}) {
+  const { original, mask, maskNote, references } = from;
+  const first = references[0];
+  const hasPrompt = prompt.trim().length > 0;
+  const modelOf = (asset: Asset) =>
+    models?.find((m) => m.providerId === asset.providerId && m.modelId === asset.modelId)?.displayName ??
+    asset.modelId ??
+    undefined;
+  return (
+    <Surface variant="block" className="w-full shrink-0">
+      <div className="flex w-full items-center justify-between">
+        <SectionLabel>{t("assets.detail.editedFrom.label")}</SectionLabel>
+        {hasPrompt ? <CopyChip text={prompt} /> : null}
+      </div>
+      {original ? (
+        <LineageRow
+          thumb={<ReferenceThumb asset={original} primary={false} />}
+          title={titleOf(original.prompt, modelOf(original))}
+          subtitle={t("assets.detail.editedFrom.original")}
+        >
+          <Button variant="ghost" size="s" onClick={() => onOpen(original)}>
+            {t("assets.detail.editedFrom.open")}
+          </Button>
+        </LineageRow>
+      ) : null}
+      {mask ? (
+        <LineageRow
+          thumb={<MaskThumb imageId={original?.id ?? id} mask={mask} />}
+          title={t("assets.detail.editedFrom.mask")}
+          subtitle={maskNote}
+        />
+      ) : null}
+      {first ? (
+        <LineageRow
+          thumb={
+            <ReferenceThumb
+              asset={first}
+              primary={false}
+              label={t("assets.detail.reference", { index: 1 })}
+              onOpen={() => onOpen(first)}
+            />
+          }
+          title={t("assets.detail.editedFrom.references")}
+          subtitle={t("assets.detail.editedFrom.referenceCount", { count: references.length })}
+        />
+      ) : null}
+      <p
+        className={cn(
+          "w-full whitespace-pre-wrap break-words text-small leading-[1.45]",
+          hasPrompt ? "text-text-primary" : "text-text-tertiary",
+        )}
+      >
+        {hasPrompt ? prompt : t("assets.detail.noPrompt")}
+      </p>
+      {onEditAgain && original && mask ? (
+        <Button variant="secondary" size="l" icon={Brush} onClick={onEditAgain} className="w-full">
+          {t("assets.detail.editedFrom.editAgain")}
+        </Button>
+      ) : null}
+    </Surface>
+  );
+}
+
+/** A thumb, then its title and a second line, then whatever the row offers (Open). */
+function LineageRow({
+  thumb,
+  title,
+  subtitle,
+  children,
+}: {
+  thumb: ReactNode;
+  title: string;
+  subtitle: string | null;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="flex w-full items-center gap-10">
+      {thumb}
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <span className="truncate text-small font-medium text-text-primary">{title}</span>
+        {subtitle ? <span className="w-full text-caption text-text-tertiary">{subtitle}</span> : null}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/**
+ * The mask over the image it was painted on: the image under the overlay fill, the painted area in
+ * the accent at 90%, softened by a 2px blur. The mask's own alpha is 0 where it was painted, so the
+ * accent shows through it inverted: a solid layer excluding the mask. It's painted dark in both
+ * themes, as everything over an image is, so the accent stays light over the dark fill.
+ */
+function MaskThumb({ imageId, mask }: { imageId: string; mask: Asset }) {
+  const image = useAuthedImage(assetThumbUrl(imageId, { h: 200 }));
+  const painted = useAuthedImage(mask.fileUrl);
+  const shape =
+    painted.status === "ready"
+      ? {
+          // Older WebKit's names first; where a browser takes both, the standard ones come last and win.
+          WebkitMaskImage: `linear-gradient(#000, #000), url("${painted.src}")`,
+          WebkitMaskComposite: "xor",
+          WebkitMaskSize: "cover",
+          WebkitMaskPosition: "center",
+          WebkitMaskRepeat: "no-repeat",
+          maskImage: `linear-gradient(#000, #000), url("${painted.src}")`,
+          maskComposite: "exclude",
+          // The same crop as the image's object-cover.
+          maskSize: "cover",
+          maskPosition: "center",
+          maskRepeat: "no-repeat",
+        }
+      : undefined;
+  return (
+    <div
+      aria-hidden
+      data-paint="dark"
+      className="relative size-54 shrink-0 overflow-hidden rounded-8 bg-elevated-2"
+    >
+      {image.status === "ready" ? (
+        <img src={image.src} alt="" draggable={false} className="size-full object-cover" />
+      ) : null}
+      <span className="absolute inset-0 bg-overlay" />
+      {shape ? (
+        <span data-mask-thumb className="absolute inset-0 opacity-90 blur-[2px]">
+          <span className="absolute inset-0 bg-accent" style={shape} />
+        </span>
+      ) : null}
+      <span className="pointer-events-none absolute inset-0 rounded-8 inset-ring inset-ring-border" />
+    </div>
   );
 }
 
@@ -338,6 +573,10 @@ function DetailsSection({
     <Surface variant="block" className="w-full shrink-0">
       <SectionLabel>{t("assets.detail.details")}</SectionLabel>
       <KeyValueList>
+        {/* An upload has no model; the first row says where it came from instead. */}
+        {asset.kind === "uploaded" && !modelName ? (
+          <KeyValueRow label={t("assets.detail.source")} value={t("assets.detail.uploaded")} />
+        ) : null}
         {modelName ? (
           <KeyValueRow
             label={t("assets.detail.model")}
@@ -449,25 +688,48 @@ function Hint({ content, shortcut, children }: { content?: string; shortcut?: st
   );
 }
 
-/** Detail / Actions / Assets (design AtTwE). */
-function LibraryActions({ id, actions }: { id: string; actions: DetailActions }) {
+/** Detail / Actions / Assets, With Edit and Uploaded (design AtTwE, CIfbbd5WMA, smL0PuARml). */
+function LibraryActions({
+  id,
+  uploaded,
+  actions,
+}: {
+  id: string;
+  uploaded: boolean;
+  actions: DetailActions;
+}) {
   const [filing, setFiling] = useState(false);
   const replayHint = actions.canReplay ? undefined : t("assets.detail.notMadeHere");
+  const recreateHint = actions.canReplay
+    ? actions.recreateInexact
+      ? t("feed.tile.recreateInexact")
+      : undefined
+    : uploaded
+      ? t("assets.detail.uploadedNoPrompt")
+      : replayHint;
   const favouriteLabel = actions.favourite ? t("assets.detail.unfavorite") : t("assets.detail.favorite");
   return (
     <div className="flex w-full shrink-0 flex-col gap-8">
-      <Hint content={replayHint ?? (actions.recreateInexact ? t("feed.tile.recreateInexact") : undefined)}>
-        <Button
-          icon={RefreshCw}
-          price={actions.canReplay ? actions.recreatePrice : undefined}
-          loading={actions.recreating}
-          aria-disabled={!actions.canReplay || undefined}
-          onClick={actions.canReplay ? actions.onRecreate : undefined}
-          className={cn("w-full", !actions.canReplay && "cursor-default opacity-40")}
-        >
-          {t("assets.detail.recreate")}
-        </Button>
-      </Hint>
+      {/* Recreate row: Recreate, and Edit beside it, which stays on even when Recreate can't. */}
+      <div className="flex w-full gap-8">
+        <Hint content={recreateHint}>
+          <Button
+            icon={RefreshCw}
+            price={actions.canReplay ? actions.recreatePrice : undefined}
+            loading={actions.recreating}
+            aria-disabled={!actions.canReplay || undefined}
+            onClick={actions.canReplay ? actions.onRecreate : undefined}
+            className={cn("min-w-0 flex-1", !actions.canReplay && "cursor-default opacity-40")}
+          >
+            {t("assets.detail.recreate")}
+          </Button>
+        </Hint>
+        {actions.onEdit ? (
+          <Button variant="secondary" size="l" icon={Brush} onClick={actions.onEdit}>
+            {t("assets.detail.edit")}
+          </Button>
+        ) : null}
+      </div>
       <div className="flex w-full gap-8">
         <Hint content={replayHint}>
           <Button

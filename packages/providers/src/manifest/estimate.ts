@@ -155,8 +155,8 @@ function inputImageUsd(
 
 /**
  * Adds the images sent in to an estimate: their cost, and "+ 4 reference images ($0.002)" in the
- * basis. They're billed per call: a model that makes a batch in one call reads them once, one that
- * doesn't reads them again for every image.
+ * basis, or "+ the image you're editing" for an edit's base. They're billed per call: a model that
+ * makes a batch in one call reads them once, one that doesn't reads them again for every image.
  */
 function withInputs(
   manifest: ModelManifest,
@@ -176,11 +176,17 @@ function withInputs(
     max: round(cost.max + high),
     // Counted tokens are the company's rule for the image, not a bill: never exact.
     confidence: cost.confidence === "exact" ? "estimated" : cost.confidence,
-    basis: t("cost.withInputs", {
-      basis: cost.basis,
-      count: inputs.count,
-      cost: moneyRange(low, high, price.currency),
-    }),
+    basis: req.base
+      ? t("cost.withBase", {
+          basis: cost.basis,
+          references: inputs.count - 1,
+          cost: moneyRange(low, high, price.currency),
+        })
+      : t("cost.withInputs", {
+          basis: cost.basis,
+          count: inputs.count,
+          cost: moneyRange(low, high, price.currency),
+        }),
   };
 }
 

@@ -307,6 +307,17 @@
   }
 }
 
+/*
+ * Sonner lays its toasts on a list 356 wide, flush with the list's left edge. Ours hug their words
+ * (Feedback / Toast), so each centres on the list instead. `translate` leaves sonner's own
+ * transform, which slides the toasts in and stacks them, as it is.
+ */
+[data-sonner-toaster][data-x-position="center"] [data-sonner-toast] {
+  left: 50%;
+  width: max-content;
+  translate: -50% 0;
+}
+
 /* Unlayered, so it beats every utility without !important. */
 @media (prefers-reduced-motion: reduce) {
   *,

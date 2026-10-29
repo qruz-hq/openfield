@@ -2,6 +2,7 @@ import { type AssetListItem, DETAIL_PREVIEW_EDGE } from "@openfield/core";
 import { cn } from "@openfield/ui";
 import {
   type PointerEvent,
+  type ReactNode,
   type Ref,
   type RefObject,
   useEffect,
@@ -19,6 +20,17 @@ import { BACKDROP_RUNG, thumbAt } from "./format";
 
 /** Space around the image in the media area (design x7y6U: a 704-tall image in 900). */
 export const MEDIA_INSET = 98;
+
+/** Space around the image, side by side. */
+export interface MediaInset {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+const INSET: MediaInset = { top: MEDIA_INSET, right: MEDIA_INSET, bottom: MEDIA_INSET, left: MEDIA_INSET };
+const EDGE_TO_EDGE: MediaInset = { top: 0, right: 0, bottom: 0, left: 0 };
 const MIN_ZOOM = 0.05;
 const MAX_ZOOM = 16;
 const STEP = 1.5;
@@ -39,7 +51,29 @@ interface MediaProps {
   expanded: boolean;
   label: string;
   onZoomedChange: (zoomed: boolean) => void;
+  /** Screen px per image px, as it changes: the Edit tab's zoom control and brush. */
+  onZoomChange?: (zoom: number) => void;
+  /** Space around the image, in place of the panelled or expanded default. */
+  inset?: MediaInset;
+  /** A drag pans at any zoom, not only once zoomed in: the Edit tab's Pan tool. */
+  panAnywhere?: boolean;
+  /** Drawn over the image, inside its zoomed and panned box: the Edit tab's mask. */
+  layer?: ReactNode;
+  /**
+   * Unscaled, over the part of the image that's on screen as it's zoomed and panned: labels on its
+   * corners (Generating, Before and After). A function is told where the whole image is.
+   */
+  pinned?: ReactNode | ((frame: PinnedFrame) => ReactNode);
+  /** Over the whole media area, above the image: what takes the Edit tab's strokes. */
+  children?: ReactNode;
   ref?: Ref<MediaHandle>;
+}
+
+/** Where `pinned` sits: the part of the image on screen, and the whole image from its top left. */
+export interface PinnedFrame {
+  width: number;
+  height: number;
+  image: { left: number; top: number; width: number; height: number };
 }
 
 interface View {
@@ -51,7 +85,8 @@ interface View {
 
 const FIT: View = { zoom: null, x: 0, y: 0 };
 
-function useBoxSize(ref: RefObject<HTMLElement | null>) {
+/** An element's laid-out size, before any transform, as it changes. */
+export function useBoxSize(ref: RefObject<HTMLElement | null>) {
   const [size, setSize] = useState({ width: 0, height: 0 });
   useLayoutEffect(() => {
     const el = ref.current;
@@ -66,7 +101,19 @@ function useBoxSize(ref: RefObject<HTMLElement | null>) {
   return size;
 }
 
-export function Media({ item, expanded, label, onZoomedChange, ref }: MediaProps) {
+export function Media({
+  item,
+  expanded,
+  label,
+  onZoomedChange,
+  onZoomChange,
+  inset = expanded ? EDGE_TO_EDGE : INSET,
+  panAnywhere = false,
+  layer,
+  pinned,
+  children,
+  ref,
+}: MediaProps) {
   const area = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLDivElement>(null);
   const { width: boxW, height: boxH } = useBoxSize(box);
@@ -82,10 +129,13 @@ export function Media({ item, expanded, label, onZoomedChange, ref }: MediaProps
   const zoomed = view.zoom !== null && Math.abs(scale - 1) > 0.001;
 
   useEffect(() => onZoomedChange(zoomed), [zoomed, onZoomedChange]);
+  useEffect(() => {
+    if (zoom > 0) onZoomChange?.(zoom);
+  }, [zoom, onZoomChange]);
 
-  // Changing between the panelled and expanded layouts starts from the fit again.
+  // Changing layouts (panelled, expanded, the Edit tab's) starts from the fit again.
   // biome-ignore lint/correctness/useExhaustiveDependencies: only the layout change resets it.
-  useEffect(() => setView(FIT), [expanded]);
+  useEffect(() => setView(FIT), [expanded, inset]);
 
   const clampOffset = (x: number, y: number, z: number) => {
     const w = naturalW * z;
@@ -127,7 +177,7 @@ export function Media({ item, expanded, label, onZoomedChange, ref }: MediaProps
       const px = event.clientX - rect.left - rect.width / 2;
       const py = event.clientY - rect.top - rect.height / 2;
       zoomTo(zoom * Math.exp(-event.deltaY * 0.01), px, py);
-    } else if (zoomed) {
+    } else if (zoomed || panAnywhere) {
       event.preventDefault();
       setView((current) => ({
         ...current,
@@ -144,7 +194,7 @@ export function Media({ item, expanded, label, onZoomedChange, ref }: MediaProps
   }, []);
 
   const onPointerDown = (event: PointerEvent) => {
-    if (!zoomed || event.button !== 0) return;
+    if (!(zoomed || panAnywhere) || event.button !== 0) return;
     drag.current = { id: event.pointerId, x: event.clientX, y: event.clientY };
     event.currentTarget.setPointerCapture(event.pointerId);
     setDragging(true);
@@ -166,18 +216,23 @@ export function Media({ item, expanded, label, onZoomedChange, ref }: MediaProps
     setDragging(false);
   };
 
-  // The original only once the preview runs out of pixels at this zoom.
-  const previewZoom = Math.min(1, DETAIL_PREVIEW_EDGE / Math.max(naturalW, naturalH));
-  const needOriginal = zoom * (window.devicePixelRatio || 1) > previewZoom + 0.001;
-
-  // The backdrop's rung first: it's already on its way, so the image paints in one frame.
-  const thumb = useAuthedImage(thumbAt(item, { h: BACKDROP_RUNG }));
-  const preview = useAuthedImage(thumbAt(item, "preview"));
-  const original = useAuthedImage(needOriginal ? item.fileUrl : null);
-  const layers = [thumb, preview, needOriginal ? original : null];
-
   const fitW = naturalW * fitZoom;
   const fitH = naturalH * fitZoom;
+
+  // The image on screen, and the part of it inside the box, which is where `pinned` goes.
+  const shownW = naturalW * zoom;
+  const shownH = naturalH * zoom;
+  const imageLeft = (boxW - shownW) / 2 + view.x;
+  const imageTop = (boxH - shownH) / 2 + view.y;
+  const visibleLeft = Math.max(0, imageLeft);
+  const visibleTop = Math.max(0, imageTop);
+  const visibleW = Math.min(boxW, imageLeft + shownW) - visibleLeft;
+  const visibleH = Math.min(boxH, imageTop + shownH) - visibleTop;
+  const frame: PinnedFrame = {
+    width: visibleW,
+    height: visibleH,
+    image: { left: imageLeft - visibleLeft, top: imageTop - visibleTop, width: shownW, height: shownH },
+  };
 
   return (
     <div
@@ -190,9 +245,9 @@ export function Media({ item, expanded, label, onZoomedChange, ref }: MediaProps
       onPointerCancel={onPointerUp}
       className={cn(
         "absolute inset-0 touch-none select-none",
-        zoomed && (dragging ? "cursor-grabbing" : "cursor-grab"),
+        (zoomed || panAnywhere) && (dragging ? "cursor-grabbing" : "cursor-grab"),
       )}
-      style={{ padding: expanded ? 0 : MEDIA_INSET }}
+      style={{ padding: `${inset.top}px ${inset.right}px ${inset.bottom}px ${inset.left}px` }}
     >
       <div ref={box} className="relative size-full">
         {fitZoom > 0 ? (
@@ -204,22 +259,59 @@ export function Media({ item, expanded, label, onZoomedChange, ref }: MediaProps
               transform: `translate(-50%, -50%) translate(${view.x}px, ${view.y}px) scale(${scale})`,
             }}
           >
-            {layers.map((layer, i) =>
-              layer?.status === "ready" ? (
-                <img
-                  // biome-ignore lint/suspicious/noArrayIndexKey: the layers are fixed and ordered.
-                  key={i}
-                  src={layer.src}
-                  alt=""
-                  draggable={false}
-                  decoding="async"
-                  className="absolute inset-0 size-full object-cover"
-                />
-              ) : null,
-            )}
+            <ImageLayers item={item} zoom={zoom} />
+            {layer}
+          </div>
+        ) : null}
+        {pinned && fitZoom > 0 && visibleW > 0 && visibleH > 0 ? (
+          <div
+            className="pointer-events-none absolute"
+            style={{ left: visibleLeft, top: visibleTop, width: visibleW, height: visibleH }}
+          >
+            {typeof pinned === "function" ? pinned(frame) : pinned}
           </div>
         ) : null}
       </div>
+      {children}
     </div>
+  );
+}
+
+/** What ImageLayers needs of an image. */
+export type LayeredImage = Pick<AssetListItem, "id" | "thumbUrl" | "fileUrl" | "width" | "height">;
+
+/**
+ * An image's pixels at `zoom` (screen px per image px): the backdrop's rung first (it's already on
+ * its way, so the image paints in one frame), the 1440 preview over it, and the original only once
+ * the preview runs out of pixels at this zoom. `stretch` fills a box of another shape edge to edge
+ * rather than cropping to it.
+ */
+export function ImageLayers({
+  item,
+  zoom,
+  stretch = false,
+}: {
+  item: LayeredImage;
+  zoom: number;
+  stretch?: boolean;
+}) {
+  const previewZoom = Math.min(1, DETAIL_PREVIEW_EDGE / Math.max(item.width, item.height));
+  const needOriginal = zoom * (window.devicePixelRatio || 1) > previewZoom + 0.001;
+  const thumb = useAuthedImage(thumbAt(item, { h: BACKDROP_RUNG }));
+  const preview = useAuthedImage(thumbAt(item, "preview"));
+  const original = useAuthedImage(needOriginal ? item.fileUrl : null);
+  const layers = [thumb, preview, needOriginal ? original : null];
+  return layers.map((layer, i) =>
+    layer?.status === "ready" ? (
+      <img
+        // biome-ignore lint/suspicious/noArrayIndexKey: the layers are fixed and ordered.
+        key={i}
+        src={layer.src}
+        alt=""
+        draggable={false}
+        decoding="async"
+        className={cn("absolute inset-0 size-full", stretch ? "object-fill" : "object-cover")}
+      />
+    ) : null,
   );
 }
