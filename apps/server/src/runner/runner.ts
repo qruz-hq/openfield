@@ -24,6 +24,7 @@ import {
   clearCanceledHandles,
   createJobSet,
   type Db,
+  getAsset,
   getJob,
   getJobSet,
   getJobSetByIdempotencyKey,
@@ -370,6 +371,7 @@ export class Runner {
         field: "model",
       });
     this.#requireEnabled(manifest.providerId);
+    this.#requireInputs(set.requestJson);
     const jobIds = Array.from({ length: change.batch }, () => newId());
     // The frozen speed replays, unless the model stopped offering it.
     const speed = resolveSpeed(manifest, set.requestJson.speed, pricedOp(set.op)).speed;
@@ -392,6 +394,27 @@ export class Runner {
       agent: change.agent ?? null,
       ...(each && { cost: scaleCost(each, change.batch) }),
     });
+  }
+
+  /**
+   * A replayed edit's base and mask must still exist. The Trash keeps their files, but one deleted
+   * for good is gone, and a model that never reads the mask would otherwise be paid for a run that
+   * can't be filed.
+   */
+  #requireInputs(request: NormalizedRequest): void {
+    const { db } = this.deps;
+    if (request.base && !getAsset(db, request.base.assetId, { includeDeleted: true })) {
+      throw new ApiFailure(400, "bad_request", `No base ${request.base.assetId}`, {
+        field: "base",
+        userMessage: t("masks.imageGone"),
+      });
+    }
+    if (request.mask && !getAsset(db, request.mask.assetId, { includeDeleted: true })) {
+      throw new ApiFailure(400, "bad_request", `No mask ${request.mask.assetId}`, {
+        field: "mask",
+        userMessage: t("masks.maskGone"),
+      });
+    }
   }
 
   /** The local estimate, with the images the request sends in priced at their own sizes. */

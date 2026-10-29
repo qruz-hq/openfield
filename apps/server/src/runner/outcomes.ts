@@ -185,7 +185,9 @@ export class Outcomes {
           : staged.assetId,
         op: set.op,
         opParams: opParamsOf(call, edit),
-        maskAssetId: call.mask?.assetId ?? null,
+        // A mask deleted for good while the run was out is no longer there to point at.
+        maskAssetId:
+          call.mask && getAsset(tx, call.mask.assetId, { includeDeleted: true }) ? call.mask.assetId : null,
         generative: true,
         // A model that can't take a mask changed the whole image (§0.9).
         approximate: edit?.fallback !== undefined,

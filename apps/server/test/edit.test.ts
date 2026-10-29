@@ -550,4 +550,47 @@ describe("a masked edit's result", () => {
     expect(files).toHaveLength(2);
     expect(files.filter((f) => existsSync(f))).toEqual([]);
   });
+
+  test("a mask deleted for good mid-run still files the result, and can't be run again", async () => {
+    server = await ready();
+    const base = await upload(await texture(640, 480));
+    const maskId = await mask(base.id, 640, 480);
+    const outcomes = server.services.runner.outcomes;
+    const composite = outcomes.composite.bind(outcomes);
+    outcomes.composite = async (call, staged) => {
+      // Emptied from the Trash while the model was at work.
+      const purged = await server!.request(`/api/assets/${maskId}?hard=1`, { method: "DELETE" });
+      expect(purged.status).toBe(200);
+      return composite(call, staged);
+    };
+    const run = jobSetAcceptedSchema.parse(
+      (
+        await edit({
+          model: NANO_BANANA,
+          op: "edit",
+          base: { assetId: base.id, role: "base" },
+          mask: { assetId: maskId },
+        })
+      ).body,
+    );
+    expect((await completed(server, run.jobSet.id)).status).toBe("succeeded");
+    const [made] = assetsForJobSets(server.services.db, [run.jobSet.id]);
+    expect(made).toMatchObject({
+      maskAssetId: null,
+      opParams: { edit: { composite: { applied: false, reason: "failed" }, fallback: "whole_image" } },
+    });
+    const usage = server.services.db.$client.query("SELECT count(*) AS n FROM usage_log").get() as {
+      n: number;
+    };
+    expect(usage.n).toBe(1);
+
+    // Recreate would pay a model that never reads the mask for a run that can't keep the rest.
+    const again = await server.json(`/api/job-sets/${run.jobSet.id}/recreate`, { method: "POST" });
+    expect(again.status).toBe(400);
+    expect(errorEnvelopeSchema.parse(again.body).error).toMatchObject({
+      field: "mask",
+      userMessage: "This mask isn't saved anymore. Paint the area to change again.",
+    });
+    expect(jobSets()).toBe(1);
+  });
 });
