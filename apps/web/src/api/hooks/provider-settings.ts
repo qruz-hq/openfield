@@ -7,7 +7,7 @@ import {
   speedName,
   t,
 } from "@openfield/core";
-import { type RunSpeed, runSpeed } from "@openfield/providers/manifest";
+import { type AdapterOp, type RunSpeed, runSpeed } from "@openfield/providers/manifest";
 import { queryOptions, useMutation, useQueries, useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { notifyError } from "../../lib/notify";
@@ -43,10 +43,16 @@ export function useAllProviderSettings(): ReadonlyMap<string, ProviderSettingsRe
   return useQueries({ queries: ids.map(settingsQuery), combine });
 }
 
-/** What a run of each model would run at right now. Standard until the settings arrive. */
-export function useRunSpeed(): (model: ModelManifest) => RunSpeed {
+/**
+ * What a run of each model would run at right now. Standard until the settings arrive. An edit
+ * passes the op it compiles to (editOpFor), since some speeds only make new images.
+ */
+export function useRunSpeed(): (model: ModelManifest, op?: AdapterOp) => RunSpeed {
   const all = useAllProviderSettings();
-  return useCallback((model: ModelManifest) => runSpeed(all.get(model.providerId), model), [all]);
+  return useCallback(
+    (model: ModelManifest, op?: AdapterOp) => runSpeed(all.get(model.providerId), model, op),
+    [all],
+  );
 }
 
 /** A speed by its company's own name ("Flex"), Openfield's until the settings arrive. */

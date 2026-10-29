@@ -393,6 +393,7 @@
     "basis": "{count} × {each}",
     "basisWith": "{count} × {each} ({detail})",
     "withInputs": "{basis} + {count, plural, one {# reference image} other {# reference images}} ({cost})",
+    "withBase": "{basis} + the image you're editing{references, plural, =0 {} one { and # reference image} other { and # reference images}} ({cost})",
     "unknown": "Cost unknown",
     "free": "Free",
     "credits": "{credits, plural, one {# credit} other {# credits}}",
@@ -2091,6 +2092,12 @@
     "tooManyPixels": "This image is {width} × {height}, too large to edit with a mask. Masked edits take images up to {megapixels} megapixels.",
     "turned": "This photo is saved on its side, so it can't be edited with a mask yet. Save an upright copy, add it to your library and try again.",
     "cantOpen": "Openfield can't open images on this computer, so it can't save this mask."
+  },
+  "edit": {
+    "generate": {
+      "paintFirst": "Paint over the part you want to change.",
+      "describeFirst": "Describe the change."
+    }
   },
   "video": {
     "placeholder": "Describe the video you want",

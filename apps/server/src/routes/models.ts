@@ -74,6 +74,8 @@ export const modelsRoutes = new Hono<Env>()
         ...(body.video && { video: body.video }),
         inputImages: (body.references?.length ?? 0) + (body.base ? 1 : 0),
         ...(sizes && { inputImageSizes: sizes }),
+        // So the price says the base is the image being edited, not another reference.
+        ...(body.base && body.op !== "generate" && { base: body.base }),
       });
       return c.json(cost satisfies CostEstimate, 200);
     },

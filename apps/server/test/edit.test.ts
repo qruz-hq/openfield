@@ -332,6 +332,8 @@ describe("POST /api/edit", () => {
       body: { op: "inpaint", prompt: "a red door", batch: 2, ...asked },
     });
     expect(priced.status).toBe(200);
+    // The base is the image being edited, not another reference image.
+    expect(priced.body.basis).toMatch(/ \+ the image you're editing \(\$[\d.]+\)$/);
     const run = jobSetAcceptedSchema.parse((await edit({ ...asked, batch: 2 })).body);
     expect(run.jobSet.costEstimateUsd).toBe(priced.body.max);
 

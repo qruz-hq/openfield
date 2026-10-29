@@ -100,6 +100,47 @@ export const flare: ModelListItem = {
   ready: false,
 };
 
+/**
+ * Flare as an edit sees it, like OpenAI's: it takes a mask and exact sizes on a 16px grid, and is
+ * priced in tokens, an image sent in by its 32px patches.
+ */
+export const flareEdit: ModelListItem = {
+  ...flare,
+  key: "openai:flare-edit",
+  modelId: "flare-edit",
+  capabilities: {
+    ...flare.capabilities,
+    ops: { ...base.ops, inpaint: true },
+    size: {
+      mode: "aspect",
+      ratios: ["auto", "1:1", "2:3", "3:2", "3:4"],
+      default: "1:1",
+      pixels: { multipleOf: 16, maxEdge: 3840, maxRatio: 3, minPixels: 655_360, maxPixels: 8_294_400 },
+    },
+  },
+  price: {
+    kind: "per_token",
+    currency: "USD",
+    pricedAt: "2026-09-27",
+    sourceUrl: "https://example.com/prices",
+    textInputPerMTok: 5,
+    imageInputPerMTok: 8,
+    imageInputTokens: {
+      kind: "patches",
+      patch: 32,
+      scaleTo: 1024,
+      maxScale: 2,
+      maxRatio: 3,
+      maxPatches: 1536,
+      unknown: { min: 1024, max: 1536 },
+    },
+    imageOutputPerMTok: 30,
+    outputTokenTable: [{ quality: "medium", size: "1:1@1K", tokens: 1056 }],
+    outputTokenBases: { low: 16, medium: 24, high: 48, max: 96 },
+  },
+  ready: true,
+};
+
 export const at = (minute: number) => new Date(Date.UTC(2026, 8, 23, 12, minute)).toISOString();
 
 let n = 0;
