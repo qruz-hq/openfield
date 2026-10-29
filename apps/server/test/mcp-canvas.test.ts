@@ -676,6 +676,42 @@ describe("Edit nodes", () => {
     expect(masks()).toBe(before);
   });
 
+  test("a node a run held back because its mask no longer fits says why, and how to fix it", async () => {
+    const { server: s, client: c } = await ready();
+    const made = j(await call(c, "create_canvas", { name: "Lighthouse" }));
+    const built = j(
+      await call(c, "edit_canvas", {
+        canvas: made.canvasId,
+        edits: [
+          { op: "add_node", as: "g", type: "image.generate", params: { prompt: "A lighthouse at dusk" } },
+          { op: "add_node", as: "e", type: "image.edit", params: { prompt: "a red door" } },
+          { connect: "g.images", to: "e.image" },
+        ],
+      }),
+    ).created as { g: string; e: string };
+    expect(j(await call(c, "run_canvas", { canvas: made.canvasId })).status).toBe("succeeded");
+    const generated = j(await call(c, "get_canvas", { canvas: made.canvasId })).nodes.find(
+      (n: Json) => n.id === built.g,
+    ).images[0] as string;
+    const { width, height } = getAsset(s.services.db, generated)!;
+    const file = join(s.home, "tmp", "mask.png");
+    writeFileSync(file, await quarterMask(width, height));
+    expect((await call(c, "set_node_mask", { canvas: made.canvasId, id: built.e, mask: file })).isError).toBe(
+      false,
+    );
+    // New words: Generate makes a new image first, which the mask wasn't painted on.
+    await call(c, "update_node", {
+      canvas: made.canvasId,
+      id: built.g,
+      params: { prompt: "A lighthouse at dawn" },
+    });
+    const ran = j(await call(c, "run_canvas", { canvas: made.canvasId }));
+    expect(ran.nodes.find((n: Json) => n.nodeId === built.e)).toMatchObject({
+      state: "blocked",
+      blocked: "The image changed. Paint the mask again.",
+    });
+  });
+
   test("set_node_mask is a change to a canvas, and asks when the person wants that", async () => {
     const { server: s, client: c } = await ready();
     const { canvasId, e } = await photoToEdit(s, c);

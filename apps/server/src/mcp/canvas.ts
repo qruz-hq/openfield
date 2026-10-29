@@ -1,5 +1,6 @@
 import type { ImageContent } from "@modelcontextprotocol/sdk/types.js";
 import {
+  blockerFromReason,
   type DocSlice,
   editBaseNow,
   editSpec,
@@ -20,6 +21,7 @@ import {
   type ErrorCode,
   errorCopy,
   isTerminalState,
+  type ModelKey,
   t,
 } from "@openfield/core";
 import type { CanvasDocument, CanvasNode, CanvasNodeResult } from "@openfield/core/canvas";
@@ -369,6 +371,8 @@ export interface CanvasRunView {
     total: number;
     images: ImageInfo[];
     error?: string;
+    /** Why it didn't start, as its band says it. */
+    blocked?: string;
     costUsd: number | null;
   }[];
   next?: string;
@@ -388,6 +392,11 @@ export async function describeCanvasRun(
   const blocks: ImageContent[] = [];
   let previews = opts.maxPreviews ?? 8;
   const nodes: CanvasRunView["nodes"] = [];
+  const providers = providerSummaries(ctx.svc);
+  const modelOf = (nodeId: string) => () => {
+    const params = doc?.nodes.find((n) => n.id === nodeId)?.params;
+    return typeof params?.model === "string" ? (params.model as ModelKey) : null;
+  };
   for (const node of state.nodes) {
     const described = await describeImages(ctx, getAssets(ctx.svc.db, node.assetIds), {
       previews: opts.previews && previews > 0,
@@ -396,6 +405,10 @@ export async function describeCanvasRun(
     previews -= described.blocks.length;
     blocks.push(...described.blocks);
     const error = errorText(node.error);
+    // A node held back at launch (its mask no longer fits a new image) says why and what to do.
+    const blocked = node.blocked
+      ? blockerMessage(blockerFromReason(node.blocked, modelOf(node.nodeId)), providers)
+      : null;
     nodes.push({
       nodeId: node.nodeId,
       title: title(node.nodeId),
@@ -404,6 +417,7 @@ export async function describeCanvasRun(
       total: node.total,
       images: described.images,
       ...(error && { error }),
+      ...(blocked && { blocked }),
       costUsd: node.costUsd,
     });
   }

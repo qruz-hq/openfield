@@ -1,4 +1,5 @@
 import {
+  blockerFromReason,
   compileRun,
   type EngineContext,
   fromDocument,
@@ -377,6 +378,18 @@ export class CanvasRunService {
         kind: "running",
         at: new Date().toISOString(),
         versionId,
+      });
+    }
+    // What only the server can tell (a mask that no longer fits the image it would go with) blocks
+    // a planned node too, and says why, as the engine's blockers do.
+    const modelOf = (nodeId: string) => () =>
+      outcome.items.find((c) => c.item.nodeId === nodeId)?.item.calls[0]?.model ?? null;
+    for (const node of response.nodes) {
+      if (!node.blocked || blocked.some((b) => b.nodeId === node.nodeId)) continue;
+      blocked.push({
+        nodeId: node.nodeId,
+        reason: node.blocked,
+        message: blockerMessage(blockerFromReason(node.blocked, modelOf(node.nodeId)), providers),
       });
     }
     return {
