@@ -24,6 +24,12 @@ export interface EditorCardMedia extends CardMediaView {
 
 export const cardMedia = createStore<EditorCardMedia>()(() => ({ dims: {}, shown: {}, bases: {} }));
 
+/** An image's stored size once it's known exactly, never a thumbnail's stand-in: what edits are priced at. */
+export function exactSize(assetId: string): { width: number; height: number } | undefined {
+  const size = cardMedia.getState().dims[assetId];
+  return size && !size.approx ? { width: size.w, height: size.h } : undefined;
+}
+
 /**
  * An image's pixel size. Images never change, so an exact size, once known, stands; a thumbnail's
  * only fills in until then.

@@ -2,7 +2,7 @@
 import { describe, expect, test } from "bun:test";
 import { canvasRunPlanItemSchema, type ModelListItem } from "@openfield/core";
 import { type CanvasNodeResult, canvasEditsSchema } from "@openfield/core/canvas";
-import { estimate } from "@openfield/providers/manifest";
+import { estimate, estimateRun } from "@openfield/providers/manifest";
 import { compileEdits, EditError } from "../src/edits/compile";
 import { compileRun } from "../src/engine/compile";
 import { buildEngineContext } from "../src/engine/context-base";
@@ -10,6 +10,7 @@ import { ZERO_COST } from "../src/engine/cost";
 import { evaluateGraph, isRunnable } from "../src/engine/evaluate";
 import { planFingerprints, resolveFingerprints } from "../src/engine/fingerprint";
 import { imagesOf, planValue, STANDING_BLOCKERS } from "../src/engine/inputs";
+import { resolveFor } from "../src/nodes/generate/settings";
 import { limitProblem } from "../src/nodes/limits";
 import { createNodeRegistry, type NodeSpec } from "../src/nodes/registry";
 import { DATA_SPECS, specRegistry } from "../src/nodes/specs";
@@ -215,6 +216,27 @@ describe("the Edit node", () => {
         .defaultEditModel,
     ).toBe(painter.key);
     expect(buildEngineContext([banana], settings, undefined).regionalFallback).toBe(true);
+  });
+
+  test("is priced as the Edit tab prices it: at its base's shape, the base named as the image being edited", async () => {
+    const sized = {
+      ...ctx,
+      imageSize: (id: string) => (id === BASE ? { width: 640, height: 480 } : undefined),
+    };
+    const doc = painted({ model: painter.key });
+    const out = compileRun({
+      doc,
+      registry: specRegistry,
+      ctx: sized,
+      fingerprints: await fingerprintsOf(doc),
+      request: { scope: "all", nodeIds: [] },
+    });
+    if (out.kind !== "plan") throw new Error(out.kind);
+    const p = specRegistry.get("image.edit")!.parseParams(doc.params.e!, sized) as never;
+    const tab = estimateRun(painter, resolveFor(painter, p, 1), "Make the berries pale", "standard", {
+      edit: { base: { assetId: BASE, width: 640, height: 480 }, masked: true },
+    });
+    expect(out.estimate).toEqual(tab);
   });
 
   test("a mask on the Mask input is used instead of the painted one", async () => {

@@ -7,7 +7,7 @@ import {
   type ResolutionTier,
   type SizeSpec,
 } from "@openfield/core";
-import { editsImages, estimate, type Resolved } from "@openfield/providers/manifest";
+import { editPricing, editsImages, estimate, type Resolved } from "@openfield/providers/manifest";
 import { speedOf } from "../../engine/context-base";
 import { scaleEstimate } from "../../engine/cost";
 import {
@@ -342,7 +342,16 @@ export const editEngine: NodeEngine<EditParams> = {
     ];
     const fanOut = fanOutOf(node, inputs);
     // Priced as the server prices the plan: the base and every reference are billed as images sent
-    // in, the mask never is.
+    // in, the mask never is. The base is the image being edited, priced at the size asked for from
+    // its shape where one image of a known size goes (a list goes at the model's default).
+    const lone = base.length === 1 && base[0]!.kind === "asset" ? base[0]!.assetId : null;
+    const edit = base.length
+      ? editPricing(
+          model,
+          { assetId: lone ?? node.id, ...(lone ? ctx.imageSize?.(lone) : undefined) },
+          wire.resolution,
+        )
+      : {};
     const once = estimate(model, {
       op,
       batch: resolved.batch,
@@ -350,6 +359,7 @@ export const editEngine: NodeEngine<EditParams> = {
       speed: speedOf(ctx, model, op),
       ...(wire.resolution && { resolution: wire.resolution }),
       ...(wire.quality && { quality: wire.quality }),
+      ...edit,
       inputImages: (base.length ? 1 : 0) + imageCount(references),
     });
     return {

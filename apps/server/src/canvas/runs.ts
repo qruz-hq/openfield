@@ -72,7 +72,7 @@ import {
   setCanvasFolder,
   updateCanvasRun,
 } from "@openfield/db";
-import { estimate, pricedOp, resolveProviderSettings } from "@openfield/providers/manifest";
+import { editPricing, estimate, pricedOp, resolveProviderSettings } from "@openfield/providers/manifest";
 import type { EventHub } from "../events/hub";
 import type { Ingest } from "../files/ingest";
 import { saveMask } from "../files/mask";
@@ -186,6 +186,9 @@ interface ActiveRun {
   filed: Set<string>;
   folderId?: string;
 }
+
+/** An edit's base as it's priced: the image, or a stand-in for one still to come, and its size. */
+type EditBase = { assetId: string; width?: number; height?: number };
 
 interface Analysis {
   skipped: boolean;
@@ -537,6 +540,8 @@ export class CanvasRunService {
       // single one. Each is billed on top of the images it makes, at its own size where it's known.
       let inputImages = 0;
       const known: { width: number; height: number }[] = [];
+      // An edit's base, priced as the image being edited at the size asked for from its shape.
+      let base: EditBase | undefined;
       for (const input of item.inputs) {
         if (input.to !== "references" && input.to !== "base") continue;
         if (input.arity === "multi") {
@@ -549,14 +554,15 @@ export class CanvasRunService {
           inputImages += 1;
           // A fanned-out input sends a different image each launch; only a lone one has one size.
           const [only] = input.values;
-          const size =
-            input.values.length === 1 && only?.kind === "asset" ? sizes.get(only.assetId) : undefined;
+          const lone = input.values.length === 1 && only?.kind === "asset" ? only.assetId : null;
+          const size = lone ? sizes.get(lone) : undefined;
           if (size) known.push(size);
+          if (input.to === "base") base = { assetId: lone ?? item.nodeId, ...size };
         }
       }
       const perRun = item.calls.reduce((sum, call) => sum + call.batch, 0);
       const cost = scaleCostEstimate(
-        sumCostEstimates(item.calls.map((c) => asked.get(c) ?? this.#estimate(c, inputImages, known))),
+        sumCostEstimates(item.calls.map((c) => asked.get(c) ?? this.#estimate(c, inputImages, known, base))),
         fanOut,
       );
       out.set(item.nodeId, {
@@ -616,10 +622,25 @@ export class CanvasRunService {
     call: CanvasRunCall,
     inputImages = 0,
     inputImageSizes: readonly { width: number; height: number }[] = [],
+    base?: EditBase,
   ): CostEstimate {
     const manifest = this.deps.models.get(call.model);
     if (!manifest) return { ...freeEstimate(), confidence: "unknown" };
     const size = call.size;
+    // An edit's "auto" is its base's shape at the tier, as the runner asks for it (withEditSize).
+    if (base && size.kind === "auto" && !call.video) {
+      const { inputImageSizes: _base, ...edit } = editPricing(manifest, base, call.resolution);
+      return estimate(manifest, {
+        batch: call.batch,
+        prompt: call.prompt,
+        op: call.op,
+        speed: this.#speed(manifest, call),
+        inputImages,
+        inputImageSizes,
+        ...(call.quality && { quality: call.quality }),
+        ...edit,
+      });
+    }
     return estimate(manifest, {
       batch: call.batch,
       prompt: call.prompt,

@@ -151,6 +151,16 @@ describe("an Edit node's run", () => {
     expect(await upToDate(canvasId)).toContain(edit);
   });
 
+  test("is priced as it runs: at the base's own shape, with the base named as the image being edited", async () => {
+    server = await ready();
+    const { canvasId, edit } = await editCanvas();
+    const dry = await server.services.canvasRuns.runScope(canvasId, { scope: "all", dryRun: true });
+    expect(dry.estimate.basis).toContain("the image you're editing");
+    // The square default the model has would come to more for a 640 × 480 photo.
+    const { set } = await runAll(canvasId, edit);
+    expect(dry.estimate.max).toBeCloseTo(set.costEstimateUsd!, 6);
+  });
+
   test("its own grow and soften settings reach the composite", async () => {
     server = await ready();
     const { canvasId, base, edit } = await editCanvas({ expandPx: 0, featherPx: 16 });

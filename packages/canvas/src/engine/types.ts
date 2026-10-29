@@ -128,6 +128,11 @@ export interface EngineContext {
   /** Images the canvas names that aren't in this library: drawn as placeholders, never sent. */
   missing?: ReadonlySet<string>;
   /**
+   * An image's stored size, where it's known. An edit is priced at the size the server asks for,
+   * which follows its base's shape.
+   */
+  imageSize?(assetId: string): { width: number; height: number } | undefined;
+  /**
    * The speed a run of this model gets from its company's settings (§0.3), for an op (generate
    * when left out): some speeds are offered for generating only. Standard when absent.
    */
