@@ -11,6 +11,7 @@ import {
   canvasDetailSchema,
   canvasSource,
   sseEventSchema,
+  uploadResponseSchema,
 } from "@openfield/core";
 import { type CanvasDocument, canvasDocumentSchema } from "@openfield/core/canvas";
 import {
@@ -33,6 +34,7 @@ import { absolutePath } from "../src/config/home";
 import { ZipArchive } from "../src/files/unzip";
 import { finished, libraryImages, MODEL, newCanvas } from "./canvas-helpers";
 import { saveKey, startTestServer, type TestServer } from "./helpers";
+import { quarterMask, texture, whiteQuarter } from "./pixels";
 
 // Canvas archives (§7.8): a canvas with every image it shows goes out as one .ofcanvas.zip and comes
 // into another library whole, with each image's details, in a folder named after it, at no cost,
@@ -783,6 +785,146 @@ describe("videos", () => {
     expect(row.posterPath).not.toBeNull();
     expect(await Bun.file(absolutePath(b.services.paths, row.posterPath!)).bytes()).toEqual(
       await Bun.file(absolutePath(a.services.paths, posterPath!)).bytes(),
+    );
+  });
+});
+
+describe("Edit nodes", () => {
+  const OPENAI = "openai:gpt-image-2";
+
+  const withOpenAi = async (s: TestServer) => {
+    const res = await s.json("/api/settings/keys/openai", {
+      method: "PUT",
+      body: { apiKey: "sk-test-0123456789abcdefghijklmnop" },
+    });
+    expect(res.status).toBe(200);
+  };
+
+  async function upload(s: TestServer, bytes: Uint8Array): Promise<string> {
+    const form = new FormData();
+    form.append("file", new File([bytes], "photo"));
+    const res = await s.request("/api/uploads", { method: "POST", body: form });
+    return uploadResponseSchema.parse(await res.json()).asset.id;
+  }
+
+  /**
+   * An image edited twice: once with a mask painted in the node, once with an image wired into its
+   * Mask input, which the run saves as a mask the canvas doesn't show. Both ran.
+   */
+  async function editedCanvas(s: TestServer) {
+    await withOpenAi(s);
+    const base = await upload(s, await texture(640, 480));
+    const wired = await upload(s, await whiteQuarter(640, 480));
+    const form = new FormData();
+    form.append("mask", new File([await quarterMask(640, 480)], "mask.png"));
+    form.append("baseAssetId", base);
+    // Inverted, so it isn't the mask the wired image makes: that one would be saved as this one.
+    form.append("invert", "true");
+    const res = await s.request("/api/masks", { method: "POST", body: form });
+    const painted = uploadResponseSchema.parse(await res.json()).asset.id;
+    const canvas = await newCanvas(s, { name: "Doors" });
+    const { aliases } = s.services.canvases.edit(
+      canvas.id,
+      [
+        { op: "add_node", as: "up", type: "image.upload", params: { assetIds: [base] } },
+        { op: "add_node", as: "m", type: "image.upload", params: { assetIds: [wired] } },
+        {
+          op: "add_node",
+          as: "painted",
+          type: "image.edit",
+          params: { model: OPENAI, prompt: "a red door", maskAssetId: painted, maskFor: base },
+        },
+        { op: "add_node", as: "wired", type: "image.edit", params: { model: OPENAI, prompt: "a blue door" } },
+        { op: "connect", source: "up", target: "painted", targetHandle: "image" },
+        { op: "connect", source: "up", target: "wired", targetHandle: "image" },
+        { op: "connect", source: "m", target: "wired", targetHandle: "mask" },
+      ],
+      tab,
+    );
+    const run = await s.services.canvasRuns.runScope(canvas.id, { scope: "all" });
+    expect((await finished(s, run.runId!, 20_000)).status).toBe("succeeded");
+    const resultOfNode = (alias: string) =>
+      savedDoc(s, canvas.id).nodes.find((n) => n.id === aliases[alias])!.result!.assetIds[0]!;
+    const [first, second] = [resultOfNode("painted"), resultOfNode("wired")];
+    const saved = getAsset(s.services.db, second)!.maskAssetId!;
+    expect(getAsset(s.services.db, first)!.maskAssetId).toBe(painted);
+    expect(saved).not.toBe(wired);
+    expect(saved).not.toBe(painted);
+    return { canvas, base, wired, painted, saved, first, second };
+  }
+
+  test("an archive carries the painted mask and the masks the edits used, and both come back whole", async () => {
+    const a = await start();
+    const made = await editedCanvas(a);
+    const file = await exportZip(a, made.canvas.id);
+    const { manifest } = await readArchive(file);
+    expect(manifest.missing).toEqual([]);
+    const listed = new Map(manifest.assets.map((m) => [m.id, m]));
+    expect(listed.get(made.painted)).toMatchObject({ kind: "mask", parentAssetId: made.base });
+    expect(listed.get(made.saved)).toMatchObject({ kind: "mask", parentAssetId: made.base });
+    expect(listed.get(made.first)).toMatchObject({ kind: "edited", maskAssetId: made.painted });
+
+    // The image is here already under another id, so the canvas and its masks follow it.
+    const b = await start();
+    await withOpenAi(b);
+    const mine = await upload(b, await texture(640, 480));
+    expect(mine).not.toBe(made.base);
+    const result = resultOf(await imported(b, file));
+    expect(result).toMatchObject({ imported: 5, reused: 1, missing: 0 });
+
+    const doc = savedDoc(b, result.canvasId);
+    const edits = doc.nodes.filter((n) => n.type === "image.edit");
+    expect(edits.find((n) => n.params.maskAssetId)!.params).toMatchObject({
+      maskAssetId: made.painted,
+      maskFor: mine,
+    });
+    for (const mask of [made.painted, made.saved]) {
+      expect(getAsset(b.services.db, mask)).toMatchObject({ kind: "mask", parentAssetId: mine });
+    }
+    // Each edit still names the mask it was made with.
+    expect(getAsset(b.services.db, made.first)).toMatchObject({
+      parentAssetId: mine,
+      maskAssetId: made.painted,
+    });
+    expect(getAsset(b.services.db, made.second)).toMatchObject({
+      parentAssetId: mine,
+      maskAssetId: made.saved,
+    });
+    expect(
+      canvasDetailSchema.parse((await b.json(`/api/canvases/${result.canvasId}`)).body).missingAssetIds,
+    ).toEqual([]);
+    // Nothing turned stale: the painted mask still fits the image it was painted on.
+    expect((await upToDate(b, result.canvasId)).sort()).toEqual(edits.map((n) => n.id).sort());
+  });
+
+  test("a folder sends the masks with the edits that need them, and none the library has", async () => {
+    const a = await start();
+    const made = await editedCanvas(a);
+    const { zip } = await readArchive(await exportZip(a, made.canvas.id));
+    const files = new Map<string, Uint8Array>();
+    for (const entry of zip.entries) {
+      files.set(entry.name, new Uint8Array(await new Response(await zip.open(entry)).arrayBuffer()));
+    }
+    const neededIn = async (s: TestServer) => {
+      const { body } = await s.json<{ uploadId: string }>("/api/canvas-imports/uploads", { method: "POST" });
+      for (const name of ["canvas.json", "manifest.json"]) {
+        const res = await s.request(
+          `/api/canvas-imports/uploads/${body.uploadId}/files?path=${name}&offset=0`,
+          { method: "PUT", body: files.get(name)! },
+        );
+        expect(res.status).toBe(200);
+      }
+      const res = await s.json<{ files: string[] }>(`/api/canvas-imports/uploads/${body.uploadId}/needed`, {
+        method: "POST",
+      });
+      return res.body.files.sort();
+    };
+    expect(await neededIn(a)).toEqual([]);
+    const b = await start();
+    await upload(b, await texture(640, 480));
+    const png = (id: string) => `assets/${id}.png`;
+    expect(await neededIn(b)).toEqual(
+      [made.wired, made.painted, made.saved, made.first, made.second].map(png).sort(),
     );
   });
 });

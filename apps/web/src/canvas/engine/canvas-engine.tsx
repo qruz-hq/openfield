@@ -6,6 +6,7 @@ import {
   planFingerprints,
   resolveFingerprints,
 } from "@openfield/canvas/engine/fingerprint";
+import { ownAssetIds } from "@openfield/canvas/store/refs";
 import { t } from "@openfield/core";
 import { useEffect, useMemo, useRef } from "react";
 import { subscribeEvents } from "../../api/events";
@@ -179,15 +180,15 @@ export function CanvasEngine() {
         rememberImageSize(asset.id, asset.width, asset.height);
       }
       if (event.event === "asset.deleted") {
-        // Images deleted while the canvas is open turn into placeholders and stay out of runs.
+        // Images deleted while the canvas is open turn into placeholders and stay out of runs. A
+        // painted mask counts too: its Edit node can't run without it.
         const { doc, missingAssets, actions } = store.getState();
         const named = event.data.assetIds.filter(
           (id) =>
             !missingAssets.has(id) &&
-            doc.order.some((n) => {
-              const own = doc.params[n]?.assetIds;
-              return (Array.isArray(own) && own.includes(id)) || doc.results[n]?.assetIds.includes(id);
-            }),
+            doc.order.some(
+              (n) => ownAssetIds(doc.params[n] ?? {}).includes(id) || doc.results[n]?.assetIds.includes(id),
+            ),
         );
         if (named.length) actions.setMissingAssets(new Set([...missingAssets, ...named]));
         return;

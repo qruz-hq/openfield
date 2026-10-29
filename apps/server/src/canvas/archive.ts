@@ -18,8 +18,9 @@ import { documentCounts, readDocument } from "./documents";
 
 // Packing a canvas (§7.8): canvas.json as saved, manifest.json with each image's details, and the
 // originals byte for byte, as one stored zip whose length is known before the first byte goes out.
-// Only what the canvas shows goes in: the images nodes were given and their runs made. Images a
-// run read that are no longer on the canvas, versions and spend stay behind.
+// Only what the canvas shows goes in: the images nodes were given and their runs made, and the
+// masks its edits used. Images a run read that are no longer on the canvas, versions and spend
+// stay behind.
 
 export interface ArchiveFile {
   /** The name inside the archive. */
@@ -66,14 +67,13 @@ export function planExport(
   const files: ArchiveFile[] = [];
   const assets: CanvasArchiveAsset[] = [];
   const missing: string[] = [];
-  for (const id of documentAssetRefs(doc).shown) {
-    // Images in the Trash show as missing on the canvas, so they stay missing in its archive.
+  /** The image as a library row with its file, or null when it's gone or in the Trash. */
+  const packable = (id: string) => {
     const asset = getAsset(db, id);
     const file = asset?.fileState === "ok" ? fileIn(paths, asset.path) : null;
-    if (!asset || !file) {
-      missing.push(id);
-      continue;
-    }
+    return asset && file ? { asset, file } : null;
+  };
+  const pack = ({ asset, file }: NonNullable<ReturnType<typeof packable>>) => {
     const name = `assets/${asset.id}.${extensionOf(asset.mime)}`;
     files.push({ name, size: file.size, read: () => Bun.file(file.path).bytes() });
     const posterFile = asset.posterPath ? fileIn(paths, asset.posterPath) : null;
@@ -83,6 +83,20 @@ export function planExport(
       files.push({ name: poster, size: posterFile.size, read: () => Bun.file(posterFile.path).bytes() });
     }
     assets.push(manifestAsset(asset, name, poster, isFavourite(db, asset.id)));
+  };
+  const shown = documentAssetRefs(doc).shown;
+  for (const id of shown) {
+    // Images in the Trash show as missing on the canvas, so they stay missing in its archive.
+    const found = packable(id);
+    if (found) pack(found);
+    else missing.push(id);
+  }
+  // The masks the canvas's edits were made with go too, so each edit keeps the one its details
+  // show. The canvas doesn't show them, so one that's gone isn't missing from it.
+  const onCanvas = new Set(shown);
+  for (const id of new Set(assets.flatMap((a) => (a.maskAssetId ? [a.maskAssetId] : [])))) {
+    const found = onCanvas.has(id) ? null : packable(id);
+    if (found) pack(found);
   }
 
   const packed = new Set(assets.map((a) => a.id));
