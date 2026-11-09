@@ -5,6 +5,7 @@ import type { AssetListItem } from "@openfield/core";
 import {
   type AssetRow,
   addAssetsToFolder,
+  assetsForJobSets,
   type Db,
   emptyTrash,
   type FeedItem,
@@ -100,8 +101,10 @@ export class LibraryService {
 
   /** Delete: to the Trash, keeping folders and favourite (§0.7). Returns the ids it moved. */
   trash(ids: readonly string[]): string[] {
+    const rows = getAssets(this.deps.db, [...new Set(ids)]);
     const changed = softDeleteAssets(this.deps.db, [...new Set(ids)]);
     this.#announceDeleted(changed, false);
+    this.#announceBasesOf(rows);
     return changed;
   }
 
@@ -110,6 +113,7 @@ export class LibraryService {
     const { db } = this.deps;
     const changed = db.transaction((tx) => restoreAssets(tx, ids));
     this.#announceUpdated(changed);
+    this.#announceBasesOf(getAssets(db, changed));
     // Their folders' counts went up again.
     for (const { folderId } of folderMemberships(db, changed)) {
       this.deps.events.publish("folder.updated", { folderId, deleted: false });
@@ -217,6 +221,7 @@ export class LibraryService {
     const changed = result.deleted.map((row) => row.id);
     await this.#removeFiles(result);
     this.#announceDeleted(changed, true);
+    this.#announceBasesOf(result.deleted);
     return { changed, reclaimedBytes: result.reclaimedBytes };
   }
 
@@ -251,6 +256,27 @@ export class LibraryService {
     for (const assetIds of chunks(ids, IDS_PER_FRAME)) {
       this.deps.events.publish("asset.deleted", { assetIds, hard });
     }
+  }
+
+  /**
+   * A layer that leaves or comes back changes its base's layer count, which the feed's badge shows:
+   * asset.updated for the live base of each split these layers came from.
+   */
+  #announceBasesOf(rows: readonly AssetRow[]): void {
+    const runs = [
+      ...new Set(
+        rows.flatMap((r) =>
+          r.jobSetId && (r.opParams?.layer as { role?: unknown } | undefined)?.role === "layer"
+            ? [r.jobSetId]
+            : [],
+        ),
+      ),
+    ];
+    if (runs.length === 0) return;
+    const bases = assetsForJobSets(this.deps.db, runs).filter(
+      (r) => (r.opParams?.layer as { role?: unknown } | undefined)?.role === "base",
+    );
+    this.#announceUpdated(bases.map((r) => r.id));
   }
 
   /** asset.updated for each of these that is live, as a list item, so other tabs can patch it. */

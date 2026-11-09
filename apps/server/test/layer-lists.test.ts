@@ -96,6 +96,17 @@ describe("a layer split in lists", () => {
     const after = await list(server, "");
     expect(after.items.find((a) => a.id === live.id)?.layer).toEqual({ role: "base", count: 2 });
     expect(all.items.find((a) => a.id === live.id)?.layer?.count).toBe(3);
+
+    // Open tabs hear the base's new count without a reload, and again when the layer comes back.
+    const baseUpdates = () =>
+      server!.events
+        .filter((e) => e.event === "asset.updated")
+        .map((e) => (e.data as { asset: AssetListItem }).asset)
+        .filter((a) => a.id === live.id);
+    expect(baseUpdates().at(-1)?.layer).toEqual({ role: "base", count: 2 });
+    const restored = await server.request(`/api/assets/${first}/restore`, { method: "POST" });
+    expect(restored.status).toBe(200);
+    expect(baseUpdates().at(-1)?.layer).toEqual({ role: "base", count: 3 });
   });
 
   test("a layer's detail says it's a layer, and its neighbours in All images skip layers", async () => {
