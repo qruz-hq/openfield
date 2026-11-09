@@ -613,8 +613,9 @@ describe("agents", () => {
     expect(models.find((m) => m.key === FLASH)?.speed).toBe("Standard");
     const fast = await call(c, "estimate", { model: PRO, prompt: "A lighthouse" });
     expect(fast.json.speed).toBe("Fast");
-    expect(fast.json.price).toMatchObject({ usd: 0.09, basis: "1 × $0.09 (2K, Fast)" });
-    expect(standard.json.price).toMatchObject({ usd: 0.09 });
+    // 5.0 Pro starts at 1.5K.
+    expect(fast.json.price).toMatchObject({ usd: 0.045, basis: "1 × $0.045 (1.5K, Fast)" });
+    expect(standard.json.price).toMatchObject({ usd: 0.045 });
 
     const made = await call(c, "generate_image", { model: PRO, prompt: "A lighthouse", confirmCost: 1 });
     expect(made.json.status).toBe("succeeded");
