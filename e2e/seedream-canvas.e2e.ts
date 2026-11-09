@@ -471,7 +471,8 @@ test("an Edit node's settings switch to Sketch & point: the wired mask goes, ref
   await expect(refs).toHaveClass(/of-port-off/);
   await expect.poll(savedNode).toEqual({ mode: "sketch", into: ["image", "input_images"] });
 
-  // One undo brings back painting and the mask's link together (from the canvas, not a text field).
+  // One undo brings back painting and the mask's link together. Keys pressed in the settings never
+  // reach the canvas (inspector.tsx), so focus leaves them first.
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
   await page.keyboard.press("ControlOrMeta+z");
   await expect(modes.getByRole("radio", { name: "Paint area" })).toHaveAttribute("aria-checked", "true");

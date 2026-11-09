@@ -24,7 +24,7 @@ import {
   Trash2,
   Undo2,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { isMac } from "../../canvas/editor/shortcuts";
 import { keepFocus, optionsBar, ToolButton, toolbarClass } from "./chrome";
 import { sketchShortcut } from "./keys";
@@ -43,6 +43,7 @@ export function ModeSwitch() {
     <ModeSegmented
       value={mode}
       onChange={(next) => useEditSession.getState().setMode(next)}
+      onMouseDown={keepFocus}
       className="w-236 shrink-0"
     />
   );
@@ -57,12 +58,15 @@ export function ModeSegmented({
   onChange,
   disabled,
   className,
+  onMouseDown,
   ...props
 }: {
   value: EditMode;
   onChange: (mode: EditMode) => void;
   disabled?: boolean;
   className?: string;
+  /** The window's toolbar keeps focus on the stage; in a node's settings a click takes it. */
+  onMouseDown?: (event: MouseEvent) => void;
   "aria-labelledby"?: string;
 }) {
   return (
@@ -71,7 +75,7 @@ export function ModeSegmented({
       aria-labelledby={props["aria-labelledby"]}
       value={value}
       onValueChange={(next) => onChange(next as EditMode)}
-      onMouseDown={keepFocus}
+      onMouseDown={onMouseDown}
       disabled={disabled}
       className={className}
     >
