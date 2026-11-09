@@ -134,6 +134,9 @@ Sources:
 | Seedream 4.5 | `seedream-4-5-251128` | 2K, 4K | 14 | JPEG only | yes | no | no |
 | Seedream 4.0 | `seedream-4-0-250828` | 1K, 2K, 4K | 14 | JPEG only | yes | yes | no |
 
+- Region: everything here is on ap-southeast-1, the base Openfield calls. Pro and Flash are only there; Lite is also on eu-west-1, which Openfield doesn't use. Keys and model activation are kept apart per region at BytePlus.
+- SeedEdit 3.0 (`seededit-3-0-i2i-250628`) is on the pricing page only, not on the model list or the API page, so it's left out.
+- Prompts: the API page asks for at most 600 English words (300 Chinese characters). Pro and Flash also read 14 more languages.
 - Seedance stays first in the catalog: `catalog()[0]` is what the conformance suite takes as the company's sample model.
 - Fields a model doesn't list are **never sent** (4.5 and 4.0 get no `output_format`, Pro and Flash no `sequential_image_generation` or `stream`, Flash no fast mode): whether BytePlus ignores or refuses them isn't documented. The fake (`src/testing/byteplus-images.ts`) refuses them, so the conformance suite catches a manifest that offers too much.
 - Sizes: `seedream.ts` holds each tier's exact WxH per ratio (the tutorial's tables), sent as `"WxH"`. `auto` sends the tier alone and lets the model pick the shape (the docs' Method 1). Exact sizes are checked against each model's pixel range and the 1:16 ratio limit.
@@ -150,6 +153,7 @@ There's no mask or sketch parameter: everything goes in the image and the prompt
 - A point becomes `<point>x y</point>` and a box `<bbox>x1 y1 x2 y2</bbox>`, after "Image n", on the editing grid: integers 0 to 999 from the top left, `round(fraction × 1000)` held at 999 (the docs' formula can reach 1000). This is **not** the layer grid below, which runs to 1000; `@openfield/core`'s `image/grid.ts` keeps the two apart.
 - Circles, strokes and arrows have no tag. They're drawn onto a copy of the image they're on, each in its own ink (red, blue, green, ...), turned upright first, for that call only (`AssetSink.drawMarks`, sharp on the server). The prompt names each by its ink and adds "Remove every drawn mark from the result."
 - A mark's note, colour (hex, with the nearest colour word) and material go next to it in words: the API has no field for them.
+- Marks add to the prompt: 20 marks with long notes can pass the 600-word guidance. Nothing trims them.
 - A masked edit still works (it's a whole-image edit, then the composite puts the original back outside the mask), but with marks the composite is off by default, since marks don't say where the edit ends.
 
 ### Layers (Pro, Flash)
@@ -183,7 +187,8 @@ The same envelope and table as Seedance. The ones to expect here: `ModelNotOpen`
 - Whether `b64_json` works for layers (the docs only show URLs there).
 - Flash's price for a separation (one flat rate, no layer row), and whether Pro's base in a separation bills at the layer rate. Both are assumed so.
 - Whether `watermark: false` reaches every layer, and whether a separation takes `<point>` as well as `<bbox>`.
-- What a `<point>` or `<bbox>` value of 1000 does (Openfield never sends one).
+- What a `<point>` or `<bbox>` value of 1000 does (Openfield never sends one), and what a prompt past 600 words does (many marks with long notes can get there).
+- Whether BytePlus reads EXIF orientation. Openfield sends every marked image upright either way, so the marks land where they were placed.
 - Whether a fresh account has a free quota per model (`QuotaExceeded` suggests so), and whether Pro and Flash need turning on in the console by hand.
 - `limits.typicalLatencyMs` is a placeholder. `maxConcurrent` is 4 per model, and the scheduler counts runs at once per company, so Seedance and Seedream share BytePlus's slots.
 

@@ -40,7 +40,10 @@ export function marksSvg(drawings: readonly MarkDrawing[], width: number, height
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}">${shapes.join("")}</svg>`;
 }
 
-/** The image, upright, with the shapes drawn on, in its own format (a JPEG stays a JPEG). */
+/**
+ * The image, upright, with the shapes drawn on, in its own format (a JPEG stays a JPEG). With no
+ * shapes it's only turned upright, and an image already upright comes back untouched.
+ */
 export async function drawMarks(source: StoredAsset, drawings: readonly MarkDrawing[]): Promise<StoredAsset> {
   const sharp = await loadSharp().catch((err: unknown) => {
     throw new ProviderError("provider_error", {
@@ -48,6 +51,11 @@ export async function drawMarks(source: StoredAsset, drawings: readonly MarkDraw
       cause: err,
     });
   });
+  // Nothing to draw on an image already upright: it goes as it is, never re-encoded.
+  if (!drawings.length) {
+    const { orientation } = await sharp(source.bytes).metadata();
+    if (orientation === undefined || orientation === 1) return source;
+  }
   // Upright as a fast lossless PNG first, so a JPEG is only encoded once, at the end.
   const upright = await sharp(source.bytes)
     .rotate()

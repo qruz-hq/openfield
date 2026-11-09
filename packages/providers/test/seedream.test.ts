@@ -519,6 +519,22 @@ describe("through the fake", () => {
     expect(assets.drawn[0]?.drawings.map((d) => d.kind)).toEqual(["circle"]);
   });
 
+  test("an image with only point or box marks still goes through the sink, to be turned upright", async () => {
+    const { assets, ctx } = setup();
+    const baseAssetId = await assets.add(await gradientPng(1024, 1024, 6));
+    const refId = await assets.add(await gradientPng(1024, 1024, 7));
+    const req = await call(PRO, {
+      op: "edit",
+      base: { assetId: baseAssetId, role: "base" },
+      references: [{ assetId: refId, role: "subject" }],
+      marks: [{ kind: "point", at: { x: 0.5, y: 0.5 } }],
+    } as Partial<GenerateRequest>);
+    const model = provider.model(manifest(PRO).key);
+    expect((await model.poll(await model.submit(req, ctx), ctx)).state).toBe("succeeded");
+    // Only the image the mark is on.
+    expect(assets.drawn.map((d) => [d.assetId, d.drawings.length])).toEqual([[baseAssetId, 0]]);
+  });
+
   async function separation(modelId: string, prompt: string) {
     const { assets, ctx } = setup();
     const baseAssetId = await assets.add(await gradientPng(1024, 1024, 9));

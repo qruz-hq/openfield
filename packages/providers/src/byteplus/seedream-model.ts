@@ -115,9 +115,11 @@ async function imageBody(
   const assets: StoredAsset[] = [];
   for (const id of ids) assets.push(checkInput(manifest, await read(ctx, id, "references"), "references"));
 
-  // Shapes that have no tag are drawn onto the image they're on, for this call only.
+  // Every image a mark is on goes upright, since marks are placed on the image as it's shown, and
+  // shapes that have no tag are drawn onto it, for this call only.
   const { drawings } = promptWithMarks("", req.marks);
-  for (const [image, shapes] of drawings) {
+  const marked = new Set((req.marks ?? []).map((m) => m.image ?? 1));
+  for (const image of marked) {
     const at = image - 1;
     if (!assets[at]) continue;
     if (!ctx.assets.drawMarks) {
@@ -126,7 +128,7 @@ async function imageBody(
         message: "Marks can't be drawn in this context",
       });
     }
-    assets[at] = await ctx.assets.drawMarks(assets[at]!.assetId, shapes);
+    assets[at] = await ctx.assets.drawMarks(assets[at]!.assetId, drawings.get(image) ?? []);
   }
 
   let transparent = false;

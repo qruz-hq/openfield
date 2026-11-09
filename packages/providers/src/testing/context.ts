@@ -114,7 +114,8 @@ export class MemoryAssetSink implements AssetSink {
   /** Marks an adapter asked to have drawn, in order. */
   readonly drawn: { assetId: string; drawings: readonly MarkDrawing[] }[] = [];
 
-  // The server draws with sharp; here the drawing is only recorded and the image comes back as is.
+  // The server turns the image upright and draws with sharp; here the call is only recorded and the
+  // image comes back as is.
   async drawMarks(assetId: string, drawings: readonly MarkDrawing[]): Promise<StoredAsset> {
     this.drawn.push({ assetId, drawings });
     return this.read(assetId);

@@ -234,6 +234,26 @@ describe("marks", () => {
     expect(at(100, 5).every((v) => v > 240)).toBe(true);
   });
 
+  test("with nothing to draw, an upright image comes back untouched and a turned one upright", async () => {
+    const upright = new Uint8Array(
+      await sharp({ create: { width: 40, height: 20, channels: 3, background: "#336699" } })
+        .jpeg()
+        .toBuffer(),
+    );
+    const same = await drawMarks(
+      { assetId: "a", mimeType: "image/jpeg", width: 40, height: 20, bytes: upright },
+      [],
+    );
+    expect(same.bytes).toBe(upright);
+    // Stored 40x20 but shown turned a quarter (EXIF 6): sent as the 20x40 it looks like.
+    const turned = new Uint8Array(await sharp(upright).withMetadata({ orientation: 6 }).jpeg().toBuffer());
+    const fixed = await drawMarks(
+      { assetId: "b", mimeType: "image/jpeg", width: 40, height: 20, bytes: turned },
+      [],
+    );
+    expect([fixed.width, fixed.height, fixed.mimeType]).toEqual([20, 40, "image/jpeg"]);
+  });
+
   test("the SVG has one shape per mark, at the image's pixels", () => {
     const svg = marksSvg(
       [
