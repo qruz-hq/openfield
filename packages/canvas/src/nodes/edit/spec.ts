@@ -159,6 +159,10 @@ const SKETCH_PORTS: readonly PortSpec[] = EDIT_PORTS.map((p) =>
 /** A saved node that sketches rather than paints, from its raw params. */
 export const sketchMode = (raw: Readonly<Record<string, unknown>>): boolean => raw.mode === "sketch";
 
+/** The rail an Edit node draws: Sketch & point hides the Mask input. */
+export const editPortsOf = (params: { readonly mode?: unknown }): readonly PortSpec[] =>
+  params.mode === "sketch" ? SKETCH_PORTS : EDIT_PORTS;
+
 /** Whether the node changes what its marks point at: Sketch & point, on a model that reads marks. */
 export const sketching = (p: Pick<EditParams, "mode">, model: ModelListItem | undefined): boolean =>
   p.mode === "sketch" && !!model?.capabilities.marks;
@@ -245,8 +249,9 @@ function fingerprintParams(node: EngineNode<EditParams>, ctx: EngineContext): Fi
     prompt: p.prompt.trim(),
     composite: keep ? { expandPx: p.expandPx, featherPx: p.featherPx } : false,
     providerOptions: p.providerOptions,
-    // Only a node that sketches says so, so every node that paints hashes as it always has.
-    ...(sketch && { mode: "sketch", marks: p.marks ?? [] }),
+    // Only a node that sketches says so, so every node that paints hashes as it always has. The
+    // marks as they're sent: a box drawn either way round is the same box.
+    ...(sketch && { mode: "sketch", marks: (p.marks ?? []).map(cornerFirst) }),
   };
   if (!model) {
     return {
@@ -475,7 +480,7 @@ export const editSpec: NodeSpec<EditParams> = {
   imageBox: imageCardBox,
   annotation: false,
   ports: EDIT_PORTS,
-  portsOf: (node) => (sketchMode(node.params) ? SKETCH_PORTS : EDIT_PORTS),
+  portsOf: (node) => editPortsOf(node.params),
   optionalSettings: ["mode", "marks", "sketchKeepOriginal"],
   defaults: (ctx) => ({
     ...(ctx.defaultEditModel && { model: ctx.defaultEditModel }),

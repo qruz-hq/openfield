@@ -66,7 +66,7 @@ const TOOLS: Record<SketchTool, { icon: LucideIcon; label: MessageKey }> = {
  * Image edit / Toolbar / Sketch & point: the switch | Pan | Sketch, Circle, Box, Arrow, Point | the
  * next mark's colour | Undo, Redo, Clear. Rests at 40% while a run goes, as the mask's does.
  */
-export function SketchToolbar({ resting = false }: { resting?: boolean }) {
+export function SketchToolbar({ resting = false, className }: { resting?: boolean; className?: string }) {
   const tool = useEditSession((s) => s.sketchTool);
   const marks = useEditSession((s) => s.marks.length);
   const canUndo = useEditSession((s) => s.marksPast.length > 0);
@@ -88,7 +88,7 @@ export function SketchToolbar({ resting = false }: { resting?: boolean }) {
       role="toolbar"
       aria-label={t("edit.sketch.tools.label")}
       inert={resting}
-      className={cn(toolbarClass, resting && "opacity-40")}
+      className={cn(toolbarClass, resting && "opacity-40", className)}
     >
       <ModeSwitch />
       <Divider orientation="vertical" size={20} />
@@ -162,12 +162,12 @@ function ColorButton() {
 }
 
 /** Image edit / Sketch hint: what the tool in hand does, or that there's no room for another mark. */
-export function SketchHint({ model }: { model: string | undefined }) {
+export function SketchHint({ model, className }: { model: string | undefined; className?: string }) {
   const tool = useEditSession((s) => s.sketchTool);
   const full = useEditSession((s) => s.marks.length >= MARKS_MAX);
   if (tool === "pan" && !full) return null;
   return (
-    <div role="status" className={optionsBar}>
+    <div role="status" className={cn(optionsBar, className)}>
       <span className="whitespace-nowrap text-caption font-normal text-text-secondary">
         {full
           ? t("edit.sketch.hints.full", { model: model ?? "", max: MARKS_MAX })

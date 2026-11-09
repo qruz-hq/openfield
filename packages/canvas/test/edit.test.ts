@@ -352,6 +352,35 @@ describe("the Edit node", () => {
     expect((await evaluate(cleared)).get("e")!.upToDate).toBe(true);
   });
 
+  test("sketching, its fingerprint follows the marks and Keep the rest, not the painted mask", async () => {
+    const fp = async (params: Record<string, unknown>) => (await fingerprintsOf(painted(params))).e;
+    const plain = await fp({});
+    // A node that paints hashes as it always has, whatever "mode" says.
+    expect(await fp({ mode: "paint" })).toBe(plain);
+    const box = { kind: "box", from: { x: 0.1, y: 0.1 }, to: { x: 0.5, y: 0.5 }, color: "#C8102E" };
+    const sketched = await fp({ mode: "sketch" });
+    expect(sketched).not.toBe(plain);
+    // The mask painted before stays on the node, unused: it doesn't count.
+    expect(await fp({ mode: "sketch", maskAssetId: WIRED })).toBe(sketched);
+    expect(await fp({ mode: "sketch", marks: [box] })).not.toBe(sketched);
+    expect(await fp({ mode: "sketch", sketchKeepOriginal: true })).not.toBe(sketched);
+    // Corner order doesn't matter: the box is sent top left first either way.
+    expect(await fp({ mode: "sketch", marks: [{ ...box, from: box.to, to: box.from }] })).toBe(
+      await fp({ mode: "sketch", marks: [box] }),
+    );
+  });
+
+  test("sketching hides the Mask input and keeps its slot", () => {
+    const doc = docOf([editNode({ mode: "sketch" })], []);
+    const sketch = specRegistry.nodeRail(doc, "e");
+    expect(sketch.find((p) => p.id === "mask")).toMatchObject({ hidden: true, keepSlot: true });
+    expect(specRegistry.nodePorts(doc, "e", "in").map((p) => p.id)).toEqual([
+      "image",
+      "prompt",
+      "input_images",
+    ]);
+  });
+
   test("a finished edit stays up to date: the mask it read counts, painted or connected", async () => {
     // The server records the base and the mask a run sent (canvas runs.ts).
     const done = await ran(painted(), "e", [BASE, MASK]);
