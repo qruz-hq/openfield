@@ -47,6 +47,7 @@ const suites: { name: string; testMatch: string; env?: Record<string, string> }[
   { name: "seedream-composer", testMatch: "seedream-composer.e2e.ts" },
   { name: "seedream-sketch", testMatch: "seedream-sketch.e2e.ts" },
   { name: "seedream-layers", testMatch: "seedream-layers.e2e.ts" },
+  { name: "seedream-canvas", testMatch: "seedream-canvas.e2e.ts" },
 ];
 const servers = suites.map((suite) => ({ ...suite, origin: `http://127.0.0.1:${portFor(suite.name)}` }));
 
