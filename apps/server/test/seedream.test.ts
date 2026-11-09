@@ -1,10 +1,24 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { newId, type UploadResponse, uploadResponseSchema } from "@openfield/core";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import {
+  type FlattenResponse,
+  type JobSetAccepted,
+  type LayerStackResponse,
+  layerStackResponseSchema,
+  newId,
+  type UploadResponse,
+  uploadResponseSchema,
+} from "@openfield/core";
 import { assetsForJobSets, edgesInto, getJobSet, jobsOf } from "@openfield/db";
 import { createFakeFetch } from "@openfield/providers/server";
 import sharp from "sharp";
 import { drawMarks, marksSvg } from "../src/files/marks";
+import { packBits, writePsd } from "../src/files/psd";
+import { ZipArchive } from "../src/files/unzip";
 import { completed, generate, startTestServer, type TestServer } from "./helpers";
+import { call, connectAgent, turnOnAgents } from "./mcp-helpers";
 import { texture } from "./pixels";
 
 // Seedream end to end on the BytePlus fake: related sets that come back short or with an image
@@ -14,7 +28,10 @@ const PRO = "byteplus:dola-seedream-5-0-pro-260628";
 const LITE = "byteplus:seedream-5-0-260128";
 
 let server: TestServer | undefined;
+let agent: Awaited<ReturnType<typeof connectAgent>> | undefined;
 afterEach(async () => {
+  await agent?.close();
+  agent = undefined;
   await server?.close();
   server = undefined;
 });
@@ -245,5 +262,341 @@ describe("marks", () => {
     expect(svg).toContain('<ellipse cx="300" cy="150" rx="200" ry="100"');
     expect(svg).toContain('<line x1="0" y1="0" x2="1000" y2="500"');
     expect(svg).toContain("<polygon");
+  });
+});
+
+/** A separation of a fresh 1024x1024 upload, through POST /api/layers, finished. */
+async function separated(s: TestServer) {
+  const source = await upload(s, await texture(1024, 1024));
+  const res = await s.json<JobSetAccepted>("/api/layers", {
+    method: "POST",
+    body: { idempotencyKey: newId(), model: PRO, image: source.id, size: "1K" },
+  });
+  expect(res.status).toBe(202);
+  await completed(s, res.body.jobSet.id);
+  const stack = await s.json<LayerStackResponse>(`/api/layers/${res.body.jobSet.id}`);
+  expect(stack.status).toBe(200);
+  return { source, runId: res.body.jobSet.id, stack: layerStackResponseSchema.parse(stack.body) };
+}
+
+/** Enough of a PSD reader to check what writePsd wrote. */
+function readPsd(bytes: Uint8Array) {
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  let at = 0;
+  const take = (n: number) => {
+    at += n;
+    return at - n;
+  };
+  const u16 = () => view.getUint16(take(2));
+  const i16 = () => view.getInt16(take(2));
+  const u32 = () => view.getUint32(take(4));
+  const i32 = () => view.getInt32(take(4));
+  const ascii = (n: number) => {
+    const from = take(n);
+    return String.fromCharCode(...bytes.subarray(from, from + n));
+  };
+  const skipSection = () => {
+    const length = u32();
+    at += length;
+  };
+  const signature = ascii(4);
+  const version = u16();
+  at += 6;
+  const channels = u16();
+  const height = u32();
+  const width = u32();
+  const depth = u16();
+  const mode = u16();
+  skipSection();
+  skipSection();
+  const layerAndMaskEnd = u32() + at;
+  const layerInfoEnd = u32() + at;
+  const count = Math.abs(i16());
+  const layers: {
+    top: number;
+    left: number;
+    bottom: number;
+    right: number;
+    name: string;
+    lengths: number[];
+  }[] = [];
+  for (let i = 0; i < count; i++) {
+    const [top, left, bottom, right] = [i32(), i32(), i32(), i32()];
+    const lengths: number[] = [];
+    const n = u16();
+    for (let k = 0; k < n; k++) {
+      i16();
+      lengths.push(u32());
+    }
+    expect(ascii(4)).toBe("8BIM");
+    ascii(4);
+    at += 4;
+    const extraEnd = u32() + at;
+    skipSection();
+    skipSection();
+    const nameLength = bytes[at]!;
+    let name = ascii(nameLength + 1).slice(1);
+    // The Pascal string is padded to a multiple of 4, its length byte included.
+    at += (4 - ((nameLength + 1) % 4)) % 4;
+    while (at < extraEnd) {
+      expect(ascii(4)).toBe("8BIM");
+      const key = ascii(4);
+      const end = u32() + at;
+      if (key === "luni") {
+        const units = u32();
+        name = String.fromCharCode(...Array.from({ length: units }, () => u16()));
+      }
+      at = end;
+    }
+    at = extraEnd;
+    layers.push({ top, left, bottom, right, name, lengths });
+  }
+  // The first layer's alpha channel, unpacked.
+  const first = layers[0]!;
+  const rows = first.bottom - first.top;
+  const cols = first.right - first.left;
+  expect(u16()).toBe(1);
+  const counts = Array.from({ length: rows }, () => u16());
+  const alpha: number[] = [];
+  for (const length of counts) {
+    const end = at + length;
+    while (at < end) {
+      const n = view.getInt8(at++);
+      if (n >= 0) for (let k = 0; k <= n; k++) alpha.push(bytes[at++]!);
+      else {
+        const v = bytes[at++]!;
+        for (let k = 0; k < 1 - n; k++) alpha.push(v);
+      }
+    }
+  }
+  expect(alpha).toHaveLength(rows * cols);
+  expect(layerInfoEnd).toBeLessThanOrEqual(layerAndMaskEnd);
+  return { signature, version, channels, width, height, depth, mode, layers, alpha };
+}
+
+describe("layer stacks", () => {
+  test("POST /api/layers separates an image and GET answers its stack, base first", async () => {
+    server = await start();
+    const { source, stack } = await separated(server);
+    expect(stack.source?.id).toBe(source.id);
+    expect(stack.canvas).toEqual({ width: 1024, height: 1024 });
+    expect(stack.layers.map((l) => [l.role, l.zIndex])).toEqual([
+      ["base", 0],
+      ["layer", 1],
+      ["layer", 2],
+      ["layer", 3],
+    ]);
+    expect(stack.layers[0]?.box).toEqual([0, 0, 1024, 1024]);
+    expect(stack.layers[1]?.name).toBe("Layer 1");
+  });
+
+  test("an unknown run has no stack", async () => {
+    server = await start();
+    const res = await server.json(`/api/layers/${newId()}`);
+    expect(res.status).toBe(404);
+  });
+
+  test("flatten puts the stack together into a new library image beside the base", async () => {
+    server = await start();
+    const { stack, runId } = await separated(server);
+    const res = await server.json<FlattenResponse>(`/api/layers/${runId}/flatten`, {
+      method: "POST",
+      body: {},
+    });
+    expect(res.status).toBe(201);
+    const flat = res.body.asset;
+    expect([flat.width, flat.height, flat.mime, flat.op]).toEqual([1024, 1024, "image/png", "overlay"]);
+    expect(flat.parentAssetId).toBe(stack.layers[0]!.asset.id);
+    expect(flat.generative).toBe(false);
+    expect(flat.providerId).toBe("local");
+  });
+
+  test("flatten takes the stack in a new order, with layers hidden or swapped for an edit", async () => {
+    server = await start();
+    const { stack, runId } = await separated(server);
+    const [base, one, two] = stack.layers;
+    const hidden = await server.json<FlattenResponse>(`/api/layers/${runId}/flatten`, {
+      method: "POST",
+      body: {
+        layers: [
+          { assetId: base!.asset.id },
+          { assetId: two!.asset.id },
+          { assetId: one!.asset.id, visible: false },
+        ],
+      },
+    });
+    expect(hidden.status).toBe(201);
+    const entries = (hidden.body.asset.opParams as { layers: { entries: { assetId: string }[] } }).layers
+      .entries;
+    expect(entries.map((e) => e.assetId)).toEqual([base!.asset.id, two!.asset.id]);
+
+    // An image from elsewhere needs a box of its own.
+    const stranger = await upload(server, await texture(64, 64));
+    const refused = await server.json(`/api/layers/${runId}/flatten`, {
+      method: "POST",
+      body: { layers: [{ assetId: stranger.id }] },
+    });
+    expect(refused.status).toBe(400);
+    const placed = await server.json<FlattenResponse>(`/api/layers/${runId}/flatten`, {
+      method: "POST",
+      body: { layers: [{ assetId: base!.asset.id }, { assetId: stranger.id, box: [10, 10, 74, 74] }] },
+    });
+    expect(placed.status).toBe(201);
+  });
+
+  test("export as a zip: each layer as a PNG, the flattened picture and stack.json", async () => {
+    server = await start();
+    const { stack, runId } = await separated(server);
+    const res = await server.request(`/api/layers/${runId}/export`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ format: "zip" }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-disposition")).toContain(".zip");
+    const dir = mkdtempSync(join(tmpdir(), "openfield-layers-"));
+    try {
+      const file = join(dir, "layers.zip");
+      writeFileSync(file, new Uint8Array(await res.arrayBuffer()));
+      const zip = await ZipArchive.open(file);
+      expect(zip.entries.map((e) => e.name)).toEqual([
+        "00 Base.png",
+        "01 Layer 1.png",
+        "02 Layer 2.png",
+        "03 Layer 3.png",
+        "flattened.png",
+        "stack.json",
+      ]);
+      const json = JSON.parse(await new Response(await zip.open(zip.find("stack.json")!)).text());
+      expect(json.canvas).toEqual(stack.canvas);
+      expect(json.layers[1].box).toEqual(stack.layers[1]!.box);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("export as a PSD: one layer each at its box, bottom first, with names", async () => {
+    server = await start();
+    const { stack, runId } = await separated(server);
+    const res = await server.request(`/api/layers/${runId}/export`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ format: "psd" }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/vnd.adobe.photoshop");
+    const psd = readPsd(new Uint8Array(await res.arrayBuffer()));
+    expect([psd.signature, psd.version, psd.channels, psd.depth, psd.mode]).toEqual(["8BPS", 1, 4, 8, 3]);
+    expect([psd.width, psd.height]).toEqual([1024, 1024]);
+    expect(psd.layers.map((l) => l.name)).toEqual(["Base", "Layer 1", "Layer 2", "Layer 3"]);
+    const box = stack.layers[2]!.box;
+    expect([psd.layers[2]!.left, psd.layers[2]!.top, psd.layers[2]!.right, psd.layers[2]!.bottom]).toEqual(
+      box,
+    );
+    // The base is opaque all over.
+    expect(psd.alpha.every((a) => a === 255)).toBe(true);
+  });
+});
+
+describe("the PSD writer", () => {
+  test("PackBits packs runs and literals and unpacks to the same row", () => {
+    const row = Uint8Array.from([0, 0, 0, 0, 1, 2, 3, 7, 7, ...Array(300).fill(9)]);
+    const packed = packBits(row);
+    const out: number[] = [];
+    for (let i = 0; i < packed.length; ) {
+      const n = packed[i]! > 127 ? packed[i]! - 256 : packed[i]!;
+      i++;
+      if (n >= 0) for (let k = 0; k <= n; k++) out.push(packed[i++]!);
+      else {
+        const v = packed[i++]!;
+        for (let k = 0; k < 1 - n; k++) out.push(v);
+      }
+    }
+    expect(out).toEqual(Array.from(row));
+    expect(packed.length).toBeLessThan(20);
+  });
+
+  test("a name past ASCII rides in full as unicode, and transparency comes through", () => {
+    const rgba = new Uint8Array(2 * 2 * 4);
+    rgba.set([255, 0, 0, 0], 0);
+    rgba.set([255, 0, 0, 128], 4);
+    rgba.set([255, 0, 0, 255], 8);
+    rgba.set([255, 0, 0, 255], 12);
+    const bytes = writePsd({
+      width: 4,
+      height: 4,
+      layers: [{ name: "Tasse à café", left: 1, top: 1, width: 2, height: 2, rgba }],
+      composite: new Uint8Array(4 * 4 * 4),
+    });
+    const psd = readPsd(bytes);
+    expect(psd.layers[0]?.name).toBe("Tasse à café");
+    expect([psd.layers[0]!.left, psd.layers[0]!.top, psd.layers[0]!.right, psd.layers[0]!.bottom]).toEqual([
+      1, 1, 3, 3,
+    ]);
+    expect(psd.alpha).toEqual([0, 128, 255, 255]);
+  });
+});
+
+describe("agents", () => {
+  async function connected() {
+    server = await start();
+    await turnOnAgents(server);
+    agent = await connectAgent(server);
+    return { s: server, c: agent };
+  }
+
+  test("list_models says which models take marks, separate layers or make related sets", async () => {
+    const { c } = await connected();
+    const listed = await call(c, "list_models", {});
+    const models = listed.json.models as unknown as Record<string, unknown>[];
+    const pro = models.find((m) => m.key === PRO)!;
+    expect(pro.marks).toEqual(["point", "box", "circle", "stroke", "arrow"]);
+    expect(pro.layers).toEqual({ sizes: ["auto", "1K", "1.5K", "2K"], most: 16 });
+    expect(pro.can).toContain("separate an image into layers (separate_layers)");
+    expect(models.find((m) => m.key === LITE)?.relatedSet).toBe(true);
+    expect(pro.relatedSet).toBeUndefined();
+  });
+
+  test("separate_layers prices the range first, then answers the stack", async () => {
+    const { s, c } = await connected();
+    const source = await upload(s, await texture(1024, 1024));
+    const priced = await call(c, "separate_layers", { image: source.id, model: PRO, dryRun: true });
+    expect(priced.json).toMatchObject({ dryRun: true, price: { usd: 0.765, minUsd: 0.045 } });
+
+    const made = await call(c, "separate_layers", { image: source.id, model: PRO, confirmCost: 0.765 });
+    expect(made.isError).toBe(false);
+    expect(made.json.status).toBe("succeeded");
+    const layers = made.json.layers as unknown as { role: string; name?: string; box: number[] }[];
+    expect(layers.map((l) => l.role)).toEqual(["base", "layer", "layer", "layer"]);
+    expect(layers[1]?.name).toBe("Layer 1");
+    // The run's image is the base, never one of its layers.
+    const images = made.json.images as unknown as { assetId: string }[];
+    expect(images).toHaveLength(1);
+    expect(images[0]?.assetId).toBe((layers[0] as unknown as { assetId: string }).assetId);
+  });
+
+  test("separate_layers refuses a model that can't", async () => {
+    const { s, c } = await connected();
+    const source = await upload(s, await texture(1024, 1024));
+    const refused = await call(c, "separate_layers", { image: source.id, model: LITE });
+    expect(refused.isError).toBe(true);
+    expect(refused.text).toContain("can't separate layers");
+  });
+
+  test("generate_image takes marks on an edit", async () => {
+    const { s, c } = await connected();
+    const source = await upload(s, await texture(1024, 1024));
+    const made = await call(c, "generate_image", {
+      model: PRO,
+      prompt: "Make the marked cup blue",
+      edit: { image: source.id, marks: [{ kind: "box", from: { x: 0.1, y: 0.1 }, to: { x: 0.4, y: 0.5 } }] },
+      confirmCost: 1,
+    });
+    expect(made.isError).toBe(false);
+    expect(made.json.status).toBe("succeeded");
+    const run = getJobSet(s.services.db, made.json.runId as unknown as string)!;
+    expect(run.requestJson.marks).toMatchObject([
+      { kind: "box", from: { x: 0.1, y: 0.1 }, to: { x: 0.4, y: 0.5 } },
+    ]);
   });
 });

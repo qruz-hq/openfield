@@ -19,6 +19,7 @@ import { generateRoutes } from "./routes/generate";
 import { healthRoutes } from "./routes/health";
 import { jobSetsRoutes } from "./routes/job-sets";
 import { keysRoutes } from "./routes/keys";
+import { layersRoutes } from "./routes/layers";
 import { libraryRoutes } from "./routes/library";
 import { masksRoutes } from "./routes/masks";
 import { modelsRoutes } from "./routes/models";
@@ -41,6 +42,7 @@ const api = new Hono<Env>()
   .route("/", modelsRoutes)
   .route("/", generateRoutes)
   .route("/", editRoutes)
+  .route("/", layersRoutes)
   .route("/", jobSetsRoutes)
   .route("/", assetsRoutes)
   .route("/", foldersRoutes)

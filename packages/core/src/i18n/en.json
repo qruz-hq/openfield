@@ -1109,7 +1109,14 @@
     "layerImage": "Layers need a PNG or JPEG of at least 512×512 pixels.",
     "layerShape": "This image is too long and thin to separate into layers.",
     "transparentInput": "A transparent background needs one PNG with transparency to start from.",
-    "groupImageMissing": "{model} made fewer images than you asked for this time."
+    "groupImageMissing": "{model} made fewer images than you asked for this time.",
+    "layerStackGone": "These layers aren't in the library anymore.",
+    "layerNotInStack": "This image isn't one of these layers. Give it a place on the canvas, or pick a layer.",
+    "layersAllHidden": "Every layer is hidden. Show at least one."
+  },
+  "layers": {
+    "base": "Base",
+    "layer": "Layer {n}"
   },
   "presets": {
     "errors": {

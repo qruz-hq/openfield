@@ -1,6 +1,6 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { formatCost, type ModelListItem, t } from "@openfield/core";
-import { estimate, pricedOp, resolveProviderSettings } from "@openfield/providers/manifest";
+import { estimate, pricedOp, resolveProviderSettings, speedOffer } from "@openfield/providers/manifest";
 import { z } from "zod";
 import { priceOf } from "../guard";
 import { guarded, reply, type ToolContext } from "../kit";
@@ -17,6 +17,7 @@ const OPS: [keyof ModelListItem["capabilities"]["ops"], string][] = [
   ["outpaint", "extend an image"],
   ["upscale", "upscale"],
   ["removeBackground", "remove the background"],
+  ["decomposeLayers", "separate an image into layers (separate_layers)"],
 ];
 
 export function modelTools(server: McpServer, ctx: ToolContext): void {
@@ -81,6 +82,9 @@ function describeModel(ctx: ToolContext, m: ModelListItem, isDefault: boolean) {
     ...(isDefault && { default: true }),
     can: OPS.filter(([op]) => caps.ops[op]).map(([, words]) => words),
     masks: caps.ops.inpaint,
+    ...(caps.marks && { marks: caps.marks.kinds }),
+    ...(caps.layers && { layers: { sizes: caps.layers.sizes, most: caps.layers.maxLayers } }),
+    ...(caps.batch.groupOption && { relatedSet: true }),
     size:
       caps.size.mode === "aspect"
         ? { aspects: caps.size.ratios, default: caps.size.default }
@@ -99,7 +103,7 @@ function describeModel(ctx: ToolContext, m: ModelListItem, isDefault: boolean) {
     references: caps.references.supported ? caps.references.max : 0,
     seeds: caps.seed.supported,
     negativePrompt: caps.negativePrompt,
-    speed: t(`speed.names.${speed}`),
+    speed: speedOffer(m, speed)?.label ?? t(`speed.names.${speed}`),
     pricePerImage: perImage.confidence === "unknown" ? null : perImage.max,
     price: formatCost(perImage),
   };

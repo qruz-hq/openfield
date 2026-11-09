@@ -5,6 +5,7 @@ import {
   type EditOpParams,
   editOpParamsSchema,
   errorCopy,
+  isStackLayer,
   isTerminalState,
   type NormalizedRequest,
 } from "@openfield/core";
@@ -60,7 +61,7 @@ export async function describeRun(
   if (!bundle) throw new Refusal(`There's no run with the id ${runId}.`);
   const { jobSet, jobs, assets } = bundle;
   const made = jobs.flatMap((job) => {
-    const asset = assets.find((a) => a.jobId === job.id);
+    const asset = assets.find((a) => a.jobId === job.id && !isStackLayer(a.opParams));
     return asset ? [{ job, asset }] : [];
   });
   const { images, blocks } = await describeImages(

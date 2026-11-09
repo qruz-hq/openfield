@@ -44,6 +44,13 @@ export const layerOpParamsSchema = z.object({
 });
 
 /**
+ * A separation's layer, as opposed to its base. Layers are filed under the base's job, so wherever
+ * a job's own image is looked up, a layer is passed over.
+ */
+export const isStackLayer = (opParams: unknown): boolean =>
+  (opParams as { layer?: { role?: unknown } } | null | undefined)?.layer?.role === "layer";
+
+/**
  * POST /api/layers: separates one library image into layers. The run lands like any other, as a
  * base and its layers in the library, linked to the image they came from.
  */

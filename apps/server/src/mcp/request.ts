@@ -3,8 +3,10 @@ import {
   BATCH_MAX,
   GENERATE_PROMPT_MAX,
   type GenerateRequest,
+  MARKS_MAX,
   MASK_COMPOSITE_DEFAULTS,
   type ModelKey,
+  marksSchema,
   maskInputSchema,
   NEGATIVE_PROMPT_MAX,
   newId,
@@ -85,9 +87,24 @@ export const imageRequestFields = {
       featherPx: maskInputSchema.shape.featherPx.describe(
         `With a mask: blend the edit into the original over this many pixels past the grown area. Default ${MASK_COMPOSITE_DEFAULTS.featherPx}.`,
       ),
+      marks: marksSchema
+        .optional()
+        .describe(
+          `For models with marks in list_models: up to ${MARKS_MAX} places on the image to point at, each with what to do there. ` +
+            "Coordinates are fractions of the image, 0 to 1 from the top left. " +
+            'kind "point" takes at; "box", "circle" and "arrow" take from and to; "stroke" takes points. ' +
+            "Each may have a note (what to do there), a color (#RRGGBB) and a material. " +
+            "image is 1 for the image being edited, 2 and up for the references in order. Default 1.",
+        ),
     })
     .optional()
     .describe("Change an existing image instead of making a new one. The prompt says what to change."),
+  relatedSet: z
+    .boolean()
+    .optional()
+    .describe(
+      "For models with relatedSet in list_models: make the count as one set of related images (a story, a series) in one call. The model may make fewer than asked; only the ones it makes are billed.",
+    ),
 };
 
 type ImageRequestArgs = {
@@ -163,6 +180,8 @@ export async function buildRequest(ctx: ToolContext, args: ImageRequestArgs): Pr
       references: references.map((r) => ({ assetId: r.id, role: "subject" as const })),
     }),
     ...(base && { base: { assetId: base.id, role: "base" as const } }),
+    ...(edit?.marks && { marks: edit.marks }),
+    ...(args.relatedSet && { providerOptions: { relatedSet: true } }),
     ...(mask &&
       edit && {
         mask: {
