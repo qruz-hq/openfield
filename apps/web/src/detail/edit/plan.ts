@@ -11,6 +11,7 @@ import {
   t,
 } from "@openfield/core";
 import { aspectLabel, nearestRatio } from "@openfield/providers/manifest";
+import type { EditMode } from "./session";
 
 // The Edit tab's choices and what its runs came to, without React: which model an edit runs on,
 // how the image's shape reads, and the panel's note once the new images are in.
@@ -142,3 +143,7 @@ export function savedNote(outcome: RunOutcome, notKept = false): SavedNote | nul
   if (notKept) return { tone: "warning", text: t("edit.saved.notKept", { count: outcome.saved }) };
   return { tone: "done", text: t("edit.saved.done", { count: outcome.saved }) };
 }
+
+/** Sketch & point is open: picked, and the model reads marks. Otherwise the edit paints. */
+export const sketching = (mode: EditMode, model: ModelListItem | undefined): boolean =>
+  mode === "sketch" && Boolean(model?.capabilities.marks);

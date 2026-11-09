@@ -1,5 +1,6 @@
 import {
   type AssetListItem,
+  MASK_COMPOSITE_DEFAULTS,
   MASK_MAX_PIXELS,
   type ModelListItem,
   newId,
@@ -27,13 +28,12 @@ import {
   Sparkles,
   Square,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { useProviders } from "../../api/hooks/keys";
 import { assetDetailQuery } from "../../api/hooks/library";
 import { useModels } from "../../api/hooks/models";
 import { useRunSpeed } from "../../api/hooks/provider-settings";
-import { useSettings } from "../../api/hooks/settings";
 import { type GenerateSpeed, tooltipFor } from "../../image/composer/generate-button";
 import { useAddReference } from "../../image/composer/use-reference";
 import { speedFallbackHint, tightCost } from "../../lib/cost";
@@ -41,14 +41,17 @@ import { notifyError } from "../../lib/notify";
 import { companyName } from "../../lib/provider";
 import { askedPrice } from "../../lib/remote-price";
 import { KeepRest } from "./keep-rest";
+import { MarksList } from "./marks-list";
 import { encodeMaskPng } from "./mask-png";
 import { ModelField } from "./model-field";
-import { anyEditReady, pickEditModel, type SavedNote, savedNote, tooLargeToMask } from "./plan";
+import { anyEditReady, type SavedNote, savedNote, tooLargeToMask } from "./plan";
 import { PromptCard } from "./prompt-card";
 import type { EditRunner } from "./runner";
 import { leaveEdit, useEditSession } from "./session";
 import { SizeFields } from "./size-fields";
+import { marksForApi, maskOfMarks } from "./sketch";
 import { useTurnedPhoto } from "./turned";
+import { useEditModel } from "./use-edit-model";
 
 // The Edit tab's side of the panel (design gpRcEBbVNM, Image edit / Panel), under the tabs: the
 // prompt card, the model, the size fields, a divider, Keep the rest, then the footer at the bottom
@@ -65,17 +68,18 @@ export interface EditPanelProps {
 
 export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   const models = useModels().data ?? [];
-  const settings = useSettings().data;
   const providers = useProviders().data;
   const runSpeedFor = useRunSpeed();
-  const picked = useEditSession((s) => s.model);
   const values = useEditSession((s) => s.values);
   const batch = useEditSession((s) => s.batch);
   // Painted enough for the server to change something, as it reads the mask.
   const masked = useEditSession((s) => s.mask.changes);
   const prompt = useEditSession((s) => s.prompt);
   const references = useEditSession((s) => s.references);
-  const composite = useEditSession((s) => s.composite);
+  const paintComposite = useEditSession((s) => s.composite);
+  const sketchComposite = useEditSession((s) => s.sketchComposite);
+  const marked = useEditSession((s) => s.marks.length > 0);
+  const mode = useEditSession((s) => s.mode);
   const featherPx = useEditSession((s) => s.featherPx);
   const expandPx = useEditSession((s) => s.expandPx);
   const navigate = useNavigate();
@@ -86,11 +90,14 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   // Reading the mask into a PNG, before the run is asked for.
   const [preparing, setPreparing] = useState(false);
 
-  const model = pickEditModel(models, picked, settings?.defaultModel, providers);
+  const { model, sketch } = useEditModel();
+  // Sketch & point keeps the rest only when asked, by the area its marks cover.
+  const composite = sketch ? sketchComposite : paintComposite;
+  const sends = sketch ? sketchComposite && marked : masked;
   const resolved = model ? resolveValues(model.capabilities, values, batch) : undefined;
   const base: EditBase = { assetId: item.id, width: item.width, height: item.height };
-  const plan: EditPlan = { base, masked };
-  const run = model ? runSpeedFor(model, editOpFor(model.capabilities, masked)) : undefined;
+  const plan: EditPlan = { base, masked: sends, ...(sketch && { sketch }) };
+  const run = model ? runSpeedFor(model, editOpFor(model.capabilities, sends)) : undefined;
   const speed = run?.speed ?? "standard";
   const refs = model ? referenceInputsFor(model.capabilities, references) : [];
   // The references' sizes from their details, so their price is the one the run records.
@@ -124,6 +131,11 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
             }
           : undefined;
 
+  // A model that can't read marks paints: Undo and the keys follow the mode that's on screen.
+  useEffect(() => {
+    if (mode === "sketch" && model && !model.capabilities.marks) useEditSession.getState().setMode("paint");
+  }, [mode, model]);
+
   const busy = runner.busy || preparing;
   const saved = runner.outcome.kind === "saved";
   const session = useEditSession.getState();
@@ -141,21 +153,28 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
     const editor = session.editor;
     if (!editor) return;
     // What the button showed is what runs, whatever changes while the limit is asked about.
-    const settled = {
-      composite: session.composite,
-      expandPx: session.expandPx,
-      featherPx: session.featherPx,
-    };
+    const settled = sketch
+      ? { ...MASK_COMPOSITE_DEFAULTS, composite: true }
+      : { composite: session.composite, expandPx: session.expandPx, featherPx: session.featherPx };
     const words = session.prompt;
     const references = session.references;
+    const marks = sketch ? marksForApi(session.marks) : [];
+    const marksVersion = session.marksVersion;
     const estimate = state.estimate;
     runner.submit(estimate, async () => {
       const { maskVersion, savedMask } = useEditSession.getState();
       setPreparing(true);
-      let mask: Blob | string;
+      let mask: Blob | string | undefined;
       try {
-        // The mask saved for the last run goes again by id while it hasn't changed.
-        mask = savedMask?.version === maskVersion ? savedMask.assetId : await encodeMaskPng(editor.mask);
+        // Sketch & point sends the area its marks cover, only to keep the rest. Painting sends the
+        // mask, by id again while it hasn't changed since the last run saved it.
+        mask = sketch
+          ? sends
+            ? await encodeMaskPng(maskOfMarks(marks, item.width, item.height))
+            : undefined
+          : savedMask?.version === maskVersion
+            ? savedMask.assetId
+            : await encodeMaskPng(editor.mask);
       } catch {
         notifyError(t("edit.generate.failed"));
         return null;
@@ -165,18 +184,21 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
       return {
         input: {
           baseAssetId: item.id,
-          mask,
+          ...(mask !== undefined && { mask }),
           body: (maskAssetId) =>
             editBody(model, resolved, words, newId(), {
               base,
               ...(maskAssetId && { mask: { assetId: maskAssetId, ...settled } }),
               references: refs,
+              ...(marks.length && { marks }),
             }),
         },
         count: resolved.batch,
         prompt: words,
         maskVersion,
-        composite: settled.composite,
+        marksVersion,
+        sketch,
+        composite: mask !== undefined && settled.composite,
         references,
         estimate,
       };
@@ -230,20 +252,22 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
         />
       ) : (
         <>
-          <PromptCard model={model} resting={busy} />
+          <PromptCard model={model} resting={busy} sketch={sketch} />
           <ModelField
             models={models}
             selected={model}
             base={base}
             composite={composite}
+            sketch={sketch}
             resting={busy}
             onPick={pickModel}
           />
+          {sketch ? <MarksList resting={busy} /> : null}
           <SizeFields
             model={model}
             resolved={resolved}
             base={base}
-            masked={masked}
+            masked={sends}
             composite={composite}
             speed={speed}
             resting={busy}
@@ -257,7 +281,8 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
             expandPx={expandPx}
             resting={busy}
             afterRun={saved}
-            onComposite={session.setComposite}
+            sketch={sketch}
+            onComposite={sketch ? session.setSketchComposite : session.setComposite}
             onFeatherPx={session.setFeatherPx}
             onExpandPx={session.setExpandPx}
           />

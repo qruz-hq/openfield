@@ -9,7 +9,16 @@ import { addReferencesTo, useEditSession } from "./session";
 // With none yet the row is just the + (Image edit / Prompt card / Empty). The references are the
 // edit's own, never the composer's.
 
-export function PromptCard({ model, resting }: { model: ModelListItem | undefined; resting: boolean }) {
+export function PromptCard({
+  model,
+  resting,
+  sketch = false,
+}: {
+  model: ModelListItem | undefined;
+  resting: boolean;
+  /** Sketch & point: the placeholder says a mark can be named by its number. */
+  sketch?: boolean;
+}) {
   const prompt = useEditSession((s) => s.prompt);
   const store = useEditSession(
     useShallow((s) => ({
@@ -56,7 +65,7 @@ export function PromptCard({ model, resting }: { model: ModelListItem | undefine
         rows={1}
         value={prompt}
         aria-label={t("edit.prompt.label")}
-        placeholder={t("edit.prompt.placeholder")}
+        placeholder={t(sketch ? "edit.prompt.sketchPlaceholder" : "edit.prompt.placeholder")}
         onChange={(event) => useEditSession.getState().setPrompt(event.target.value)}
         className="block w-full resize-none overflow-hidden bg-transparent text-small leading-[1.5] text-text-primary outline-none placeholder:text-text-tertiary"
       />

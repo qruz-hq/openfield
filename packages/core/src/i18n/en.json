@@ -2262,6 +2262,56 @@
       "undo": "Undo",
       "redo": "Redo"
     },
+    "mode": {
+      "label": "How to show the change",
+      "paint": "Paint area",
+      "sketch": "Sketch & point"
+    },
+    "sketch": {
+      "tools": {
+        "label": "Sketch tools",
+        "pan": "Pan",
+        "brush": "Sketch",
+        "circle": "Circle",
+        "box": "Box",
+        "arrow": "Arrow",
+        "point": "Point",
+        "color": "Mark color",
+        "clear": "Clear all marks"
+      },
+      "hints": {
+        "brush": "Sketch what you want added. Your lines show the model where and what shape.",
+        "circle": "Circle what to change.",
+        "box": "Drag a box around what to change, then say what to do in the prompt.",
+        "arrow": "Drag from a thing to where it should go.",
+        "point": "Click on the thing to change. The model finds its edges.",
+        "full": "{model} reads up to {max} marks. Remove one to add another."
+      },
+      "kinds": {
+        "point": "Point",
+        "box": "Box",
+        "circle": "Circle",
+        "stroke": "Sketch",
+        "arrow": "Arrow"
+      },
+      "mark": "Mark {n}",
+      "markTitle": "Mark {n} · {kind}",
+      "remove": "Remove mark {n}",
+      "color": "Color",
+      "hex": "Hex color",
+      "pick": "Pick a color from the screen",
+      "preset": "Use {color}",
+      "material": "Material",
+      "optional": "Optional",
+      "materialPlaceholder": "Brushed steel",
+      "note": "Added to your prompt with this mark.",
+      "marks": "Marks",
+      "clearAll": "Clear all",
+      "sent": "Sent with your prompt",
+      "emptyTitle": "No marks yet",
+      "emptyHint": "Box, circle, point or sketch on the image to show the model where.",
+      "editMarks": "Edit the marks"
+    },
     "options": {
       "brush": "Brush options",
       "shape": "Shape options",
@@ -2293,11 +2343,13 @@
       "working": "Generating {count, plural, one {# image} other {# images}}",
       "stop": "Stop",
       "open": "Open new image",
-      "failed": "Couldn't make this edit. Your mask is still here."
+      "failed": "Couldn't make this edit. Your mask is still here.",
+      "markOrDescribe": "Describe the change."
     },
     "prompt": {
       "placeholder": "Describe the change",
-      "label": "What to change"
+      "label": "What to change",
+      "sketchPlaceholder": "Describe the change. Point to a mark by its number, like mark 1."
     },
     "model": {
       "label": "Model",
@@ -2305,7 +2357,9 @@
       "whole": "Redraw the whole image",
       "wholeKept": "{model} redraws the whole image, then everything outside your mask is put back.",
       "wholeNotKept": "{model} redraws the whole image, so anything can change.",
-      "needsKey": "Needs {vowel, select, yes {an} other {a}} {company} key"
+      "needsKey": "Needs {vowel, select, yes {an} other {a}} {company} key",
+      "sketch": "Sketch and point",
+      "wholeKeptSketch": "{model} redraws the whole image, then everything outside your mask is put back. For a precise change, try Sketch & point."
     },
     "size": {
       "resolution": "Resolution",
@@ -2326,7 +2380,9 @@
       "featherNext": "Softens the edge on your next Generate.",
       "expand": "Expand",
       "expandHint": "Grows the mask a little past what you painted.",
-      "expandNext": "Grows the mask on your next Generate."
+      "expandNext": "Grows the mask on your next Generate.",
+      "sketchOff": "Off, so the change can blend in. Turn on to keep everything outside your marks exactly the same.",
+      "sketchOn": "Everything outside your marks stays exactly the same."
     },
     "saved": {
       "done": "Saved as {count, plural, one {# new image} other {# new images}}. The original stays as it is.",

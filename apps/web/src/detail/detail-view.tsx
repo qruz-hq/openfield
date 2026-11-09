@@ -61,7 +61,7 @@ import { EditPanel } from "./edit/edit-panel";
 import { editKey } from "./edit/keys";
 import { reopenEdit } from "./edit/reopen";
 import { useEditRunner } from "./edit/runner";
-import { cancelLeave, confirmLeave, DEFAULT_TOOL, leaveEdit, useEditSession } from "./edit/session";
+import { cancelLeave, confirmLeave, leaveEdit, useEditSession } from "./edit/session";
 import {
   addedCaption,
   BACKDROP_RUNG,
@@ -532,7 +532,7 @@ function DetailContent({
     if (event.defaultPrevented || !content.current?.contains(target)) return;
     if (target.closest("input, textarea, select, [contenteditable='true']")) return;
     // On the Edit tab its tool keys come first, and the view's own letters stay quiet (keys.ts).
-    const edit = editing ? editKey(event) : null;
+    const edit = editing ? editKey(event, useEditSession.getState().mode) : null;
     if (edit) {
       const session = useEditSession.getState();
       // While a run goes the mask and its tools rest, as the toolbar shows, and while a new image is
@@ -605,11 +605,7 @@ function DetailContent({
       onEscape={() => {
         if (editing && !runner.compared) {
           if (media.current?.cancel()) return true;
-          const session = useEditSession.getState();
-          if (session.tool !== DEFAULT_TOOL) {
-            session.setTool(DEFAULT_TOOL);
-            return true;
-          }
+          if (useEditSession.getState().resetTool()) return true;
         }
         if (!expanded) return false;
         setExpanded(false);
