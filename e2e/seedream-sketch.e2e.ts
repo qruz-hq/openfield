@@ -139,6 +139,42 @@ test("Paint area on Seedream points to Sketch & point, and the switch opens it",
   const paint = detail(page).getByRole("toolbar", { name: "Mask tools" });
   const modes = paint.getByRole("radiogroup", { name: "How to show the change" });
   await expect(modes.getByRole("radio", { name: "Paint area" })).toHaveAttribute("aria-checked", "true");
+
+  // Image edit / Toolbar / Paint area (DU19ExJcxQ): the switch first, then the mask's tools.
+  await settled(page);
+  await expect.poll(async () => (await paint.boundingBox())?.y).toBe(900 - 16 - 44);
+  const bar = await drawn(paint);
+  console.log("Paint toolbar", JSON.stringify(bar));
+  expect(bar).toMatchObject({
+    h: 44,
+    radius: "12px",
+    padding: "4px 4px 4px 4px",
+    gap: "2px",
+    align: "center",
+    background: ELEVATED,
+  });
+  expect(await drawn(modes)).toMatchObject({
+    w: 236,
+    radius: "10px",
+    padding: "3px 3px 3px 3px",
+    gap: "4px",
+    background: SURFACE,
+  });
+  expect(await drawn(modes.locator("+ div"))).toMatchObject({ w: 9, h: 36 });
+  expect(await icons(paint)).toEqual([
+    "18 lucide-hand",
+    "18 lucide-brush",
+    "18 lucide-eraser",
+    "18 lucide-lasso",
+    "18 lucide-square-dashed",
+    "18 lucide-contrast",
+    "18 lucide-trash-2",
+    "18 lucide-undo-2",
+    "18 lucide-redo-2",
+  ]);
+  const note = panel.getByText(/redraws the whole image/);
+  expect(await font(note)).toBe("Inter 12px 400");
+  expect(await icons(note.locator(".."))).toEqual(["12 lucide-info"]);
   await modes.getByRole("radio", { name: "Sketch & point" }).click();
   await expect(detail(page).getByRole("toolbar", { name: "Sketch tools" })).toBeVisible();
   await expect(paint).toHaveCount(0);

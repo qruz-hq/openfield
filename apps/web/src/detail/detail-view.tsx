@@ -883,7 +883,9 @@ function Shell({
         if (onEscape()) event.preventDefault();
       }}
       onInteractOutside={(event) => event.preventDefault()}
-      className="inset-0 h-dvh max-h-none w-auto mac-window:max-h-none other-window:max-h-none max-w-none translate-x-0 translate-y-0 gap-0 overflow-hidden rounded-none bg-surface p-0 shadow-none inset-ring-0 data-[state=open]:animate-none"
+      // Clipped, not hidden: the backdrop runs 80 past the bottom, and a box that hides overflow can
+      // still be scrolled, so a focus or a click scrolled the whole view up by that much.
+      className="inset-0 h-dvh max-h-none w-auto mac-window:max-h-none other-window:max-h-none max-w-none translate-x-0 translate-y-0 gap-0 overflow-clip rounded-none bg-surface p-0 shadow-none inset-ring-0 data-[state=open]:animate-none"
     >
       {children}
     </ModalContent>

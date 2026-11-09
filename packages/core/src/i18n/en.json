@@ -2343,8 +2343,7 @@
       "working": "Generating {count, plural, one {# image} other {# images}}",
       "stop": "Stop",
       "open": "Open new image",
-      "failed": "Couldn't make this edit. Your mask is still here.",
-      "markOrDescribe": "Describe the change."
+      "failed": "Couldn't make this edit. Your mask is still here."
     },
     "prompt": {
       "placeholder": "Describe the change",
