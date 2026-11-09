@@ -370,3 +370,131 @@ test("an Edit node in Sketch & point: marks drawn in the window, listed in its s
     )
     .toBe(1);
 });
+
+test("an Edit node's settings switch to Sketch & point: the wired mask goes, references stay home", async ({
+  page,
+  request,
+}) => {
+  const token = await sessionToken(request);
+  const photo = await makeImage(request, token, unique("white vases, red berries"), "3:4");
+  const mask = await makeImage(request, token, unique("a mask"), "3:4");
+  const reference = await makeImage(request, token, unique("a brass kettle"), "1:1");
+  const { id, aliases } = await canvasOf(request, "Sketch switch", [
+    {
+      op: "add_node",
+      as: "u",
+      type: "image.upload",
+      position: { x: 0, y: 0 },
+      params: { assetIds: [photo] },
+    },
+    {
+      op: "add_node",
+      as: "m",
+      type: "image.upload",
+      position: { x: 0, y: 420 },
+      params: { assetIds: [mask] },
+    },
+    {
+      op: "add_node",
+      as: "r",
+      type: "image.upload",
+      position: { x: 0, y: 840 },
+      params: { assetIds: [reference] },
+    },
+    {
+      op: "add_node",
+      as: "e",
+      type: "image.edit",
+      position: { x: 420, y: 0 },
+      params: { model: PRO, prompt: "Turn the vase into red brushed steel" },
+    },
+    { op: "connect", source: "u", sourceHandle: "images", target: "e", targetHandle: "image" },
+    { op: "connect", source: "m", sourceHandle: "images", target: "e", targetHandle: "mask" },
+    { op: "connect", source: "r", sourceHandle: "images", target: "e", targetHandle: "input_images" },
+  ]);
+  const savedNode = async () => {
+    const saved = await api<CanvasDetail>(request, token, "GET", `/api/canvases/${id}`);
+    const node = saved.graph.nodes.find((n) => n.id === aliases.e)!;
+    const into = saved.graph.edges.filter((e) => e.target === aliases.e).map((e) => e.targetHandle);
+    return { mode: node.params.mode ?? null, into: into.sort() };
+  };
+
+  await page.goto(`/canvas/${id}`);
+  const edit = nodeOf(page, aliases.e!);
+  await expect(edit).toBeVisible();
+  await edit.dblclick({ position: { x: 160, y: 40 } });
+  const settings = page.getByRole("complementary", { name: "Edit" });
+  const modes = settings.getByRole("radiogroup", { name: "How to show the change" });
+  await expect(modes).toBeVisible();
+  await expect(modes.getByRole("radio", { name: "Paint area" })).toHaveAttribute("aria-checked", "true");
+  await expect(settings.getByText("From the Mask input")).toBeVisible();
+  await expect(settings.getByRole("button", { name: "Add a reference image" })).toBeVisible();
+
+  // Mode (RIMVE6Wb5c): column, 4 2 in, 8 between, its label 12/500, then the switch at full width:
+  // radius 10, 3 in, 4 between, segments h30 radius 8, the picked one 600.
+  const field = modes.locator("..");
+  const fieldBox = await drawn(field);
+  expect(fieldBox).toMatchObject({ padding: "4px 2px 4px 2px", gap: "8px", display: "flex" });
+  expect(await font(field.getByText("How to show the change"))).toBe("12px 500");
+  const track = await drawn(modes);
+  expect(track).toMatchObject({
+    radius: "10px",
+    padding: "3px 3px 3px 3px",
+    gap: "4px",
+    h: 36,
+    w: fieldBox.w - 4,
+  });
+  const picked = modes.getByRole("radio", { name: "Paint area" });
+  const other = modes.getByRole("radio", { name: "Sketch & point" });
+  expect(await drawn(picked)).toMatchObject({ h: 30, radius: "8px" });
+  expect(await drawn(other)).toMatchObject({ h: 30, radius: "8px", w: (track.w - 6 - 4) / 2 });
+  expect(await font(picked)).toBe("12px 600");
+  expect(await font(other)).toBe("12px 500");
+  // It comes first, above the Mask card: 12 apart, as the inspector's column.
+  const maskCard = settings.locator("div.rounded-14.bg-surface").first();
+  expect((await maskCard.boundingBox())!.y - ((await field.boundingBox())!.y + fieldBox.h)).toBeCloseTo(
+    12,
+    0,
+  );
+
+  // Sketch & point: the link into the Mask input goes with it, and the references are left out.
+  await other.click();
+  await expect(other).toHaveAttribute("aria-checked", "true");
+  await expect(handleOf(page, aliases.e!, "target", "mask")).toHaveCount(0);
+  await expect(settings.getByText("No marks yet. Add them to point at what to change.")).toBeVisible();
+  await expect(settings.getByRole("button", { name: "Add a reference image" })).toHaveCount(0);
+  const refs = handleOf(page, aliases.e!, "target", "input_images");
+  await expect(refs).toHaveAttribute(
+    "aria-label",
+    "Reference images ×n. Sketch & point doesn't use reference images",
+  );
+  await expect(refs).toHaveClass(/of-port-off/);
+  await expect.poll(savedNode).toEqual({ mode: "sketch", into: ["image", "input_images"] });
+
+  // One undo brings back painting and the mask's link together (from the canvas, not a text field).
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press("ControlOrMeta+z");
+  await expect(modes.getByRole("radio", { name: "Paint area" })).toHaveAttribute("aria-checked", "true");
+  await expect(handleOf(page, aliases.e!, "target", "mask")).toHaveCount(1);
+  await expect(settings.getByRole("button", { name: "Add a reference image" })).toBeVisible();
+  await expect.poll(savedNode).toEqual({ mode: null, into: ["image", "input_images", "mask"] });
+
+  // Again, then run: the prompt alone, on the image alone.
+  await other.click();
+  await expect.poll(savedNode).toEqual({ mode: "sketch", into: ["image", "input_images"] });
+  await settings.getByRole("button", { name: /^Run/ }).click();
+  await expect
+    .poll(
+      async () => {
+        const saved = await api<CanvasDetail>(request, token, "GET", `/api/canvases/${id}`);
+        return saved.graph.nodes.find((n) => n.id === aliases.e)?.result?.assetIds.length ?? 0;
+      },
+      { timeout: 20_000 },
+    )
+    .toBe(1);
+
+  // Painting again from the switch lets Sketch & point's settings go.
+  await modes.getByRole("radio", { name: "Paint area" }).click();
+  await expect.poll(savedNode).toEqual({ mode: null, into: ["image", "input_images"] });
+  await expect(handleOf(page, aliases.e!, "target", "mask")).toHaveCount(1);
+});
