@@ -1,6 +1,6 @@
-# BytePlus adapter (Seedance video)
+# BytePlus adapter (Seedance video, Seedream images)
 
-BytePlus ModelArk's video generation API, with the person's own key and billing. It's Openfield's first **video** company: every model here has `modality: "video"` and a `capabilities.video` block, and makes one MP4 per run. **Nothing has run live yet.** Everything below comes from BytePlus's API reference as of 2026-09-29, extracted from the pages' own content (not from memory), and every place that still needs a live run says so. `meta.stable` is `true` so the models show without Settings > Experimental; flip it to `false` if the first live run finds a surprise.
+BytePlus ModelArk's video and image generation APIs, with the person's own key and billing. The Seedance half (this part, down to Fixtures) is Openfield's first **video** company; the Seedream half (see [Seedream images](#seedream-images)) makes images. For Seedance, every model here has `modality: "video"` and a `capabilities.video` block, and makes one MP4 per run. **Nothing has run live yet.** Everything below comes from BytePlus's API reference as of 2026-09-29, extracted from the pages' own content (not from memory), and every place that still needs a live run says so. `meta.stable` is `true` so the models show without Settings > Experimental; flip it to `false` if the first live run finds a surprise.
 
 Sources:
 
@@ -105,6 +105,87 @@ Every error body is `{"error": {"code", "message"}}`, and a failed task carries 
 - The exact status and code a running task's DELETE answers (the fixture guesses 409 `InvalidParameter.TaskStatus`); anything that isn't retryable ends the cancel quietly, so the guess doesn't change behaviour.
 - Which code a not-yet-activated 2.x model answers with on this endpoint: the error page lists both `ModelNotOpen` (404) and `OperationDenied.ServiceNotOpen` (403), and both give the same tile.
 - `limits.typicalLatencyMs` is a placeholder, not 10 measured runs. `maxConcurrent` is the model list's individual-account figure (3 on 2.x, 10 on 1.x).
+
+## Seedream images
+
+Five image models on the same key, read from BytePlus's docs on 2026-11-09 (sections expanded, official pages only). **Nothing here has run live yet**: every value is from these pages, and the list at the end says what a first live run has to confirm.
+
+Sources:
+
+- Model list: <https://docs.byteplus.com/en/docs/modelark/model-list>
+- Image generation API: <https://docs.byteplus.com/en/docs/modelark/image-generation-api>
+- Image generation tutorial (size tables, capability table): <https://docs.byteplus.com/en/docs/modelark/image-generation-tutorial>
+- Seedream 5.0 pro / flash tutorial (layers, sketch edits): <https://docs.byteplus.com/en/docs/modelark/seedream-5-0-pro>
+- Seedream 5.0 pro / flash interactive editing guide (`<point>`, `<bbox>`): <https://docs.byteplus.com/en/docs/modelark/seedream-5-0-pro-editing-guide>
+- Pricing: <https://docs.byteplus.com/en/docs/modelark/model-pricing>
+- Error codes: <https://docs.byteplus.com/en/docs/modelark/error-codes>
+
+### Endpoint
+
+`POST /images/generations` on the same base and key. It's **synchronous**: the call blocks until the images exist and answers them inline, with no id to read them by later. So nothing resumes after a restart; a call cut off runs again (`seedream-model.ts`). Every body asks for `response_format: "b64_json"`, so there's no download host to allow (the URL form lasts 24 hours on a host the docs don't name), and `watermark: false`, which BytePlus defaults to on.
+
+### Models
+
+| Model | Id | Tiers | Inputs | Formats | Related sets | Fast | Marks and layers |
+|---|---|---|---|---|---|---|---|
+| Seedream 5.0 Pro | `dola-seedream-5-0-pro-260628` | 1K, 1.5K, 2K | 10 | PNG, JPEG | no | yes | yes, and transparent backgrounds |
+| Seedream 5.0 Flash | `dola-seedream-5-0-flash-260915` | 1K, 1.5K, 2K | 10 | PNG, JPEG | no | no | yes, and transparent backgrounds |
+| Seedream 5.0 Lite | `seedream-5-0-260128` (also `seedream-5-0-lite-260128`) | 2K, 3K, 4K | 14 | PNG, JPEG | yes | no | no |
+| Seedream 4.5 | `seedream-4-5-251128` | 2K, 4K | 14 | JPEG only | yes | no | no |
+| Seedream 4.0 | `seedream-4-0-250828` | 1K, 2K, 4K | 14 | JPEG only | yes | yes | no |
+
+- Seedance stays first in the catalog: `catalog()[0]` is what the conformance suite takes as the company's sample model.
+- Fields a model doesn't list are **never sent** (4.5 and 4.0 get no `output_format`, Pro and Flash no `sequential_image_generation` or `stream`, Flash no fast mode): whether BytePlus ignores or refuses them isn't documented. The fake (`src/testing/byteplus-images.ts`) refuses them, so the conformance suite catches a manifest that offers too much.
+- Sizes: `seedream.ts` holds each tier's exact WxH per ratio (the tutorial's tables), sent as `"WxH"`. `auto` sends the tier alone and lets the model pick the shape (the docs' Method 1). Exact sizes are checked against each model's pixel range and the 1:16 ratio limit.
+- Inputs: PNG, JPEG or WebP data URLs, under 30 MB, sides over 14 px, at most 36 million pixels, within 1:16. The edited image goes first (Image 1), then the references in order.
+- No seed (it isn't a parameter of this API). A negative prompt is folded into the prompt by Openfield.
+- **Fast** is BytePlus's fast prompt optimizer (`optimize_prompt_options.mode: "fast"`). Openfield has no speed id for it, so it rides on the Priority id, labelled "Fast" in the company's Speed setting, at the Standard price (the pricing page charges nothing for it). The docs list it on Pro and 4.0 only.
+- **Related sets** (Lite, 4.5, 4.0): by default a count of 4 is four calls of one image, so a moderated image fails on its own. Turning on Related set in Advanced (`providerOptions.relatedSet`) sends one call with `sequential_image_generation: "auto"` and `max_images` up to the count, within "inputs plus outputs at most 15". The model may make fewer: those images fail one by one with "made fewer images than you asked for", and the estimate is a range from one image to the count. A moderated image in a set comes back as `data[].error`, and only that image fails.
+- **Transparent backgrounds** (Pro, Flash): only an edit of exactly one PNG with an alpha channel, sent with `background: "transparent"` and PNG out. Anything else is refused before it's sent.
+
+### Marks (Pro, Flash)
+
+There's no mask or sketch parameter: everything goes in the image and the prompt (`marks.ts`, pure).
+
+- A point becomes `<point>x y</point>` and a box `<bbox>x1 y1 x2 y2</bbox>`, after "Image n", on the editing grid: integers 0 to 999 from the top left, `round(fraction × 1000)` held at 999 (the docs' formula can reach 1000). This is **not** the layer grid below, which runs to 1000; `@openfield/core`'s `image/grid.ts` keeps the two apart.
+- Circles, strokes and arrows have no tag. They're drawn onto a copy of the image they're on, each in its own ink (red, blue, green, ...), turned upright first, for that call only (`AssetSink.drawMarks`, sharp on the server). The prompt names each by its ink and adds "Remove every drawn mark from the result."
+- A mark's note, colour (hex, with the nearest colour word) and material go next to it in words: the API has no field for them.
+- A masked edit still works (it's a whole-image edit, then the composite puts the original back outside the mask), but with marks the composite is off by default, since marks don't say where the edit ends.
+
+### Layers (Pro, Flash)
+
+A separation (`op: "decompose"`) sends one PNG or JPEG of at least 512×512 pixels with `layer_decomposition: true` and a resolution level (`auto`, 1K, 1.5K, 2K; `auto` keeps the image's size within the model's range). It answers a base (`z_index` 0, the whole canvas) and up to 16 layers, each a **cropped** PNG with its own `bounding_box` (`absolute` pixels on the base, and `normalized` 0 to 1000), a `name` and a `description`. If any layer fails, the whole call fails ("Partial success is not supported").
+
+Every image of a separation is a library image derived from the image separated. The base is the job's own image; each layer is filed beside it in the same transaction, and `opParams.layer` records its role, `zIndex`, the canvas size, its box in pixels (from `absolute`, falling back to `normalized`), its box on the 0 to 1000 grid, its name and its description. One usage row carries the whole call. The server reads a stack back by its run id, flattens it into one image (op `overlay`, made locally, free) and exports it as a zip of PNGs with `stack.json` or as a PSD.
+
+### Cost
+
+`price.kind: "per_image"`, from the pricing page on 2026-11-09. Every image is billed at the rate for its own pixel count, and only images that came back are billed. Results are `reconciled` from `usage.generated_images` and each image's `data[].size`.
+
+| Model | Each image | Input images |
+|---|---|---|
+| Seedream 5.0 Pro | $0.045 up to 2.61 million pixels (1K, 1.5K), $0.09 above (2K). Layers: $0.0225 and $0.045 on the same line | first free, then $0.003 each |
+| Seedream 5.0 Flash | $0.018 (layers assumed the same) | free |
+| Seedream 5.0 Lite | $0.035 | free |
+| Seedream 4.5 | $0.04 | free |
+| Seedream 4.0 | $0.03 | free |
+
+A separation's estimate runs from a base and one layer to a base and 16 (17 images): at Pro 2K that's $0.09 to $0.765.
+
+### Errors
+
+The same envelope and table as Seedance. The ones to expect here: `ModelNotOpen` and `OperationDenied.ServiceNotOpen` ("Turn on {model} in BytePlus first"), `ModelAccountIpmRateLimitExceeded` (429, 500 images a minute per model; a separation reserves 17) as `rate_limited`, `QuotaExceeded` (a used-up free trial) as `quota_exceeded`, `OutputImageSensitiveContentDetected` as `content_refused`. A separation that fails on BytePlus's side says "couldn't separate this image into layers".
+
+### Unconfirmed until a live run
+
+- Whether a field a model doesn't list (`output_format` on 4.5, fast mode on Flash, `stream: false` on Pro) is an error or ignored. The adapter never sends them either way.
+- Pro and Flash's size when none is sent (the API page says 2K, the tutorial's table 1024×1024). Openfield always sends one.
+- Whether `b64_json` works for layers (the docs only show URLs there).
+- Flash's price for a separation (one flat rate, no layer row), and whether Pro's base in a separation bills at the layer rate. Both are assumed so.
+- Whether `watermark: false` reaches every layer, and whether a separation takes `<point>` as well as `<bbox>`.
+- What a `<point>` or `<bbox>` value of 1000 does (Openfield never sends one).
+- Whether a fresh account has a free quota per model (`QuotaExceeded` suggests so), and whether Pro and Flash need turning on in the console by hand.
+- `limits.typicalLatencyMs` is a placeholder. `maxConcurrent` is 4 per model, and the scheduler counts runs at once per company, so Seedance and Seedream share BytePlus's slots.
 
 ## Fixtures
 
