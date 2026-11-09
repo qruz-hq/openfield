@@ -1118,6 +1118,10 @@
     "base": "Base",
     "layer": "Layer {n}"
   },
+  "layerPills": {
+    "open": "{count, plural, one {Open its # layer} other {Open its # layers}}",
+    "layer": "Layer"
+  },
   "presets": {
     "errors": {
       "slot": "Include {slot} exactly once.",

@@ -70,6 +70,7 @@ import { useSpeedName } from "../api/hooks/provider-settings";
 import { ApiError, errorMessage } from "../api/raw";
 import type { LibraryActions } from "../assets/actions";
 import { AddToFolderPopover } from "../assets/add-to-folder";
+import { LayerPill, LayersBadge } from "../assets/layer-pills";
 import { detailTarget, useIsLastViewed, useOpenDetail } from "../detail";
 import { useDismissed, useLive } from "../lib/live";
 import { notify, notifyError } from "../lib/notify";
@@ -130,6 +131,7 @@ export function AssetTile({
   const image = useAuthedImage(thumbPath(asset, rung));
   const openDetail = useOpenDetail();
   const lastViewed = useIsLastViewed(asset.id);
+  const layers = asset.layer;
   const addReference = useAddReference();
   const label = t("feed.tile.label", {
     prompt: asset.prompt.trim() ? truncate(asset.prompt, 80) : t("feed.tile.noPrompt"),
@@ -161,18 +163,22 @@ export function AssetTile({
           className="pointer-events-none absolute inset-0 inset-ring inset-ring-border-strong"
         />
       ) : null}
-      {lastViewed || rerun ? (
-        // One row at 10,10: the eye badge, then the note 8 after it (design MKHsL). The hover
-        // overlay takes this corner over, so it steps aside while that's up.
-        <span
-          aria-hidden
-          className={cn(
-            "pointer-events-none absolute top-10 left-10 flex max-w-[calc(100%-20px)] items-center gap-8",
-            idle,
-          )}
-        >
-          {lastViewed ? <LastViewedBadge /> : null}
-          {rerun ? <RerunNote /> : null}
+      {layers || lastViewed || rerun ? (
+        // One row at 10,10: the layers badge, the eye badge, then the note, 8 apart (design MKHsL,
+        // rU5l6oEks5). The hover overlay takes this corner over, so the eye and the note step aside
+        // while it's up. The layers badge stays, above the scrim, since it's a way in on its own.
+        <span className="pointer-events-none absolute top-10 left-10 z-1 flex max-w-[calc(100%-20px)] items-center gap-8">
+          {layers?.role === "base" && layers.count ? (
+            <LayersBadge count={layers.count} onOpen={() => openDetail(asset.id, "layers")} />
+          ) : layers?.role === "layer" ? (
+            <LayerPill />
+          ) : null}
+          {lastViewed || rerun ? (
+            <span aria-hidden className={cn("flex min-w-0 items-center gap-8", idle)}>
+              {lastViewed ? <LastViewedBadge /> : null}
+              {rerun ? <RerunNote /> : null}
+            </span>
+          ) : null}
         </span>
       ) : null}
       {/* Feed / Tile / Favorite badge (design nPfg4): at rest only, the hover actions say it once hovered. */}
