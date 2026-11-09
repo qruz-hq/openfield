@@ -115,8 +115,9 @@ export interface AssetSink {
    */
   read(assetId: string): Promise<StoredAsset>;
   /**
-   * Optional: a stored image with shapes drawn on it, as a PNG, for a model that reads marks off
-   * the image itself (Seedream's sketch edits). Nothing is saved; the drawing exists for the call.
+   * Optional: a stored image, turned upright, with shapes drawn on it, for a model that reads
+   * marks off the image itself (Seedream's sketch edits). Nothing is saved; the drawing exists for
+   * the call.
    */
   drawMarks?(assetId: string, drawings: readonly MarkDrawing[]): Promise<StoredAsset>;
 }

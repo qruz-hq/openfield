@@ -74,9 +74,10 @@ import {
   inputImageSizes,
   refuseMaskInputs,
   requireBaseShape,
+  requireLayerInput,
   withEditSize,
 } from "./edit-inputs";
-import { batchAction, callsFor, eachFromSet, finalReason, Outcomes } from "./outcomes";
+import { batchAction, callsFor, eachFromSet, finalReason, type ImageCost, Outcomes } from "./outcomes";
 import { type CallContexts, noWrites } from "./provider-fetch";
 import {
   batchPollDelay,
@@ -321,6 +322,7 @@ export class Runner {
     // A base or mask that can't be used is refused now, not after the job set is made.
     const base = await checkEditInputs(this.deps, asked);
     if (base) requireBaseShape(manifest, asked, base);
+    if (base && asked.op === "decompose") requireLayerInput(manifest, base);
     refuseMaskInputs(this.deps.db, asked);
     checkInputBytes(this.deps.db, manifest, asked);
     const body = withEditSize(manifest, asked, base);
@@ -1236,10 +1238,22 @@ export class Runner {
     const speedUsed = result.speedUsed ?? call.speed;
     const cost = this.outcomes.cost(manifest, call, speedUsed, result, set);
     const jobs = unit.jobIds.map((id) => getJob(db, id)).filter((j): j is JobRow => j !== undefined);
+    if (call.op === "decompose") {
+      await this.#succeedLayers(set, jobs, call, result, sink, cost, speedUsed, latencyMs);
+      return;
+    }
+    // Images the company said it couldn't make (a moderated or missing image in a related set).
+    const failures = new Map((result.failures ?? []).map((f) => [f.index, f.error]));
 
     for (const [i, job] of jobs.entries()) {
       this.#busy.delete(job.id);
-      const image = images.find((img) => img.index === job.idx) ?? images[i];
+      const failed = failures.get(job.idx);
+      if (failed) {
+        this.outcomes.fail(set, [job.id], failed, { latencyMs, speed: speedUsed });
+        continue;
+      }
+      // By position only when nothing failed, so a failure never hands its slot another image.
+      const image = images.find((img) => img.index === job.idx) ?? (failures.size ? undefined : images[i]);
       const staged = image && sink.take(image.assetId);
       if (!image || !staged) {
         this.outcomes.fail(
@@ -1279,6 +1293,62 @@ export class Runner {
     // Anything the adapter wrote that no job claimed.
     sink.discardAll();
     recordKeyCheck(db, set.providerId, { ok: true });
+    this.outcomes.finishSet(set.id);
+  }
+
+  /**
+   * A layer separation: one job, whose image is the base, with every layer filed beside it in the
+   * same transaction and one usage row for the whole call. Nothing to composite: a separation
+   * changes nothing.
+   */
+  async #succeedLayers(
+    set: JobSetRow,
+    jobs: readonly JobRow[],
+    call: NormalizedRequest,
+    result: JobResult,
+    sink: AttemptSink,
+    cost: ImageCost,
+    speedUsed: SpeedId,
+    latencyMs: number,
+  ): Promise<void> {
+    const [job] = jobs;
+    const images = result.images.filter((i) => !i.partial);
+    const base = images.find((i) => i.layer?.role === "base") ?? images[0];
+    const staged = base && sink.take(base.assetId);
+    if (job) this.#busy.delete(job.id);
+    if (job && base && staged) {
+      const layers = images
+        .filter((i) => i !== base)
+        .flatMap((image) => {
+          const file = sink.take(image.assetId);
+          return file ? [{ image, staged: file, costUsd: cost.costUsd }] : [];
+        });
+      const whole = this.outcomes.fake
+        ? 0
+        : (result.cost?.amount ?? (cost.costUsd === null ? null : cost.costUsd * (layers.length + 1)));
+      this.outcomes.succeed({
+        set,
+        job,
+        call,
+        image: base,
+        staged,
+        cost,
+        speedUsed,
+        latencyMs,
+        usage: result.usage,
+        layers,
+        usageCostUsd: whole,
+      });
+    } else if (job) {
+      this.outcomes.fail(
+        set,
+        [job.id],
+        new ProviderError("provider_error", { message: "The separation came back without a base image" }),
+        { latencyMs, speed: speedUsed },
+      );
+    }
+    sink.discardAll();
+    recordKeyCheck(this.deps.db, set.providerId, { ok: true });
     this.outcomes.finishSet(set.id);
   }
 

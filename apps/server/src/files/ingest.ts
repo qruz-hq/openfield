@@ -6,11 +6,13 @@ import { type Db, findLiveAssetBySha256, getAsset } from "@openfield/db";
 import {
   type AssetSink,
   looksLikeVideo,
+  type MarkDrawing,
   ProviderError,
   type StoredAsset,
   type WrittenAsset,
 } from "@openfield/providers/server";
 import { absolutePath, type HomePaths } from "../config/home";
+import { drawMarks } from "./marks";
 import {
   EXTENSION,
   type Probed,
@@ -273,6 +275,10 @@ export class AttemptSink implements AssetSink {
 
   read(assetId: string): Promise<StoredAsset> {
     return this.ingest.read(assetId);
+  }
+
+  async drawMarks(assetId: string, drawings: readonly MarkDrawing[]): Promise<StoredAsset> {
+    return drawMarks(await this.ingest.read(assetId), drawings);
   }
 
   /** Hands a staged file to the caller, who now owns committing or discarding it. */
