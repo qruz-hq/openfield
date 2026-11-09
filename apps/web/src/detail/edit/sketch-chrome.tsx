@@ -40,12 +40,40 @@ import { CHIP_PX, isLightColor, MARK_PRESETS, normalHex, type SketchTool } from 
 export function ModeSwitch() {
   const mode = useEditSession((s) => s.mode);
   return (
-    <Segmented
-      aria-label={t("edit.mode.label")}
+    <ModeSegmented
       value={mode}
-      onValueChange={(next) => useEditSession.getState().setMode(next as EditMode)}
-      onMouseDown={keepFocus}
+      onChange={(next) => useEditSession.getState().setMode(next)}
       className="w-236 shrink-0"
+    />
+  );
+}
+
+/**
+ * The same switch on any value: the edit window's toolbar holds the session's, a canvas Edit node's
+ * settings hold the node's (design RIMVE6Wb5c, full width).
+ */
+export function ModeSegmented({
+  value,
+  onChange,
+  disabled,
+  className,
+  ...props
+}: {
+  value: EditMode;
+  onChange: (mode: EditMode) => void;
+  disabled?: boolean;
+  className?: string;
+  "aria-labelledby"?: string;
+}) {
+  return (
+    <Segmented
+      aria-label={props["aria-labelledby"] ? undefined : t("edit.mode.label")}
+      aria-labelledby={props["aria-labelledby"]}
+      value={value}
+      onValueChange={(next) => onChange(next as EditMode)}
+      onMouseDown={keepFocus}
+      disabled={disabled}
+      className={className}
     >
       <SegmentedItem value="paint">{t("edit.mode.paint")}</SegmentedItem>
       <SegmentedItem value="sketch">{t("edit.mode.sketch")}</SegmentedItem>

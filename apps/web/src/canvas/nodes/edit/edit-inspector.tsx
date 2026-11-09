@@ -7,15 +7,25 @@ import { assetThumbUrl, t } from "@openfield/core";
 import { type ComposerValues, type EditBase, editOpFor } from "@openfield/providers/manifest";
 import { Button, cn, Divider } from "@openfield/ui";
 import { Brush, Pencil } from "lucide-react";
+import { useId } from "react";
 import { useNavigate } from "react-router";
 import { useStore } from "zustand";
 import { KeepRest } from "../../../detail/edit/keep-rest";
 import { MarksListView } from "../../../detail/edit/marks-list";
 import { MaskThumb } from "../../../detail/edit/mask-thumb";
 import { ModelField } from "../../../detail/edit/model-field";
+import type { EditMode } from "../../../detail/edit/session";
 import { SizeFields } from "../../../detail/edit/size-fields";
+import { ModeSegmented } from "../../../detail/edit/sketch-chrome";
 import { useCanvasEngineContext, useNodeAnalysis } from "../../engine/engine-store";
-import { useCanvas, useCanvasActions, useLocked, useNodeFrame, useReadOnly } from "../../store/context";
+import {
+  useCanvas,
+  useCanvasActions,
+  useCanvasStoreApi,
+  useLocked,
+  useNodeFrame,
+  useReadOnly,
+} from "../../store/context";
 import { cardMedia } from "../generate/card-media";
 import { useModelSwitch } from "../generate/controls";
 import { nodeRegistry } from "../registry";
@@ -32,10 +42,11 @@ import { openOnMark } from "./mask-window";
 // mask was painted on another image, or there are no words: the card above it says why. A mask on
 // the Mask input stands in for a painted one, and is changed where it comes from.
 //
-// In Sketch & point (design ILw0tWC0ex) the Marks card takes the Mask card's place, the marks are
-// listed under the model without the lines sent with the prompt, there's no aspect ratio, and Keep
-// the rest is off by default with just its switch. A model that can't read marks goes back to
-// painting, as the Edit tab does.
+// On a model that reads marks, the switch between Paint area and Sketch & point comes first (design
+// RIMVE6Wb5c). In Sketch & point (design ILw0tWC0ex) the Marks card takes the Mask card's place,
+// there are no references (they aren't sent), the marks are listed under the model without the lines
+// sent with the prompt, there's no aspect ratio, and Keep the rest is off by default with just its
+// switch. A model that can't read marks goes back to painting, as the Edit tab does.
 
 /** Settings only a node that sketches has: off again in one step with the model that can't. */
 const PAINT_AGAIN = { mode: undefined, marks: undefined, sketchKeepOriginal: undefined };
@@ -85,12 +96,16 @@ export function EditInspector({ nodeId }: { nodeId: string }) {
   if (!frame) return null;
   return (
     <>
+      {model?.capabilities.marks || sketch ? (
+        <ModeField nodeId={nodeId} mode={sketch ? "sketch" : "paint"} resting={resting} />
+      ) : null}
       {sketch ? <MarksCard nodeId={nodeId} params={params} /> : <MaskCard nodeId={nodeId} params={params} />}
       <PromptCard
         nodeId={nodeId}
         value={params.prompt}
         onChange={(prompt) => setParams({ prompt }, "prompt")}
         references={!!model?.capabilities.references.supported}
+        referenceRow={!sketch}
         // Words typed before a Prompt node was linked still go after its words, until cleared.
         placeholder={t(
           analysis?.upstreamText ? "canvas.nodes.generate.promptPlaceholder" : "edit.prompt.placeholder",
@@ -165,6 +180,38 @@ export function EditInspector({ nodeId }: { nodeId: string }) {
         onRun={(anchor, bypassCache) => void run("node", { anchor, bypassCache })}
       />
     </>
+  );
+}
+
+/**
+ * Mode (design RIMVE6Wb5c): how to show the change, column gap 8 pad 4 2, the label then the Image
+ * edit / Mode switch at full width. Sketch & point drops a mask wired into the Mask input, which it
+ * hides, in the same undo step, as saving marks in the window does. Painting again lets the marks go.
+ */
+function ModeField({ nodeId, mode, resting }: { nodeId: string; mode: EditMode; resting: boolean }) {
+  const store = useCanvasStoreApi();
+  const actions = useCanvasActions();
+  const label = useId();
+  const pick = (next: EditMode) => {
+    if (next === mode) return;
+    const { doc } = store.getState();
+    actions.apply(
+      next === "sketch"
+        ? [
+            { op: "setParams", id: nodeId, patch: { mode: "sketch", sketchKeepOriginal: false } },
+            ...incomingEdges(doc, nodeId, "mask").map((edge) => ({ op: "deleteEdge" as const, id: edge.id })),
+          ]
+        : [{ op: "setParams", id: nodeId, patch: PAINT_AGAIN }],
+      { label: "mode" },
+    );
+  };
+  return (
+    <div className="flex w-full flex-col gap-8 px-2 py-4">
+      <span id={label} className={LABEL}>
+        {t("edit.mode.label")}
+      </span>
+      <ModeSegmented value={mode} onChange={pick} disabled={resting} aria-labelledby={label} />
+    </div>
   );
 }
 

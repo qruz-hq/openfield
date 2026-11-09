@@ -134,7 +134,7 @@ export interface PortRailsProps {
   nodeId: string;
   ports: readonly PortSpec[];
   connectable: boolean;
-  /** Per input port id, why it's greyed. */
+  /** Per input port id, why it's greyed (a port's own `unused` comes first). */
   off?: Readonly<Record<string, string | null>>;
   collapsed?: boolean;
 }
@@ -148,7 +148,8 @@ export function PortRails({ nodeId, ports, connectable, off, collapsed = false }
         nodeId={nodeId}
         port={port}
         offset={collapsed ? 0 : offset}
-        off={off?.[port.id] ?? null}
+        // A port the node doesn't read in its current settings says so before anything else.
+        off={(port.unused ? t(port.unused) : null) ?? off?.[port.id] ?? null}
         stacked={collapsed && i > 0}
         collapsed={collapsed}
         connectable={connectable}
