@@ -115,7 +115,8 @@ export function EditInspector({ nodeId }: { nodeId: string }) {
             switchModel(model, next, params, sketch && !next.capabilities.marks ? PAINT_AGAIN : {});
         }}
       />
-      {sketch ? (
+      {/* With none, the Marks card above already says so. */}
+      {sketch && marks.length > 0 ? (
         <MarksListView
           marks={marks}
           selected={null}
