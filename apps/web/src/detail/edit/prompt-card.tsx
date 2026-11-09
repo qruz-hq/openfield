@@ -9,7 +9,16 @@ import { addReferencesTo, useEditSession } from "./session";
 // With none yet the row is just the + (Image edit / Prompt card / Empty). The references are the
 // edit's own, never the composer's.
 
-export function PromptCard({ model, resting }: { model: ModelListItem | undefined; resting: boolean }) {
+export function PromptCard({
+  model,
+  resting,
+  sketch = false,
+}: {
+  model: ModelListItem | undefined;
+  resting: boolean;
+  /** Sketch & point: the placeholder says a mark can be named by its number. */
+  sketch?: boolean;
+}) {
   const prompt = useEditSession((s) => s.prompt);
   const store = useEditSession(
     useShallow((s) => ({
@@ -29,13 +38,13 @@ export function PromptCard({ model, resting }: { model: ModelListItem | undefine
   const text = useRef<HTMLTextAreaElement>(null);
 
   // Grows with what's written, as the design's text does; the panel scrolls past that.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: measure again whenever the text changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: measure again whenever the text or the placeholder changes.
   useLayoutEffect(() => {
     const el = text.current;
     if (!el) return;
     el.style.height = "auto";
     el.style.height = `${el.scrollHeight}px`;
-  }, [prompt]);
+  }, [prompt, sketch]);
 
   return (
     <div
@@ -45,18 +54,21 @@ export function PromptCard({ model, resting }: { model: ModelListItem | undefine
         resting && "opacity-45",
       )}
     >
-      <ReferenceRow
-        store={store}
-        model={model}
-        pending={uploads.pending}
-        onUpload={(files) => void uploads.upload(files)}
-      />
+      {sketch ? null : (
+        <ReferenceRow
+          store={store}
+          model={model}
+          pending={uploads.pending}
+          onUpload={(files) => void uploads.upload(files)}
+        />
+      )}
       <textarea
         ref={text}
-        rows={1}
+        // Sketch & point's placeholder runs to two lines.
+        rows={sketch ? 2 : 1}
         value={prompt}
         aria-label={t("edit.prompt.label")}
-        placeholder={t("edit.prompt.placeholder")}
+        placeholder={t(sketch ? "edit.prompt.sketchPlaceholder" : "edit.prompt.placeholder")}
         onChange={(event) => useEditSession.getState().setPrompt(event.target.value)}
         className="block w-full resize-none overflow-hidden bg-transparent text-small leading-[1.5] text-text-primary outline-none placeholder:text-text-tertiary"
       />

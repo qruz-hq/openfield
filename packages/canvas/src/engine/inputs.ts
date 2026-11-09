@@ -103,15 +103,23 @@ export interface EditModels {
    * outside the mask afterwards, unless the person turns that off.
    */
   whole: ModelListItem[];
+  /**
+   * "Sketch and point": the models in `whole` that also read marks (capabilities.marks), which a
+   * picker lists as a group of their own between the two.
+   */
+  sketch: ModelListItem[];
 }
 
 /** Image models that can edit, those that take a mask first. Models that can't edit aren't listed. */
 export function modelsForEdit(models: readonly ModelListItem[]): EditModels {
-  const out: EditModels = { masked: [], whole: [] };
+  const out: EditModels = { masked: [], whole: [], sketch: [] };
   for (const m of models) {
     if (modalityOf(m) !== "image") continue;
     if (m.capabilities.ops.inpaint) out.masked.push(m);
-    else if (m.capabilities.ops.imageEdit) out.whole.push(m);
+    else if (m.capabilities.ops.imageEdit) {
+      out.whole.push(m);
+      if (m.capabilities.marks) out.sketch.push(m);
+    }
   }
   return out;
 }

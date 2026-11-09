@@ -1,4 +1,5 @@
-import type { MaskTool } from "./session";
+import type { EditMode, EditTool, MaskTool } from "./session";
+import type { SketchTool } from "./sketch";
 
 // The Edit tab's keys (§4.5, §4.6). On this tab its tool letters win over the detail view's own:
 // D picks the brush rather than downloading, so Download moves to ⇧⌘S. The view's other letters
@@ -6,7 +7,7 @@ import type { MaskTool } from "./session";
 // image being edited. Zoom (+, -, 0) works on both tabs.
 
 export type EditKey =
-  | { kind: "tool"; tool: MaskTool }
+  | { kind: "tool"; tool: EditTool }
   | { kind: "undo" }
   | { kind: "redo" }
   | { kind: "download" }
@@ -21,13 +22,23 @@ const TOOL_KEYS: Record<string, MaskTool> = {
   h: "pan",
 };
 
+// Sketch & point keeps the letters it shares with painting: D draws, M boxes, H pans.
+const SKETCH_KEYS: Record<string, SketchTool> = {
+  d: "brush",
+  o: "circle",
+  m: "box",
+  a: "arrow",
+  p: "point",
+  h: "pan",
+};
+
 /** The view's keys that the Edit tab silences besides letters: Delete, and stepping to another image. */
 const BLOCKED = new Set(["Delete", "Backspace", "ArrowLeft", "ArrowRight"]);
 
 type KeyInput = Pick<KeyboardEvent, "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">;
 
 /** What a key does on the Edit tab, or null when the view's own handling stands (zoom, Tab, Esc). */
-export function editKey(event: KeyInput): EditKey | null {
+export function editKey(event: KeyInput, mode: EditMode = "paint"): EditKey | null {
   const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
   if (event.altKey) return null;
   if (event.metaKey || event.ctrlKey) {
@@ -35,7 +46,7 @@ export function editKey(event: KeyInput): EditKey | null {
     if (key === "s" && event.shiftKey) return { kind: "download" };
     return null;
   }
-  const tool = event.shiftKey ? undefined : TOOL_KEYS[key];
+  const tool = event.shiftKey ? undefined : (mode === "sketch" ? SKETCH_KEYS : TOOL_KEYS)[key];
   if (tool) return { kind: "tool", tool };
   // Any other letter, shifted or not: ⇧D mustn't download any more than D does.
   if (/^[a-z]$/.test(key) || BLOCKED.has(key)) return { kind: "blocked" };
@@ -49,4 +60,13 @@ export const toolShortcut: Record<MaskTool, string> = {
   eraser: "E",
   lasso: "A",
   rect: "M",
+};
+
+export const sketchShortcut: Record<SketchTool, string> = {
+  pan: "H",
+  brush: "D",
+  circle: "O",
+  box: "M",
+  arrow: "A",
+  point: "P",
 };

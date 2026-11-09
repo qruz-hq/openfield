@@ -28,6 +28,17 @@ export type LibraryPage = Page<FeedItem> & {
   total?: number;
 };
 
+/**
+ * A layer from a layer split (opParams.layer.role "layer"). Browsing leaves them out, so one split
+ * shows as its base rather than as up to 17 images; search, folders, favourites and the Trash keep
+ * them, and the base's stack lists them all.
+ */
+const isLayer = sql`coalesce(json_extract(${assets.opParams}, '$.layer.role'), '') = 'layer'`;
+const notLayer = sql`coalesce(json_extract(${assets.opParams}, '$.layer.role'), '') != 'layer'`;
+
+/** Browsing everything (All images, the feed), where a split shows as its base alone. */
+const browsing = (q: LibraryFilter) => !q.trash && !q.text?.trim() && !q.folderId && !q.favouritesOnly;
+
 const itemFields = {
   asset: assets,
   isFavourite:
@@ -63,6 +74,7 @@ function scope(q: LibraryFilter): SQL[] | null {
       ? sql`${assets.id} IN (SELECT asset_id FROM asset_folders WHERE folder_id = ${q.folderId})`
       : undefined,
     q.favouritesOnly ? sql`${assets.id} IN (SELECT asset_id FROM favourites)` : undefined,
+    browsing(q) ? notLayer : undefined,
   ];
   if (q.text?.trim()) {
     const match = toFtsQuery(q.text);
@@ -199,7 +211,8 @@ export interface LibraryCounts {
 export function libraryCounts(db: Executor, modality: Modality | "all" = "all"): LibraryCounts {
   const row = db
     .select({
-      all: sql<number>`coalesce(sum(${assets.deletedAt} IS NULL), 0)`,
+      // All images leaves layers out, as its listing does.
+      all: sql<number>`coalesce(sum(${assets.deletedAt} IS NULL AND ${notLayer}), 0)`,
       favourites: sql<number>`coalesce(sum(${assets.deletedAt} IS NULL AND ${assets.id} IN (SELECT asset_id FROM favourites)), 0)`,
       trash: sql<number>`coalesce(sum(${assets.deletedAt} IS NOT NULL), 0)`,
     })
@@ -209,6 +222,36 @@ export function libraryCounts(db: Executor, modality: Modality | "all" = "all"):
   return { all: row?.all ?? 0, favourites: row?.favourites ?? 0, trash: row?.trash ?? 0 };
 }
 
+/**
+ * How many live layers each split's base has, by the run that made it (a base and its layers share
+ * one job set). One grouped query for any number of rows; rows that aren't a base are skipped.
+ */
+export function layerCounts(
+  db: Executor,
+  rows: readonly Pick<AssetRow, "jobSetId" | "opParams">[],
+): Map<string, number> {
+  const runs = [
+    ...new Set(
+      rows.flatMap((r) =>
+        r.jobSetId && (r.opParams?.layer as { role?: unknown } | undefined)?.role === "base"
+          ? [r.jobSetId]
+          : [],
+      ),
+    ),
+  ];
+  const out = new Map<string, number>(runs.map((id) => [id, 0]));
+  for (const part of chunked(runs)) {
+    const counted = db
+      .select({ jobSetId: assets.jobSetId, n: sql<number>`count(*)` })
+      .from(assets)
+      .where(and(inArray(assets.jobSetId, part), isNull(assets.deletedAt), isLayer))
+      .groupBy(assets.jobSetId)
+      .all();
+    for (const { jobSetId, n } of counted) if (jobSetId) out.set(jobSetId, n);
+  }
+  return out;
+}
+
 export interface LibraryFacets {
   models: { providerId: string; modelId: string; count: number }[];
   providers: { providerId: string; count: number }[];
@@ -216,7 +259,8 @@ export interface LibraryFacets {
 
 /** The models and companies that made a live image, for the Model and Company filters (§2.8). */
 export function libraryFacets(db: Executor, modality: Modality | "all" = "all"): LibraryFacets {
-  const live = and(isNull(assets.deletedAt), ne(assets.kind, "mask"), modalityIs(modality));
+  // Counted as All images lists them, without a split's layers.
+  const live = and(isNull(assets.deletedAt), ne(assets.kind, "mask"), modalityIs(modality), notLayer);
   const models = db
     .select({ providerId: assets.providerId, modelId: assets.modelId, count: sql<number>`count(*)` })
     .from(assets)

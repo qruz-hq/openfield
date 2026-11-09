@@ -40,6 +40,8 @@ export interface ModelFieldProps {
   base: EditBase | null;
   /** Keep the rest of the image is on, which the whole-image note says. */
   composite: boolean;
+  /** Sketch & point is open: marks say where, so a whole-image model needs no note. */
+  sketch?: boolean;
   resting: boolean;
   /** A model was picked. One whose company has no key is the caller's to send to Settings. */
   onPick: (model: ModelListItem) => void;
@@ -52,12 +54,14 @@ export function ModelField({
   selected,
   base,
   composite,
+  sketch = false,
   resting,
   onPick,
   labelClassName,
 }: ModelFieldProps) {
   // A model without a mask input runs over the whole image (§0.9), so the field says what happens.
-  const whole = selected && !selected.capabilities.ops.inpaint;
+  // One that reads marks says Sketch & point is the precise way (design yf6ZmcvOWm).
+  const whole = selected && !sketch && !selected.capabilities.ops.inpaint;
   return (
     // Image edit / Model field: the field, then the note, 6 apart.
     <div inert={resting} className={cn("flex w-full shrink-0 flex-col gap-6", resting && "opacity-45")}>
@@ -68,9 +72,14 @@ export function ModelField({
         <div className="flex w-full items-center gap-6 px-2">
           <Info size={12} aria-hidden className="shrink-0 text-text-tertiary" />
           <p className="min-w-0 flex-1 text-caption text-text-tertiary">
-            {t(composite ? "edit.model.wholeKept" : "edit.model.wholeNotKept", {
-              model: selected.displayName,
-            })}
+            {t(
+              composite
+                ? selected.capabilities.marks
+                  ? "edit.model.wholeKeptSketch"
+                  : "edit.model.wholeKept"
+                : "edit.model.wholeNotKept",
+              { model: selected.displayName },
+            )}
           </p>
         </div>
       ) : null}
@@ -98,10 +107,12 @@ function ModelPicker({
     [model.displayName, companyName(providers, model.providerId), model.description ?? ""].some((text) =>
       text.toLowerCase().includes(needle),
     );
-  const { masked, whole } = modelsForEdit(models);
+  // Models that read marks get their own group, between the masked ones and the rest.
+  const { masked, sketch, whole } = modelsForEdit(models);
   const groups = [
     { label: t("edit.model.masked"), models: masked.filter(matches) },
-    { label: t("edit.model.whole"), models: whole.filter(matches) },
+    { label: t("edit.model.sketch"), models: sketch.filter(matches) },
+    { label: t("edit.model.whole"), models: whole.filter((m) => !sketch.includes(m) && matches(m)) },
   ].filter((group) => group.models.length > 0);
 
   const pick = (model: ModelListItem) => {

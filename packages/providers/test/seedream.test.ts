@@ -369,6 +369,25 @@ describe("prices", () => {
     expect(auto.basis).toContain("16");
   });
 
+  test("an Auto separation is priced at the image's own size once it's known", () => {
+    // 1152 × 1536 is 1.77 million pixels, under Pro's 2.61 million line: $0.0225 an image.
+    const small = estimate(manifest(PRO), {
+      op: "decompose",
+      batch: 1,
+      layers: { size: "auto" },
+      base: { assetId: "01J0000000000000000000BASE", role: "base" },
+      inputImageSizes: [{ width: 1152, height: 1536 }],
+    });
+    expect([small.min, small.max]).toEqual([0.045, 0.3825]);
+    const large = estimate(manifest(PRO), {
+      op: "decompose",
+      batch: 1,
+      layers: { size: "auto" },
+      inputImageSizes: [{ width: 2048, height: 2048 }],
+    });
+    expect([large.min, large.max]).toEqual([0.09, 0.765]);
+  });
+
   test("Fast costs the same as Standard", async () => {
     const req = await call(PRO, { resolution: "2K" });
     expect(estimate(manifest(PRO), { ...req, speed: "priority" }).max).toBe(estimate(manifest(PRO), req).max);

@@ -18,10 +18,12 @@ import {
   Square,
 } from "lucide-react";
 import { aspectChoices, qualityChoices, resolutionChoices } from "../../lib/control-choices";
+import { ImagesChip, type RelatedSet } from "./images-chip";
 import { DisabledChip, OptionChip } from "./option-chip";
 
 // One setting chip in the composer's toolbar (§3.3): aspect, resolution, quality, the batch
-// stepper, or Seed's reason when the model has none. It holds no state: the caller passes the
+// stepper (the Images chip for a model that makes related sets), or Seed's reason when the model
+// has none. It holds no state: the caller passes the
 // resolved values and takes changes back, so the Edit view can show the same chips over its own
 // settings.
 
@@ -39,6 +41,7 @@ export function ControlChip({
   speed,
   onValues,
   onBatch,
+  relatedSet,
 }: {
   control: ControlResolution & { id: string };
   caps: Capabilities;
@@ -48,6 +51,8 @@ export function ControlChip({
   speed: SpeedId;
   onValues: (values: ComposerValues) => void;
   onBatch: (batch: number) => void;
+  /** The related set switch, for a model with one. Left out, the count is a plain stepper. */
+  relatedSet?: RelatedSet;
 }) {
   const unsupported = control.state === "unsupported";
   switch (control.id) {
@@ -102,13 +107,24 @@ export function ControlChip({
       );
     }
     case "batch": {
+      const max = control.max ?? caps.batch.max;
+      if (relatedSet && caps.batch.groupOption) {
+        return (
+          <ImagesChip
+            value={resolved.batch}
+            max={Math.min(max, relatedSet.max ?? max)}
+            onValueChange={onBatch}
+            relatedSet={relatedSet}
+          />
+        );
+      }
       const emulated = control.state === "emulated";
       const stepper = (
         <StepperChip
           emulated={emulated}
           value={resolved.batch}
           min={1}
-          max={control.max ?? caps.batch.max}
+          max={max}
           onValueChange={onBatch}
           label={t("composer.chips.batch.label")}
           decrementLabel={t("composer.chips.batch.fewer")}

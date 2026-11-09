@@ -74,6 +74,31 @@ export const banana: ModelListItem = {
   enabled: true,
 };
 
+/** A Seedream-like model: redraws the whole image, reads marks, and makes related sets. */
+export const sketcher: ModelListItem = {
+  ...banana,
+  key: "byteplus:sketcher",
+  providerId: "byteplus",
+  modelId: "sketcher",
+  displayName: "Sketcher",
+  capabilities: {
+    ...base,
+    batch: { max: 4, native: false, groupOption: "relatedSet" },
+    extraSchema: {
+      type: "object",
+      properties: { relatedSet: { type: "boolean", title: "Related set", default: false } },
+    },
+    marks: { kinds: ["point", "box", "circle", "stroke", "arrow"], max: 20 },
+  },
+  price: {
+    kind: "per_image",
+    currency: "USD",
+    pricedAt: "2026-11-09",
+    sourceUrl: "https://example.com/prices",
+    tiers: [{ usd: 0.035 }],
+  },
+};
+
 export const flare: ModelListItem = {
   ...banana,
   key: "openai:flare",

@@ -263,7 +263,12 @@ describe("the edit session", () => {
     );
     session().setPrompt("pale berries");
     session().setReferences(["ref-1"]);
-    session().setKept({ maskVersion: session().maskVersion, prompt: "pale berries", references: ["ref-1"] });
+    session().setKept({
+      maskVersion: session().maskVersion,
+      marksVersion: session().marksVersion,
+      prompt: "pale berries",
+      references: ["ref-1"],
+    });
     expect(editHasWork()).toBe(false);
     leaveEdit(() => left++);
     expect(left).toBe(1);

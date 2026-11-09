@@ -95,7 +95,7 @@
       "step3": "Copy it and paste it in Settings under API keys."
     },
     "byteplus": {
-      "for": "For Seedance video models",
+      "for": "For Seedream images and Seedance videos",
       "go": "Go to BytePlus",
       "step1": "Sign in to BytePlus and open ModelArk.",
       "step2": "Create a new API key.",
@@ -330,7 +330,12 @@
         "label": "Images",
         "fewer": "Fewer images",
         "more": "More images",
-        "emulated": "Each image is made and billed separately."
+        "emulated": "Each image is made and billed separately.",
+        "upTo": "Up to {count}",
+        "relatedSet": "Related set",
+        "relatedSetNeedsTwo": "A set needs 2 or more images.",
+        "relatedSetNoRoom": "Send in fewer images to make a set.",
+        "relatedSetHint": "Images that belong together, like frames of a storyboard. You get up to {count, plural, one {# image} other {# images}} in one go and pay only for the ones that come back."
       },
       "enhance": {
         "label": "Enhance",
@@ -410,7 +415,8 @@
     "videoAnyShape": "{seconds}s at {resolution}, in the shape the model picks",
     "videoTokens": "{tokens} tokens at {rate} per million",
     "layers": "A base and 1 to {max} layers, {each} each",
-    "groupSet": "Up to {count} × {each}, only for the images it makes"
+    "groupSet": "Up to {count} × {each}, only for the images it makes",
+    "upTo": "Up to {cost}"
   },
   "settings": {
     "title": "Settings",
@@ -432,7 +438,7 @@
       "title": "API keys",
       "intro": "Add a key to start making images. Your keys stay on this computer.",
       "tagline": "Makes and edits images",
-      "taglineVideo": "Makes videos",
+      "taglineImagesVideo": "Makes images and videos",
       "byteplusNote": "Seedance 2.0 and 2.5 need turning on in the BytePlus console first (add a balance over $30, or a resource pack).",
       "status": {
         "connected": "Connected",
@@ -926,6 +932,7 @@
     "saved": "Saved",
     "perImage": "per image",
     "modelsOnly": "{models} only",
+    "alwaysStandard": "{models} always use {speed}.",
     "batchNote": "Batch runs keep going at {company} even if you close Openfield, and Openfield lets you know when they're ready. {company} stops any batch that isn't done in {days, plural, one {# day} other {# days}}.",
     "onlyWhen": "Only used when {field} is {values}.",
     "notWhen": "Not used when {field} is {values}.",
@@ -1116,7 +1123,80 @@
   },
   "layers": {
     "base": "Base",
-    "layer": "Layer {n}"
+    "layer": "Layer {n}",
+    "baseDescription": "Everything behind the layers",
+    "intro": {
+      "title": "Split into layers",
+      "body": "Each part of the image becomes its own layer you can hide, reorder, edit or download."
+    },
+    "what": {
+      "label": "What to separate",
+      "hint": "Optional. Leave it empty to find every main part.",
+      "placeholder": "The vases, the berries, the cloth"
+    },
+    "model": "Model",
+    "size": {
+      "label": "Size",
+      "auto": "Auto",
+      "autoNote": "Auto keeps the original size, {width} × {height}.",
+      "tierNote": "The layers come out at {size}, in the image's shape."
+    },
+    "price": {
+      "base": "Base image",
+      "each": "Each layer",
+      "upTo": "Up to {count} layers",
+      "atMost": "{cost} at most",
+      "note": "You pay for the layers you get. If it doesn't work, you aren't charged."
+    },
+    "separate": "Separate layers",
+    "tryAgain": "Try again",
+    "separating": {
+      "title": "Separating layers",
+      "note": "Usually under a minute. You can keep working, the layers save to your library when they're ready."
+    },
+    "failed": "Couldn't split this image into layers. You weren't charged.",
+    "tooSmall": "Layers need an image at least {width} × {height}.",
+    "wrongType": "Layers work with PNG and JPEG images.",
+    "done": {
+      "title": "{count, plural, one {# layer and a base} other {# layers and a base}}",
+      "cost": "{model} · {cost}"
+    },
+    "list": "Layers, top first",
+    "row": {
+      "show": "Show {name}",
+      "hide": "Hide {name}",
+      "drag": "Move {name}. Drag, or press Alt and an arrow key.",
+      "locked": "The base stays at the bottom"
+    },
+    "actions": {
+      "edit": "Edit this layer",
+      "reference": "Use as reference",
+      "download": "Download"
+    },
+    "hint": "Drag to reorder. Hidden layers stay out of downloads and Flatten.",
+    "saved": "Each layer is saved to your library, linked to this image.",
+    "pngs": "PNGs (ZIP)",
+    "psd": "PSD",
+    "flatten": "Flatten into a new image",
+    "flattened": "Saved as a new image.",
+    "selected": "Selected layer",
+    "from": {
+      "label": "Layers from",
+      "position": "Layer {index} of {count} · {name}",
+      "open": "Open",
+      "openAll": "Open all layers",
+      "size": "{width} × {height} · {format}"
+    },
+    "section": {
+      "label": "Layers",
+      "count": "{count} and a base",
+      "open": "Open in Layers",
+      "openLayer": "Open {name}"
+    }
+  },
+  "layerPills": {
+    "open": "{count, plural, one {Open its # layer} other {Open its # layers}}",
+    "layer": "Layer"
   },
   "presets": {
     "errors": {
@@ -2077,7 +2157,8 @@
       "labelVideo": "Video details",
       "tabs": {
         "info": "Info",
-        "edit": "Edit"
+        "edit": "Edit",
+        "layers": "Layers"
       },
       "previous": "Previous image",
       "previousVideo": "Previous video",
@@ -2183,6 +2264,56 @@
       "undo": "Undo",
       "redo": "Redo"
     },
+    "mode": {
+      "label": "How to show the change",
+      "paint": "Paint area",
+      "sketch": "Sketch & point"
+    },
+    "sketch": {
+      "tools": {
+        "label": "Sketch tools",
+        "pan": "Pan",
+        "brush": "Sketch",
+        "circle": "Circle",
+        "box": "Box",
+        "arrow": "Arrow",
+        "point": "Point",
+        "color": "Mark color",
+        "clear": "Clear all marks"
+      },
+      "hints": {
+        "brush": "Sketch what you want added. Your lines show the model where and what shape.",
+        "circle": "Circle what to change.",
+        "box": "Drag a box around what to change, then say what to do in the prompt.",
+        "arrow": "Drag from a thing to where it should go.",
+        "point": "Click on the thing to change. The model finds its edges.",
+        "full": "{model} reads up to {max} marks. Remove one to add another."
+      },
+      "kinds": {
+        "point": "Point",
+        "box": "Box",
+        "circle": "Circle",
+        "stroke": "Sketch",
+        "arrow": "Arrow"
+      },
+      "mark": "Mark {n}",
+      "markTitle": "Mark {n} · {kind}",
+      "remove": "Remove mark {n}",
+      "color": "Color",
+      "hex": "Hex color",
+      "pick": "Pick a color from the screen",
+      "preset": "Use {color}",
+      "material": "Material",
+      "optional": "Optional",
+      "materialPlaceholder": "Brushed steel",
+      "note": "Added to your prompt with this mark.",
+      "marks": "Marks",
+      "clearAll": "Clear all",
+      "sent": "Sent with your prompt",
+      "emptyTitle": "No marks yet",
+      "emptyHint": "Box, circle, point or sketch on the image to show the model where.",
+      "editMarks": "Edit the marks"
+    },
     "options": {
       "brush": "Brush options",
       "shape": "Shape options",
@@ -2218,7 +2349,8 @@
     },
     "prompt": {
       "placeholder": "Describe the change",
-      "label": "What to change"
+      "label": "What to change",
+      "sketchPlaceholder": "Describe the change. Point to a mark by its number, like mark 1."
     },
     "model": {
       "label": "Model",
@@ -2226,7 +2358,9 @@
       "whole": "Redraw the whole image",
       "wholeKept": "{model} redraws the whole image, then everything outside your mask is put back.",
       "wholeNotKept": "{model} redraws the whole image, so anything can change.",
-      "needsKey": "Needs {vowel, select, yes {an} other {a}} {company} key"
+      "needsKey": "Needs {vowel, select, yes {an} other {a}} {company} key",
+      "sketch": "Sketch and point",
+      "wholeKeptSketch": "{model} redraws the whole image, then everything outside your mask is put back. For a precise change, try Sketch & point."
     },
     "size": {
       "resolution": "Resolution",
@@ -2247,7 +2381,9 @@
       "featherNext": "Softens the edge on your next Generate.",
       "expand": "Expand",
       "expandHint": "Grows the mask a little past what you painted.",
-      "expandNext": "Grows the mask on your next Generate."
+      "expandNext": "Grows the mask on your next Generate.",
+      "sketchOff": "Off, so the change can blend in. Turn on to keep everything outside your marks exactly the same.",
+      "sketchOn": "Everything outside your marks stays exactly the same."
     },
     "saved": {
       "done": "Saved as {count, plural, one {# new image} other {# new images}}. The original stays as it is.",

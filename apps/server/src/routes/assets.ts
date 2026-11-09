@@ -30,6 +30,7 @@ import {
   getJobSet,
   isFavourite,
   type LibraryFilter,
+  layerCounts,
   libraryPage,
   referencesOf,
   rerunJobIds,
@@ -129,7 +130,8 @@ export const assetsRoutes = new Hono<Env>()
       db,
       [row, ...references, ...ancestors, ...children].map((a) => a.jobId),
     );
-    const wire = (a: AssetRow) => toAsset(a, isFavourite(db, a.id), reruns.has(a.jobId ?? ""));
+    const layers = layerCounts(db, [row, ...references, ...ancestors, ...children]);
+    const wire = (a: AssetRow) => toAsset(a, isFavourite(db, a.id), reruns.has(a.jobId ?? ""), layers);
     const jobSet = row.jobSetId ? getJobSet(db, row.jobSetId) : undefined;
     const asset = wire(row);
     const body: AssetDetailResponse = {
@@ -178,7 +180,12 @@ export const assetsRoutes = new Hono<Env>()
     if (!getAsset(db, id, { includeDeleted: true })) return notFound(c, "That image");
     library.restore([id]);
     const row = getAsset(db, id)!;
-    const asset: Asset = toAsset(row, isFavourite(db, id), rerunJobIds(db, [row.jobId]).has(row.jobId ?? ""));
+    const asset: Asset = toAsset(
+      row,
+      isFavourite(db, id),
+      rerunJobIds(db, [row.jobId]).has(row.jobId ?? ""),
+      layerCounts(db, [row]),
+    );
     return c.json(asset satisfies Asset, 200);
   })
   .put("/assets/:id/favourite", zValidator("param", idParamSchema, onInvalid), (c) => {
