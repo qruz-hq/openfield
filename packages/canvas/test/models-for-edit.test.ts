@@ -6,7 +6,8 @@ import { modelsForEdit } from "../src/engine/inputs";
 import { banana } from "./fixtures";
 
 // The Edit tab's model picker (design JYJSUrM1XY): models that take a mask under "Change only what
-// you paint", then those that redraw the whole image. A model that can't edit isn't offered.
+// you paint", then those that redraw the whole image, with the ones that read marks also listed for
+// Sketch and point. A model that can't edit isn't offered.
 
 const model = (
   id: string,
@@ -43,7 +44,16 @@ describe("modelsForEdit", () => {
 
   test("a model that can't edit, or makes video, isn't offered", () => {
     const video = model("seedance", { inpaint: false, imageEdit: true }, { modality: "video" });
-    expect(modelsForEdit([textOnly, video])).toEqual({ masked: [], whole: [] });
+    expect(modelsForEdit([textOnly, video])).toEqual({ masked: [], whole: [], sketch: [] });
+  });
+
+  test("whole-image models that read marks are also listed for Sketch and point", () => {
+    const marks: ModelListItem["capabilities"]["marks"] = { kinds: ["point", "box"], max: 20 };
+    const seedream = model("seedream", { inpaint: false, imageEdit: true });
+    const marked: ModelListItem = { ...seedream, capabilities: { ...seedream.capabilities, marks } };
+    const { whole, sketch } = modelsForEdit([pro, marked, flare]);
+    expect(keys(whole)).toEqual(["pro", "seedream"]);
+    expect(keys(sketch)).toEqual(["seedream"]);
   });
 });
 

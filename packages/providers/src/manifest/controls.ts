@@ -7,6 +7,7 @@ import {
   type CostEstimate,
   type EditBody,
   type GenerateBody,
+  type Mark,
   type MaskInput,
   type ModelListItem,
   type PixelSize,
@@ -182,6 +183,11 @@ export interface EditPlan {
   base: EditBase;
   /** A mask goes with it, so the model changes only that area where it can. */
   masked: boolean;
+  /**
+   * Sketch & point: marks on the image say where, so it runs without a painted area. A mask then
+   * only goes with it to keep the rest of the image.
+   */
+  sketch?: boolean;
 }
 
 /** What else a run sends that its company's price can depend on (Z-Image's prompt rewriting, say). */
@@ -268,6 +274,9 @@ export function estimateRun(
     prompt,
     speed,
     ...(inputImages && { inputImages }),
+    // A related set changes how many images are billed (batch.groupOption).
+    ...(extras.providerOptions &&
+      Object.keys(extras.providerOptions).length && { providerOptions: extras.providerOptions }),
     // The base goes first, and its size is known. The references after it are priced at theirs once
     // all of them are known, else as any size could be.
     ...(edit &&
@@ -296,6 +305,7 @@ export function generateBody(
   prompt: string,
   idempotencyKey: string,
   references: readonly ReferenceInput[] = [],
+  providerOptions?: Readonly<Record<string, unknown>>,
 ): GenerateBody {
   const caps = model.capabilities;
   return {
@@ -311,6 +321,9 @@ export function generateBody(
     seed: null,
     source: "composer",
     ...(references.length ? { references: [...references] } : {}),
+    ...(providerOptions && Object.keys(providerOptions).length
+      ? { providerOptions: { ...providerOptions } }
+      : {}),
   };
 }
 
@@ -319,6 +332,8 @@ export interface EditInputs {
   base: EditBase;
   mask?: MaskInput;
   references?: readonly ReferenceInput[];
+  /** Sketch & point's marks, on models that read them (capabilities.marks). */
+  marks?: readonly Mark[];
 }
 
 /**
@@ -349,6 +364,7 @@ export function editBody(
     base: { assetId: inputs.base.assetId, role: "base" },
     ...(inputs.mask ? { mask: { ...inputs.mask } } : {}),
     ...(inputs.references?.length ? { references: [...inputs.references] } : {}),
+    ...(inputs.marks?.length && caps.marks ? { marks: [...inputs.marks] } : {}),
   };
 }
 
@@ -430,7 +446,8 @@ export function editState(input: {
   };
   const asked = resolved ? estimateRun(model, resolved, prompt, speed, extras, askPrice) : undefined;
   const cost = isPricePending(asked) ? undefined : asked;
-  if (!edit.masked) return { kind: "blocked", reason: t("edit.generate.paintFirst"), estimate: cost };
+  if (!edit.masked && !edit.sketch)
+    return { kind: "blocked", reason: t("edit.generate.paintFirst"), estimate: cost };
   if (!prompt.trim()) return { kind: "blocked", reason: t("edit.generate.describeFirst"), estimate: cost };
   return { kind: "ready", estimate: cost };
 }

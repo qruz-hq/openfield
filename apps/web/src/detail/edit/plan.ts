@@ -34,7 +34,7 @@ export function pickEditModel(
 
 /**
  * A model that can edit has its company's key. A key only for companies whose models can't edit
- * (Higgsfield, BytePlus) leaves nothing to pick, so the panel says to add a key.
+ * (Higgsfield) leaves nothing to pick, so the panel says to add a key.
  */
 export function anyEditReady(models: readonly ModelListItem[]): boolean {
   const { masked, whole } = modelsForEdit(models);
