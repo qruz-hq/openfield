@@ -61,11 +61,17 @@ export interface ComposerState extends ComposerValues, ReferenceSlice {
    * persisted: an asset queued from one session may not still make sense to send after a reload.
    */
   references: string[];
+  /**
+   * Each model's own settings beyond the chips, such as a related set, by model so switching away
+   * and back keeps them.
+   */
+  providerOptions: Partial<Record<ModelKey, Record<string, unknown>>>;
   setPrompt: (prompt: string) => void;
   setBatch: (batch: number) => void;
   setValues: (values: ComposerValues) => void;
   /** Switch model with the values already carried or clamped for it. */
   switchModel: (model: ModelKey | null, values: ComposerValues, batch: number) => void;
+  setProviderOption: (model: ModelKey, field: string, value: unknown) => void;
 }
 
 export const useComposer = create<ComposerState>()(
@@ -74,25 +80,35 @@ export const useComposer = create<ComposerState>()(
       prompt: "",
       model: null,
       batch: 1,
+      providerOptions: {},
       ...referenceSlice(set),
       setPrompt: (prompt) => set({ prompt }),
       setBatch: (batch) => set({ batch }),
       setValues: (values) => set(values),
       switchModel: (model, values, batch) =>
         set({ model, aspect: values.aspect, resolution: values.resolution, quality: values.quality, batch }),
+      setProviderOption: (model, field, value) =>
+        set((state) => ({
+          providerOptions: {
+            ...state.providerOptions,
+            [model]: { ...state.providerOptions[model], [field]: value },
+          },
+        })),
     }),
     {
       name: "openfield.composer",
+      // A new field merges into what's saved, so this stays version 1 and nothing saved is lost.
       version: 1,
       // Half a second after the last change, not on every keystroke.
       storage: safeStorage({ debounceMs: 500 }),
-      partialize: ({ prompt, model, batch, aspect, resolution, quality }) => ({
+      partialize: ({ prompt, model, batch, aspect, resolution, quality, providerOptions }) => ({
         prompt,
         model,
         batch,
         aspect,
         resolution,
         quality,
+        providerOptions,
       }),
     },
   ),

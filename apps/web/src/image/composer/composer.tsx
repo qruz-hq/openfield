@@ -46,6 +46,7 @@ import { focusPrompt, registerPrompt } from "./focus";
 import { GenerateButton, type GenerateSpeed } from "./generate-button";
 import { ModelSelect } from "./model-select";
 import { ReferenceRow, referenceNote, useReferenceUploads } from "./references";
+import { relatedSetPlan, withinSet } from "./related-set";
 import { useComposer } from "./store";
 
 // Composer / Full: 1120×146, floating 16 above the bottom, and the prompt grows it upward (§3.1).
@@ -96,7 +97,8 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
   const picked = anyReady || composer.model ? model : undefined;
   // With no model yet, chips preview the first model's so the bar keeps its shape.
   const caps: Capabilities | undefined = (model ?? models[0])?.capabilities;
-  const resolved = caps
+  const set = relatedSetPlan(picked, picked && composer.providerOptions[picked.key], composer.references);
+  const values = caps
     ? resolveValues(
         caps,
         { aspect: composer.aspect, resolution: composer.resolution, quality: composer.quality },
@@ -104,6 +106,8 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
         settings?.defaultAspect,
       )
     : undefined;
+  // A related set's count leaves room for the images sent in, so the price and the run agree.
+  const resolved = values && withinSet(values, set);
   const controls = useMemo(() => {
     const all = caps ? visibleControls(caps) : [];
     return picked ? all : neutral(all);
@@ -118,6 +122,7 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
     resolved,
     speed,
     askPrice: askedPrice,
+    ...(set.providerOptions && { providerOptions: set.providerOptions }),
   });
   const generateSpeed: GenerateSpeed | undefined =
     !picked || !run
@@ -201,7 +206,7 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
     // Browsers only ask from a click, and a Batch run's finish is worth a system notification.
     if (speed === "batch") askToNotifyOnce();
     const references = referenceInputsFor(model.capabilities, composer.references);
-    const body = generateBody(model, resolved, composer.prompt, newId(), references);
+    const body = generateBody(model, resolved, composer.prompt, newId(), references, set.providerOptions);
     generate.mutate(
       { body, placeholder: expectedSize(model.capabilities, resolved), speed, modality: "image" },
       {
@@ -236,7 +241,7 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
     void uploads.upload([...event.dataTransfer.files]);
   };
 
-  const note = referenceNote(picked, composer.references.length);
+  const note = referenceNote(picked, composer.references.length) ?? set.note;
 
   const onPromptKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
@@ -317,6 +322,16 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
                       speed={speed}
                       onValues={composer.setValues}
                       onBatch={composer.setBatch}
+                      relatedSet={
+                        picked && set.option
+                          ? {
+                              on: set.on,
+                              max: set.max,
+                              onChange: (on) =>
+                                set.option && composer.setProviderOption(picked.key, set.option, on),
+                            }
+                          : undefined
+                      }
                     />
                   ))
               : null}
@@ -329,6 +344,7 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
             working={generate.isPending}
             batch={resolved?.batch ?? 1}
             speed={generateSpeed}
+            upTo={set.on}
             onGenerate={submit}
           />
         </div>

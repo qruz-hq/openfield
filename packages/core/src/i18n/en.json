@@ -330,7 +330,10 @@
         "label": "Images",
         "fewer": "Fewer images",
         "more": "More images",
-        "emulated": "Each image is made and billed separately."
+        "emulated": "Each image is made and billed separately.",
+        "upTo": "Up to {count}",
+        "relatedSet": "Related set",
+        "relatedSetHint": "Images that belong together, like frames of a storyboard. You get up to {count, plural, one {# image} other {# images}} in one go and pay only for the ones that come back."
       },
       "enhance": {
         "label": "Enhance",
@@ -410,7 +413,8 @@
     "videoAnyShape": "{seconds}s at {resolution}, in the shape the model picks",
     "videoTokens": "{tokens} tokens at {rate} per million",
     "layers": "A base and 1 to {max} layers, {each} each",
-    "groupSet": "Up to {count} × {each}, only for the images it makes"
+    "groupSet": "Up to {count} × {each}, only for the images it makes",
+    "upTo": "Up to {cost}"
   },
   "settings": {
     "title": "Settings",

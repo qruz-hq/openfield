@@ -405,12 +405,15 @@ export function generateState(input: {
   resolved: Resolved | undefined;
   speed?: SpeedId;
   askPrice?: AskPrice;
+  /** The model's own settings the run sends: a related set changes how many images are billed. */
+  providerOptions?: PriceExtras["providerOptions"];
 }): GenerateState {
-  const { model, anyReady, prompt, resolved, speed, askPrice } = input;
+  const { model, anyReady, prompt, resolved, speed, askPrice, providerOptions } = input;
   if (!model)
     return anyReady ? { kind: "blocked", reason: t("composer.generate.noModel") } : { kind: "no-key" };
   if (!model.ready) return { kind: "needs-key", model };
-  const asked = resolved ? estimateRun(model, resolved, prompt, speed, {}, askPrice) : undefined;
+  const extras: PriceExtras = providerOptions ? { providerOptions } : {};
+  const asked = resolved ? estimateRun(model, resolved, prompt, speed, extras, askPrice) : undefined;
   // A price still being asked shows as none yet, never as "Cost unknown".
   const cost = isPricePending(asked) ? undefined : asked;
   if (!prompt.trim()) return { kind: "blocked", reason: t("composer.generate.emptyPrompt"), estimate: cost };
