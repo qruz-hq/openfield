@@ -78,16 +78,75 @@ export function formatPriceRange({ min, max, currency }: PriceRange): string {
 const list = (items: string[], type: Intl.ListFormatType = "conjunction") =>
   new Intl.ListFormat(formatLocale(), { style: "long", type }).format(items);
 
+const appliesTo = (field: SettingField, manifests: readonly ModelManifest[]) =>
+  manifests.filter((m) => !field.models || field.models.includes(m.key));
+
+/**
+ * Several models of one family, named without it after the first ("Seedream 5.0 Flash, 5.0 Lite"),
+ * or without it at all when the panel already says whose they are ("5.0 Pro and 4.0").
+ */
+function familyNames(models: readonly ModelManifest[], keepFirst: boolean): string[] {
+  const names = models.map((m) => m.displayName);
+  const family = models[0]?.family;
+  const prefix = `${family} `;
+  if (
+    models.length < 2 ||
+    !family ||
+    !models.every((m) => m.family === family && m.displayName.startsWith(prefix))
+  )
+    return names;
+  return names.map((name, i) => (keepFirst && i === 0 ? name : name.slice(prefix.length)));
+}
+
 /** "Nano Banana Pro only" when only some of the company's models offer an option. */
 export function optionAvailability(
   field: SettingField,
   option: SettingOption,
   manifests: readonly ModelManifest[],
 ): string | undefined {
-  const applies = manifests.filter((m) => !field.models || field.models.includes(m.key));
+  const applies = appliesTo(field, manifests);
   const offering = modelsOffering(field, option, manifests);
   if (!offering.length || offering.length === applies.length) return undefined;
-  return t("providerSettings.modelsOnly", { models: list(offering.map((m) => m.displayName)) });
+  return t("providerSettings.modelsOnly", { models: list(familyNames(offering, false)) });
+}
+
+const sameAmounts = (a: number[], b: number[]) => [...a].sort().join() === [...b].sort().join();
+
+/**
+ * Whether picking a speed changes what any model's images cost. BytePlus's Fast doesn't, so its
+ * cards leave prices out rather than repeat Standard's.
+ */
+export function speedChangesPrice(field: SettingField, manifests: readonly ModelManifest[]): boolean {
+  if (field.kind !== "select" || !isSpeedField(field)) return false;
+  return field.options.some((option) => {
+    const speed = option.value as SpeedId;
+    if (speed === "standard") return false;
+    return modelsOffering(field, option, manifests).some(
+      (m) =>
+        !sameAmounts(amounts(priceFor(m, speed), m, speed), amounts(priceFor(m, "standard"), m, "standard")),
+    );
+  });
+}
+
+/**
+ * "Seedream 5.0 Flash, 5.0 Lite and 4.5 always use Standard.": the models a speed field is for that
+ * offer none of its other speeds, so whatever is picked they run at Standard.
+ */
+export function standardOnlyNote(
+  field: SettingField,
+  manifests: readonly ModelManifest[],
+): string | undefined {
+  if (field.kind !== "select" || !isSpeedField(field)) return undefined;
+  const others = field.options.filter((o) => o.value !== "standard");
+  if (!others.length) return undefined;
+  const offered = new Set(others.flatMap((o) => modelsOffering(field, o, manifests).map((m) => m.key)));
+  const standardOnly = appliesTo(field, manifests).filter((m) => !offered.has(m.key));
+  if (!standardOnly.length || standardOnly.length === appliesTo(field, manifests).length) return undefined;
+  const standard = field.options.find((o) => o.value === "standard")?.label ?? t("speed.names.standard");
+  return t("providerSettings.alwaysStandard", {
+    models: list(familyNames(standardOnly, true)),
+    speed: standard,
+  });
 }
 
 /** "Nano Banana Pro only" for a field that applies to some of the company's models. */

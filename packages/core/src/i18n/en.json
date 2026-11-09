@@ -95,7 +95,7 @@
       "step3": "Copy it and paste it in Settings under API keys."
     },
     "byteplus": {
-      "for": "For Seedance video models",
+      "for": "For Seedream images and Seedance videos",
       "go": "Go to BytePlus",
       "step1": "Sign in to BytePlus and open ModelArk.",
       "step2": "Create a new API key.",
@@ -436,7 +436,7 @@
       "title": "API keys",
       "intro": "Add a key to start making images. Your keys stay on this computer.",
       "tagline": "Makes and edits images",
-      "taglineVideo": "Makes videos",
+      "taglineImagesVideo": "Makes images and videos",
       "byteplusNote": "Seedance 2.0 and 2.5 need turning on in the BytePlus console first (add a balance over $30, or a resource pack).",
       "status": {
         "connected": "Connected",
@@ -930,6 +930,7 @@
     "saved": "Saved",
     "perImage": "per image",
     "modelsOnly": "{models} only",
+    "alwaysStandard": "{models} always use {speed}.",
     "batchNote": "Batch runs keep going at {company} even if you close Openfield, and Openfield lets you know when they're ready. {company} stops any batch that isn't done in {days, plural, one {# day} other {# days}}.",
     "onlyWhen": "Only used when {field} is {values}.",
     "notWhen": "Not used when {field} is {values}.",
