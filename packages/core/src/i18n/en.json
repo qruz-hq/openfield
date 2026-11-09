@@ -1121,7 +1121,76 @@
   },
   "layers": {
     "base": "Base",
-    "layer": "Layer {n}"
+    "layer": "Layer {n}",
+    "baseDescription": "Everything behind the layers",
+    "intro": {
+      "title": "Split into layers",
+      "body": "Each part of the image becomes its own layer you can hide, reorder, edit or download."
+    },
+    "what": {
+      "label": "What to separate",
+      "hint": "Optional. Leave it empty to find every main part.",
+      "placeholder": "The vases, the berries, the cloth"
+    },
+    "model": "Model",
+    "size": {
+      "label": "Size",
+      "auto": "Auto",
+      "autoNote": "Auto keeps the original size, {width} × {height}.",
+      "tierNote": "The layers come out at {size}, in the image's shape."
+    },
+    "price": {
+      "base": "Base image",
+      "each": "Each layer",
+      "upTo": "Up to {count} layers",
+      "atMost": "{cost} at most",
+      "note": "You pay for the layers you get. If it doesn't work, you aren't charged."
+    },
+    "separate": "Separate layers",
+    "tryAgain": "Try again",
+    "separating": {
+      "title": "Separating layers",
+      "note": "Usually under a minute. You can keep working, the layers save to your library when they're ready."
+    },
+    "failed": "Couldn't split this image into layers. You weren't charged.",
+    "tooSmall": "Layers need an image at least {width} × {height}.",
+    "wrongType": "Layers work with PNG and JPEG images.",
+    "done": {
+      "title": "{count, plural, one {# layer and a base} other {# layers and a base}}",
+      "cost": "{model} · {cost}"
+    },
+    "list": "Layers, top first",
+    "row": {
+      "show": "Show {name}",
+      "hide": "Hide {name}",
+      "drag": "Move {name}. Drag, or press Alt and an arrow key.",
+      "locked": "The base stays at the bottom"
+    },
+    "actions": {
+      "edit": "Edit this layer",
+      "reference": "Use as reference",
+      "download": "Download"
+    },
+    "hint": "Drag to reorder. Hidden layers stay out of downloads and Flatten.",
+    "saved": "Each layer is saved to your library, linked to this image.",
+    "pngs": "PNGs (ZIP)",
+    "psd": "PSD",
+    "flatten": "Flatten into a new image",
+    "flattened": "Saved as a new image.",
+    "selected": "Selected layer",
+    "from": {
+      "label": "Layers from",
+      "position": "Layer {index} of {count} · {name}",
+      "open": "Open",
+      "openAll": "Open all layers",
+      "size": "{width} × {height} · {format}"
+    },
+    "section": {
+      "label": "Layers",
+      "count": "{count} and a base",
+      "open": "Open in Layers",
+      "openLayer": "Open {name}"
+    }
   },
   "layerPills": {
     "open": "{count, plural, one {Open its # layer} other {Open its # layers}}",
@@ -2086,7 +2155,8 @@
       "labelVideo": "Video details",
       "tabs": {
         "info": "Info",
-        "edit": "Edit"
+        "edit": "Edit",
+        "layers": "Layers"
       },
       "previous": "Previous image",
       "previousVideo": "Previous video",

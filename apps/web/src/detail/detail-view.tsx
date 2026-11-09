@@ -42,6 +42,7 @@ import {
 import { modelsQuery } from "../api/hooks/models";
 import { useSettings } from "../api/hooks/settings";
 import { ApiError, errorMessage } from "../api/raw";
+import { useAddReference } from "../image/composer/use-reference";
 import { tightCost } from "../lib/cost";
 import { notify, notifyError } from "../lib/notify";
 import { asksForPrice } from "../lib/remote-price";
@@ -72,6 +73,11 @@ import {
   thumbAt,
   titleOf,
 } from "./format";
+import { LayerMedia, StackMedia } from "./layers/layers-media";
+import { LayersPanel } from "./layers/layers-panel";
+import { LayersFromSection, LayersSection } from "./layers/sections";
+import { formatRate, layerOf } from "./layers/stack";
+import { useLayersTab } from "./layers/use-layers-tab";
 import { editedFrom, reopenedEdit } from "./lineage";
 import {
   afterLeaving,
@@ -223,6 +229,12 @@ function DetailContent({
   const nav: Nav = navFor(items, id, hasMore, lastIndex, outsideList ? (neighbours.data ?? null) : null);
   const item =
     items[listIndex] ?? seen.current.get(id) ?? (detail.data ? listItemOf(detail.data.asset) : undefined);
+  // The Layers tab, and a layer's own Info: the stack this image belongs to or was split into.
+  const layersTab = useLayersTab(
+    item ?? { id, modality: "image" },
+    detail.data?.asset.id === id ? detail.data : undefined,
+  );
+  const addReference = useAddReference();
 
   // Stepping keeps the card in view behind the overlay, so closing lands where the person is.
   useEffect(() => {
@@ -349,7 +361,7 @@ function DetailContent({
       : undefined;
   const prompt = jobSet?.promptOriginal ?? data?.asset.prompt ?? item.prompt;
   const modelName = model?.displayName ?? item.modelId ?? undefined;
-  const title = titleOf(prompt, modelName);
+  const title = (layersTab.isLayer ? layerOf(data?.asset)?.name : undefined) ?? titleOf(prompt, modelName);
   // An edited image's original, mask and references (design Detail / Section / Edited from).
   const from = data && !isVideo ? editedFrom(data, modelName) : null;
   const deletedAt = item.deletedAt ?? data?.asset.deletedAt ?? null;
@@ -359,6 +371,9 @@ function DetailContent({
   // Only an image in the library can be edited; a link to anything else on Edit shows Info.
   const editable = !isVideo && !trashed;
   const editing = editable && tab === "edit";
+  // A layer of a split shows on its canvas, gets Info and Edit only, and is titled by its name.
+  const ownLayer = data && layersTab.isLayer ? layerOf(data.asset) : null;
+  const layering = editable && layersTab.offered && tab === "layers";
   const caption =
     trashed && deletedAt
       ? inTrashCaption(deletedAt)
@@ -420,6 +435,18 @@ function DetailContent({
   };
 
   const leave = () => go(afterLeaving(nav, id));
+
+  // Another image of this stack, already known, shows at once; any other loads.
+  const openAsset = (target: string, to?: DetailTab) =>
+    leaveEdit(() => {
+      const stack = layersTab.stack;
+      const known =
+        stack?.layers.find((l) => l.asset.id === target)?.asset ??
+        (stack?.source?.id === target ? stack.source : undefined);
+      if (known) seen.current.set(target, listItemOf(known));
+      setPending(null);
+      show(target, to);
+    });
 
   const runDelete = () => {
     const ids = [id];
@@ -600,6 +627,30 @@ function DetailContent({
         <div ref={mediaBox} className="absolute inset-0">
           {isVideo ? (
             <VideoMedia key={item.id} ref={videoMedia} item={item} expanded={expanded} label={title} />
+          ) : layering ? (
+            <StackMedia
+              key={item.id}
+              ref={media}
+              item={item}
+              expanded={expanded}
+              label={title}
+              onZoomedChange={setZoomed}
+              rows={layersTab.rows}
+              canvas={layersTab.stack?.canvas ?? null}
+              hidden={layersTab.hidden}
+              selected={layersTab.selected}
+              separating={layersTab.separation?.status === "running"}
+            />
+          ) : ownLayer && !editing ? (
+            <LayerMedia
+              key={item.id}
+              ref={media}
+              item={item}
+              expanded={expanded}
+              label={title}
+              onZoomedChange={setZoomed}
+              layer={ownLayer}
+            />
           ) : (
             <ImageMedia
               key={item.id}
@@ -703,10 +754,42 @@ function DetailContent({
               }
             : undefined
         }
+        layersSection={
+          layersTab.stack && !layersTab.isLayer ? (
+            <LayersSection
+              stack={layersTab.stack}
+              onOpenLayer={(asset) => openAsset(asset.id)}
+              onOpenTab={() => setTab("layers")}
+            />
+          ) : undefined
+        }
+        layer={
+          ownLayer && layersTab.stack
+            ? {
+                from: (
+                  <LayersFromSection
+                    layerId={id}
+                    stack={layersTab.stack}
+                    models={allModels}
+                    onOpen={(asset) => openAsset(asset.id)}
+                    onOpenAll={() =>
+                      openAsset(
+                        layersTab.stack?.source?.id ?? layersTab.stack?.layers[0]?.asset.id ?? id,
+                        "layers",
+                      )
+                    }
+                  />
+                ),
+                format: (item.mime.split("/")[1] ?? "").toUpperCase(),
+                cost: data?.asset.costUsd != null ? formatRate(data.asset.costUsd) : undefined,
+                onUseAsReference: () => addReference(id),
+              }
+            : undefined
+        }
         tabs={
           editable
             ? {
-                tab: editing ? "edit" : "info",
+                tab: editing ? "edit" : layering ? "layers" : "info",
                 onTabChange: setTab,
                 edit: (
                   <EditPanel
@@ -722,6 +805,9 @@ function DetailContent({
                     }
                   />
                 ),
+                layers: layersTab.offered ? (
+                  <LayersPanel item={item} tab={layersTab} onOpen={openAsset} />
+                ) : undefined,
               }
             : undefined
         }

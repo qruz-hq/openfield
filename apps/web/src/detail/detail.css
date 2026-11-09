@@ -5,3 +5,29 @@
 [data-sonner-toast]:not([data-visible="false"]) {
   pointer-events: auto;
 }
+
+/*
+ * Layers / Separating (design xYNaPyLK2h): a band of light sweeps down the image while the model
+ * works, its leading edge a 2px line. Still under reduced motion, where it rests where the design
+ * draws it.
+ */
+@keyframes layers-scan {
+  from {
+    transform: translateY(-100%);
+  }
+  to {
+    transform: translateY(calc(100% / 0.2206));
+  }
+}
+
+.layers-scan {
+  animation: layers-scan 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .layers-scan {
+    animation: none;
+    /* 250 down a 680 tall image, as drawn. */
+    transform: translateY(166.67%);
+  }
+}
