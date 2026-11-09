@@ -11,6 +11,8 @@ import type {
   CompositeSettings,
   CostEstimate,
   ErrorCode,
+  LayerRequest,
+  Mark,
   MessageKey,
   ModelKey,
   ModelListItem,
@@ -72,6 +74,15 @@ export interface PortSpec {
   keepSlot?: boolean;
   /** Drawn with the Images icon rather than its type's own: Edit's references (design BDnK6). */
   glyph?: "images";
+  /** A name of the node's own for the port, over `label`: a Layers node's layer ("Red berries"). */
+  name?: string;
+  /** The port's centre from the node's top, for a rail that isn't spread round the middle. */
+  top?: number;
+  /**
+   * Drawn, and still linked, though it hands on nothing now: a Layers output whose layer the last
+   * run didn't make. It takes no new links.
+   */
+  gone?: boolean;
 }
 
 /** Compatibility (§7.6). "coerce" is image into mask: luminance becomes alpha, white is the edit area. */
@@ -198,6 +209,10 @@ export type NodeBlocker =
   | { kind: "area_edit_off"; model: ModelKey; name: string }
   /** An edit with no mask: none painted in the node and none connected. */
   | { kind: "no_mask" }
+  /** Sketch & point on a model that doesn't read marks. */
+  | { kind: "marks_unsupported"; model: ModelKey }
+  /** The image coming into a Layers node can't be split: too small, or several at once. */
+  | { kind: "layer_input"; problem: "small" | "several"; width?: number; height?: number }
   /**
    * The mask painted in the node was painted on another image than the one coming in now. `several`:
    * more than one comes in, and a painted mask fits one.
@@ -247,7 +262,7 @@ export interface FingerprintParams {
 /** One request template: a GenerateRequest minus what the server fills in per job set. */
 export interface RunCall {
   model: ModelKey;
-  op: "generate" | "variation" | "edit" | "inpaint";
+  op: "generate" | "variation" | "edit" | "inpaint" | "decompose";
   prompt: string;
   negativePrompt?: string;
   enhancePrompt?: boolean;
@@ -267,6 +282,10 @@ export interface RunCall {
   mask?: CompositeSettings;
   /** Caption for this call's images in the result grid, e.g. the prompt line. */
   label?: string;
+  /** A layer split's size (op "decompose"). */
+  layers?: LayerRequest;
+  /** Sketch & point: places on the image, each with what to do there. */
+  marks?: Mark[];
 }
 
 /** One image input of a plan item, bound into every request the node makes. */

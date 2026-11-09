@@ -5,6 +5,7 @@ import {
   modalityOf,
   safeParseModelKey,
 } from "@openfield/core";
+import type { CanvasOutput } from "@openfield/core/canvas";
 import type { EngineContext, NodeBlocker, PortValue, ResolvedInputs } from "./types";
 import { PROMPT_JOINER } from "./types";
 
@@ -39,6 +40,24 @@ export const imageCount = (values: readonly ImageValue[]): number =>
  */
 export const imagesNow = (values: readonly ImageValue[]): string[] =>
   values.flatMap((v) => (v.kind === "asset" ? [v.assetId] : [...(v.current ?? [])]));
+
+/** A Layers node's output port for one of its images: "base", or "layer-" and its place. */
+export const layerPortId = (layer: { role: "base" | "layer"; zIndex: number }): string =>
+  layer.role === "base" ? "base" : `layer-${layer.zIndex}`;
+
+/**
+ * The images a node hands on through one output port. A node has one image output, so all of them,
+ * except a Layers node: one image per port, the base or one layer, matched by its place in the stack.
+ */
+export function imagesOnPort(
+  made: { assetIds: readonly string[]; outputs?: readonly CanvasOutput[] } | null | undefined,
+  port: string,
+): string[] {
+  if (!made) return [];
+  const layered = made.outputs?.filter((o) => o.layer) ?? [];
+  if (!layered.length) return [...made.assetIds];
+  return layered.filter((o) => layerPortId(o.layer!) === port).map((o) => o.assetId);
+}
 
 /** The run plan's form of an image value. */
 export const planValue = (v: ImageValue) =>
@@ -90,6 +109,8 @@ export const STANDING_BLOCKERS: ReadonlySet<NodeBlocker["kind"]> = new Set([
   "end_frame_unsupported",
   "area_edit_off",
   "mask_stale",
+  "layer_input",
+  "marks_unsupported",
   "too_many_jobs",
   "loop",
 ]);
