@@ -281,10 +281,15 @@ function layersCost(
 ): CostEstimate {
   const decompose = price.decompose!;
   const size = req.layers?.size;
+  // "auto" keeps the image's own size, so once that's known it bills at that size's own rate.
+  const source = req.inputImageSizes?.[0];
   const rows = decompose.tiers.filter(
     (p) => !p.tier || size === undefined || size === "auto" || p.tier === size,
   );
-  const amounts = (rows.length ? rows : decompose.tiers).map((p) => p.usd);
+  const amounts =
+    decompose.byPixels && source && (size === undefined || size === "auto")
+      ? [pixelPriceFor(decompose.byPixels, source.width * source.height)]
+      : (rows.length ? rows : decompose.tiers).map((p) => p.usd);
   const low = Math.min(...amounts);
   const high = Math.max(...amounts);
   const each = [moneyRange(low, high, price.currency), speedLabel].filter(Boolean).join(", ");
