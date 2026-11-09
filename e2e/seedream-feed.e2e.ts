@@ -100,8 +100,12 @@ test("the feed shows a split's base with its layer count, and the badge opens it
   expect(measured.iconClass).toContain("lucide-layers");
 
   await badge.click();
-  await expect(page.getByRole("dialog", { name: "Image details" })).toBeVisible();
+  const dialog = page.getByRole("dialog", { name: "Image details" });
+  await expect(dialog).toBeVisible();
   await expect(page).toHaveURL(/[?&]tab=layers(&|$)/);
+  // The URL alone could still open on Info; the Layers tab itself must be the one showing.
+  await expect(dialog.getByRole("tab", { name: "Layers" })).toHaveAttribute("aria-selected", "true");
+  await expect(dialog.getByRole("tabpanel", { name: "Layers" })).toBeVisible();
 });
 
 test("a search lists the layers, each with the Layer pill; All images keeps only the base", async ({
