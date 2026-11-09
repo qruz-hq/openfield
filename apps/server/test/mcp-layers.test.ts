@@ -159,6 +159,14 @@ describe("set_node_marks", () => {
       marks: [{ kind: "point", at: { x: 1.4, y: 0.2 } }],
     });
     expect(off.isError).toBe(true);
+    // Sketch & point sends the image being edited alone, so a mark can't be on a reference.
+    const onReference = await call(c, "set_node_marks", {
+      canvas: canvasId,
+      id: e,
+      marks: [{ kind: "point", at: { x: 0.4, y: 0.2 }, image: 2 }],
+    });
+    expect(onReference.isError).toBe(true);
+    expect(onReference.text).toContain("Mark 1 is on image 2");
 
     await call(c, "update_node", { canvas: canvasId, id: e, params: { model: OPENAI } });
     const unable = await call(c, "set_node_marks", { canvas: canvasId, id: e, marks: [box] });

@@ -15,6 +15,8 @@ export const NODE_LIMITS = {
     batch: { min: 1, max: BATCH_MAX },
     featherPx: { min: 0, max: MASK_COMPOSITE_MAX_PX },
     expandPx: { min: 0, max: MASK_COMPOSITE_MAX_PX },
+    // Sketch & point sends no references: every mark is on the image being edited.
+    marks: { image: 1 },
   },
   "image.layers": { prompt: { maxChars: LAYERS_PROMPT_MAX } },
   "image.variations": {
