@@ -144,6 +144,8 @@ function LayersCard({ id, name, selected, display, params, rail }: LayersCardPro
       seedless
       models={[model]}
       primary
+      // Over the image and its scrim, which are placed absolutely.
+      className={ready ? "relative" : undefined}
     />
   );
 

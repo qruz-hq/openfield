@@ -55,6 +55,8 @@ export const LAYERS_INPUT: PortSpec = {
   items: "one",
   required: true,
   binding: { to: "base" },
+  // In the image's middle (design AvNxGiFbq7), however many rows are under it.
+  top: LAYERS_MEDIA_HEIGHT / 2,
 };
 
 const output = (id: string, label: PortSpec["label"]): PortSpec => ({
