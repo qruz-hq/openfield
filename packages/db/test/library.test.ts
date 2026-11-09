@@ -6,6 +6,7 @@ import {
   addFolder,
   assetNeighbours,
   countLibrary,
+  createJobSet,
   deleteFolder,
   deleteFolderTree,
   emptyTrash,
@@ -18,6 +19,7 @@ import {
   insertAsset,
   insertCanvas,
   type LibraryFilter,
+  layerCounts,
   libraryCounts,
   libraryFacets,
   libraryPage,
@@ -29,6 +31,7 @@ import {
   purgeAssets,
   removeAssetsFromFolder,
   restoreAssets,
+  seedProviders,
   setCanvasFolder,
   setFavourites,
   softDeleteAssets,
@@ -571,5 +574,97 @@ describe("views, search and filters", () => {
         { providerId: "openai", count: 2 },
       ],
     });
+  });
+});
+
+describe("layer splits", () => {
+  /** A split made at `at`: its base and `layers` layers, all filed under one run. */
+  function split(prefix: string, layers: number, at = 1) {
+    seedProviders(db(), [
+      {
+        id: "byteplus",
+        displayName: "BytePlus",
+        adapter: "byteplus",
+        authKind: "api_key",
+        concurrencyCap: 4,
+      },
+    ]);
+    const run = createJobSet(db(), {
+      jobSet: {
+        id: newId(),
+        idempotencyKey: null,
+        op: "decompose",
+        providerId: "byteplus",
+        modelId: "seedream",
+        requestJson: {} as never,
+        speed: "standard",
+      },
+      jobs: [{ id: newId(), idx: 0 }],
+    });
+    const file = (id: string, role: "base" | "layer", zIndex: number) =>
+      insertAsset(db(), {
+        id,
+        kind: "generated",
+        path: `assets/${id}.png`,
+        mime: "image/png",
+        width: 1,
+        height: 1,
+        bytes: 10,
+        sha256: id.toLowerCase().padEnd(64, "0").slice(0, 64),
+        providerId: "byteplus",
+        modelId: "seedream",
+        prompt: "white vases",
+        createdAt: minute(at),
+        jobSetId: run.jobSet.id,
+        jobId: run.jobs[0]!.id,
+        opParams: { layer: { role, zIndex, canvas: { width: 1, height: 1 } } },
+      });
+    file(`${prefix}0`, "base", 0);
+    for (let i = 1; i <= layers; i++) file(`${prefix}${i}`, "layer", i);
+    return run.jobSet.id;
+  }
+
+  test("browsing shows a split as its base; search, folders, favourites and the Trash show its layers", () => {
+    image("P0", { at: 0, prompt: "white vases" });
+    split("S", 3);
+    image("P9", { at: 2 });
+    const acme = folder("Acme");
+    addAssetsToFolder(db(), acme.id, ["S0", "S2"]);
+    setFavourites(db(), ["S3"], true);
+
+    expect(allPages({}, 2)).toMatchObject({ ids: ["P9", "S0", "P0"], total: 3 });
+    expect(countLibrary(db(), {})).toBe(3);
+    expect(libraryCounts(db()).all).toBe(3);
+    expect(libraryFacets(db()).models).toContainEqual({
+      providerId: "byteplus",
+      modelId: "seedream",
+      count: 1,
+    });
+
+    expect(ids(libraryPage(db(), { text: "vases" }))).toEqual(["S3", "S2", "S1", "S0", "P0"]);
+    expect(ids(libraryPage(db(), { folderId: acme.id }))).toEqual(["S2", "S0"]);
+    expect(ids(libraryPage(db(), { favouritesOnly: true }))).toEqual(["S3"]);
+    softDeleteAssets(db(), ["S1"]);
+    expect(ids(libraryPage(db(), { trash: true }))).toEqual(["S1"]);
+  });
+
+  test("stepping in All images passes over layers", () => {
+    image("P0", { at: 0 });
+    split("S", 2);
+    image("P9", { at: 2 });
+    const n = assetNeighbours(db(), {}, "S0");
+    expect([n?.previous?.id, n?.next?.id]).toEqual(["P9", "P0"]);
+  });
+
+  test("a base counts its live layers, in one query for any number of rows", () => {
+    const one = split("A", 3, 1);
+    const two = split("B", 1, 2);
+    softDeleteAssets(db(), ["A2"]);
+    const rows = libraryPage(db(), {}).items;
+    const counts = layerCounts(db(), rows);
+    expect(counts.get(one)).toBe(2);
+    expect(counts.get(two)).toBe(1);
+    // Only bases are counted for.
+    expect(layerCounts(db(), libraryPage(db(), { text: "vases" }).items).size).toBe(2);
   });
 });

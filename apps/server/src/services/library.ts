@@ -12,6 +12,7 @@ import {
   getAsset,
   getAssets,
   isFavourite,
+  layerCounts,
   type PurgeResult,
   purgeAssets,
   removeAssetsFromFolder,
@@ -75,7 +76,8 @@ export function toListItems(db: Db, rows: readonly FeedItem[]): AssetListItem[] 
     db,
     rows.map((r) => r.jobId),
   );
-  return rows.map((r) => toAssetListItem(r, r.isFavourite, reruns.has(r.jobId ?? "")));
+  const layers = layerCounts(db, rows);
+  return rows.map((r) => toAssetListItem(r, r.isFavourite, reruns.has(r.jobId ?? ""), layers));
 }
 
 const MAX_ANCESTORS = 100;
@@ -260,9 +262,10 @@ export class LibraryService {
         db,
         rows.map((r) => r.jobId),
       );
+      const layers = layerCounts(db, rows);
       for (const row of rows) {
         events.publish("asset.updated", {
-          asset: toAssetListItem(row, isFavourite(db, row.id), reruns.has(row.jobId ?? "")),
+          asset: toAssetListItem(row, isFavourite(db, row.id), reruns.has(row.jobId ?? ""), layers),
         });
       }
     }
