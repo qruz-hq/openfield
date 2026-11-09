@@ -89,7 +89,7 @@ const response = (exchange: RecordedExchange) =>
   });
 
 describe("the BytePlus catalog", () => {
-  test("seven Seedance models, every one a video model that parses strictly", () => {
+  test("seven Seedance video models, then five Seedream image models, all parsing strictly", () => {
     expect(BYTEPLUS_MODELS.map((m) => m.displayName)).toEqual([
       "Seedance 2.5",
       "Seedance 2.0",
@@ -98,13 +98,18 @@ describe("the BytePlus catalog", () => {
       "Seedance 1.5 Pro",
       "Seedance 1.0 Pro",
       "Seedance 1.0 Pro Fast",
+      "Seedream 5.0 Pro",
+      "Seedream 5.0 Flash",
+      "Seedream 5.0 Lite",
+      "Seedream 4.5",
+      "Seedream 4.0",
     ]);
     for (const m of BYTEPLUS_MODELS) {
       expect(modelManifestSchema.safeParse(m).error?.issues ?? []).toEqual([]);
-      expect(m.modality).toBe("video");
-      expect(m.capabilities.batch.max).toBe(1);
+      expect(m.modality).toBe(m.family === "Seedream" ? "image" : "video");
+      if (m.modality === "video") expect(m.capabilities.batch.max).toBe(1);
       expect(m.description!.length).toBeLessThanOrEqual(90);
-      expect(m.description).not.toContain("—");
+      expect(m.description).not.toContain("\u2014");
     }
   });
 

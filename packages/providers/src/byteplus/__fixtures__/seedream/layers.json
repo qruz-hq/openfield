@@ -1,0 +1,66 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/images/generations"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "model": "dola-seedream-5-0-pro-260628",
+      "created": 1784696685,
+      "data": [
+        {
+          "b64_json": "<png>",
+          "size": "2048x2048",
+          "output_format": "png",
+          "z_index": 0
+        },
+        {
+          "b64_json": "<png-alpha>",
+          "size": "1273x265",
+          "output_format": "png",
+          "z_index": 1,
+          "bounding_box": {
+            "absolute": [383, 120, 1655, 384],
+            "normalized": [187, 59, 808, 188]
+          },
+          "name": "Seedream title text",
+          "description": "Large yellow Seedream title text in a serif font"
+        },
+        {
+          "b64_json": "<png-alpha>",
+          "size": "900x1305",
+          "output_format": "png",
+          "z_index": 2,
+          "bounding_box": {
+            "absolute": [450, 710, 1350, 2015],
+            "normalized": [220, 347, 659, 984]
+          },
+          "name": "Ceramic vase",
+          "description": "A tall matte white ceramic vase with a narrow neck"
+        },
+        {
+          "b64_json": "<png-alpha>",
+          "size": "1141x1162",
+          "output_format": "png",
+          "z_index": 3,
+          "bounding_box": {
+            "absolute": [451, 885, 1591, 2048],
+            "normalized": [220, 432, 777, 1000]
+          },
+          "name": "Dried flowers",
+          "description": "A bunch of dried pampas grass and eucalyptus stems"
+        }
+      ],
+      "usage": {
+        "input_images": 1,
+        "generated_images": 4,
+        "output_tokens": 34012,
+        "total_tokens": 34012
+      }
+    }
+  }
+}

@@ -605,7 +605,7 @@ describe.each(kits.map((kit) => [kit.provider.meta.id, kit] as const))("%s", (_i
       }
       expect(golden).toMatchSnapshot(`${manifest.key} speeds`);
 
-      if (offers(manifest, "priority")) {
+      if (offers(manifest, "priority") && kit.fake.reportsServedSpeed) {
         const h = harness(kit, { scenario: "priority_standard" });
         const { handles, model } = await generate(kit, manifest, request(manifest), h, { speed: "priority" });
         expect((await finish(model, handles[0]!, h)).result?.speedUsed).toBe("standard");

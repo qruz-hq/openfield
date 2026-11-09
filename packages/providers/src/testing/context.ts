@@ -1,7 +1,15 @@
 import { type CredentialValues, newId, type SettingValue, type SpeedId, sha256Hex } from "@openfield/core";
 import { probeMp4 } from "../mp4";
 import { redact } from "../redact";
-import type { AssetSink, CallContext, FetchLike, RedactingLogger, StoredAsset, WrittenAsset } from "../types";
+import type {
+  AssetSink,
+  CallContext,
+  FetchLike,
+  MarkDrawing,
+  RedactingLogger,
+  StoredAsset,
+  WrittenAsset,
+} from "../types";
 import { probeImage } from "./png";
 
 // A CallContext for tests: an in-memory asset store, a logger that records redacted lines, and
@@ -101,6 +109,15 @@ export class MemoryAssetSink implements AssetSink {
       sha256,
       ...(video && { durationMs: video.durationMs, hasAudio: video.hasAudio }),
     };
+  }
+
+  /** Marks an adapter asked to have drawn, in order. */
+  readonly drawn: { assetId: string; drawings: readonly MarkDrawing[] }[] = [];
+
+  // The server draws with sharp; here the drawing is only recorded and the image comes back as is.
+  async drawMarks(assetId: string, drawings: readonly MarkDrawing[]): Promise<StoredAsset> {
+    this.drawn.push({ assetId, drawings });
+    return this.read(assetId);
   }
 
   async read(assetId: string): Promise<StoredAsset> {

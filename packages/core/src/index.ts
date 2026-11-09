@@ -5,6 +5,7 @@ export * from "./i18n";
 export * from "./ids";
 export * from "./image/grid";
 export * from "./image/mask";
+export * from "./image/png";
 export * from "./library";
 export * from "./schemas";
 export * from "./video";

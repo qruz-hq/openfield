@@ -14,6 +14,7 @@ import refused from "../byteplus/__fixtures__/refused.json";
 import serverError from "../byteplus/__fixtures__/server-error.json";
 import tasks from "../byteplus/__fixtures__/tasks.json";
 import { childBoxes } from "../mp4";
+import { handleImages, IMAGES_PATH } from "./byteplus-images";
 import { hashString } from "./png";
 import {
   type FakeEnv,
@@ -25,7 +26,8 @@ import {
   taggedScenario,
 } from "./types";
 
-// A stand-in for BytePlus ModelArk's video task API and its storage host. It checks every create
+// A stand-in for BytePlus ModelArk's video task API and its storage host (Seedream's images
+// endpoint is in byteplus-images.ts). It checks every create
 // against the Create task reference, written out below rather than read from our manifests, so a
 // manifest that offers something a model doesn't take fails the conformance suite. It's stricter
 // than the real API: an unknown field is refused, so a typo can't slip through.
@@ -188,6 +190,7 @@ export const byteplusFake: FakeRoute = {
     const key = /^Bearer (.+)$/.exec(request.headers.get("authorization") ?? "")?.[1];
     // Any key works, except one containing "invalid", like the other fakes.
     const forced = env.scenario ?? (!key || key.includes("invalid") ? "bad_key" : undefined);
+    if (url.pathname === IMAGES_PATH) return handleImages(request, env, forced);
     const failure = forced && !(forced in LATER) ? fixtures[forced] : undefined;
 
     if (url.pathname === TASKS && request.method === "GET") {
