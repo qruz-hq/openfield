@@ -57,6 +57,8 @@ const DEFAULT_SIZES: Record<string, { w: number; h: number }> = {
   "image.generate": { w: 320, h: 400 },
   "image.edit": { w: 320, h: 320 },
   "image.variations": { w: 320, h: 360 },
+  // Its image, then the one hint row before a run (layers/spec.ts).
+  "image.layers": { w: 320, h: 288 },
   note: { w: 240, h: 240 },
   frame: { w: 640, h: 420 },
   shape: { w: 210, h: 126 },
@@ -66,7 +68,7 @@ const COLLAPSED_HEIGHT = 56;
 
 // Visible ports in rail order (canvas plan §1); null is a slot kept empty for a port still to
 // come (Generate's style input). Types this build doesn't define (Style) take their ports from the
-// edges that touch them.
+// edges that touch them, and so do a Layers node's outputs, one per layer its last run made.
 const PORTS: Record<string, { in: readonly (string | null)[]; out: readonly (string | null)[] }> = {
   prompt: { in: ["text"], out: ["text"] },
   "image.upload": { in: [], out: ["images"] },
@@ -188,6 +190,21 @@ function parts(p: Placed): SketchShape[] {
         { kind: "rect", x: w - 64, y: h - 43, w: 52, h: 20, r: 10, fill: "accent" },
       ];
     }
+    case "image.layers": {
+      // The image, 240 tall, then a bar per 40 tall row below it.
+      const image = 240;
+      const rows = Math.max(1, Math.floor((h - image) / 40));
+      const shapes: SketchShape[] = [
+        { kind: "rect", x: 0, y: 0, w, h: image, r: [r, r, 0, 0], fill: "surface" },
+        { kind: "mark", cx: w / 2, cy: image / 2, size: 56 },
+      ];
+      for (let i = 0; i < rows; i++) {
+        const y = image + 4 + i * 40;
+        shapes.push({ kind: "rect", x: 12, y: y + 6, w: 28, h: 28, r: 6, fill: "elevated-2" });
+        shapes.push(bar(50, y + 15, 0.4 * w));
+      }
+      return shapes;
+    }
     case "image.variations": {
       const cell = (w - 4) / 2;
       return [
@@ -289,9 +306,19 @@ function place(nodes: readonly SketchNode[], edges: readonly SketchEdge[]): Plac
   }
   return nodes.map((node) => {
     const known = PORTS[node.type];
+    const seen = inferred.get(node.id) ?? { in: [], out: [] };
     const ports = known
-      ? { in: [...known.in], out: [...known.out] }
-      : (inferred.get(node.id) ?? { in: [], out: [] });
+      ? {
+          // Sketch & point hides an Edit node's Mask input and keeps its slot.
+          in:
+            node.type === "image.edit" && node.params.mode === "sketch"
+              ? known.in.map((port) => (port === "mask" ? null : port))
+              : [...known.in],
+          out: [...known.out],
+        }
+      : node.type === "image.layers"
+        ? { in: ["image"], out: seen.out }
+        : seen;
     return { node, ...absolute(node), ...nodeBox(node), ports };
   });
 }
