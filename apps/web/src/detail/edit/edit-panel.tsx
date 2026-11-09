@@ -99,7 +99,8 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   const plan: EditPlan = { base, masked: sends, ...(sketch && { sketch }) };
   const run = model ? runSpeedFor(model, editOpFor(model.capabilities, sends)) : undefined;
   const speed = run?.speed ?? "standard";
-  const refs = model ? referenceInputsFor(model.capabilities, references) : [];
+  // Sketch & point's prompt has no references (design 42o8VYRkhr): its marks are on this image.
+  const refs = model && !sketch ? referenceInputsFor(model.capabilities, references) : [];
   // The references' sizes from their details, so their price is the one the run records.
   const referenceSizes = useQueries({
     queries: refs.map((ref) => assetDetailQuery(ref.assetId)),
@@ -268,6 +269,8 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
             resolved={resolved}
             base={base}
             masked={sends}
+            note={!sketch}
+            aspect={!sketch}
             composite={composite}
             speed={speed}
             resting={busy}

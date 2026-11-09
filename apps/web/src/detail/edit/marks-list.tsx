@@ -59,6 +59,7 @@ export function MarksList({ resting }: { resting: boolean }) {
             // biome-ignore lint/suspicious/noArrayIndexKey: a mark is its number.
             key={i}
             type="button"
+            data-mark-row
             aria-pressed={i === selected}
             onClick={() => selectMark(i === selected ? null : i)}
             className={cn(

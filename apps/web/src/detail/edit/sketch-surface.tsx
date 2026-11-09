@@ -145,7 +145,9 @@ export function useSketchSurface({ panning }: SketchOptions): SketchSurface {
     if (mark) session.addMark(mark);
   };
 
-  const layer = <div ref={anchor} aria-hidden className="pointer-events-none absolute inset-0" />;
+  const layer = (
+    <div ref={anchor} aria-hidden data-sketch-anchor className="pointer-events-none absolute inset-0" />
+  );
 
   const input = (
     // Pointer only; the tools' keys are the view's (keys.ts).

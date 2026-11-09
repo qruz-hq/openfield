@@ -148,7 +148,13 @@ function ColorButton() {
           </button>
         </PopoverTrigger>
       </Tooltip>
-      <PopoverContent side="top" align="center" sideOffset={12} className={popoverClass}>
+      <PopoverContent
+        side="top"
+        align="center"
+        sideOffset={12}
+        onCloseAutoFocus={focusView}
+        className={popoverClass}
+      >
         <ColorField value={color} onChange={useEditSession.getState().setMarkColor} />
       </PopoverContent>
     </Popover>
@@ -170,6 +176,18 @@ export function SketchHint({ model }: { model: string | undefined }) {
     </div>
   );
 }
+
+/**
+ * Hands focus back to the detail view as a popover closes, so the tools' keys go on working. The
+ * view's own element is the dialog the media area is in.
+ */
+const focusView = (event: Event) => {
+  event.preventDefault();
+  document
+    .querySelector("[data-sketch-input], [data-paint-input]")
+    ?.closest<HTMLElement>("[role='dialog']")
+    ?.focus({ preventScroll: true });
+};
 
 /** Image edit / Mark popover's box: 264 wide, 12 in, 12 between its parts. */
 const popoverClass = "w-264 gap-12 rounded-14 p-12";
@@ -282,6 +300,8 @@ export function MarkPopover({ index, mark }: { index: number; mark: Mark }) {
       sideOffset={14}
       collisionPadding={16}
       onOpenAutoFocus={(event) => event.preventDefault()}
+      // It has no trigger to hand focus back to: the view takes it.
+      onCloseAutoFocus={focusView}
       aria-label={t("edit.sketch.markTitle", { n, kind: kindName(mark) })}
       className={popoverClass}
     >
@@ -345,7 +365,7 @@ export function MarkChip({
       data-mark-chip={n}
       aria-hidden
       className={cn(
-        "flex size-22 shrink-0 items-center justify-center rounded-full border-2 text-[11px] leading-none font-semibold",
+        "flex size-22 shrink-0 items-center justify-center rounded-[11px] border-2 text-[11px] leading-none font-semibold",
         selected ? "border-accent" : "border-surface",
         at && "absolute",
       )}
