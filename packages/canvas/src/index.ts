@@ -26,6 +26,7 @@ export * from "./nodes/edit/spec";
 export * from "./nodes/generate/card-size";
 export * from "./nodes/generate/settings";
 export * from "./nodes/generate/spec";
+export * from "./nodes/layers/spec";
 export * from "./nodes/limits";
 export * from "./nodes/params";
 export * from "./nodes/prompt/spec";

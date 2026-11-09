@@ -173,16 +173,21 @@ async function images(
   });
 }
 
-/** A base and three layers, each cropped to its own box, with sizes a pixel off as the docs show. */
+/**
+ * A base and three layers, each cropped to its own box, with sizes a pixel off as the docs show.
+ * "#fake-layers:N" in the prompt makes only the first N (1 to 3), as a rerun that finds fewer would.
+ */
 async function layers(body: Record<string, unknown>, env: FakeEnv): Promise<Response> {
   const tier = String(body.size ?? "auto");
   const edge = tier === "auto" ? 2048 : TIER_EDGE[tier]!;
   const canvas = { width: edge, height: edge };
-  const boxes: [number, number, number, number][] = [
+  const all: [number, number, number, number][] = [
     [0.1, 0.05, 0.8, 0.2],
     [0.2, 0.35, 0.65, 0.98],
     [0.22, 0.43, 0.78, 1],
   ];
+  const asked = Number(/#fake-layers:(\d)/.exec(String(body.prompt ?? ""))?.[1] ?? all.length);
+  const boxes = all.slice(0, Math.min(all.length, Math.max(1, asked)));
   const data: Record<string, unknown>[] = [
     {
       b64_json: Buffer.from(await gradientPng(...fitted(edge, edge, env.maxEdge), env.nextSeed())).toString(

@@ -101,6 +101,8 @@ export interface NodeSpec<P extends object = Record<string, unknown>> {
   defaults(ctx: EngineContext): P;
   /** Reads saved params leniently: fills defaults, drops what it can't use, never throws. */
   parseParams(raw: Readonly<Record<string, unknown>>, ctx: EngineContext): P;
+  /** Settings the node takes that its defaults leave out (an Edit node's Sketch & point ones). */
+  optionalSettings?: readonly string[];
   runnable: boolean;
   /** Data nodes only. */
   engine?: NodeEngine<P>;

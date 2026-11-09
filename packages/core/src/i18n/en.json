@@ -1955,6 +1955,7 @@
         "promptText": "A Prompt node holds at most {max} characters. This text has {count}.",
         "generatePrompt": "A Generate prompt can be at most {max} characters. This one has {count}.",
         "editPrompt": "An Edit prompt can be at most {max} characters. This one has {count}.",
+        "layersPrompt": "What to separate can be at most {max} characters. This one has {count}.",
         "takes": "New takes makes {min} to {max} images. This asks for {count}.",
         "prompts": "Variations takes at most {max} prompts. This has {count}.",
         "promptLine": "Each Variations prompt can be at most {max} characters. Prompt {index} has {count}.",

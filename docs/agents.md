@@ -102,12 +102,17 @@ New nodes go where they fit at the size they show: an image card at its aspect r
 
 An **Edit** node changes the image on its `image` input where its mask says, and puts back the rest, like the Edit tab on an image. You paint its mask in the app; an agent gives it one with `set_node_mask`, from a file, a web address or a library image, read the same way as a mask for `generate_image` (see [Editing part of an image](#editing-part-of-an-image)). The mask is saved for the one image on the node's `image` input, so that has to be connected first. A mask fits only that image: if it changes, the node waits with "The image changed. Paint the mask again." until it gets a new mask. A node connected to the `mask` input gives its mask instead. `keepOriginal`, `expandPx` and `featherPx` are the node's own settings for putting the original back.
 
+On a model that reads marks (`marks` in `list_models`), an Edit node can work in **Sketch & point** instead: `set_node_marks` gives it points, boxes, circles, lines and arrows on the image, each with an optional colour, material and note, in fractions of the image from 0 at the top left to 1 at the bottom right. Its `mask` input is ignored while it sketches. `sketchKeepOriginal` (off by default) puts the original back outside the area the marks cover.
+
+A **Layers** node splits the image on its `image` input into a base and separate transparent layers, like the Layers tab on an image. After a run it has one output per layer, `layer-1` at the bottom up to `layer-16`, and `base`; `get_canvas` lists the ones it made with the name the model gave each. Connect one by port, as `l.layer-2`, even before the first run. If a later run makes fewer layers, a connection to one that's gone stays, but hands on nothing until a run makes that layer again, and the node it feeds waits.
+
 | Tool | Does |
 |---|---|
 | `list_canvases`, `create_canvas`, `get_canvas` | Find, make (blank or from a template) and read canvases. `get_canvas` gives each node's box (where it sits and how big it is), its frame, its settings and whether it's done, out of date or needs something. |
 | `edit_canvas` | A batch of changes: add, change, move and remove nodes, connect and disconnect, rename. |
 | `add_nodes`, `connect`, `update_node`, `move_node`, `delete_nodes` | The same changes one kind at a time. |
 | `set_node_mask` | Gives an Edit node its mask, saved for the image it edits, or takes it off. |
+| `set_node_marks` | Puts an Edit node in Sketch & point with its marks, or clears them. |
 | `run_canvas`, `get_run`, `stop_run` | Run all of a canvas, one node, a node and what follows it, or a selection; follow the run; stop it or one node. Goes through the same limits as `generate_image`. |
 | `list_versions`, `save_version`, `restore_version` | Versions. Restoring saves what's there first, and open tabs show the restore live. |
 | `rename_canvas`, `duplicate_canvas`, `delete_canvas` | Tidy up. Deleting a canvas keeps its images in the library. |

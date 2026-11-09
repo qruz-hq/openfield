@@ -3,6 +3,7 @@ import {
   applyOps,
   fromDocument,
   LIST_MAX,
+  layersSpec,
   lockProblem,
   NODE_LIMITS,
   PROMPT_MAX,
@@ -16,6 +17,7 @@ import {
   CANVAS_EDGE_KINDS,
   GENERATE_PROMPT_MAX,
   MASK_COMPOSITE_MAX_PX,
+  marksSchema,
   t,
 } from "@openfield/core";
 import { type CanvasEdit, canvasEditSchema } from "@openfield/core/canvas";
@@ -31,6 +33,7 @@ import {
   canvasUrl,
   describeCanvas,
   lastSeen,
+  marksTarget,
   maskTarget,
   reading,
   resolveCanvas,
@@ -79,6 +82,17 @@ const SETTINGS: Partial<Record<string, Record<string, string>>> = {
     quality: "A quality id the model lists in list_models.",
     batch: `How many images, 1 to ${BATCH_MAX}. Each is billed.`,
     seed: '{"mode":"random"} or {"mode":"fixed","value":42}, for models that take seeds.',
+    mode: '"sketch" for Sketch & point, on models whose list_models entry has marks: marks on the image say where to change, in place of a mask, and its mask input is ignored. Leave out (or null) to paint a mask.',
+    marks:
+      "Sketch & point: the marks, set with set_node_marks. Without marks the prompt alone says what to change.",
+    sketchKeepOriginal:
+      "Sketch & point: true puts the original back outside the area the marks cover. false (default) keeps the model's whole result, so the change can blend in.",
+  },
+  "image.layers": {
+    model:
+      'A model key from list_models that separates layers (layers: true), such as "byteplus:dola-seedream-5-0-pro-260628". Leave out for the default.',
+    prompt: "Optional: which parts to separate, in words. Empty lets the model pick the main parts.",
+    size: '"auto" (the image\'s own size), "1K", "1.5K" or "2K", as the model lists them.',
   },
   "image.variations": {
     strategy:
@@ -93,6 +107,10 @@ const SETTINGS: Partial<Record<string, Record<string, string>>> = {
   text: { text: "The text." },
   shape: { shape: '"rectangle" or "ellipse".', text: "Text inside it." },
 };
+
+/** How a Layers node's outputs work, for list_node_types. */
+const LAYERS_OUTPUTS_NOTE =
+  'One output per layer its last run made: "layer-N" is the layer at place N in the stack (a higher N sits on top) and "base" is the base. get_canvas lists the ones it has, with the name the model gave each. Connect by port, as "l.layer-2"; before a run any place can be connected. A run that makes fewer layers keeps the connection, but that port hands on nothing until a run makes that layer again, and what reads it waits.';
 
 // Edits
 
@@ -536,6 +554,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
           ...(p.required && { required: true }),
         })),
         outputs: specRegistry.ports(spec.type, "out").map((p) => ({ port: p.id, gives: p.type })),
+        ...(spec.type === layersSpec.type && { outputsNote: LAYERS_OUTPUTS_NOTE }),
         settings: SETTINGS[spec.type] ?? {},
         defaults: spec.defaults(engine),
         ...(spec.size && { size: spec.size }),
@@ -699,6 +718,47 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
         const saved = await resolveMask(ctx, mask, base);
         params = { maskAssetId: saved.id, maskFor: base.id };
       }
+      return applyEdits(ctx, canvas.id, [{ op: "update_node", id, params }], { label: () => `Node ${id}` });
+    }),
+  );
+
+  server.registerTool(
+    "set_node_marks",
+    {
+      title: "Give an Edit node its marks",
+      description:
+        "Puts an Edit node in Sketch & point and sets its marks, as marking the image in Openfield does: points, boxes, circles, freehand lines and arrows on the image it edits, each with an optional colour, material and note, numbered from 1 in this order. Only for models whose list_models entry has marks. " +
+        "Coordinates are fractions of the image: x and y from 0 at the top left to 1 at the bottom right. Its mask input is ignored while it sketches. null clears the marks and keeps Sketch & point.",
+      inputSchema: {
+        canvas: z.string().describe(canvasField),
+        id: z.string().describe("The Edit node's id."),
+        marks: marksSchema
+          .nullable()
+          .describe(
+            'The marks, such as [{"kind":"box","from":{"x":0.1,"y":0.2},"to":{"x":0.4,"y":0.6},"material":"brushed steel"}, {"kind":"point","at":{"x":0.7,"y":0.3},"color":"#C8102E"}]. "image" says which image a mark is on: 1 (default) is the one being edited, then its references in order.',
+          ),
+        keepRest: z
+          .boolean()
+          .optional()
+          .describe(
+            "true puts the original back outside the area the marks cover. false (the default for a new Sketch & point) keeps the model's whole result, so the change can blend in.",
+          ),
+      },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    guarded(ctx, "set_node_marks", async ({ canvas: ref, id, marks, keepRest }) => {
+      const canvas = resolveCanvas(ctx, ref);
+      await marksTarget(ctx, canvas.id, id);
+      const params: Record<string, unknown> = {
+        mode: "sketch",
+        marks,
+        ...(keepRest !== undefined && { sketchKeepOriginal: keepRest }),
+      };
       return applyEdits(ctx, canvas.id, [{ op: "update_node", id, params }], { label: () => `Node ${id}` });
     }),
   );

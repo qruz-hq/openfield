@@ -357,7 +357,7 @@ export const editEngine: NodeEngine<EditParams> = {
     // Sketch & point sends its marks. Keeping the rest, the server makes the mask from them for the
     // image it edits (canvas runs.ts), so the settings go with the call and no mask comes in.
     const sketch = p.mode === "sketch";
-    const marks = sketch && p.marks?.length ? p.marks : null;
+    const marks = sketch && p.marks?.length ? p.marks.map(cornerFirst) : null;
     const settled = sketch
       ? marks && p.sketchKeepOriginal
         ? { composite: true, expandPx: p.expandPx, featherPx: p.featherPx }
@@ -439,6 +439,17 @@ export const editEngine: NodeEngine<EditParams> = {
   },
 };
 
+/** A box or circle top left corner first, as POST /api/edit takes it (the Edit tab's marksForApi). */
+function cornerFirst(mark: Mark): Mark {
+  if (mark.kind !== "box" && mark.kind !== "circle") return mark;
+  const { from, to } = mark;
+  return {
+    ...mark,
+    from: { x: Math.min(from.x, to.x), y: Math.min(from.y, to.y) },
+    to: { x: Math.max(from.x, to.x), y: Math.max(from.y, to.y) },
+  };
+}
+
 /** Saved marks, read leniently: a list that doesn't fit the mark rules counts as none. */
 function readMarks(value: unknown): Mark[] {
   const parsed = marksSchema.safeParse(value);
@@ -465,6 +476,7 @@ export const editSpec: NodeSpec<EditParams> = {
   annotation: false,
   ports: EDIT_PORTS,
   portsOf: (node) => (sketchMode(node.params) ? SKETCH_PORTS : EDIT_PORTS),
+  optionalSettings: ["mode", "marks", "sketchKeepOriginal"],
   defaults: (ctx) => ({
     ...(ctx.defaultEditModel && { model: ctx.defaultEditModel }),
     prompt: "",

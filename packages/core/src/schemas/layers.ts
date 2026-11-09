@@ -14,6 +14,9 @@ export const layerSizeSchema = z.enum(LAYER_SIZES);
 /** The most layers one separation makes, besides its base (Seedream: 16). */
 export const LAYERS_MAX = 16;
 
+/** The most a separation's words (which parts to separate) can say. */
+export const LAYERS_PROMPT_MAX = 4000;
+
 /** request.layers, on a decompose run. */
 export const layerRequestSchema = z.object({ size: layerSizeSchema.optional() });
 
@@ -61,7 +64,7 @@ export const layersBodySchema = z.object({
   image: ulidSchema,
   size: layerSizeSchema.optional(),
   /** Optional: which parts to separate, in words. Without one the model picks the main elements. */
-  prompt: z.string().max(4000).optional(),
+  prompt: z.string().max(LAYERS_PROMPT_MAX).optional(),
   source: jobSourceSchema.default("detail_editor"),
   canvas: z.object({ canvasId: ulidSchema, nodeId: z.string().min(1).max(64) }).optional(),
 });

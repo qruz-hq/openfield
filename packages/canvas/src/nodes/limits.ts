@@ -1,4 +1,4 @@
-import { BATCH_MAX, GENERATE_PROMPT_MAX, MASK_COMPOSITE_MAX_PX, t } from "@openfield/core";
+import { BATCH_MAX, GENERATE_PROMPT_MAX, LAYERS_PROMPT_MAX, MASK_COMPOSITE_MAX_PX, t } from "@openfield/core";
 import { PROMPT_MAX } from "./prompt/spec";
 import { LIST_MAX, TAKES_MAX, TAKES_MIN } from "./variations/spec";
 
@@ -16,6 +16,7 @@ export const NODE_LIMITS = {
     featherPx: { min: 0, max: MASK_COMPOSITE_MAX_PX },
     expandPx: { min: 0, max: MASK_COMPOSITE_MAX_PX },
   },
+  "image.layers": { prompt: { maxChars: LAYERS_PROMPT_MAX } },
   "image.variations": {
     count: { min: TAKES_MIN, max: TAKES_MAX },
     prompts: { maxItems: LIST_MAX, maxChars: PROMPT_MAX },
@@ -43,6 +44,12 @@ export function limitProblem(type: string, params: Readonly<Record<string, unkno
       const count = chars(params.prompt);
       return count > GENERATE_PROMPT_MAX
         ? t("canvas.edits.limits.editPrompt", { max: GENERATE_PROMPT_MAX, count })
+        : null;
+    }
+    case "image.layers": {
+      const count = chars(params.prompt);
+      return count > LAYERS_PROMPT_MAX
+        ? t("canvas.edits.limits.layersPrompt", { max: LAYERS_PROMPT_MAX, count })
         : null;
     }
     case "image.variations": {
