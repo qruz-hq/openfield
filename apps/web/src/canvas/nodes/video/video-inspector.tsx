@@ -201,10 +201,12 @@ function SpeedNote({ model }: { model: ModelListItem | undefined }) {
   const navigate = useNavigate();
   const run = model && ctx.runSpeed?.(model);
   if (!model || !run || run.speed === "standard") return null;
-  const note =
-    run.speed in SPEED_NOTES
-      ? t(SPEED_NOTES[run.speed as keyof typeof SPEED_NOTES])
-      : t("canvas.nodes.inspector.speedNote.other", { speed: run.name });
+  // The stock notes describe Openfield's speeds; a company's own (BytePlus's Fast on the Priority
+  // id, same price) only gets its name.
+  const stock = run.speed in SPEED_NOTES && run.name === t(`speed.names.${run.speed}`);
+  const note = stock
+    ? t(SPEED_NOTES[run.speed as keyof typeof SPEED_NOTES])
+    : t("canvas.nodes.inspector.speedNote.other", { speed: run.name });
   return (
     <div className="flex w-full items-center gap-6 px-2">
       <Timer size={12} aria-hidden className="shrink-0 text-text-tertiary" />

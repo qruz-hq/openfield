@@ -100,6 +100,7 @@ export {
   resolveSpeed,
   resumesAfterRestart,
   type SpeedTimeouts,
+  speedLabel,
   speedOffer,
   speedTimeouts,
 } from "./manifest/speed";

@@ -26,6 +26,7 @@ import { texture } from "./pixels";
 
 const PRO = "byteplus:dola-seedream-5-0-pro-260628";
 const LITE = "byteplus:seedream-5-0-260128";
+const FLASH = "byteplus:dola-seedream-5-0-flash-260915";
 
 let server: TestServer | undefined;
 let agent: Awaited<ReturnType<typeof connectAgent>> | undefined;
@@ -593,6 +594,36 @@ describe("agents", () => {
     const images = made.json.images as unknown as { assetId: string }[];
     expect(images).toHaveLength(1);
     expect(images[0]?.assetId).toBe((layers[0] as unknown as { assetId: string }).assetId);
+  });
+
+  test("Fast is only ever called Fast, and costs what Standard does", async () => {
+    const { s, c } = await connected();
+    const standard = await call(c, "estimate", { model: PRO, prompt: "A lighthouse" });
+    expect(standard.json.speed).toBe("Standard");
+    const set = await s.json("/api/providers/byteplus/settings", {
+      method: "PATCH",
+      body: { values: { speed: "priority" } },
+    });
+    expect(set.status).toBe(200);
+
+    const models = (await call(c, "list_models", {})).json.models as unknown as Record<string, unknown>[];
+    expect(models.find((m) => m.key === PRO)?.speed).toBe("Fast");
+    // Flash has no Fast, so it runs at Standard.
+    expect(models.find((m) => m.key === FLASH)?.speed).toBe("Standard");
+    const fast = await call(c, "estimate", { model: PRO, prompt: "A lighthouse" });
+    expect(fast.json.speed).toBe("Fast");
+    expect(fast.json.price).toMatchObject({ usd: 0.09, basis: "1 × $0.09 (2K, Fast)" });
+    expect(standard.json.price).toMatchObject({ usd: 0.09 });
+
+    const made = await call(c, "generate_image", { model: PRO, prompt: "A lighthouse", confirmCost: 1 });
+    expect(made.json.status).toBe("succeeded");
+    expect(made.json.speed).toBe("Fast");
+    const runId = made.json.runId as unknown as string;
+    expect(getJobSet(s.services.db, runId)?.speed).toBe("priority");
+    expect(usageOf(s, runId)[0]?.cost_usd).toBe((standard.json.price as unknown as { usd: number }).usd);
+    const settings = await call(c, "get_settings", {});
+    expect(JSON.stringify(settings.json)).not.toContain("Priority");
+    expect(JSON.stringify(settings.json)).toContain("Fast");
   });
 
   test("separate_layers refuses a model that can't", async () => {

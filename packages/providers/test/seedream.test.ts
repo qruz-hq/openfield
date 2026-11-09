@@ -25,7 +25,10 @@ import { PRO_TIER_PIXELS } from "../src/byteplus/pricing";
 import { seedreamSize, seedreamSpecFor } from "../src/byteplus/seedream";
 import { toLayersBody, toSeedreamBody, wireSize } from "../src/byteplus/seedream-request";
 import { costOf, type SeedreamResponse, toSeedreamResult } from "../src/byteplus/seedream-response";
+import { BYTEPLUS_SETTINGS } from "../src/byteplus/settings";
 import { estimate } from "../src/manifest/estimate";
+import { runSpeed } from "../src/manifest/provider-settings";
+import { speedLabel } from "../src/manifest/speed";
 import { normalize } from "../src/normalize";
 import { createTestContext, MemoryAssetSink } from "../src/testing/context";
 import { createFakeFetch } from "../src/testing/fake-fetch";
@@ -369,6 +372,26 @@ describe("prices", () => {
   test("Fast costs the same as Standard", async () => {
     const req = await call(PRO, { resolution: "2K" });
     expect(estimate(manifest(PRO), { ...req, speed: "priority" }).max).toBe(estimate(manifest(PRO), req).max);
+  });
+
+  test("Fast rides on the Priority id but is only ever called Fast, at no extra cost", async () => {
+    const req = await call(PRO, { resolution: "2K" });
+    const fast = estimate(manifest(PRO), { ...req, speed: "priority" });
+    expect(fast.basis).toContain("Fast");
+    expect(fast.basis).not.toContain("Priority");
+    expect(speedLabel(manifest(PRO), BYTEPLUS_SETTINGS, "priority")).toBe("Fast");
+    // A model without it still names the company's own option, as the settings card shows it.
+    expect(speedLabel(manifest("seedance-1-0-pro-250528"), BYTEPLUS_SETTINGS, "priority")).toBe("Fast");
+    // What the settings card, composer and canvas pills read.
+    const settings = { schema: BYTEPLUS_SETTINGS, values: { speed: "priority" } } as unknown as Parameters<
+      typeof runSpeed
+    >[0];
+    expect(runSpeed(settings, manifest(PRO))).toMatchObject({ speed: "priority", name: "Fast" });
+    expect(runSpeed(settings, manifest(FLASH))).toMatchObject({
+      speed: "standard",
+      name: "Standard",
+      requestedName: "Fast",
+    });
   });
 });
 

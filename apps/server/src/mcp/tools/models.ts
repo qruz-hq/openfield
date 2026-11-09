@@ -1,11 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { formatCost, type ModelListItem, t } from "@openfield/core";
-import { estimate, pricedOp, resolveProviderSettings, speedOffer } from "@openfield/providers/manifest";
+import { formatCost, type ModelListItem } from "@openfield/core";
+import { estimate, pricedOp, resolveProviderSettings, speedLabel } from "@openfield/providers/manifest";
 import { z } from "zod";
 import { priceOf } from "../guard";
 import { guarded, reply, type ToolContext } from "../kit";
 import { buildRequest, imageRequestFields } from "../request";
-import { editOf } from "../runs";
+import { editOf, speedNameFor } from "../runs";
 import { modelName } from "./generate";
 
 // Which models there are, what each can do and what it costs.
@@ -60,7 +60,7 @@ export function modelTools(server: McpServer, ctx: ToolContext): void {
         model: request.model,
         count: request.batch,
         ...(edit && { op: quote.request.op, edit }),
-        speed: quote.request.speed,
+        speed: speedNameFor(ctx, request.model, quote.request.speed),
         price: priceOf(quote.estimate),
       });
     }),
@@ -103,7 +103,7 @@ function describeModel(ctx: ToolContext, m: ModelListItem, isDefault: boolean) {
     references: caps.references.supported ? caps.references.max : 0,
     seeds: caps.seed.supported,
     negativePrompt: caps.negativePrompt,
-    speed: speedOffer(m, speed)?.label ?? t(`speed.names.${speed}`),
+    speed: speedLabel(m, schema, speed),
     pricePerImage: perImage.confidence === "unknown" ? null : perImage.max,
     price: formatCost(perImage),
   };
