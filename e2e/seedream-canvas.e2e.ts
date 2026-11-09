@@ -9,6 +9,8 @@ import { api, FAKE_KEY, makeImage, sessionToken } from "./support";
 test.describe.configure({ mode: "serial" });
 // The design is drawn in the dark theme.
 test.use({ colorScheme: "dark" });
+// Each test runs a split or an edit end to end, and measures as it goes.
+test.setTimeout(60_000);
 
 const PRO = "byteplus:dola-seedream-5-0-pro-260628";
 
@@ -106,7 +108,14 @@ test("a Layers node splits its image, a port per layer, and a layer goes into an
       position: { x: 0, y: 0 },
       params: { assetIds: [photo] },
     },
-    { op: "add_node", as: "l", type: "image.layers", position: { x: 400, y: 0 }, params: { model: PRO } },
+    {
+      op: "add_node",
+      as: "l",
+      type: "image.layers",
+      position: { x: 400, y: 0 },
+      // The fake takes 3 seconds, so the split can be seen under way.
+      params: { model: PRO, prompt: "#fake-layers-slow" },
+    },
     { op: "connect", source: "u", sourceHandle: "images", target: "l", targetHandle: "image" },
     {
       op: "add_node",
@@ -141,6 +150,20 @@ test("a Layers node splits its image, a port per layer, and a layer goes into an
   const pill = await drawn(run);
   expect(pill).toMatchObject({ h: 32, padding: "0px 12px 0px 10px", gap: "6px" });
   await run.click();
+
+  // Separating (wTRrNWjboM): the scrim stays, a band of light sweeps the image, the pill counts up
+  // and two bars wait where the rows will be.
+  await expect(layers.getByText("Separating")).toBeVisible();
+  const sweep = await drawn(card.locator(".of-layers-sweep"));
+  expect(sweep.display).not.toBe("none");
+  expect(sweep).toMatchObject({ w: 90, h: 240 });
+  const busyScrim = await drawn(card.locator(".of-layers-scrim"));
+  expect(busyScrim.display).not.toBe("none");
+  expect(busyScrim.h).toBe(240);
+  const bars = card.locator(".of-layers-foot > span");
+  expect(await drawn(bars.nth(0))).toMatchObject({ w: 120, h: 8 });
+  expect(await drawn(bars.nth(1))).toMatchObject({ w: 64, h: 8 });
+  expect(await drawn(card.locator(".of-layers-foot"))).toMatchObject({ h: 48, gap: "8px" });
 
   // Done: a row and a port for each layer, top first, then the base.
   const rows = card.locator(".of-layers-row");
@@ -189,6 +212,36 @@ test("a Layers node splits its image, a port per layer, and a layer goes into an
     .toBe("layer-2");
   // The Edit card now shows the layer it edits.
   await expect(nodeOf(page, aliases.e!).locator("img").first()).toBeVisible();
+
+  // Canvas / Inspector / Layers (GCugSMFGGB), measured against its nodes.
+  await layers.dblclick({ position: { x: 160, y: 300 } });
+  const sheet = page.getByRole("complementary", { name: "Layers" });
+  await expect(sheet.getByText("What to separate")).toBeVisible();
+  const boxes = sheet.locator("div.rounded-14.bg-surface");
+  const input = boxes.first();
+  expect(await drawn(input)).toMatchObject({
+    padding: "12px 12px 12px 12px",
+    gap: "12px",
+    radius: "14px",
+    align: "center",
+  });
+  expect(await drawn(input.locator("span.size-40"))).toMatchObject({ w: 40, h: 40, radius: "8px" });
+  const what = sheet.getByRole("textbox", { name: "What to separate" });
+  await expect(what).toHaveAttribute("maxlength", "4000");
+  // What to separate: a column 4 2 in, 8 between, the label row over the 38 tall input.
+  const field = what.locator("xpath=ancestor::div[contains(@class, 'py-4')][1]");
+  expect(await drawn(field)).toMatchObject({ padding: "4px 2px 4px 2px", gap: "8px" });
+  const sizes = sheet.getByRole("radiogroup", { name: "Size" });
+  expect(await drawn(sizes)).toMatchObject({ radius: "10px", padding: "3px 3px 3px 3px", gap: "4px" });
+  const price = boxes.filter({ hasText: "You pay for the layers you get" });
+  expect(await drawn(price)).toMatchObject({ padding: "12px 12px 12px 12px", gap: "8px", radius: "14px" });
+  const sheetRun = sheet.getByRole("button", { name: /^Run/ });
+  expect(await drawn(sheetRun)).toMatchObject({
+    h: 40,
+    radius: "10px",
+    gap: "8px",
+    padding: "0px 16px 0px 16px",
+  });
 });
 
 test("an Edit node in Sketch & point: marks drawn in the window, listed in its settings, then run", async ({

@@ -176,8 +176,10 @@ async function images(
 /**
  * A base and three layers, each cropped to its own box, with sizes a pixel off as the docs show.
  * "#fake-layers:N" in the prompt makes only the first N (1 to 3), as a rerun that finds fewer would.
+ * "#fake-layers-slow" answers after 3 seconds, long enough for a test to see the split under way.
  */
 async function layers(body: Record<string, unknown>, env: FakeEnv): Promise<Response> {
+  if (String(body.prompt ?? "").includes("#fake-layers-slow")) await new Promise((r) => setTimeout(r, 3_000));
   const tier = String(body.size ?? "auto");
   const edge = tier === "auto" ? 2048 : TIER_EDGE[tier]!;
   const canvas = { width: edge, height: edge };
