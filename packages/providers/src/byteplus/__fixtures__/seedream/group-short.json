@@ -1,0 +1,33 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/images/generations"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "model": "seedream-5-0-260128",
+      "created": 1757323460,
+      "data": [
+        {
+          "b64_json": "<png>",
+          "size": "2848x1600",
+          "output_format": "png"
+        },
+        {
+          "b64_json": "<png>",
+          "size": "2848x1600",
+          "output_format": "png"
+        }
+      ],
+      "usage": {
+        "generated_images": 2,
+        "output_tokens": 35600,
+        "total_tokens": 35600
+      }
+    }
+  }
+}

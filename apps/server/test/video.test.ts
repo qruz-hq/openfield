@@ -352,8 +352,11 @@ describe("listings by modality", () => {
   test("models: images by default, videos when asked, both with all", async () => {
     server = await startTestServer({ fetch: byteplusFake() });
     const images = await server.json<ModelsListResponse>("/api/models");
-    expect(images.body.models.some((m) => m.providerId === "byteplus")).toBe(false);
+    // BytePlus's Seedream models are images; its Seedance models only list as videos.
     expect(images.body.models.every((m) => m.modality === "image")).toBe(true);
+    expect(images.body.models.filter((m) => m.providerId === "byteplus").map((m) => m.family)).toEqual(
+      Array(5).fill("Seedream"),
+    );
 
     const videos = await server.json<ModelsListResponse>("/api/models?modality=video");
     expect(videos.body.models.map((m) => m.displayName)).toEqual([

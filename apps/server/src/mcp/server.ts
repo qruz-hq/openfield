@@ -11,6 +11,7 @@ import { canvasRunTools } from "./tools/canvas-runs";
 import { canvasScriptTools } from "./tools/canvas-script";
 import { folderTools } from "./tools/folders";
 import { generateTools } from "./tools/generate";
+import { layerTools } from "./tools/layers";
 import { libraryTools } from "./tools/library";
 import { modelTools } from "./tools/models";
 import { presenceTools } from "./tools/presence";
@@ -23,6 +24,7 @@ export type ToolGroup = (server: McpServer, ctx: ToolContext) => void;
 export const TOOL_GROUPS: readonly ToolGroup[] = [
   modelTools,
   generateTools,
+  layerTools,
   runTools,
   libraryTools,
   folderTools,

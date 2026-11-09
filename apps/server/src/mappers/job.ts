@@ -2,6 +2,7 @@ import {
   type BatchCounts,
   type BatchSummary,
   type BatchUpdated,
+  isStackLayer,
   isTerminalBatchState,
   isTerminalState,
   type Job,
@@ -133,7 +134,7 @@ export function toJobSetWithJobs(bundle: {
       toJob(
         job,
         planned,
-        bundle.assets?.find((a) => a.jobId === job.id),
+        bundle.assets?.find((a) => a.jobId === job.id && !isStackLayer(a.opParams)),
       ),
     ),
     ...(bundle.batch && { batch: toBatchSummary(bundle.batch, bundle.jobs) }),

@@ -9,6 +9,7 @@ import {
   SPEED_IDS,
   type SpeedId,
   type SpeedOffer,
+  speedName,
 } from "@openfield/core";
 
 // Speeds (§0.3). Pure and browser-safe: the composer, the canvas pills, the server and the usage log
@@ -19,6 +20,18 @@ type Speeds = Pick<ModelManifest, "speeds">;
 /** The offer for a speed, or undefined for Standard and for speeds the model doesn't offer. */
 export function speedOffer(manifest: Speeds, speed: SpeedId): SpeedOffer | undefined {
   return speed === "standard" ? undefined : manifest.speeds?.find((o) => o.id === speed);
+}
+
+/**
+ * A speed's name for one model: the model's own offer label first (BytePlus's Fast rides on the
+ * Priority id), then its company's Speed field, then Openfield's name.
+ */
+export function speedLabel(
+  manifest: Speeds | undefined,
+  schema: Parameters<typeof speedName>[0],
+  speed: SpeedId,
+): string {
+  return (manifest && speedOffer(manifest, speed)?.label) ?? speedName(schema, speed);
 }
 
 /** What a model runs at when its company's settings ask for `requested`. */
@@ -59,7 +72,7 @@ export function resumesAfterRestart(
 
 /** The adapter op a recorded op prices as. Local and plugin ops fall back to generate. */
 export function pricedOp(op: Op | undefined): AdapterOp {
-  return (op && adapterOpFor(op, { hasMask: false, canInpaint: false })) ?? "generate";
+  return (op && adapterOpFor(op, { hasMask: false, canInpaint: false, canDecompose: true })) ?? "generate";
 }
 
 export interface SpeedTimeouts {

@@ -32,12 +32,17 @@ export interface CompositeSettings {
   featherPx: number;
 }
 
-/** A request's composite settings with the defaults filled in. */
+/**
+ * A request's composite settings with the defaults filled in. An edit steered by marks (points,
+ * boxes, sketches) expects the model to redraw around them, so there the composite is off unless
+ * the request asks for it; a painted area alone keeps it on.
+ */
 export function compositeSettingsOf(
   mask: Pick<MaskInput, "composite" | "expandPx" | "featherPx"> = {},
+  opts: { marks?: boolean } = {},
 ): CompositeSettings {
   return {
-    composite: mask.composite ?? MASK_COMPOSITE_DEFAULTS.composite,
+    composite: mask.composite ?? (opts.marks ? false : MASK_COMPOSITE_DEFAULTS.composite),
     expandPx: mask.expandPx ?? MASK_COMPOSITE_DEFAULTS.expandPx,
     featherPx: mask.featherPx ?? MASK_COMPOSITE_DEFAULTS.featherPx,
   };

@@ -164,6 +164,7 @@ describe("the connection", () => {
         "list_models",
         "recreate",
         "search_assets",
+        "separate_layers",
         "update_assets",
         "update_folder",
         "view_asset",

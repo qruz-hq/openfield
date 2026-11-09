@@ -14,6 +14,7 @@ import type { CallContexts } from "./runner/provider-fetch";
 import type { Runner } from "./runner/runner";
 import type { AgentService } from "./services/agents";
 import type { CredentialService } from "./services/credentials";
+import type { LayerService } from "./services/layers";
 import type { LibraryService } from "./services/library";
 import type { ModelService } from "./services/models";
 import type { PresenceService } from "./services/presence";
@@ -49,6 +50,8 @@ export interface Services {
   thumbs: Thumbs;
   /** The Assets library's changes, with their events and file cleanup (§2.8, §8.6). */
   library: LibraryService;
+  /** Layer stacks a separation made: read, flattened and exported. */
+  layers: LayerService;
   runner: Runner;
   canvases: CanvasService;
   canvasRuns: CanvasRunService;

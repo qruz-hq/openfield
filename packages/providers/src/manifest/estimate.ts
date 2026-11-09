@@ -8,12 +8,14 @@ import {
   outputTokensFor,
   type PerImagePrice,
   type PriceModel,
+  pixelPriceFor,
   type ResolutionTier,
   type SpeedId,
   t,
 } from "@openfield/core";
+import { inOneCall, isGroupRun } from "./batch";
 import { editSizeFor } from "./size";
-import { pricedOp, priceFor, resolveSpeed } from "./speed";
+import { pricedOp, priceFor, resolveSpeed, speedOffer } from "./speed";
 import { resolveVideo, videoRate, videoSize, videoSizes, videoTokens } from "./video";
 
 // §0.13: pure. Reads the manifest's prices and the request, never credentials, the network or the
@@ -39,6 +41,8 @@ export type EstimateRequest = Pick<NormalizedRequest, "batch"> &
       | "references"
       | "base"
       | "video"
+      | "layers"
+      | "providerOptions"
     >
   > & {
     speed?: SpeedId;
@@ -108,9 +112,12 @@ export function estimate(manifest: ModelManifest, req: EstimateRequest): CostEst
   const price = priceFor(manifest, speed);
   const count = Math.max(1, req.batch);
   // The basis names the speed whenever it isn't Standard: "2 × $0.067 (1K, Batch)".
-  const speedLabel = speed === "standard" ? undefined : t(`speed.names.${speed}`);
+  const speedLabel =
+    speed === "standard" ? undefined : (speedOffer(manifest, speed)?.label ?? t(`speed.names.${speed}`));
   switch (price.kind) {
     case "per_image":
+      if (req.op === "decompose" && price.decompose)
+        return withInputs(manifest, price, req, 1, layersCost(price, req, speedLabel));
       return withInputs(manifest, price, req, count, perImage(manifest, price, req, count, speedLabel));
     case "per_token": {
       const output = perToken(manifest, price, req, count, speedLabel);
@@ -145,6 +152,10 @@ function inputImageUsd(
       ? price.inputImage
       : price.imageInputTokens && { tokens: price.imageInputTokens, perMTok: price.imageInputPerMTok };
   if (!rate) return null;
+  if ("usd" in rate) {
+    const usd = Math.max(0, count - rate.freePerCall) * rate.usd;
+    return { count, min: usd, max: usd };
+  }
   let min = 0;
   let max = 0;
   for (let i = 0; i < count; i++) {
@@ -169,7 +180,7 @@ function withInputs(
 ): CostEstimate {
   const inputs = inputImageUsd(price, req);
   if (!inputs) return cost;
-  const calls = manifest.capabilities.batch.native ? 1 : count;
+  const calls = inOneCall(manifest, req) ? 1 : count;
   const low = inputs.min * calls;
   const high = inputs.max * calls;
   return {
@@ -202,6 +213,15 @@ function perImage(
   const caps = manifest.capabilities;
   const tier = req.resolution ?? caps.resolution?.default;
   const quality = req.quality ?? caps.quality?.default;
+  // A related set bills only the images the model makes, which can be as few as one.
+  const fewest = isGroupRun(manifest, req) ? 1 : count;
+
+  // An exact size bills by its own pixels where the company prices that way.
+  if (price.byPixels && req.size && "width" in req.size) {
+    const usd = pixelPriceFor(price.byPixels, req.size.width * req.size.height);
+    const detail = [`${req.size.width}×${req.size.height}`, speedLabel].filter(Boolean).join(", ");
+    return perImageCost(price, usd, count, fewest, detail);
+  }
 
   const specificity = (p: PerImagePrice) => (p.tier ? 1 : 0) + (p.quality ? 1 : 0);
   const hit = price.tiers
@@ -212,16 +232,7 @@ function perImage(
     const label = [hit.quality && qualityLabel(manifest, hit.quality), hit.tier, speedLabel]
       .filter(Boolean)
       .join(", ");
-    return {
-      currency: price.currency,
-      min: round(hit.usd * count),
-      max: round(hit.usd * count),
-      confidence: "exact",
-      basis: label
-        ? t("cost.basisWith", { count, each: formatMoney(hit.usd, price.currency, true), detail: label })
-        : t("cost.basis", { count, each: formatMoney(hit.usd, price.currency, true) }),
-      pricedAt: price.pricedAt,
-    };
+    return perImageCost(price, hit.usd, count, fewest, label);
   }
 
   // No row for this combination: show the whole range rather than guess one row.
@@ -234,6 +245,55 @@ function perImage(
     max: round(high * count),
     confidence: "estimated",
     basis: basis(count, moneyRange(low, high, price.currency), speedLabel),
+    pricedAt: price.pricedAt,
+  };
+}
+
+/** `count` images at one price, or for a related set anywhere from `fewest` up to `count` of them. */
+function perImageCost(
+  price: PerImagePriceModel,
+  usd: number,
+  count: number,
+  fewest: number,
+  detail: string,
+): CostEstimate {
+  const each = formatMoney(usd, price.currency, true);
+  const plain = detail ? t("cost.basisWith", { count, each, detail }) : t("cost.basis", { count, each });
+  return {
+    currency: price.currency,
+    min: round(usd * fewest),
+    max: round(usd * count),
+    confidence: fewest === count ? "exact" : "estimated",
+    basis: fewest === count ? plain : t("cost.groupSet", { count, each }),
+    pricedAt: price.pricedAt,
+  };
+}
+
+/**
+ * A layer separation: the base and each layer are billed as images, and the model
+ * decides how many layers there are, so the range runs from a base and one layer to the most it
+ * makes. "auto" keeps the image's own size, so it could land at any of the rates.
+ */
+function layersCost(
+  price: PerImagePriceModel,
+  req: EstimateRequest,
+  speedLabel: string | undefined,
+): CostEstimate {
+  const decompose = price.decompose!;
+  const size = req.layers?.size;
+  const rows = decompose.tiers.filter(
+    (p) => !p.tier || size === undefined || size === "auto" || p.tier === size,
+  );
+  const amounts = (rows.length ? rows : decompose.tiers).map((p) => p.usd);
+  const low = Math.min(...amounts);
+  const high = Math.max(...amounts);
+  const each = [moneyRange(low, high, price.currency), speedLabel].filter(Boolean).join(", ");
+  return {
+    currency: price.currency,
+    min: round(low * decompose.outputs.min),
+    max: round(high * decompose.outputs.max),
+    confidence: "estimated",
+    basis: t("cost.layers", { max: decompose.outputs.max - 1, each }),
     pricedAt: price.pricedAt,
   };
 }

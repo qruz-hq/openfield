@@ -38,10 +38,33 @@ export const inputImageTokensSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-/** What one image sent in costs on top of a per-image price. */
-export const inputImagePriceSchema = z.strictObject({
-  tokens: inputImageTokensSchema,
-  perMTok: z.number().nonnegative(),
+/**
+ * What one image sent in costs on top of a per-image price: tokens counted from it, or a flat price
+ * per image past the first few of each call, which are free (Seedream 5.0 Pro: the first one).
+ */
+export const inputImagePriceSchema = z.union([
+  z.strictObject({ tokens: inputImageTokensSchema, perMTok: z.number().nonnegative() }),
+  z.strictObject({ usd: z.number().nonnegative(), freePerCall: z.int().nonnegative() }),
+]);
+
+/**
+ * A per-image price by the output's pixel count, for a company that bills by pixels rather than by
+ * the size it was asked for. Rows go smallest first; the first whose maxPixels covers the image
+ * applies, and the last has none.
+ */
+export const pixelPriceSchema = z
+  .array(z.strictObject({ maxPixels: z.int().positive().optional(), usd: z.number().nonnegative() }))
+  .min(1)
+  .refine((rows) => rows.at(-1)?.maxPixels === undefined, { message: "the last row has no maxPixels" });
+
+/**
+ * A layer separation's price (decompose): every image it makes, the base and each layer, is billed
+ * at these rates. How many it makes is up to the model, between `outputs.min` and `outputs.max`.
+ */
+export const decomposePriceSchema = z.strictObject({
+  tiers: z.array(perImagePriceSchema).min(1),
+  byPixels: pixelPriceSchema.optional(),
+  outputs: z.strictObject({ min: z.int().positive(), max: z.int().positive() }),
 });
 
 export const priceModelSchema = z.discriminatedUnion("kind", [
@@ -49,7 +72,10 @@ export const priceModelSchema = z.discriminatedUnion("kind", [
     kind: z.literal("per_image"),
     ...priced,
     tiers: z.array(perImagePriceSchema).min(1),
+    /** Wins over `tiers` once the output's pixels are known: an exact size, or a finished image. */
+    byPixels: pixelPriceSchema.optional(),
     inputImage: inputImagePriceSchema.optional(),
+    decompose: decomposePriceSchema.optional(),
   }),
   z.strictObject({
     kind: z.literal("per_token"),
@@ -140,6 +166,14 @@ export function outputTokensFor(base: number, width: number, height: number): nu
 export type PerImagePrice = z.infer<typeof perImagePriceSchema>;
 export type PriceModel = z.infer<typeof priceModelSchema>;
 export type InputImageTokens = z.infer<typeof inputImageTokensSchema>;
+export type InputImagePrice = z.infer<typeof inputImagePriceSchema>;
+export type PixelPrice = z.infer<typeof pixelPriceSchema>;
+export type DecomposePrice = z.infer<typeof decomposePriceSchema>;
+
+/** The usd of the first row of a pixel price that covers an image this many pixels. */
+export function pixelPriceFor(rows: PixelPrice, pixels: number): number {
+  return (rows.find((r) => r.maxPixels === undefined || pixels <= r.maxPixels) ?? rows.at(-1)!).usd;
+}
 export type CostEstimate = z.infer<typeof costEstimateSchema>;
 export type CostActual = z.infer<typeof costActualSchema>;
 export type UsageUnits = z.infer<typeof usageUnitsSchema>;

@@ -26,13 +26,17 @@ import { byteplusFetch } from "./http";
 import { type FrameUrls, toSeedanceBody } from "./map-request";
 import { type Resume, type TaskBody, toJobUpdate } from "./map-response";
 import { BYTEPLUS_MODELS, specFor } from "./models";
+import { seedreamSpecFor } from "./seedream";
+import { bindSeedream } from "./seedream-model";
+import { BYTEPLUS_SETTINGS } from "./settings";
 
 export { mapError } from "./errors";
 
-// BytePlus ModelArk's video generation API (Seedance): a task queue. A create call answers at once
-// with a task id, and a status read by that id answers queued, running, then the finished video as
-// a URL that lasts 24 hours. Checked against the API reference on 2026-09-29; README.md lists what
-// still needs a live run.
+// BytePlus ModelArk, one key for two APIs. Video (Seedance) is a task queue: a create call answers
+// at once with a task id, and a status read by that id answers queued, running, then the finished
+// video as a URL that lasts 24 hours. Images (Seedream, seedream-model.ts) are one blocking call.
+// Checked against the API references on 2026-09-29 and 2026-11-09; README.md lists what still
+// needs a live run.
 
 export function createByteplusProvider(): Provider {
   return {
@@ -45,6 +49,7 @@ export function createByteplusProvider(): Provider {
       assetHosts: [...ASSET_HOSTS],
       stable: true,
     },
+    settings: BYTEPLUS_SETTINGS,
     credentials: {
       fields: [
         {
@@ -83,15 +88,16 @@ export function createByteplusProvider(): Provider {
       await listTasks(ctx);
       return BYTEPLUS_MODELS.map((m) => structuredClone(m));
     },
-    recognise: (modelId) => specFor(modelId) !== undefined,
+    recognise: (modelId) => specFor(modelId) !== undefined || seedreamSpecFor(modelId) !== undefined,
 
     model(key, manifest) {
       const modelId = key.slice("byteplus:".length);
-      const spec = specFor(modelId);
       const bound = manifest ?? BYTEPLUS_MODELS.find((m) => m.key === key);
-      if (!spec || !bound || bound.key !== key || bound.providerId !== "byteplus") {
-        throw new UnknownModelError(key);
-      }
+      if (!bound || bound.key !== key || bound.providerId !== "byteplus") throw new UnknownModelError(key);
+      const image = seedreamSpecFor(modelId);
+      if (image) return bindSeedream(bound, image);
+      const spec = specFor(modelId);
+      if (!spec) throw new UnknownModelError(key);
       return bindModel(bound, spec);
     },
   };

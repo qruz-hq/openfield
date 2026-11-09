@@ -59,6 +59,53 @@ export async function checkEditInputs(
 }
 
 /**
+ * A layer separation's one image, checked against the model's layer rules now, so a file it can't
+ * separate is refused before anything is spent: a PNG or JPEG, big enough, not too long and thin.
+ */
+export function requireLayerInput(manifest: ModelManifest, base: AssetRow): void {
+  const rules = manifest.capabilities.layers;
+  if (!rules) {
+    throw new ApiFailure(400, "bad_request", `${manifest.displayName} doesn't separate layers`, {
+      field: "model",
+      userMessage: t("errors.capability_unsupported.reason"),
+    });
+  }
+  const pixels = base.width * base.height;
+  if (!rules.mimeTypes.includes(base.mime) || pixels < rules.minPixels || pixels > rules.maxPixels) {
+    throw new ApiFailure(
+      400,
+      "bad_request",
+      `A ${base.mime} of ${base.width}x${base.height} can't be separated`,
+      {
+        field: "base",
+        userMessage: t("errors.layerImage"),
+      },
+    );
+  }
+  const long = Math.max(base.width, base.height);
+  if (long / Math.max(1, Math.min(base.width, base.height)) > rules.maxRatio) {
+    throw new ApiFailure(
+      400,
+      "bad_request",
+      `${base.width}x${base.height} is too long and thin to separate`,
+      {
+        field: "base",
+        userMessage: t("errors.layerShape"),
+      },
+    );
+  }
+  if (base.bytes > rules.maxBytes) {
+    throw new ApiFailure(413, "payload_too_large", `The base ${base.id} is ${base.bytes} bytes`, {
+      field: "base",
+      userMessage: t("errors.imageTooLarge", {
+        model: manifest.displayName,
+        size: formatBytes(rules.maxBytes),
+      }),
+    });
+  }
+}
+
+/**
  * Refuses an image the request sends in that's larger than the model takes, now rather than once
  * the run is sent. An edit's composite can come out larger than an upload may be, so an edited
  * image isn't always small enough to go back to every model.
@@ -148,10 +195,11 @@ export function withEditSize<T extends Sizable>(manifest: ModelManifest, req: T,
  */
 export function requireBaseShape(
   manifest: ModelManifest,
-  req: Pick<GenerateRequest, "size" | "resolution" | "mask">,
+  req: Pick<GenerateRequest, "size" | "resolution" | "mask" | "marks">,
   base: PixelSize,
 ): void {
-  if (!req.mask || !compositeSettingsOf(req.mask).composite || !req.size) return;
+  if (!req.mask || !req.size) return;
+  if (!compositeSettingsOf(req.mask, { marks: Boolean(req.marks?.length) }).composite) return;
   const asked = shapeOf(req.size);
   if (asked === undefined) return;
   // The base's own shape, or the nearest the model takes, which is what an open size would ask.

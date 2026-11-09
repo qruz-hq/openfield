@@ -67,6 +67,7 @@ const TOOLS: Record<string, AgentAction> = {
   restore_version: "versions",
   show: "show",
   generate_image: "make_images",
+  separate_layers: "make_images",
   recreate: "make_images",
   run_canvas: "run_canvases",
   cancel_job: "stop_runs",
