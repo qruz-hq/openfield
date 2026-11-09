@@ -70,7 +70,15 @@ export const EDIT_OPS = [
 export type EditOp = (typeof EDIT_OPS)[number];
 
 /** The subset an adapter is ever asked to perform. */
-export const ADAPTER_OPS = ["generate", "edit", "inpaint", "outpaint", "upscale", "remove_bg"] as const;
+export const ADAPTER_OPS = [
+  "generate",
+  "edit",
+  "inpaint",
+  "outpaint",
+  "upscale",
+  "remove_bg",
+  "decompose",
+] as const;
 export type AdapterOp = (typeof ADAPTER_OPS)[number];
 
 /** Ops that never reach a provider: provider_id 'local', cost 0, generative 0. */
@@ -289,7 +297,7 @@ export const ASPECT_RATIOS = [
 ] as const;
 export type AspectRatio = (typeof ASPECT_RATIOS)[number];
 
-export const RESOLUTION_TIERS = ["512", "1K", "1.5K", "2K", "4K"] as const;
+export const RESOLUTION_TIERS = ["512", "1K", "1.5K", "2K", "3K", "4K"] as const;
 export type ResolutionTier = (typeof RESOLUTION_TIERS)[number];
 
 /** Video resolutions, as the company names them on the wire ("720p"). Image tiers don't apply. */
@@ -311,6 +319,7 @@ export const RESOLUTION_TIER_PX: Record<ResolutionTier, number> = {
   "1K": 1024,
   "1.5K": 1536,
   "2K": 2048,
+  "3K": 3072,
   "4K": 4096,
 };
 

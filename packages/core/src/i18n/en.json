@@ -275,6 +275,11 @@
     "referenceCount": "{count} / {max}",
     "referenceLimit": "{model} accepts up to {max, plural, one {# reference image} other {# reference images}}.",
     "referencesNone": "{model} doesn't take reference images",
+    "groupLimit": "{model} makes at most {max} images in a set, counting the images you send in.",
+    "marksNone": "{model} can't read points or sketches on the image.",
+    "marksKind": "{model} can't read some of these marks, so they were left out.",
+    "marksLimit": "{model} reads up to {max} marks.",
+    "markImageMissing": "A mark is on an image this edit doesn't send.",
     "referencesDropped": "{sent} of {total} references will be sent to {model}. Drag to choose which.",
     "referenceWontSend": "Won't be sent",
     "removeReference": "Remove",
@@ -314,6 +319,7 @@
           "1K": "Quick drafts",
           "1.5K": "A little sharper",
           "2K": "Good for most uses",
+          "3K": "Sharper, for print",
           "4K": "Largest, costs more"
         }
       },
@@ -402,7 +408,9 @@
     "pricesAsOf": "Prices as of {date}. They may have changed since.",
     "video": "{seconds}s at {size}",
     "videoAnyShape": "{seconds}s at {resolution}, in the shape the model picks",
-    "videoTokens": "{tokens} tokens at {rate} per million"
+    "videoTokens": "{tokens} tokens at {rate} per million",
+    "layers": "A base and 1 to {max} layers, {each} each",
+    "groupSet": "Up to {count} × {each}, only for the images it makes"
   },
   "settings": {
     "title": "Settings",
@@ -1096,7 +1104,12 @@
     "usageQuota": "This key used up its {company} quota for now. Try again later.",
     "accountOverdue": "Your {company} account is overdue. Add funds to keep going.",
     "videoStarted": "{company} had already started this video, so you may still be charged.",
-    "videoBlocked": "Video blocked. It came from an unknown site."
+    "videoBlocked": "Video blocked. It came from an unknown site.",
+    "layersFailed": "{model} couldn't separate this image into layers. Try again, or name the parts you want in the prompt.",
+    "layerImage": "Layers need a PNG or JPEG of at least 512×512 pixels.",
+    "layerShape": "This image is too long and thin to separate into layers.",
+    "transparentInput": "A transparent background needs one PNG with transparency to start from.",
+    "groupImageMissing": "{model} made fewer images than you asked for this time."
   },
   "presets": {
     "errors": {

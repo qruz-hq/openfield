@@ -17,7 +17,9 @@ import {
   ulidSchema,
   videoResolutionSchema,
 } from "./common";
+import { layerRequestSchema } from "./layers";
 import { backgroundSchema } from "./manifest";
+import { marksSchema } from "./marks";
 import { providerSettingValuesSchema } from "./provider-settings";
 
 // One body for POST /api/generate and POST /api/edit (§0.6, §6.5).
@@ -120,6 +122,13 @@ export const generateRequestSchema = z.object({
   moderation: z.string().min(1).max(64).optional(),
   /** Video models only. */
   video: videoRequestSchema.optional(),
+  /**
+   * Points, boxes and shapes on the image being edited (or a reference), for models that read
+   * them (capabilities.marks). With marks, a mask's composite is off unless the request turns it on.
+   */
+  marks: marksSchema.optional(),
+  /** A decompose run's settings, on models that separate layers. */
+  layers: layerRequestSchema.optional(),
 
   source: jobSourceSchema,
   canvas: z.object({ canvasId: ulidSchema, nodeId: z.string().min(1).max(64) }).optional(),
@@ -181,8 +190,12 @@ export const diagnosticSchema = z.object({
  * The adapter op a recorded op compiles to (§0.4), or null for local and plugin-only ops.
  * Edits, inpaints and widget edits become an inpaint only when there's a mask and the model can
  * inpaint; otherwise they're a whole-image edit, and normalize() decides what the mask still does.
+ * A decompose reaches the model only when it separates layers itself.
  */
-export function adapterOpFor(op: Op, opts: { hasMask: boolean; canInpaint: boolean }): AdapterOp | null {
+export function adapterOpFor(
+  op: Op,
+  opts: { hasMask: boolean; canInpaint: boolean; canDecompose?: boolean },
+): AdapterOp | null {
   switch (op) {
     case "generate":
     case "outpaint":
@@ -199,6 +212,8 @@ export function adapterOpFor(op: Op, opts: { hasMask: boolean; canInpaint: boole
     case "text_edit":
       return opts.hasMask && opts.canInpaint ? "inpaint" : "edit";
     case "decompose":
+      // Layer separation is a model's own op where it has one, else a plugin's.
+      return opts.canDecompose ? "decompose" : null;
     case "crop":
     case "grade":
     case "overlay":

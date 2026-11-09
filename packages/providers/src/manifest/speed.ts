@@ -59,7 +59,7 @@ export function resumesAfterRestart(
 
 /** The adapter op a recorded op prices as. Local and plugin ops fall back to generate. */
 export function pricedOp(op: Op | undefined): AdapterOp {
-  return (op && adapterOpFor(op, { hasMask: false, canInpaint: false })) ?? "generate";
+  return (op && adapterOpFor(op, { hasMask: false, canInpaint: false, canDecompose: true })) ?? "generate";
 }
 
 export interface SpeedTimeouts {

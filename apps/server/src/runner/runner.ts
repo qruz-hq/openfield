@@ -41,7 +41,13 @@ import {
   transitionJob,
   updateJob,
 } from "@openfield/db";
-import { estimate, pricedOp, resolveSpeed, resumesAfterRestart } from "@openfield/providers/manifest";
+import {
+  estimate,
+  inOneCall,
+  pricedOp,
+  resolveSpeed,
+  resumesAfterRestart,
+} from "@openfield/providers/manifest";
 import {
   type CallContext,
   type JobResult,
@@ -554,7 +560,8 @@ export class Runner {
       const modelKey = `${jobSet.providerId}:${jobSet.modelId}`;
       // A Batch run goes as one provider batch, whatever its image count (§0.4).
       const kind = jobSet.speed === "batch" ? "batch" : "call";
-      const whole = kind === "batch" || (this.deps.models.get(modelKey)?.capabilities.batch.native ?? false);
+      const model = this.deps.models.get(modelKey);
+      const whole = kind === "batch" || (model ? inOneCall(model, jobSet.requestJson) : false);
       if (whole && grouped.has(jobSet.id)) {
         grouped.get(jobSet.id)!.jobIds.push(job.id);
         continue;
@@ -1183,7 +1190,7 @@ export class Runner {
   #callFor(set: JobSetRow, manifest: ModelManifest, jobs: JobRow[]): NormalizedRequest {
     const request = set.requestJson;
     const first = jobs[0]!;
-    if (manifest.capabilities.batch.native || request.batch === 1) {
+    if (inOneCall(manifest, request) || request.batch === 1) {
       return { ...request, jobId: first.id, batchIndex: first.idx, batch: jobs.length };
     }
     return callsFor(manifest, request, jobsOf(this.deps.db, set.id)).get(first.id)!;

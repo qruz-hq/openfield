@@ -148,10 +148,11 @@ export function withEditSize<T extends Sizable>(manifest: ModelManifest, req: T,
  */
 export function requireBaseShape(
   manifest: ModelManifest,
-  req: Pick<GenerateRequest, "size" | "resolution" | "mask">,
+  req: Pick<GenerateRequest, "size" | "resolution" | "mask" | "marks">,
   base: PixelSize,
 ): void {
-  if (!req.mask || !compositeSettingsOf(req.mask).composite || !req.size) return;
+  if (!req.mask || !req.size) return;
+  if (!compositeSettingsOf(req.mask, { marks: Boolean(req.marks?.length) }).composite) return;
   const asked = shapeOf(req.size);
   if (asked === undefined) return;
   // The base's own shape, or the nearest the model takes, which is what an open size would ask.
