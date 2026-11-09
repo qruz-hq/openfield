@@ -6,15 +6,26 @@ import { incomingEdges } from "@openfield/canvas/store/graph";
 import { assetThumbUrl, t } from "@openfield/core";
 import { type ComposerValues, type EditBase, editOpFor } from "@openfield/providers/manifest";
 import { Button, cn, Divider } from "@openfield/ui";
-import { Brush } from "lucide-react";
+import { Brush, Pencil } from "lucide-react";
+import { useId } from "react";
 import { useNavigate } from "react-router";
 import { useStore } from "zustand";
 import { KeepRest } from "../../../detail/edit/keep-rest";
+import { MarksListView } from "../../../detail/edit/marks-list";
 import { MaskThumb } from "../../../detail/edit/mask-thumb";
 import { ModelField } from "../../../detail/edit/model-field";
+import type { EditMode } from "../../../detail/edit/session";
 import { SizeFields } from "../../../detail/edit/size-fields";
+import { ModeSegmented } from "../../../detail/edit/sketch-chrome";
 import { useCanvasEngineContext, useNodeAnalysis } from "../../engine/engine-store";
-import { useCanvas, useCanvasActions, useLocked, useNodeFrame, useReadOnly } from "../../store/context";
+import {
+  useCanvas,
+  useCanvasActions,
+  useCanvasStoreApi,
+  useLocked,
+  useNodeFrame,
+  useReadOnly,
+} from "../../store/context";
 import { cardMedia } from "../generate/card-media";
 import { useModelSwitch } from "../generate/controls";
 import { nodeRegistry } from "../registry";
@@ -22,12 +33,23 @@ import { InspectorRun, LOCKED_DIM } from "../shell/inspector-parts";
 import { PromptCard } from "../shell/prompt-card";
 import { useNodeDisplay, useParsedParams, useRunNode, useSetParams } from "../shell/use-node";
 import { soleBase, usePaintBase } from "./base";
+import { MarksThumb } from "./marks-thumb";
+import { openOnMark } from "./mask-window";
 
 // Canvas / Inspector / Image edit (design MZI3JqbHJr): the Mask card (the mask over the image and
 // Paint), the prompt card, then the Edit tab's own Model field, Size fields (no size note) and Keep
 // the rest, with the node's values, then Run. Run waits, with no price, while there's no mask, the
 // mask was painted on another image, or there are no words: the card above it says why. A mask on
 // the Mask input stands in for a painted one, and is changed where it comes from.
+//
+// On a model that reads marks, the switch between Paint area and Sketch & point comes first (design
+// RIMVE6Wb5c). In Sketch & point (design ILw0tWC0ex) the Marks card takes the Mask card's place,
+// there are no references (they aren't sent), the marks are listed under the model without the lines
+// sent with the prompt, there's no aspect ratio, and Keep the rest is off by default with just its
+// switch. A model that can't read marks goes back to painting, as the Edit tab does.
+
+/** Settings only a node that sketches has: off again in one step with the model that can't. */
+const PAINT_AGAIN = { mode: undefined, marks: undefined, sketchKeepOriginal: undefined };
 
 /** The canvas settings' field labels: 12/500, tertiary (design WnWS6lEX2i, WVZFuSKfP2). */
 const LABEL = "text-caption font-medium text-text-tertiary";
@@ -44,6 +66,7 @@ export function EditInspector({ nodeId }: { nodeId: string }) {
   const analysis = useNodeAnalysis(nodeId);
   const display = useNodeDisplay(nodeId);
   const run = useRunNode(nodeId);
+  const actions = useCanvasActions();
   const navigate = useNavigate();
   const readOnly = useReadOnly();
   const locked = useLocked(nodeId);
@@ -57,7 +80,13 @@ export function EditInspector({ nodeId }: { nodeId: string }) {
   });
   const key = editModelKeyOf(params.model, ctx);
   const model = ctx.model(key);
-  const masked = (analysis?.maskImages.length ?? 0) > 0 || !!params.maskAssetId;
+  const sketch = params.mode === "sketch";
+  const marks = params.marks ?? [];
+  // Sketching, the rest is kept by the area the marks cover, and only when asked.
+  const composite = sketch ? !!params.sketchKeepOriginal : params.keepOriginal;
+  const masked = sketch
+    ? composite && marks.length > 0
+    : (analysis?.maskImages.length ?? 0) > 0 || !!params.maskAssetId;
   const speed = model ? speedOf(ctx, model, editOpFor(model.capabilities, masked)) : "standard";
   const resolved = model ? resolveFor(model, params, params.batch) : undefined;
   const editBase: EditBase | null = base && dims ? { assetId: base, width: dims.w, height: dims.h } : null;
@@ -67,12 +96,16 @@ export function EditInspector({ nodeId }: { nodeId: string }) {
   if (!frame) return null;
   return (
     <>
-      <MaskCard nodeId={nodeId} params={params} />
+      {model?.capabilities.marks || sketch ? (
+        <ModeField nodeId={nodeId} mode={sketch ? "sketch" : "paint"} resting={resting} />
+      ) : null}
+      {sketch ? <MarksCard nodeId={nodeId} params={params} /> : <MaskCard nodeId={nodeId} params={params} />}
       <PromptCard
         nodeId={nodeId}
         value={params.prompt}
         onChange={(prompt) => setParams({ prompt }, "prompt")}
         references={!!model?.capabilities.references.supported}
+        referenceRow={!sketch}
         // Words typed before a Prompt node was linked still go after its words, until cleared.
         placeholder={t(
           analysis?.upstreamText ? "canvas.nodes.generate.promptPlaceholder" : "edit.prompt.placeholder",
@@ -86,24 +119,38 @@ export function EditInspector({ nodeId }: { nodeId: string }) {
         models={ctx.models}
         selected={model}
         base={editBase}
-        composite={params.keepOriginal}
+        composite={composite}
+        sketch={sketch}
         resting={resting}
         labelClassName={LABEL}
         onPick={(next) => {
           // A model whose company has no key leads to where the key goes, as in the composer.
           if (!next.ready) navigate("/settings/api-keys", { state: { focusKey: true } });
-          else if (next.key !== model?.key) switchModel(model, next, params);
+          else if (next.key !== model?.key)
+            switchModel(model, next, params, sketch && !next.capabilities.marks ? PAINT_AGAIN : {});
         }}
       />
+      {/* With none, the Marks card above already says so. */}
+      {sketch && marks.length > 0 ? (
+        <MarksListView
+          marks={marks}
+          selected={null}
+          resting={resting}
+          preview={false}
+          onSelect={(index) => openOnMark(() => actions.setUi({ maskNodeId: nodeId }), index)}
+          onClear={() => setParams({ marks: undefined }, "marks")}
+        />
+      ) : null}
       <SizeFields
         model={model}
         resolved={resolved}
         base={editBase}
         masked={masked}
-        composite={params.keepOriginal}
+        composite={composite}
         speed={speed}
         resting={resting}
         note={false}
+        aspect={!sketch}
         labelClassName={LABEL}
         onValues={(values: ComposerValues) =>
           setParams({
@@ -115,12 +162,13 @@ export function EditInspector({ nodeId }: { nodeId: string }) {
       />
       <Divider />
       <KeepRest
-        composite={params.keepOriginal}
+        composite={composite}
         featherPx={params.featherPx}
         expandPx={params.expandPx}
         resting={resting}
         afterRun={false}
-        onComposite={(keepOriginal) => setParams({ keepOriginal })}
+        sketch={sketch}
+        onComposite={(keep) => setParams(sketch ? { sketchKeepOriginal: keep } : { keepOriginal: keep })}
         onFeatherPx={(featherPx) => setParams({ featherPx }, "featherPx")}
         onExpandPx={(expandPx) => setParams({ expandPx }, "expandPx")}
       />
@@ -132,6 +180,38 @@ export function EditInspector({ nodeId }: { nodeId: string }) {
         onRun={(anchor, bypassCache) => void run("node", { anchor, bypassCache })}
       />
     </>
+  );
+}
+
+/**
+ * Mode (design RIMVE6Wb5c): how to show the change, column gap 8 pad 4 2, the label then the Image
+ * edit / Mode switch at full width. Sketch & point drops a mask wired into the Mask input, which it
+ * hides, in the same undo step, as saving marks in the window does. Painting again lets the marks go.
+ */
+function ModeField({ nodeId, mode, resting }: { nodeId: string; mode: EditMode; resting: boolean }) {
+  const store = useCanvasStoreApi();
+  const actions = useCanvasActions();
+  const label = useId();
+  const pick = (next: EditMode) => {
+    if (next === mode) return;
+    const { doc } = store.getState();
+    actions.apply(
+      next === "sketch"
+        ? [
+            { op: "setParams", id: nodeId, patch: { mode: "sketch", sketchKeepOriginal: false } },
+            ...incomingEdges(doc, nodeId, "mask").map((edge) => ({ op: "deleteEdge" as const, id: edge.id })),
+          ]
+        : [{ op: "setParams", id: nodeId, patch: PAINT_AGAIN }],
+      { label: "mode" },
+    );
+  };
+  return (
+    <div className="flex w-full flex-col gap-8 px-2 py-4">
+      <span id={label} className={LABEL}>
+        {t("edit.mode.label")}
+      </span>
+      <ModeSegmented value={mode} onChange={pick} disabled={resting} aria-labelledby={label} />
+    </div>
   );
 }
 
@@ -200,6 +280,43 @@ function MaskCard({ nodeId, params }: { nodeId: string; params: EditParams }) {
           {t("canvas.nodes.edit.paint")}
         </Button>
       )}
+    </div>
+  );
+}
+
+/**
+ * Marks card (Sketch & point's Mask card, JEWRsoRd4J): the marks over the image, how many, and Mark,
+ * which opens the window on them.
+ */
+function MarksCard({ nodeId, params }: { nodeId: string; params: EditParams }) {
+  const actions = useCanvasActions();
+  const analysis = useNodeAnalysis(nodeId);
+  const readOnly = useReadOnly();
+  const locked = useLocked(nodeId);
+  const base = soleBase(analysis);
+  const paintOn = usePaintBase(nodeId);
+  const dims = useStore(cardMedia, (s) => (base ? s.dims[base] : undefined));
+  const marks = params.marks ?? [];
+  return (
+    <div className={cn("flex w-full items-center gap-12 rounded-14 bg-surface p-12", locked && LOCKED_DIM)}>
+      <MarksThumb imageId={base} dims={dims} marks={marks} />
+      {/* Text */}
+      <div className="flex min-w-0 flex-1 flex-col gap-2">
+        <span className="text-small font-medium text-text-primary">{t("canvas.nodes.edit.marks")}</span>
+        <span className="w-full text-caption text-text-tertiary">
+          {t("canvas.nodes.edit.marksCount", { count: marks.length })}
+        </span>
+      </div>
+      <Button
+        variant="secondary"
+        size="s"
+        icon={Pencil}
+        disabled={readOnly || locked || paintOn === null}
+        className={locked ? "disabled:bg-elevated-2 disabled:text-text-primary" : undefined}
+        onClick={() => actions.setUi({ maskNodeId: nodeId })}
+      >
+        {t("canvas.nodes.edit.mark")}
+      </Button>
     </div>
   );
 }

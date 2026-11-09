@@ -24,7 +24,7 @@ import {
   Trash2,
   Undo2,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { type MouseEvent, useEffect, useRef, useState } from "react";
 import { isMac } from "../../canvas/editor/shortcuts";
 import { keepFocus, optionsBar, ToolButton, toolbarClass } from "./chrome";
 import { sketchShortcut } from "./keys";
@@ -40,12 +40,44 @@ import { CHIP_PX, isLightColor, MARK_PRESETS, normalHex, type SketchTool } from 
 export function ModeSwitch() {
   const mode = useEditSession((s) => s.mode);
   return (
-    <Segmented
-      aria-label={t("edit.mode.label")}
+    <ModeSegmented
       value={mode}
-      onValueChange={(next) => useEditSession.getState().setMode(next as EditMode)}
+      onChange={(next) => useEditSession.getState().setMode(next)}
       onMouseDown={keepFocus}
       className="w-236 shrink-0"
+    />
+  );
+}
+
+/**
+ * The same switch on any value: the edit window's toolbar holds the session's, a canvas Edit node's
+ * settings hold the node's (design RIMVE6Wb5c, full width).
+ */
+export function ModeSegmented({
+  value,
+  onChange,
+  disabled,
+  className,
+  onMouseDown,
+  ...props
+}: {
+  value: EditMode;
+  onChange: (mode: EditMode) => void;
+  disabled?: boolean;
+  className?: string;
+  /** The window's toolbar keeps focus on the stage; in a node's settings a click takes it. */
+  onMouseDown?: (event: MouseEvent) => void;
+  "aria-labelledby"?: string;
+}) {
+  return (
+    <Segmented
+      aria-label={props["aria-labelledby"] ? undefined : t("edit.mode.label")}
+      aria-labelledby={props["aria-labelledby"]}
+      value={value}
+      onValueChange={(next) => onChange(next as EditMode)}
+      onMouseDown={onMouseDown}
+      disabled={disabled}
+      className={className}
     >
       <SegmentedItem value="paint">{t("edit.mode.paint")}</SegmentedItem>
       <SegmentedItem value="sketch">{t("edit.mode.sketch")}</SegmentedItem>
@@ -66,7 +98,7 @@ const TOOLS: Record<SketchTool, { icon: LucideIcon; label: MessageKey }> = {
  * Image edit / Toolbar / Sketch & point: the switch | Pan | Sketch, Circle, Box, Arrow, Point | the
  * next mark's colour | Undo, Redo, Clear. Rests at 40% while a run goes, as the mask's does.
  */
-export function SketchToolbar({ resting = false }: { resting?: boolean }) {
+export function SketchToolbar({ resting = false, className }: { resting?: boolean; className?: string }) {
   const tool = useEditSession((s) => s.sketchTool);
   const marks = useEditSession((s) => s.marks.length);
   const canUndo = useEditSession((s) => s.marksPast.length > 0);
@@ -88,7 +120,7 @@ export function SketchToolbar({ resting = false }: { resting?: boolean }) {
       role="toolbar"
       aria-label={t("edit.sketch.tools.label")}
       inert={resting}
-      className={cn(toolbarClass, resting && "opacity-40")}
+      className={cn(toolbarClass, resting && "opacity-40", className)}
     >
       <ModeSwitch />
       <Divider orientation="vertical" size={20} />
@@ -162,12 +194,12 @@ function ColorButton() {
 }
 
 /** Image edit / Sketch hint: what the tool in hand does, or that there's no room for another mark. */
-export function SketchHint({ model }: { model: string | undefined }) {
+export function SketchHint({ model, className }: { model: string | undefined; className?: string }) {
   const tool = useEditSession((s) => s.sketchTool);
   const full = useEditSession((s) => s.marks.length >= MARKS_MAX);
   if (tool === "pan" && !full) return null;
   return (
-    <div role="status" className={optionsBar}>
+    <div role="status" className={cn(optionsBar, className)}>
       <span className="whitespace-nowrap text-caption font-normal text-text-secondary">
         {full
           ? t("edit.sketch.hints.full", { model: model ?? "", max: MARKS_MAX })

@@ -28,6 +28,11 @@ export interface PromptCardProps {
   onChange: (value: string) => void;
   /** The model takes reference images: the + adds one. */
   references: boolean;
+  /**
+   * The references row shows. Off while the node doesn't read them at all (an Edit node in Sketch &
+   * point, design CjrWb3jA5z), as the Edit tab hides its own.
+   */
+  referenceRow?: boolean;
   placeholder: string;
   /** The text field's name. */
   fieldLabel: string;
@@ -47,6 +52,7 @@ export function PromptCard({
   value,
   onChange,
   references,
+  referenceRow = true,
   placeholder,
   fieldLabel,
   fromLabel,
@@ -125,19 +131,21 @@ export function PromptCard({
         }}
       />
       {/* The references come in first, then the + that adds one (design iy0ZN). */}
-      <div className="flex flex-wrap items-center gap-6">
-        <ReferenceOrder nodeId={nodeId} size={thumbSize} />
-        <IconButton
-          variant="secondary"
-          size={32}
-          icon={Plus}
-          label={t("canvas.nodes.generate.addReference")}
-          disabled={readOnly || locked || !references}
-          // Locked, the + keeps its look inside the dimmed card.
-          className={locked && references ? "disabled:text-inherit" : undefined}
-          onClick={() => files.current?.click()}
-        />
-      </div>
+      {referenceRow ? (
+        <div className="flex flex-wrap items-center gap-6">
+          <ReferenceOrder nodeId={nodeId} size={thumbSize} />
+          <IconButton
+            variant="secondary"
+            size={32}
+            icon={Plus}
+            label={t("canvas.nodes.generate.addReference")}
+            disabled={readOnly || locked || !references}
+            // Locked, the + keeps its look inside the dimmed card.
+            className={locked && references ? "disabled:text-inherit" : undefined}
+            onClick={() => files.current?.click()}
+          />
+        </div>
+      ) : null}
       {/* The whole prompt coming in, then this node's own words after it. */}
       {upstream ? (
         <p className="w-full text-small leading-[1.5] break-words whitespace-pre-wrap text-text-primary">

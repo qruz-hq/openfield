@@ -2,8 +2,10 @@ import {
   type CompositeSettings,
   MASK_COMPOSITE_DEFAULTS,
   MASK_COMPOSITE_MAX_PX,
+  type Mark,
   type ModelKey,
   type ModelListItem,
+  marksSchema,
   type ResolutionTier,
   type SizeSpec,
 } from "@openfield/core";
@@ -80,7 +82,21 @@ export interface EditParams {
   batch: number;
   seed: SeedParam;
   providerOptions: Record<string, unknown>;
+  /**
+   * Sketch & point (models that read marks): marks on the image say where, in place of a mask.
+   * Absent in a saved node that paints.
+   */
+  mode?: EditMode;
+  /** Sketch & point's marks, numbered from 1 in this order. */
+  marks?: Mark[];
+  /**
+   * Keep the rest in Sketch & point: off by default, so the change can blend in. On, the original
+   * goes back outside the area the marks cover.
+   */
+  sketchKeepOriginal?: boolean;
 }
+
+export type EditMode = "paint" | "sketch";
 
 export const EDIT_PORTS: readonly PortSpec[] = [
   {
@@ -135,6 +151,30 @@ export const EDIT_PORTS: readonly PortSpec[] = [
   },
 ];
 
+/**
+ * Sketch & point's version of the rail: the Mask input is hidden and ignored, its slot kept. The
+ * references stay drawn and linked for painting again, but go unsent, as on the Edit tab: the marks
+ * are numbered on the image being edited alone.
+ */
+const SKETCH_PORTS: readonly PortSpec[] = EDIT_PORTS.map((p) =>
+  p.id === "mask"
+    ? { ...p, hidden: true, keepSlot: true }
+    : p.id === "input_images"
+      ? { ...p, unused: "canvas.nodes.ports.sketchNoReferences" as const }
+      : p,
+);
+
+/** A saved node that sketches rather than paints, from its raw params. */
+export const sketchMode = (raw: Readonly<Record<string, unknown>>): boolean => raw.mode === "sketch";
+
+/** The rail an Edit node draws: Sketch & point hides the Mask input. */
+export const editPortsOf = (params: { readonly mode?: unknown }): readonly PortSpec[] =>
+  params.mode === "sketch" ? SKETCH_PORTS : EDIT_PORTS;
+
+/** Whether the node changes what its marks point at: Sketch & point, on a model that reads marks. */
+export const sketching = (p: Pick<EditParams, "mode">, model: ModelListItem | undefined): boolean =>
+  p.mode === "sketch" && !!model?.capabilities.marks;
+
 /** The model an Edit node asks for, or the one edits start on when it names none. */
 export const editModelKeyOf = (key: ModelKey | undefined, ctx: EngineContext): ModelKey | null =>
   key ?? ctx.defaultEditModel ?? null;
@@ -174,9 +214,9 @@ export function paintedMaskFits(node: EngineNode<EditParams>, inputs: ResolvedIn
   return maskFitsBase(node.params.maskFor, editBaseNow(inputs));
 }
 
-/** The mask a run sends: none while a painted one doesn't fit the image. */
+/** The mask a run sends: none while a painted one doesn't fit the image, nor while it sketches. */
 const sentMask = (node: EngineNode<EditParams>, inputs: ResolvedInputs): ImageValue[] =>
-  paintedMaskFits(node, inputs) ? imagesOf(inputs, "mask") : [];
+  node.params.mode === "sketch" || !paintedMaskFits(node, inputs) ? [] : imagesOf(inputs, "mask");
 
 /** A list into the image or the Mask input runs the node once per image, as any single input does. */
 const fanOutOf = (node: EngineNode<EditParams>, inputs: ResolvedInputs): number =>
@@ -211,10 +251,15 @@ function fingerprintParams(node: EngineNode<EditParams>, ctx: EngineContext): Fi
   // The image and a connected mask count through their own fingerprints; a painted one as the
   // node's own input (inlineInputs), only while nothing is connected in its place. Growing and
   // softening only matter while the original is put back.
+  const sketch = p.mode === "sketch";
+  const keep = sketch ? !!p.sketchKeepOriginal : p.keepOriginal;
   const common = {
     prompt: p.prompt.trim(),
-    composite: p.keepOriginal ? { expandPx: p.expandPx, featherPx: p.featherPx } : false,
+    composite: keep ? { expandPx: p.expandPx, featherPx: p.featherPx } : false,
     providerOptions: p.providerOptions,
+    // Only a node that sketches says so, so every node that paints hashes as it always has. The
+    // marks as they're sent: a box drawn either way round is the same box.
+    ...(sketch && { mode: "sketch", marks: (p.marks ?? []).map(cornerFirst) }),
   };
   if (!model) {
     return {
@@ -252,8 +297,9 @@ function fingerprintParams(node: EngineNode<EditParams>, ctx: EngineContext): Fi
 export const editEngine: NodeEngine<EditParams> = {
   fingerprintParams,
 
-  // The painted mask, while nothing is connected to the Mask input.
+  // The painted mask, while nothing is connected to the Mask input. Sketching, there's none.
   inlineInputs(node): Record<string, PortValue[]> {
+    if (node.params.mode === "sketch") return {};
     const mask = node.params.maskAssetId;
     return mask ? { mask: [{ kind: "asset", assetId: mask }] } : {};
   },
@@ -278,9 +324,21 @@ export const editEngine: NodeEngine<EditParams> = {
     const model = ctx.model(key)!;
     // A model that can't edit is as good as missing here, as a video model is.
     if (!editsImages(model.capabilities)) return { kind: "model_unavailable", model: model.key };
-    // What the person has to fix whatever else is missing comes first (STANDING_BLOCKERS).
-    const references = referenceBlocker(model, imageCount(imagesOf(inputs, "input_images")));
+    // What the person has to fix whatever else is missing comes first (STANDING_BLOCKERS). Sketching
+    // sends no references, so none can be in the way.
+    const sketch = node.params.mode === "sketch";
+    const references = sketch ? null : referenceBlocker(model, imageCount(imagesOf(inputs, "input_images")));
     if (references) return references;
+    if (sketch) {
+      if (!model.capabilities.marks) return { kind: "marks_unsupported", model: model.key };
+      if (imageCount(imagesOf(inputs, "image")) === 0) return { kind: "missing_input", port: "image" };
+      // Marks go without a mask: one is only made from them to put the rest back, as in the Edit tab.
+      const keeps = !!node.params.sketchKeepOriginal && !!node.params.marks?.length;
+      if (keeps && ctx.regionalFallback === false && !model.capabilities.ops.inpaint) {
+        return { kind: "area_edit_off", model: model.key, name: model.displayName };
+      }
+      return editPrompt(node, inputs) ? null : { kind: "no_description" };
+    }
     if (imageCount(imagesOf(inputs, "image")) === 0) return { kind: "missing_input", port: "image" };
     if (imageCount(imagesOf(inputs, "mask")) === 0) return { kind: "no_mask" };
     if (!paintedMaskFits(node, inputs)) {
@@ -306,11 +364,23 @@ export const editEngine: NodeEngine<EditParams> = {
     const resolved = resolveFor(model, p, p.batch);
     const base = imagesOf(inputs, "image");
     const mask = sentMask(node, inputs);
-    const references = imagesOf(inputs, "input_images");
+    // Sketching, the marks point at the image being edited alone, so references stay home.
+    const references = p.mode === "sketch" ? [] : imagesOf(inputs, "input_images");
     // As the server decides (core adapterOpFor): an inpaint where the model takes the mask, else a
     // whole-image edit. The mask goes either way, so the server can put back what's outside it.
     const op = mask.length > 0 && model.capabilities.ops.inpaint ? "inpaint" : "edit";
     const wire = editWire(model, resolved);
+    // Sketch & point sends its marks. Keeping the rest, the server makes the mask from them for the
+    // image it edits (canvas runs.ts), so the settings go with the call and no mask comes in.
+    const sketch = p.mode === "sketch";
+    const marks = sketch && p.marks?.length ? p.marks.map(cornerFirst) : null;
+    const settled = sketch
+      ? marks && p.sketchKeepOriginal
+        ? { composite: true, expandPx: p.expandPx, featherPx: p.featherPx }
+        : null
+      : mask.length > 0
+        ? compositeOf(p)
+        : null;
     const call: RunCall = {
       model: key,
       op,
@@ -318,7 +388,8 @@ export const editEngine: NodeEngine<EditParams> = {
       ...wire,
       batch: resolved.batch,
       seed: pinnedSeed(model, p.seed),
-      ...(mask.length > 0 && { mask: compositeOf(p) }),
+      ...(settled && { mask: settled }),
+      ...(marks && { marks }),
       ...(Object.keys(p.providerOptions).length && { providerOptions: p.providerOptions }),
     };
     const inputsSent: RunInput[] = [
@@ -384,6 +455,23 @@ export const editEngine: NodeEngine<EditParams> = {
   },
 };
 
+/** A box or circle top left corner first, as POST /api/edit takes it (the Edit tab's marksForApi). */
+function cornerFirst(mark: Mark): Mark {
+  if (mark.kind !== "box" && mark.kind !== "circle") return mark;
+  const { from, to } = mark;
+  return {
+    ...mark,
+    from: { x: Math.min(from.x, to.x), y: Math.min(from.y, to.y) },
+    to: { x: Math.max(from.x, to.x), y: Math.max(from.y, to.y) },
+  };
+}
+
+/** Saved marks, read leniently: a list that doesn't fit the mark rules counts as none. */
+function readMarks(value: unknown): Mark[] {
+  const parsed = marksSchema.safeParse(value);
+  return parsed.success ? parsed.data : [];
+}
+
 export const editSpec: NodeSpec<EditParams> = {
   type: "image.edit",
   typeVersion: 1,
@@ -403,6 +491,8 @@ export const editSpec: NodeSpec<EditParams> = {
   imageBox: imageCardBox,
   annotation: false,
   ports: EDIT_PORTS,
+  portsOf: (node) => editPortsOf(node.params),
+  optionalSettings: ["mode", "marks", "sketchKeepOriginal"],
   defaults: (ctx) => ({
     ...(ctx.defaultEditModel && { model: ctx.defaultEditModel }),
     prompt: "",
@@ -426,6 +516,12 @@ export const editSpec: NodeSpec<EditParams> = {
     batch: readBatch(raw.batch, 1),
     seed: readSeed(raw.seed),
     providerOptions: readRecord(raw.providerOptions),
+    // Only a node that sketches carries these, so one that paints reads as it always has.
+    ...(sketchMode(raw) && {
+      mode: "sketch" as const,
+      marks: readMarks(raw.marks),
+      sketchKeepOriginal: readBoolean(raw, "sketchKeepOriginal", false),
+    }),
   }),
   runnable: true,
   engine: editEngine,

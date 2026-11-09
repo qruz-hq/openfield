@@ -71,6 +71,8 @@ function lookFor(state: CanvasState, nodeId: string, port: PortSpec): PortLook {
 
 /** The port's name for its tooltip: "Reference images ×n" for inputs and outputs that carry many. */
 export function portName(port: PortSpec): string {
+  // A Layers output goes by its layer's own name.
+  if (port.name) return port.gone ? `${port.name}. ${t("canvas.nodes.layers.gone")}` : port.name;
   const name = port.label ? t(port.label) : port.id;
   return port.arity === "multi" || port.items === "list" ? t("canvas.nodes.ports.many", { name }) : name;
 }
@@ -84,10 +86,20 @@ export interface PortProps {
   off?: string | null;
   /** Collapsed cards stack every handle on one spot and show only the first. */
   stacked?: boolean;
+  /** On the collapsed card's middle, whatever its own place. */
+  collapsed?: boolean;
   connectable: boolean;
 }
 
-export const Port = memo(function Port({ nodeId, port, offset, off, stacked, connectable }: PortProps) {
+export const Port = memo(function Port({
+  nodeId,
+  port,
+  offset,
+  off,
+  stacked,
+  collapsed,
+  connectable,
+}: PortProps) {
   const look = useCanvas((s) => lookFor(s, nodeId, port));
   const Icon = port.glyph === "images" ? Images : (ICONS[port.type] ?? Image);
   const name = portName(port);
@@ -98,7 +110,7 @@ export const Port = memo(function Port({ nodeId, port, offset, off, stacked, con
         id={port.id}
         type={input ? "target" : "source"}
         position={input ? Position.Left : Position.Right}
-        isConnectable={connectable}
+        isConnectable={connectable && !port.gone}
         tabIndex={stacked ? -1 : 0}
         aria-label={off ? `${name}. ${off}` : name}
         className={cn(
@@ -108,8 +120,9 @@ export const Port = memo(function Port({ nodeId, port, offset, off, stacked, con
           look === "dimmed" && "of-port-dimmed",
           off && look === "idle" && "of-port-off",
           stacked && "of-port-stacked",
+          port.gone && "of-port-gone",
         )}
-        style={{ top: `calc(50% + ${offset}px)` }}
+        style={{ top: port.top !== undefined && !collapsed ? port.top : `calc(50% + ${offset}px)` }}
       >
         <Icon size={12} aria-hidden />
       </Handle>
@@ -121,7 +134,7 @@ export interface PortRailsProps {
   nodeId: string;
   ports: readonly PortSpec[];
   connectable: boolean;
-  /** Per input port id, why it's greyed. */
+  /** Per input port id, why it's greyed (a port's own `unused` comes first). */
   off?: Readonly<Record<string, string | null>>;
   collapsed?: boolean;
 }
@@ -135,8 +148,10 @@ export function PortRails({ nodeId, ports, connectable, off, collapsed = false }
         nodeId={nodeId}
         port={port}
         offset={collapsed ? 0 : offset}
-        off={off?.[port.id] ?? null}
+        // A port the node doesn't read in its current settings says so before anything else.
+        off={(port.unused ? t(port.unused) : null) ?? off?.[port.id] ?? null}
         stacked={collapsed && i > 0}
+        collapsed={collapsed}
         connectable={connectable}
       />
     ));

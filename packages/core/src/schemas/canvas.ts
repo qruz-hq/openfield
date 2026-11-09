@@ -30,6 +30,8 @@ import {
 } from "./common";
 import { costEstimateSchema } from "./cost";
 import { errorEnvelopeSchema } from "./errors";
+import { layerRequestSchema } from "./layers";
+import { marksSchema } from "./marks";
 import { generateRequestSchema, maskInputSchema, videoRequestSchema } from "./request";
 
 // Canvas routes (§8.3). The document itself lives in ../canvas.
@@ -161,7 +163,11 @@ export const canvasRunCallSchema = generateRequestSchema
     providerOptions: true,
   })
   .extend({
-    op: z.enum(["generate", "variation", "edit", "inpaint"]),
+    op: z.enum(["generate", "variation", "edit", "inpaint", "decompose"]),
+    /** A layer split's size (op "decompose"). */
+    layers: layerRequestSchema.optional(),
+    /** Sketch & point: where on the image, for models that read marks. */
+    marks: marksSchema.optional(),
     /** A video's settings. Its frames come from the item's inputs, never from here. */
     video: videoRequestSchema.omit({ startFrame: true, endFrame: true }).optional(),
     /**

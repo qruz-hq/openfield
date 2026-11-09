@@ -1,4 +1,4 @@
-import { BATCH_MAX, GENERATE_PROMPT_MAX, MASK_COMPOSITE_MAX_PX, t } from "@openfield/core";
+import { BATCH_MAX, GENERATE_PROMPT_MAX, LAYERS_PROMPT_MAX, MASK_COMPOSITE_MAX_PX, t } from "@openfield/core";
 import { PROMPT_MAX } from "./prompt/spec";
 import { LIST_MAX, TAKES_MAX, TAKES_MIN } from "./variations/spec";
 
@@ -15,13 +15,19 @@ export const NODE_LIMITS = {
     batch: { min: 1, max: BATCH_MAX },
     featherPx: { min: 0, max: MASK_COMPOSITE_MAX_PX },
     expandPx: { min: 0, max: MASK_COMPOSITE_MAX_PX },
+    // Sketch & point sends no references: every mark is on the image being edited.
+    marks: { image: 1 },
   },
+  "image.layers": { prompt: { maxChars: LAYERS_PROMPT_MAX } },
   "image.variations": {
     count: { min: TAKES_MIN, max: TAKES_MAX },
     prompts: { maxItems: LIST_MAX, maxChars: PROMPT_MAX },
     models: { maxItems: LIST_MAX },
   },
 } as const;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
 const chars = (value: unknown) => (typeof value === "string" ? value.length : 0);
 
@@ -41,8 +47,24 @@ export function limitProblem(type: string, params: Readonly<Record<string, unkno
     }
     case "image.edit": {
       const count = chars(params.prompt);
-      return count > GENERATE_PROMPT_MAX
-        ? t("canvas.edits.limits.editPrompt", { max: GENERATE_PROMPT_MAX, count })
+      if (count > GENERATE_PROMPT_MAX) {
+        return t("canvas.edits.limits.editPrompt", { max: GENERATE_PROMPT_MAX, count });
+      }
+      // Sketch & point sends no references (nodes/edit/spec.ts), so a mark on one would point at
+      // nothing the model sees.
+      const marks = Array.isArray(params.marks) ? params.marks : [];
+      const off = marks.findIndex((m) => isRecord(m) && typeof m.image === "number" && m.image > 1);
+      return off >= 0
+        ? t("canvas.edits.limits.marksImage", {
+            index: off + 1,
+            image: String((marks[off] as { image: number }).image),
+          })
+        : null;
+    }
+    case "image.layers": {
+      const count = chars(params.prompt);
+      return count > LAYERS_PROMPT_MAX
+        ? t("canvas.edits.limits.layersPrompt", { max: LAYERS_PROMPT_MAX, count })
         : null;
     }
     case "image.variations": {

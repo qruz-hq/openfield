@@ -185,7 +185,13 @@ interface Switchable extends SizeParams {
 export function useModelSwitch(id: string) {
   const store = useCanvasStoreApi();
   return useCallback(
-    (from: ModelListItem | undefined, to: ModelListItem, params: Switchable) => {
+    (
+      from: ModelListItem | undefined,
+      to: ModelListItem,
+      params: Switchable,
+      /** More settings the switch changes, in the same undo step. */
+      also: Record<string, unknown> = {},
+    ) => {
       const before = {
         model: params.model,
         size: params.size,
@@ -206,6 +212,7 @@ export function useModelSwitch(id: string) {
         resolution: carried.values.resolution,
         quality: carried.values.quality,
         ...(params.batch !== undefined && { batch: carried.batch }),
+        ...also,
       };
       const { actions } = store.getState();
       actions.apply([{ op: "setParams", id, patch }], { label: "model" });

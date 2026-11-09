@@ -6,16 +6,40 @@ import { kindName, MarkChip } from "./sketch-chrome";
 
 // Image edit / Marks list (design dGmKS7RNNK, and / Empty fVYLRNCACZ): the marks in the Edit panel,
 // numbered as on the image, each with its colour and material. Picking a row picks the mark, which
-// opens its popover on the image. Under them, the lines that go into the prompt with them.
+// opens its popover on the image. Under them, the lines that go into the prompt with them. The
+// canvas shows the same list for an Edit node's marks, without those lines (design PdssD21Csb).
 
 /** "#C8102E · brushed steel": a mark's colour, then its material if it has one. */
 const detailOf = (mark: Mark) => [mark.color, mark.material?.toLocaleLowerCase()].filter(Boolean).join(" · ");
 
-export function MarksList({ resting }: { resting: boolean }) {
+/** The Edit session's marks: the Edit tab's panel and the canvas mark window. */
+export function MarksList({ resting, preview = true }: { resting: boolean; preview?: boolean }) {
   const marks = useEditSession((s) => s.marks);
   const selected = useEditSession((s) => s.selectedMark);
   const { selectMark, clearMarks } = useEditSession.getState();
+  return (
+    <MarksListView
+      marks={marks}
+      selected={selected}
+      resting={resting}
+      preview={preview}
+      onSelect={(i) => selectMark(i === selected ? null : i)}
+      onClear={clearMarks}
+    />
+  );
+}
 
+export interface MarksListViewProps {
+  marks: readonly Mark[];
+  selected: number | null;
+  resting: boolean;
+  /** The lines that go into the prompt, under the rows. */
+  preview: boolean;
+  onSelect: (index: number) => void;
+  onClear: () => void;
+}
+
+export function MarksListView({ marks, selected, resting, preview, onSelect, onClear }: MarksListViewProps) {
   if (marks.length === 0)
     return (
       <div
@@ -46,7 +70,7 @@ export function MarksList({ resting }: { resting: boolean }) {
         </div>
         <button
           type="button"
-          onClick={clearMarks}
+          onClick={onClear}
           className="cursor-pointer text-caption font-semibold text-text-secondary hover:text-text-primary"
         >
           {t("edit.sketch.clearAll")}
@@ -61,7 +85,7 @@ export function MarksList({ resting }: { resting: boolean }) {
             type="button"
             data-mark-row
             aria-pressed={i === selected}
-            onClick={() => selectMark(i === selected ? null : i)}
+            onClick={() => onSelect(i)}
             className={cn(
               "flex w-full cursor-pointer items-center gap-10 rounded-10 px-10 py-8 text-left",
               i === selected ? "bg-accent-soft" : "hover:bg-elevated",
@@ -81,22 +105,24 @@ export function MarksList({ resting }: { resting: boolean }) {
         ))}
       </div>
       {/* Prompt preview */}
-      <div className="flex w-full flex-col gap-6 rounded-10 border border-dashed border-border px-12 py-10">
-        <span className="text-micro font-medium text-text-tertiary">{t("edit.sketch.sent")}</span>
-        {marks.map((mark, i) => (
-          <p
-            // biome-ignore lint/suspicious/noArrayIndexKey: as above.
-            key={i}
-            className="text-mono-11 leading-[1.45] break-words text-text-secondary"
-          >
-            {previewLine(
-              { ...mark, material: mark.material?.toLocaleLowerCase() },
-              t("edit.sketch.mark", { n: i + 1 }),
-              kindName(mark).toLocaleLowerCase(),
-            )}
-          </p>
-        ))}
-      </div>
+      {preview ? (
+        <div className="flex w-full flex-col gap-6 rounded-10 border border-dashed border-border px-12 py-10">
+          <span className="text-micro font-medium text-text-tertiary">{t("edit.sketch.sent")}</span>
+          {marks.map((mark, i) => (
+            <p
+              // biome-ignore lint/suspicious/noArrayIndexKey: as above.
+              key={i}
+              className="text-mono-11 leading-[1.45] break-words text-text-secondary"
+            >
+              {previewLine(
+                { ...mark, material: mark.material?.toLocaleLowerCase() },
+                t("edit.sketch.mark", { n: i + 1 }),
+                kindName(mark).toLocaleLowerCase(),
+              )}
+            </p>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }

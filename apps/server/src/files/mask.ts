@@ -7,6 +7,8 @@ import {
   MASK_CHANGE_BELOW,
   MASK_MAX_BYTES,
   MASK_MAX_PIXELS,
+  type Mark,
+  marksArea,
   t,
   UPLOAD_MAX_BYTES,
   type UploadResponse,
@@ -63,14 +65,7 @@ export async function saveMask(deps: MaskDeps, file: Blob, opts: SaveMaskOptions
   if (!probed || probed.mime === "image/heic") throw unsupported("Not a PNG, JPEG or WebP image");
   requireSameSize(probed, base);
 
-  let sharp: Sharp;
-  try {
-    sharp = await loadSharp();
-  } catch {
-    throw new ApiFailure(500, "internal", "sharp can't load on this computer", {
-      userMessage: t("masks.cantOpen"),
-    });
-  }
+  const sharp = await sharpOrFail();
   if (await isTurned(sharp, ingest.fileOf(base.path))) throw turned("baseAssetId");
 
   let alpha = await alphaOf(sharp, bytes, base.width, base.height);
@@ -78,6 +73,47 @@ export async function saveMask(deps: MaskDeps, file: Blob, opts: SaveMaskOptions
   if (opts.invert) alpha = invertAlpha(alpha);
   // Every pixel either changes or keeps, so the model and the composite agree on the area.
   for (let i = 0; i < alpha.length; i++) alpha[i] = alpha[i]! < MASK_CHANGE_BELOW ? 0 : 255;
+  return storeMask(deps, sharp, base, alpha);
+}
+
+/**
+ * Saves the area a set of marks covers as a mask for the image they're on, so a Sketch & point
+ * edit that keeps the rest of the image is composited the way the Edit tab does it.
+ */
+export async function saveMarksMask(
+  deps: MaskDeps,
+  marks: readonly Mark[],
+  opts: Pick<SaveMaskOptions, "baseAssetId">,
+): Promise<UploadResponse> {
+  const base = editableImage(deps.db, opts.baseAssetId, "baseAssetId");
+  requireMaskableSize(base, "baseAssetId");
+  const sharp = await sharpOrFail();
+  if (await isTurned(sharp, deps.ingest.fileOf(base.path))) throw turned("baseAssetId");
+  const area = marksArea(marks, base.width, base.height);
+  // Transparent where the marks reach: that part changes.
+  const alpha = new Uint8Array(area.length);
+  for (let i = 0; i < area.length; i++) alpha[i] = area[i] ? 0 : 255;
+  return storeMask(deps, sharp, base, alpha);
+}
+
+async function sharpOrFail(): Promise<Sharp> {
+  try {
+    return await loadSharp();
+  } catch {
+    throw new ApiFailure(500, "internal", "sharp can't load on this computer", {
+      userMessage: t("masks.cantOpen"),
+    });
+  }
+}
+
+/** Files an alpha mask (0 changes, 255 keeps) for `base`, or the one already saved for it. */
+async function storeMask(
+  deps: MaskDeps,
+  sharp: Sharp,
+  base: AssetRow,
+  alpha: Uint8Array,
+): Promise<UploadResponse> {
+  const { db, ingest } = deps;
   if (isEmptyMask(alpha)) throw badMask("The mask marks nothing to change", t("errors.maskMissing"));
 
   const png = await encodeMask(sharp, alpha, base.width, base.height);

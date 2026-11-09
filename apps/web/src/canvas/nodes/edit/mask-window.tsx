@@ -1,5 +1,6 @@
-import { type EditParams, editSpec } from "@openfield/canvas/nodes/edit/spec";
-import { type AssetListItem, MASK_MAX_PIXELS, t } from "@openfield/core";
+import { type EditParams, editModelKeyOf, editSpec } from "@openfield/canvas/nodes/edit/spec";
+import { incomingEdges } from "@openfield/canvas/store/graph";
+import { type AssetListItem, MASK_MAX_PIXELS, type Mark, t } from "@openfield/core";
 import {
   Button,
   cn,
@@ -21,16 +22,19 @@ import { useAssetDetail } from "../../../api/hooks/library";
 import { errorMessage, rawFetch } from "../../../api/raw";
 import { EditToolbar, ZoomControl } from "../../../detail/edit/chrome";
 import { editKey } from "../../../detail/edit/keys";
+import { MarksList } from "../../../detail/edit/marks-list";
 import { decodeMaskPng, encodeMaskPng } from "../../../detail/edit/mask-png";
 import { usePaintSurface, useSpaceHeld } from "../../../detail/edit/paint-surface";
 import { tooLargeToMask } from "../../../detail/edit/plan";
 import {
   BRUSH_SLIDER_STEPS,
   brushSizeAt,
-  DEFAULT_TOOL,
+  type EditMode,
   sliderOfSize,
   useEditSession,
 } from "../../../detail/edit/session";
+import { ModeSwitch, SketchHint, SketchToolbar } from "../../../detail/edit/sketch-chrome";
+import { useSketchSurface } from "../../../detail/edit/sketch-surface";
 import { useTurnedPhoto } from "../../../detail/edit/turned";
 import { listItemOf } from "../../../detail/format";
 import { Media, type MediaHandle, type MediaInset } from "../../../detail/media";
@@ -53,9 +57,23 @@ import { usePaintBase } from "./base";
 // the mask (POST /api/masks) and writes it and the image it was painted on to the node in one undo
 // step. Cancel, Close and Esc leave the node as it was, and wait while a save is under way. Opened
 // from the node or its settings rather than a trigger, it hands focus back to what opened it.
+//
+// For a model that reads marks the toolbar has the Edit tab's switch to Sketch & point: the same
+// stage takes the Edit tab's marks instead, with their list beside it in place of the brush. Save
+// marks writes the marks and the mode, and drops a link into the Mask input, in one undo step.
+// There's no design of its own for marking: it's this window with the Edit tab's sketch chrome.
 
 /** Room round the photo in the 560-tall stage: it fits above the toolbar (Photo at 16, 460 tall). */
 const STAGE_INSET: MediaInset = { top: 16, right: 16, bottom: 84, left: 16 };
+
+/** The mark a row in the node's settings picked: the window opens with it picked. */
+let pickOnOpen: number | null = null;
+
+/** Opens the window on an Edit node's marks with one of them picked, its popover open. */
+export function openOnMark(open: () => void, index: number): void {
+  pickOnOpen = index;
+  open();
+}
 
 /** Opens on the node the editor says (ui.maskNodeId), while it can still take a mask. */
 export function MaskWindow({ nodeId }: { nodeId: string }) {
@@ -68,6 +86,7 @@ export function MaskWindow({ nodeId }: { nodeId: string }) {
   const detail = query.data?.asset;
   const item = useMemo(() => (detail ? listItemOf(detail) : undefined), [detail]);
   const open = !!frame && frame.type === editSpec.type && !locked && !readOnly && base !== null;
+  const sketch = useNodeSketches(nodeId);
   const close = () => actions.setUi({ maskNodeId: null });
   const returnFocus = useOpenerFocus(nodeId);
   // A node that's gone, locked or lost its image closes the window.
@@ -87,10 +106,17 @@ export function MaskWindow({ nodeId }: { nodeId: string }) {
       {item ? (
         <MaskWindowBody nodeId={nodeId} item={item} onCloseAutoFocus={returnFocus} />
       ) : (
-        <MaskWindowLoading onCloseAutoFocus={returnFocus} />
+        <MaskWindowLoading sketch={sketch} onCloseAutoFocus={returnFocus} />
       )}
     </Modal>
   );
+}
+
+/** Whether the node marks its image rather than painting a mask, on a model that reads marks. */
+function useNodeSketches(nodeId: string): boolean {
+  const ctx = useCanvasEngineContext();
+  const params = useParsedParams<EditParams>(nodeId, editSpec, ctx);
+  return params.mode === "sketch" && !!ctx.model(editModelKeyOf(params.model, ctx))?.capabilities.marks;
 }
 
 /**
@@ -121,10 +147,16 @@ function useOpenerFocus(nodeId: string): (event: Event) => void {
 }
 
 /** The window's frame while the image's details load: the stage waits, and only Cancel works. */
-function MaskWindowLoading({ onCloseAutoFocus }: { onCloseAutoFocus: (event: Event) => void }) {
+function MaskWindowLoading({
+  sketch,
+  onCloseAutoFocus,
+}: {
+  sketch: boolean;
+  onCloseAutoFocus: (event: Event) => void;
+}) {
   return (
     <ModalSurface className="w-1152 gap-20 p-24" aria-busy onCloseAutoFocus={onCloseAutoFocus}>
-      <MaskWindowHeader />
+      <MaskWindowHeader sketch={sketch} />
       <div className="flex h-560 w-full min-w-0 gap-16">
         <div className="flex h-full min-w-0 flex-1 items-center justify-center rounded-14 bg-canvas">
           <Spinner size={18} />
@@ -138,20 +170,21 @@ function MaskWindowLoading({ onCloseAutoFocus }: { onCloseAutoFocus: (event: Eve
           </Button>
         </ModalClose>
         <Button variant="primary" size="m" disabled>
-          {t("canvas.nodes.edit.maskWindow.save")}
+          {t(sketch ? "canvas.nodes.edit.markWindow.save" : "canvas.nodes.edit.maskWindow.save")}
         </Button>
       </div>
     </ModalSurface>
   );
 }
 
-function MaskWindowHeader({ closing = true }: { closing?: boolean }) {
+function MaskWindowHeader({ sketch, closing = true }: { sketch: boolean; closing?: boolean }) {
+  const copy = sketch ? "markWindow" : "maskWindow";
   return (
     <div className="flex w-full items-start justify-between">
       {/* Title */}
       <div className="flex flex-col gap-4">
-        <ModalTitle>{t("canvas.nodes.edit.maskWindow.title")}</ModalTitle>
-        <ModalDescription>{t("canvas.nodes.edit.maskWindow.hint")}</ModalDescription>
+        <ModalTitle>{t(`canvas.nodes.edit.${copy}.title`)}</ModalTitle>
+        <ModalDescription>{t(`canvas.nodes.edit.${copy}.hint`)}</ModalDescription>
       </div>
       <ModalClose asChild>
         <IconButton icon={X} label={t("actions.close")} disabled={!closing} />
@@ -171,21 +204,31 @@ function MaskWindowBody({
 }) {
   const ctx = useCanvasEngineContext();
   const actions = useCanvasActions();
+  const store = useCanvasStoreApi();
   const params = useParsedParams<EditParams>(nodeId, editSpec, ctx);
   const stage = useRef<HTMLDivElement>(null);
   const media = useRef<MediaHandle>(null);
   const [zoom, setZoom] = useState(0);
   const [saving, setSaving] = useState(false);
   const tool = useEditSession((s) => s.tool);
+  const sketchTool = useEditSession((s) => s.sketchTool);
   const mask = useEditSession((s) => s.mask);
+  const picking = useEditSession((s) => s.selectedMark !== null);
+  const model = ctx.model(editModelKeyOf(params.model, ctx));
+  const canMark = !!model?.capabilities.marks;
   // The mask painted on this very image comes back to edit; one painted on another doesn't fit it.
   const existing = params.maskAssetId && params.maskFor === item.id ? params.maskAssetId : null;
-  const started = useMaskSession(item, existing);
+  const wasSketch = params.mode === "sketch" && canMark;
+  const started = useMaskSession(item, existing, wasSketch ? "sketch" : "paint", params.marks);
+  const sessionSketch = useEditSession((s) => s.mode === "sketch");
+  // Until the session starts, the node says which way it shows its change.
+  const sketch = (started ? sessionSketch : wasSketch) && canMark;
   const turned = useTurnedPhoto(item, true);
   const tooLarge = tooLargeToMask(item);
   const blocked = turned || tooLarge;
   const spaceHeld = useSpaceHeld(true);
-  const panning = tool === "pan" || spaceHeld || saving;
+  const panning = (sketch ? sketchTool : tool) === "pan" || spaceHeld || saving;
+  const marks = useSketchSurface({ panning });
   const paint = usePaintSurface({
     width: item.width,
     height: item.height,
@@ -203,19 +246,58 @@ function MaskWindowBody({
     [],
   );
   const close = () => actions.setUi({ maskNodeId: null });
+  // Painting again takes the node out of Sketch & point; its marks go with it.
+  const nodeSketch = params.mode === "sketch";
+  const leaveSketch = nodeSketch ? { mode: undefined, marks: undefined, sketchKeepOriginal: undefined } : {};
   // The mask and the image it fits, together, so one undo takes both back.
   const setMask = (maskAssetId: string | undefined) =>
     actions.apply(
-      [{ op: "setParams", id: nodeId, patch: { maskAssetId, maskFor: maskAssetId ? item.id : undefined } }],
+      [
+        {
+          op: "setParams",
+          id: nodeId,
+          patch: { maskAssetId, maskFor: maskAssetId ? item.id : undefined, ...leaveSketch },
+        },
+      ],
       { label: "mask" },
     );
+  // The marks and the mode, and no link into the Mask input it now hides, in one undo step. A mask
+  // painted before stays on the node, for painting again.
+  const setMarks = (next: readonly Mark[]) => {
+    const { doc } = store.getState();
+    actions.apply(
+      [
+        {
+          op: "setParams",
+          id: nodeId,
+          patch: {
+            mode: "sketch",
+            marks: next.length ? [...next] : undefined,
+            sketchKeepOriginal: wasSketch ? !!params.sketchKeepOriginal : false,
+          },
+        },
+        ...incomingEdges(doc, nodeId, "mask").map((edge) => ({ op: "deleteEdge" as const, id: edge.id })),
+      ],
+      { label: "marks" },
+    );
+  };
 
   const save = async () => {
     const session = useEditSession.getState();
     const editor = session.editor;
-    if (!editor || saving) return;
-    // Nothing painted since it opened: the node keeps the mask it has.
-    if (!session.mask.canUndo) return close();
+    if (saving) return;
+    if (sketch) {
+      // Nothing marked since it opened: the node stays as it was.
+      if (wasSketch && session.marksPast.length === 0) return close();
+      setMarks(session.marks);
+      return close();
+    }
+    if (!editor) return;
+    // Nothing painted since it opened: the node keeps the mask it has, painting again.
+    if (!session.mask.canUndo) {
+      if (nodeSketch) setMask(existing ?? undefined);
+      return close();
+    }
     // All of it cleared: the node has no painted mask any more.
     if (session.mask.empty) {
       setMask(undefined);
@@ -245,7 +327,7 @@ function MaskWindowBody({
     }
     if (!started || saving) return;
     const session = useEditSession.getState();
-    const edit = editKey(event);
+    const edit = editKey(event, sketch ? "sketch" : "paint");
     let handled = true;
     if (edit?.kind === "tool") session.setTool(edit.tool);
     else if (edit?.kind === "undo") session.undo();
@@ -261,7 +343,7 @@ function MaskWindowBody({
     }
   };
 
-  const title = t("canvas.nodes.edit.maskWindow.title");
+  const title = t(sketch ? "canvas.nodes.edit.markWindow.title" : "canvas.nodes.edit.maskWindow.title");
   return (
     <ModalSurface
       className="w-1152 gap-20 p-24"
@@ -276,9 +358,11 @@ function MaskWindowBody({
       // saving: the mask is on its way to the node.
       onEscapeKeyDown={(event) => {
         if (saving) return event.preventDefault();
-        if (paint.cancel()) return event.preventDefault();
-        if (useEditSession.getState().tool !== DEFAULT_TOOL) {
-          useEditSession.getState().setTool(DEFAULT_TOOL);
+        if ((sketch ? marks.cancel() : paint.cancel()) || useEditSession.getState().resetTool())
+          return event.preventDefault();
+        // A picked mark lets go before the window closes.
+        if (sketch && useEditSession.getState().selectedMark !== null) {
+          useEditSession.getState().selectMark(null);
           event.preventDefault();
         }
       }}
@@ -286,7 +370,7 @@ function MaskWindowBody({
         if (saving) event.preventDefault();
       }}
     >
-      <MaskWindowHeader closing={!saving} />
+      <MaskWindowHeader sketch={sketch} closing={!saving} />
       {/* Editor */}
       <div className="flex h-560 w-full min-w-0 gap-16">
         {/* Stage */}
@@ -308,11 +392,24 @@ function MaskWindowBody({
                 onZoomChange={setZoom}
                 inset={STAGE_INSET}
                 panAnywhere={panning}
-                layer={paint.layer}
+                layer={sketch ? marks.layer : paint.layer}
+                pinned={sketch ? marks.pinned : undefined}
               >
-                {saving ? null : paint.input}
+                {saving ? null : sketch ? marks.input : paint.input}
               </Media>
-              <EditToolbar resting={saving} className="bottom-12" />
+              {sketch ? (
+                <>
+                  {/* The picked mark's popover says what to do with it instead. */}
+                  {saving || picking ? null : <SketchHint model={model?.displayName} className="bottom-64" />}
+                  <SketchToolbar resting={saving} className="bottom-12" />
+                </>
+              ) : (
+                <EditToolbar
+                  resting={saving}
+                  modeSwitch={canMark ? <ModeSwitch /> : undefined}
+                  className="bottom-12"
+                />
+              )}
               <ZoomControl
                 zoom={zoom}
                 onZoomIn={() => media.current?.zoomIn()}
@@ -323,8 +420,12 @@ function MaskWindowBody({
           ) : null}
         </div>
         {/* Settings */}
-        <div className="flex h-full w-300 shrink-0 flex-col gap-12">
-          <BrushSettings resting={saving || blocked} />
+        <div className="flex h-full w-300 shrink-0 flex-col gap-12 overflow-y-auto">
+          {sketch ? (
+            <MarksList resting={saving || blocked} preview={false} />
+          ) : (
+            <BrushSettings resting={saving || blocked} />
+          )}
         </div>
       </div>
       {/* Footer */}
@@ -339,10 +440,11 @@ function MaskWindowBody({
           size="m"
           loading={saving}
           // A trace too faint to change anything can't be saved (an empty one clears the mask).
-          disabled={!started || blocked || (!mask.empty && !mask.changes)}
+          // Marks can always be saved: none at all edits the whole image as the prompt says.
+          disabled={!started || blocked || (!sketch && !mask.empty && !mask.changes)}
           onClick={() => void save()}
         >
-          {t("canvas.nodes.edit.maskWindow.save")}
+          {t(sketch ? "canvas.nodes.edit.markWindow.save" : "canvas.nodes.edit.maskWindow.save")}
         </Button>
       </div>
     </ModalSurface>
@@ -356,8 +458,16 @@ const noop = () => {};
  * painted on this image. One that can't be read is left out, to paint again. The session ends with
  * the window.
  */
-function useMaskSession(item: AssetListItem, existing: string | null): boolean {
+function useMaskSession(
+  item: AssetListItem,
+  existing: string | null,
+  mode: EditMode,
+  marks: readonly Mark[] | undefined,
+): boolean {
   const [started, setStarted] = useState(false);
+  // Read once: the session owns them from then on.
+  const marksAtStart = useRef(marks);
+  const modeAtStart = useRef(mode);
   const detail = useAssetDetail(existing);
   const maskUrl = detail.data?.asset.fileUrl ?? null;
   const waiting = existing !== null && detail.isPending;
@@ -382,6 +492,16 @@ function useMaskSession(item: AssetListItem, existing: string | null): boolean {
       const session = useEditSession.getState();
       session.end();
       if (!tooLargeToMask({ width, height })) session.start(id, width, height, initial);
+      // The node's marks, as they were saved: Undo starts from here.
+      useEditSession.setState({
+        mode: modeAtStart.current,
+        marks: marksAtStart.current ?? [],
+        marksPast: [],
+        marksFuture: [],
+        selectedMark:
+          pickOnOpen !== null && pickOnOpen < (marksAtStart.current?.length ?? 0) ? pickOnOpen : null,
+      });
+      pickOnOpen = null;
       setStarted(true);
     };
     void load();
@@ -390,7 +510,15 @@ function useMaskSession(item: AssetListItem, existing: string | null): boolean {
     };
   }, [waiting, maskUrl, id, width, height]);
 
-  useEffect(() => () => useEditSession.getState().end(), []);
+  // The Edit tab keeps the way of showing a change the person last used: the window hands it back.
+  useEffect(() => {
+    const before = useEditSession.getState().mode;
+    return () => {
+      pickOnOpen = null;
+      useEditSession.getState().end();
+      useEditSession.setState({ mode: before });
+    };
+  }, []);
   return started;
 }
 
