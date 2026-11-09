@@ -6,13 +6,16 @@ import { useId } from "react";
 // Chip / Setting / Images and its Popover / Images / Related set (design Zn3DlLHTxJ, h2bPH8Zad4):
 // the image count for a model that can make a related set, in place of the stepper. Off, the count
 // is exact as with any model; on, the model makes up to that many in one call and bills only what
-// comes back, so the chip reads "Up to 4".
+// comes back, so the chip reads "Up to 4". It
+// needs a count of 2: a set of one would read "Up to 1" for what is just one image.
 
 export interface RelatedSet {
   on: boolean;
   onChange: (on: boolean) => void;
   /** Fewer than the model's count when the images sent in leave less room in a set. */
   max?: number;
+  /** Why it can't be turned on yet (a count of 1, or no room left beside the images sent in). */
+  blocked?: string | null;
 }
 
 export function ImagesChip({
@@ -63,11 +66,12 @@ export function ImagesChip({
               {t("composer.chips.batch.relatedSet")}
             </span>
             <span id={descriptionId} className="w-full text-caption leading-[1.45] text-text-tertiary">
-              {t("composer.chips.batch.relatedSetHint", { count: value })}
+              {relatedSet.blocked ?? t("composer.chips.batch.relatedSetHint", { count: value })}
             </span>
           </div>
           <Switch
             checked={relatedSet.on}
+            disabled={!!relatedSet.blocked}
             onCheckedChange={relatedSet.onChange}
             aria-labelledby={titleId}
             aria-describedby={descriptionId}

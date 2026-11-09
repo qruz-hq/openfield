@@ -97,7 +97,6 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
   const picked = anyReady || composer.model ? model : undefined;
   // With no model yet, chips preview the first model's so the bar keeps its shape.
   const caps: Capabilities | undefined = (model ?? models[0])?.capabilities;
-  const set = relatedSetPlan(picked, picked && composer.providerOptions[picked.key], composer.references);
   const values = caps
     ? resolveValues(
         caps,
@@ -106,6 +105,12 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
         settings?.defaultAspect,
       )
     : undefined;
+  const set = relatedSetPlan(
+    picked,
+    picked && composer.providerOptions[picked.key],
+    composer.references,
+    values?.batch ?? composer.batch,
+  );
   // A related set's count leaves room for the images sent in, so the price and the run agree.
   const resolved = values && withinSet(values, set);
   const controls = useMemo(() => {
@@ -327,6 +332,7 @@ export function Composer({ firstRun = false }: { firstRun?: boolean }) {
                           ? {
                               on: set.on,
                               max: set.max,
+                              blocked: set.blocked,
                               onChange: (on) =>
                                 set.option && composer.setProviderOption(picked.key, set.option, on),
                             }

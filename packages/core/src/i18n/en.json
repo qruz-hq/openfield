@@ -333,6 +333,8 @@
         "emulated": "Each image is made and billed separately.",
         "upTo": "Up to {count}",
         "relatedSet": "Related set",
+        "relatedSetNeedsTwo": "A set needs 2 or more images.",
+        "relatedSetNoRoom": "Send in fewer images to make a set.",
         "relatedSetHint": "Images that belong together, like frames of a storyboard. You get up to {count, plural, one {# image} other {# images}} in one go and pay only for the ones that come back."
       },
       "enhance": {

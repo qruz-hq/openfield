@@ -63,13 +63,17 @@ test("Lite's Images chip turns on a related set, priced up to the count and sent
   await chip.click();
   const popover = page.getByRole("dialog").filter({ hasText: "Related set" });
   await expect(popover).toBeVisible();
+  // At one image there's no set to make, so the switch waits and says why.
+  const toggle = popover.getByRole("switch", { name: "Related set" });
+  await expect(toggle).toBeDisabled();
+  await expect(toggle).toHaveAccessibleDescription("A set needs 2 or more images.");
   for (let n = 1; n < 4; n++) await popover.getByRole("button", { name: "More images" }).click();
   await expect(popover.getByRole("status")).toHaveText("4");
   await expect(chip).toHaveText("4");
   const generate = page.getByRole("button", { name: /^Generate/ });
   await expect(generate).toHaveAccessibleName("Generate About $0.14");
 
-  const toggle = popover.getByRole("switch", { name: "Related set" });
+  await expect(toggle).toBeEnabled();
   await toggle.click();
   await expect(toggle).toBeChecked();
   await expect(popover).toContainText(

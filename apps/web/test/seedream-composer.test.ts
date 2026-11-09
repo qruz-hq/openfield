@@ -76,7 +76,7 @@ const seedance: ModelListItem = { ...sketcher, key: "byteplus:seedance", display
 
 describe("related set", () => {
   test("off, the run sends nothing extra and the count is exact", () => {
-    const plan = relatedSetPlan(setMaker, undefined, []);
+    const plan = relatedSetPlan(setMaker, undefined, [], 4);
     expect(plan).toMatchObject({ option: "relatedSet", on: false, providerOptions: undefined, note: null });
     const resolved = resolveValues(setMaker.capabilities, {}, 4);
     const body = generateBody(
@@ -93,7 +93,7 @@ describe("related set", () => {
   });
 
   test("on, the run sends the switch and is priced up to the count", () => {
-    const plan = relatedSetPlan(setMaker, { relatedSet: true }, []);
+    const plan = relatedSetPlan(setMaker, { relatedSet: true }, [], 4);
     expect(plan.providerOptions).toEqual({ relatedSet: true });
     expect(plan.max).toBeUndefined();
     const resolved = resolveValues(setMaker.capabilities, {}, 4);
@@ -113,18 +113,34 @@ describe("related set", () => {
 
   test("the images sent in leave less room, and the composer says why", () => {
     const refs = Array.from({ length: 12 }, (_, i) => `ref-${i}`);
-    const plan = relatedSetPlan(setMaker, { relatedSet: true }, refs);
+    const plan = relatedSetPlan(setMaker, { relatedSet: true }, refs, 4);
     expect(plan.max).toBe(3);
     expect(plan.note).toBe("Sketcher makes at most 15 images in a set, counting the images you send in.");
     expect(withinSet(resolveValues(setMaker.capabilities, {}, 4), plan).batch).toBe(3);
     // Only the references the model takes count.
     const many = Array.from({ length: 20 }, (_, i) => `ref-${i}`);
-    expect(relatedSetPlan(setMaker, { relatedSet: true }, many).max).toBe(1);
+    expect(relatedSetPlan(setMaker, { relatedSet: true }, many, 4)).toMatchObject({
+      on: false,
+      providerOptions: undefined,
+      blocked: "Send in fewer images to make a set.",
+    });
+  });
+
+  test("a set needs a count of 2, and comes back on once it has one", () => {
+    const one = relatedSetPlan(setMaker, { relatedSet: true }, [], 1);
+    expect(one).toMatchObject({
+      on: false,
+      providerOptions: undefined,
+      blocked: "A set needs 2 or more images.",
+    });
+    // Off, it says so too, so the switch can't be turned on at 1.
+    expect(relatedSetPlan(setMaker, undefined, [], 1).blocked).toBe("A set needs 2 or more images.");
+    expect(relatedSetPlan(setMaker, { relatedSet: true }, [], 2)).toMatchObject({ on: true, blocked: null });
   });
 
   test("a model without related sets has no switch", () => {
-    expect(relatedSetPlan(pro, { relatedSet: true }, []).option).toBeUndefined();
-    expect(relatedSetPlan(undefined, undefined, []).on).toBe(false);
+    expect(relatedSetPlan(pro, { relatedSet: true }, [], 4).option).toBeUndefined();
+    expect(relatedSetPlan(undefined, undefined, [], 4).on).toBe(false);
   });
 });
 
