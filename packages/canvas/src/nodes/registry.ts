@@ -120,6 +120,8 @@ export function linkedPorts(doc: Pick<DocSlice, "edges">, id: string): ReadonlyS
   return out;
 }
 
+const NO_LINKS: ReadonlySet<string> = new Set();
+
 /** The document fields nodePorts reads. */
 export type PortDoc = Pick<DocSlice, "nodes" | "params" | "results" | "edges">;
 
@@ -164,8 +166,15 @@ export function createNodeRegistry<D extends NodeSpec>(definitions: readonly D[]
 
   const visible = (type: string) => byType.get(type)?.ports.filter((p) => !p.hidden) ?? [];
 
+  /** A new node's ports: a Layers node has no outputs before it runs. */
+  const fresh = (type: string): readonly PortSpec[] => {
+    const def = byType.get(type);
+    if (!def?.portsOf) return visible(type);
+    return def.portsOf({ params: {}, result: null, linked: () => NO_LINKS }).filter((p) => !p.hidden);
+  };
+
   const fittingPort = (type: string, pending: PortMatch): PortSpec | undefined =>
-    visible(type).find((port) =>
+    fresh(type).find((port) =>
       // Dragging from an output looks for an input it can flow into, and the other way round.
       pending.handleType === "source"
         ? port.direction === "in" && portFlow(pending.portType, port.type) !== "no"

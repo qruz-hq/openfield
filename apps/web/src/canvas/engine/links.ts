@@ -35,7 +35,8 @@ type Evaluated = ReadonlyMap<string, Pick<NodeEvaluation, "outputs" | "definitio
 export function valueImages(doc: DocSlice, value: PortValue): (string | null)[] {
   if (value.kind === "asset") return [value.assetId];
   if (value.kind !== "pending") return [];
-  const now = doc.results[value.nodeId]?.assetIds ?? [];
+  // On its own port: a Layers node's layer, not every image it made.
+  const now = value.current ?? doc.results[value.nodeId]?.assetIds ?? [];
   const count = Math.max(0, value.expected);
   return Array.from({ length: count }, (_, i) => now[i] ?? null);
 }

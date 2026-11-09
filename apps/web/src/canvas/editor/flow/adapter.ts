@@ -1,4 +1,5 @@
-import type { EngineContext, PortType } from "@openfield/canvas/engine/types";
+import type { EngineContext, PortSpec, PortType } from "@openfield/canvas/engine/types";
+import { linkedPorts } from "@openfield/canvas/nodes/registry";
 import { t } from "@openfield/core";
 import type { CanvasEdge } from "@openfield/core/canvas";
 import type { CoordinateExtent, Edge, Node } from "@xyflow/react";
@@ -107,6 +108,7 @@ export function boxesFor(
       params: doc.params[frame.id] ?? {},
       result: doc.results[frame.id] ?? null,
       ctx,
+      linked: () => linkedPorts(doc, frame.id),
     });
 }
 
@@ -121,6 +123,12 @@ export function lockedExtent(position: { x: number; y: number }, frame: Size, ow
   ];
 }
 
+const NO_LINKS: ReadonlySet<string> = new Set();
+
+/** What about a rail moves its handles. */
+const railKey = (rail: readonly PortSpec[]): string =>
+  rail.map((p) => `${p.direction}:${p.id}:${p.hidden ? 1 : 0}${p.gone ? 1 : 0}:${p.top ?? ""}`).join("|");
+
 const sameExtent = (a: CoordinateExtent | undefined, b: CoordinateExtent | undefined) =>
   a === b || (!!a && !!b && a.flat().every((v, i) => v === b.flat()[i]));
 
@@ -129,7 +137,9 @@ interface NodeEntry {
   def: NodeDefinition | undefined;
   box: Size | undefined;
   /** What the box was worked out from (boxOf), so an unchanged node skips it. */
-  boxFrom: { size: Size | undefined; params: unknown; result: unknown; key: unknown };
+  boxFrom: { size: Size | undefined; params: unknown; result: unknown; key: unknown; rail: string };
+  /** Its own ports, where they depend on it (NodeSpec.portsOf); else its type's. */
+  rail: readonly PortSpec[];
   selected: boolean;
   hidden: boolean;
   interactive: boolean;
@@ -148,15 +158,38 @@ export function createNodeCache() {
     const interactive = !readOnly && tool === "select";
     const next = new Map<string, NodeEntry>();
     const out: FlowNode[] = [];
+    // Outputs with links on, by node, read once and only when a node's ports depend on them.
+    let links: Map<string, Set<string>> | undefined;
+    const linkedOf = (id: string): ReadonlySet<string> => {
+      if (!links) {
+        links = new Map();
+        for (const e of Object.values(doc.edges)) {
+          if (e.kind !== "data") continue;
+          const set = links.get(e.source) ?? new Set();
+          set.add(e.sourceHandle);
+          links.set(e.source, set);
+        }
+      }
+      return links.get(id) ?? NO_LINKS;
+    };
     for (const id of parentsFirst(doc)) {
       const frame = doc.nodes[id]!;
       const def = inputs.definition(frame.type);
       const old = cache.get(id);
+      const rail = def?.portsOf
+        ? def.portsOf({
+            params: doc.params[id] ?? {},
+            result: doc.results[id] ?? null,
+            linked: () => linkedOf(id),
+          })
+        : (def?.ports ?? []);
       const boxFrom = {
         size: frame.size,
         params: doc.params[id],
         result: doc.results[id],
         key: inputs.boxKey,
+        // A Layers node grows a row for each output; the ports also move the handles.
+        rail: def?.portsOf ? railKey(rail) : "",
       };
       // A move or a selection change doesn't change what a card shows: keep its box (cardLayout).
       const keepBox =
@@ -165,12 +198,14 @@ export function createNodeCache() {
         old.boxFrom.size === boxFrom.size &&
         old.boxFrom.params === boxFrom.params &&
         old.boxFrom.result === boxFrom.result &&
-        old.boxFrom.key === boxFrom.key;
+        old.boxFrom.key === boxFrom.key &&
+        old.boxFrom.rail === boxFrom.rail;
       const entry = {
         frame,
         def,
         box: keepBox ? old.box : inputs.boxOf?.(frame),
         boxFrom,
+        rail,
         selected: selected.has(id),
         hidden: insideCollapsed(doc, id),
         interactive,
@@ -198,6 +233,7 @@ export function createNodeCache() {
         old.hidden === entry.hidden &&
         old.interactive === entry.interactive &&
         old.hit === entry.hit &&
+        old.boxFrom.rail === entry.boxFrom.rail &&
         sameExtent(old.confined, entry.confined) &&
         sameMeasure(old.measured, entry.measured);
       const node = same ? old.node : toFlowNode(entry);
@@ -228,8 +264,7 @@ function toFlowNode(e: Omit<NodeEntry, "node">): FlowNode {
     ...(measured && { measured: { width: measured.width, height: measured.height } }),
     // Where its ports and arrow handles are, from the same box, so links reach a node React Flow
     // hasn't measured or mounted. A type this build doesn't know draws its handles from its links.
-    ...(known &&
-      def && { handles: nodeHandles(def.ports ?? [], size.width!, size.height!, frame.collapsed) }),
+    ...(known && def && { handles: nodeHandles(e.rail, size.width!, size.height!, frame.collapsed) }),
     selected: e.selected,
     hidden: e.hidden,
     draggable: e.interactive,

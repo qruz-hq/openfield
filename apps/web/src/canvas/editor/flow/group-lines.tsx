@@ -33,7 +33,7 @@ function useGroupPorts(fromNodeId: string, fromHandleId: string, side: "source" 
       .map((id) => ({ id, at: absolutePosition(s.doc, id) }))
       .sort((a, b) => a.at.y - b.at.y || a.at.x - b.at.x)
       .flatMap(({ id }) => {
-        const ports = nodeRegistry.ports(s.doc.nodes[id]!.type, side === "source" ? "out" : "in");
+        const ports = nodeRegistry.nodePorts(s.doc, id, side === "source" ? "out" : "in");
         const port =
           ports.find((p) => p.id === fromHandleId) ?? ports.find((p) => p.type === type) ?? ports[0];
         return port ? [`${id}:${port.id}`] : [];

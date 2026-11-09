@@ -14,7 +14,7 @@ import type { AddMenuState } from "../store/types";
 import { markOpenPicker, OPENS_AT_ONCE } from "./picker-intent";
 import { type NodeDefinition, nodeRegistry } from "./registry";
 import { nodeWrapper } from "./shell/focus";
-import { railLayout } from "./shell/rail";
+import { portY, railLayout } from "./shell/rail";
 
 // Canvas / Add node menu (design CnYWZ, 320 wide): search, then References, Image and Utilities.
 // Opened at a point (double-click, A, the + tool) it adds the node there. Opened by dropping a
@@ -149,7 +149,8 @@ function AddNodePanel({ menu }: { menu: AddMenuState }) {
     const port = pending ? nodeRegistry.fittingPort(def.type, pending) : undefined;
     if (pending && port) {
       const box = node.size ?? boxOf(def);
-      const y = box.h / 2 + (railLayout(def.ports, port.direction).find((p) => p.port === port)?.offset ?? 0);
+      const placed = railLayout(def.ports, port.direction).find((p) => p.port.id === port.id);
+      const y = placed ? portY(placed, box.h) : box.h / 2;
       node.position =
         port.direction === "in"
           ? { x: menu.flowPosition.x, y: menu.flowPosition.y - y }
