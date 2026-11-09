@@ -102,9 +102,16 @@ export function planFingerprints(doc: DocSlice, registry: NodeRegistry, ctx: Eng
     let ports: string[];
     if (def?.engine) {
       const fp = def.engine.fingerprintParams(node, ctx);
-      // Ports a node hides for now (an Edit node's Mask input while it sketches) don't count. Ports
-      // its type hides for good still do, as they always have.
-      const shown = def.portsOf ? new Set(registry.nodePorts(doc, id, "in").map((p) => p.id)) : null;
+      // Ports a node hides or doesn't read for now (an Edit node's Mask input and references while
+      // it sketches) don't count. Ports its type hides for good still do, as they always have.
+      const shown = def.portsOf
+        ? new Set(
+            registry
+              .nodePorts(doc, id, "in")
+              .filter((p) => !p.unused)
+              .map((p) => p.id),
+          )
+        : null;
       ports = def.ports
         .filter((p) => p.direction === "in" && (!shown || p.hidden || shown.has(p.id)))
         .map((p) => p.id);

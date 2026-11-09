@@ -151,9 +151,17 @@ export const EDIT_PORTS: readonly PortSpec[] = [
   },
 ];
 
-/** Sketch & point's version of the rail: the Mask input is hidden and ignored, its slot kept. */
+/**
+ * Sketch & point's version of the rail: the Mask input is hidden and ignored, its slot kept. The
+ * references stay drawn and linked for painting again, but go unsent, as on the Edit tab: the marks
+ * are numbered on the image being edited alone.
+ */
 const SKETCH_PORTS: readonly PortSpec[] = EDIT_PORTS.map((p) =>
-  p.id === "mask" ? { ...p, hidden: true, keepSlot: true } : p,
+  p.id === "mask"
+    ? { ...p, hidden: true, keepSlot: true }
+    : p.id === "input_images"
+      ? { ...p, unused: "canvas.nodes.ports.sketchNoReferences" as const }
+      : p,
 );
 
 /** A saved node that sketches rather than paints, from its raw params. */
@@ -316,10 +324,12 @@ export const editEngine: NodeEngine<EditParams> = {
     const model = ctx.model(key)!;
     // A model that can't edit is as good as missing here, as a video model is.
     if (!editsImages(model.capabilities)) return { kind: "model_unavailable", model: model.key };
-    // What the person has to fix whatever else is missing comes first (STANDING_BLOCKERS).
-    const references = referenceBlocker(model, imageCount(imagesOf(inputs, "input_images")));
+    // What the person has to fix whatever else is missing comes first (STANDING_BLOCKERS). Sketching
+    // sends no references, so none can be in the way.
+    const sketch = node.params.mode === "sketch";
+    const references = sketch ? null : referenceBlocker(model, imageCount(imagesOf(inputs, "input_images")));
     if (references) return references;
-    if (node.params.mode === "sketch") {
+    if (sketch) {
       if (!model.capabilities.marks) return { kind: "marks_unsupported", model: model.key };
       if (imageCount(imagesOf(inputs, "image")) === 0) return { kind: "missing_input", port: "image" };
       // Marks go without a mask: one is only made from them to put the rest back, as in the Edit tab.
@@ -354,7 +364,8 @@ export const editEngine: NodeEngine<EditParams> = {
     const resolved = resolveFor(model, p, p.batch);
     const base = imagesOf(inputs, "image");
     const mask = sentMask(node, inputs);
-    const references = imagesOf(inputs, "input_images");
+    // Sketching, the marks point at the image being edited alone, so references stay home.
+    const references = p.mode === "sketch" ? [] : imagesOf(inputs, "input_images");
     // As the server decides (core adapterOpFor): an inpaint where the model takes the mask, else a
     // whole-image edit. The mask goes either way, so the server can put back what's outside it.
     const op = mask.length > 0 && model.capabilities.ops.inpaint ? "inpaint" : "edit";

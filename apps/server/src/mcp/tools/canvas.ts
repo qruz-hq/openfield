@@ -82,7 +82,7 @@ const SETTINGS: Partial<Record<string, Record<string, string>>> = {
     quality: "A quality id the model lists in list_models.",
     batch: `How many images, 1 to ${BATCH_MAX}. Each is billed.`,
     seed: '{"mode":"random"} or {"mode":"fixed","value":42}, for models that take seeds.',
-    mode: '"sketch" for Sketch & point, on models whose list_models entry has marks: marks on the image say where to change, in place of a mask, and its mask input is ignored. Leave out (or null) to paint a mask.',
+    mode: '"sketch" for Sketch & point, on models whose list_models entry has marks: marks on the image say where to change, in place of a mask, and its mask and reference image inputs are ignored (no references are sent). Leave out (or null) to paint a mask.',
     marks:
       "Sketch & point: the marks, set with set_node_marks. Without marks the prompt alone says what to change.",
     sketchKeepOriginal:
@@ -728,14 +728,14 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
       title: "Give an Edit node its marks",
       description:
         "Puts an Edit node in Sketch & point and sets its marks, as marking the image in Openfield does: points, boxes, circles, freehand lines and arrows on the image it edits, each with an optional colour, material and note, numbered from 1 in this order. Only for models whose list_models entry has marks. " +
-        "Coordinates are fractions of the image: x and y from 0 at the top left to 1 at the bottom right. Its mask input is ignored while it sketches. null clears the marks and keeps Sketch & point.",
+        "Coordinates are fractions of the image: x and y from 0 at the top left to 1 at the bottom right. Its mask input and reference images are ignored while it sketches: only the image being edited is sent. null clears the marks and keeps Sketch & point.",
       inputSchema: {
         canvas: z.string().describe(canvasField),
         id: z.string().describe("The Edit node's id."),
         marks: marksSchema
           .nullable()
           .describe(
-            'The marks, such as [{"kind":"box","from":{"x":0.1,"y":0.2},"to":{"x":0.4,"y":0.6},"material":"brushed steel"}, {"kind":"point","at":{"x":0.7,"y":0.3},"color":"#C8102E"}]. "image" says which image a mark is on: 1 (default) is the one being edited, then its references in order.',
+            'The marks, such as [{"kind":"box","from":{"x":0.1,"y":0.2},"to":{"x":0.4,"y":0.6},"material":"brushed steel"}, {"kind":"point","at":{"x":0.7,"y":0.3},"color":"#C8102E"}]. Marks go on the image being edited: leave "image" out (or 1).',
           ),
         keepRest: z
           .boolean()

@@ -37,8 +37,21 @@ const textOnly: ModelListItem = {
   modelId: "words",
   capabilities: { ...banana.capabilities, ops: { ...banana.capabilities.ops, imageEdit: false } },
 };
+/** A model that reads marks and takes no references: Sketch & point never sends any. */
+const marker: ModelListItem = {
+  ...banana,
+  key: "byteplus:marker",
+  providerId: "byteplus",
+  modelId: "marker",
+  displayName: "Marker",
+  capabilities: {
+    ...banana.capabilities,
+    marks: { kinds: ["point", "box"], max: 20 },
+    references: { ...banana.capabilities.references, supported: false },
+  },
+};
 const ctx = buildEngineContext(
-  [banana, painter, textOnly],
+  [banana, painter, textOnly, marker],
   { defaultModel: banana.key, defaultBatch: 1, defaultAspect: null },
   undefined,
 );
@@ -379,6 +392,49 @@ describe("the Edit node", () => {
       "prompt",
       "input_images",
     ]);
+  });
+
+  test("sketching, its references stay drawn but unsent, as on the Edit tab", async () => {
+    const point = { kind: "point" as const, at: { x: 0.5, y: 0.5 } };
+    const withRef = (params: Record<string, unknown>, ref = OTHER) =>
+      docOf(
+        [upload("u", [BASE]), upload("r", [ref]), editNode({ model: marker.key, ...params })],
+        [edge("e1", "u", "images", "e", "image"), edge("e2", "r", "images", "e", "input_images")],
+      );
+    const sketch = { mode: "sketch", marks: [point] };
+    // The port stays on the rail, linked, and says why it's dimmed.
+    expect(
+      specRegistry.nodePorts(withRef(sketch), "e", "in").find((p) => p.id === "input_images"),
+    ).toMatchObject({
+      unused: "canvas.nodes.ports.sketchNoReferences",
+    });
+    // Nothing stops the run on references the model can't take, and none go with it.
+    const plan = await compile(withRef(sketch));
+    expect(plan.blocked).toEqual({});
+    const { item } = plan.items.find((i) => i.item.nodeId === "e")!;
+    expect(item.inputs.map((i) => i.port)).toEqual(["image"]);
+    expect(item.calls[0]!.marks).toEqual([point]);
+    expect(item.calls[0]!.mask).toBeUndefined();
+    // A new reference doesn't put it out of date, so it doesn't run (and bill) again.
+    const fp = async (doc: DocSlice) => (await fingerprintsOf(doc)).e;
+    expect(await fp(withRef(sketch, MASK))).toBe(await fp(withRef(sketch)));
+    const done = await ran(withRef(sketch), "e", [BASE]);
+    const swapped = { ...done, params: { ...done.params, r: { assetIds: [MASK] } } };
+    expect((await evaluate(swapped)).get("e")!.upToDate).toBe(true);
+    // Painting again, the same model's references are in the way once more.
+    const paint = await evaluate(withRef({}));
+    expect(paint.get("e")!.blocker).toMatchObject({ kind: "references_unsupported" });
+    expect(
+      specRegistry.nodePorts(withRef({}), "e", "in").find((p) => p.id === "input_images")!.unused,
+    ).toBeUndefined();
+  });
+
+  test("sketching, marks go on the image being edited only", () => {
+    const point = { kind: "point" as const, at: { x: 0.5, y: 0.5 } };
+    expect(limitProblem("image.edit", { mode: "sketch", marks: [point, { ...point, image: 1 }] })).toBeNull();
+    expect(limitProblem("image.edit", { mode: "sketch", marks: [point, { ...point, image: 2 }] })).toMatch(
+      /Mark 2 is on image 2/,
+    );
   });
 
   test("a finished edit stays up to date: the mask it read counts, painted or connected", async () => {

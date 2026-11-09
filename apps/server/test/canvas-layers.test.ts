@@ -202,17 +202,39 @@ describe("an Edit node in Sketch & point", () => {
     return { canvasId: canvas.id, photo, edit: aliases.e! };
   }
 
-  test("sends its marks, corner first, and no mask while Keep the rest is off", async () => {
+  test("sends its marks, corner first, with no mask while Keep the rest is off and no references", async () => {
     server = await ready();
     const { canvasId, edit } = await sketchCanvas({});
+    // A reference wired in stays linked for painting again, but Sketch & point doesn't send it.
+    const reference = await upload(await texture(320, 240));
+    server.services.canvases.edit(
+      canvasId,
+      [
+        { op: "add_node", as: "ref", type: "image.upload", params: { assetIds: [reference] } },
+        { op: "connect", source: "ref", target: edit, targetHandle: "input_images" },
+      ],
+      tab,
+    );
     const { done } = await runAll(canvasId);
     expect(done.status).toBe("succeeded");
     const set = getJobSet(server.services.db, done.nodes.find((n) => n.nodeId === edit)!.jobSetIds[0]!)!;
-    const request = set.requestJson as { marks: unknown; mask?: unknown };
+    const request = set.requestJson as { marks: unknown; mask?: unknown; references?: unknown };
     expect(request.marks).toEqual([
       { kind: "box", from: { x: 0.1, y: 0.1 }, to: { x: 0.5, y: 0.5 }, material: "brushed steel" },
     ]);
     expect(request.mask).toBeUndefined();
+    expect(request.references).toBeUndefined();
+    expect(savedDoc(canvasId).edges.some((e) => e.target === edit && e.targetHandle === "input_images")).toBe(
+      true,
+    );
+  });
+
+  test("refuses marks on a reference image, since none are sent", async () => {
+    server = await ready();
+    const point = { kind: "point" as const, at: { x: 0.5, y: 0.5 } };
+    await expect(sketchCanvas({ marks: [point, { ...point, image: 2 }] })).rejects.toThrow(
+      /Mark 2 is on image 2/,
+    );
   });
 
   test("keeping the rest, sends the marks' area as a mask saved for the image", async () => {

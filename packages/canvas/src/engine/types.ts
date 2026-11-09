@@ -83,6 +83,12 @@ export interface PortSpec {
    * run didn't make. It takes no new links.
    */
   gone?: boolean;
+  /**
+   * Inputs only: drawn dimmed and still linked, though the node doesn't read it in its current
+   * settings (an Edit node's references while it sketches). Says why in the port's tooltip, and what
+   * comes in on it doesn't count towards the node being up to date.
+   */
+  unused?: MessageKey;
 }
 
 /** Compatibility (§7.6). "coerce" is image into mask: luminance becomes alpha, white is the edit area. */

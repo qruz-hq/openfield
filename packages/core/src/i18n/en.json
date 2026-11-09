@@ -1700,6 +1700,7 @@
         "style": "Style",
         "many": "{name} ×n",
         "noReferences": "This model doesn't take reference images",
+        "sketchNoReferences": "Sketch & point doesn't use reference images",
         "startFrame": "Start frame",
         "endFrame": "End frame",
         "video": "Video",
@@ -1959,7 +1960,8 @@
         "takes": "New takes makes {min} to {max} images. This asks for {count}.",
         "prompts": "Variations takes at most {max} prompts. This has {count}.",
         "promptLine": "Each Variations prompt can be at most {max} characters. Prompt {index} has {count}.",
-        "models": "Variations takes at most {max} models. This has {count}."
+        "models": "Variations takes at most {max} models. This has {count}.",
+        "marksImage": "Marks go on the image being edited, as Sketch & point doesn't send reference images. Mark {index} is on image {image}: leave its image out or set it to 1."
       },
       "whichLayer": "{node} has an output per layer. Say which one: {ports}.",
       "sketchMask": "{node} points with marks, so it has no mask input. Paint a mask in it first to connect one."
