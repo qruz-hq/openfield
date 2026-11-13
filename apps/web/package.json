@@ -15,7 +15,7 @@
     "@openfield/ui": "workspace:*",
     "@tanstack/react-query": "5.103.2",
     "@xyflow/react": "12.11.6",
-    "hono": "4.13.8",
+    "hono": "4.13.16",
     "html-to-image": "1.11.13",
     "lucide-react": "1.47.0",
     "react": "19.3.0",
