@@ -15,6 +15,7 @@ import groupShort from "../src/byteplus/__fixtures__/seedream/group-short.json";
 import invalid from "../src/byteplus/__fixtures__/seedream/invalid.json";
 import ipmLimited from "../src/byteplus/__fixtures__/seedream/ipm-rate-limited.json";
 import layers from "../src/byteplus/__fixtures__/seedream/layers.json";
+import notFoundLive from "../src/byteplus/__fixtures__/seedream/not-found-live.json";
 import notOpen from "../src/byteplus/__fixtures__/seedream/not-open.json";
 import outputFlagged from "../src/byteplus/__fixtures__/seedream/output-flagged.json";
 import quotaExceeded from "../src/byteplus/__fixtures__/seedream/quota-exceeded.json";
@@ -518,6 +519,12 @@ describe("errors", () => {
     const err = await mapError(response(notOpen), undefined, "Seedream 5.0 Pro");
     expect(err.code).toBe("auth_forbidden");
     expect(err.userMessage).toMatch(/BytePlus/);
+  });
+
+  test("a model the account hasn't turned on, as BytePlus really answers it, says to turn it on", async () => {
+    const err = await mapError(response(notFoundLive), undefined, "Seedream 5.0 Pro");
+    expect(err.code).toBe("auth_forbidden");
+    expect(err.userMessage).toBe("Turn on Seedream 5.0 Pro in BytePlus first, then try again.");
   });
 
   test("the per-minute image limit waits and retries; a used-up quota doesn't", async () => {

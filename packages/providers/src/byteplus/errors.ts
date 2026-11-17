@@ -65,6 +65,13 @@ export function errorFor(error: ByteplusErrorBody | undefined, ctx: Context = {}
       userMessage: t("errors.modelNotActivated", { model, company: COMPANY }),
     });
   }
+  // Seen live (2026-11-17): an account with no models turned on gets this, not ModelNotOpen, for
+  // every model id, so it most often means "turn it on" rather than "wrong key".
+  if (code === "InvalidEndpointOrModel.NotFound") {
+    return fail("auth_forbidden", {
+      userMessage: t("errors.modelNotActivated", { model, company: COMPANY }),
+    });
+  }
   if (code.startsWith("InvalidEndpointOrModel")) {
     return fail("auth_forbidden", { userMessage: t("errors.forbiddenModel", { model }) });
   }
