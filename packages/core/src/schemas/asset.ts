@@ -9,6 +9,7 @@ import {
   FOLDER_NAME_MAX,
   THUMB_RUNGS,
 } from "../constants";
+import { KEEP_REST_FALLBACKS, KEEP_REST_MODES, KEEP_REST_SENSITIVITY } from "../image/keep-rest";
 import {
   cursorSchema,
   hexColorSchema,
@@ -90,10 +91,50 @@ export const assetSchema = assetListItemSchema.extend({
   deletedAt: timestampSchema.nullable(),
 });
 
+/** Where the line-up read the model's result for each pixel (core keep-rest.ts LineUp). */
+export const lineUpSchema = z.object({
+  dx: z.number(),
+  dy: z.number(),
+  scaleX: z.number(),
+  scaleY: z.number(),
+  confidence: z.number().min(0).max(1),
+});
+
+/** Why a smart decision fell back to the mask alone: KEEP_REST_FALLBACKS, or it failed outright. */
+export const KEEP_REST_FELL_BACK = [...KEEP_REST_FALLBACKS, "failed"] as const;
+
+/**
+ * Smart keep the rest's record (§0.9), on every edit made with a mask or marks since the model's
+ * own result has been kept. Absent on older edits, which have no stored result to adjust.
+ */
+export const keepRestRecordSchema = z.object({
+  /** smart: the mask and what really changed; mask: the mask alone, as before. */
+  mode: z.enum(KEEP_REST_MODES),
+  sensitivity: z.int().min(KEEP_REST_SENSITIVITY.min).max(KEEP_REST_SENSITIVITY.max),
+  /** Where the area starts: the painted mask, or the area the marks cover (Sketch & point). */
+  start: z.enum(["mask", "marks"]),
+  /** How the result was lined up with the original, when it was compared. */
+  lineUp: lineUpSchema.optional(),
+  /** The smart decision fell back to the mask alone, and why. */
+  fellBack: z.enum(KEEP_REST_FELL_BACK).optional(),
+  /** Share of the picture taken from the model, 0 to 1. */
+  changed: z.number().min(0).max(1).optional(),
+  /** A fix layer painted after the run says where to use the model or the original. */
+  fixes: z.boolean().optional(),
+  /** Times it was adjusted after the run; 0 is the run's own. */
+  revision: z.int().nonnegative(),
+  /** The model's own result is stored with the edit, so it can be adjusted again for free. */
+  stored: z.boolean(),
+  /** The library image the model's own result was saved as ("Save as new image"). */
+  savedAs: ulidSchema.optional(),
+});
+
 /**
  * What a masked edit records in its result's opParams.edit (§0.9). `composite` says whether the
  * original was put back outside the mask and with which settings. `fallback` marks a model that
  * can't take a mask, so it changed the whole image and only the composite kept the rest.
+ * `keepRest` is smart keep the rest's record: how the area was decided, and whether the model's
+ * own result is stored. A fallback to the mask alone still counts as applied.
  */
 export const editOpParamsSchema = z.object({
   composite: z.object({
@@ -110,6 +151,7 @@ export const editOpParamsSchema = z.object({
     reason: z.enum(["off", "unavailable", "turned", "failed"]).optional(),
   }),
   fallback: z.literal("whole_image").optional(),
+  keepRest: keepRestRecordSchema.optional(),
 });
 
 /**
@@ -340,6 +382,7 @@ export const folderDeleteResponseSchema = z.object({
 export type AssetListItem = z.infer<typeof assetListItemSchema>;
 export type Asset = z.infer<typeof assetSchema>;
 export type EditOpParams = z.infer<typeof editOpParamsSchema>;
+export type KeepRestRecord = z.infer<typeof keepRestRecordSchema>;
 export type Folder = z.infer<typeof folderSchema>;
 export type AssetsListQuery = z.infer<typeof assetsListQuerySchema>;
 export type AssetsListResponse = z.infer<typeof assetsListResponseSchema>;

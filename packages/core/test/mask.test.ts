@@ -54,13 +54,14 @@ function pixels(width: number, height: number, channels: number, seed: number): 
 }
 
 describe("composite settings", () => {
-  test("a missing setting means on, expanded 4 px and feathered 8 px", () => {
-    expect(MASK_COMPOSITE_DEFAULTS).toEqual({ composite: true, expandPx: 4, featherPx: 8 });
-    expect(compositeSettingsOf()).toEqual({ composite: true, expandPx: 4, featherPx: 8 });
-    expect(compositeSettingsOf({ composite: false, featherPx: 0 })).toEqual({
+  test("a missing setting means on, expanded 4 px, feathered 8 px, at sensitivity 50", () => {
+    expect(MASK_COMPOSITE_DEFAULTS).toEqual({ composite: true, expandPx: 4, featherPx: 8, sensitivity: 50 });
+    expect(compositeSettingsOf()).toEqual({ composite: true, expandPx: 4, featherPx: 8, sensitivity: 50 });
+    expect(compositeSettingsOf({ composite: false, featherPx: 0, sensitivity: 80 })).toEqual({
       composite: false,
       expandPx: 4,
       featherPx: 0,
+      sensitivity: 80,
     });
   });
 });
