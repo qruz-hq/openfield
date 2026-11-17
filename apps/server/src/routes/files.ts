@@ -13,6 +13,7 @@ import { z } from "zod";
 import { previewFile } from "../canvas/files";
 import { absolutePath } from "../config/home";
 import type { Env } from "../context";
+import type { Decided } from "../files/composite";
 import { attachment, downloadName } from "../files/names";
 import { stillMime, Thumbs, thumbSourceOf } from "../files/thumbs";
 import { notFound, onInvalid } from "../http/errors";
@@ -104,8 +105,13 @@ export const filesRoutes = new Hono<Env>()
     async (c) => {
       const { v: _v, ...query } = c.req.valid("query");
       const id = c.req.valid("param").id;
-      const { png, etag } = await c.var.svc.keepRest.area(id, query, c.req.header("if-none-match"));
-      const headers = { "content-type": "image/png", "cache-control": "no-cache", etag };
+      const { png, etag, decided } = await c.var.svc.keepRest.area(id, query, c.req.header("if-none-match"));
+      const headers = {
+        "content-type": "image/png",
+        "cache-control": "no-cache",
+        etag,
+        ...keepRestHeaders(decided),
+      };
       if (!png) return new Response(null, { status: 304, headers });
       return new Response(png, { headers: { ...headers, "content-length": String(png.byteLength) } });
     },
@@ -198,4 +204,22 @@ async function sendFile(
   }
   headers.set("content-length", String(size));
   return new Response(buffered ? await blob.arrayBuffer() : blob, { status: 200, headers });
+}
+
+/**
+ * What an area map's decision found, for a browser previewing other settings (a Sensitivity drag
+ * can flip a fallback). The etag covers them: the same inputs always decide the same.
+ *   x-keep-rest-fell-back  the fallback reason, or "none"
+ *   x-keep-rest-line-up    "dx,dy,scaleX,scaleY" the result was moved by, or "none" when the mask
+ *                          alone decided (a fallback, or Mode "mask")
+ *   x-keep-rest-changed    the share of the picture taken from the model, 0 to 1
+ */
+function keepRestHeaders(decided: Decided): Record<string, string> {
+  const { lineUp, fellBack, changed } = decided;
+  return {
+    "x-keep-rest-fell-back": fellBack ?? "none",
+    "x-keep-rest-line-up":
+      lineUp && !fellBack ? [lineUp.dx, lineUp.dy, lineUp.scaleX, lineUp.scaleY].join(",") : "none",
+    "x-keep-rest-changed": String(Math.round((changed ?? 0) * 10_000) / 10_000),
+  };
 }

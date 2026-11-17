@@ -501,6 +501,48 @@ describe("saving the model's result as a new image", () => {
   }, 30_000);
 });
 
+describe("the area map", () => {
+  test("says what its decision found, on a 304 too", async () => {
+    server = await ready();
+    const { baseBytes, edit } = await maskedEdit();
+    const headersOf = (res: Response) => ({
+      fellBack: res.headers.get("x-keep-rest-fell-back"),
+      lineUp: res.headers.get("x-keep-rest-line-up"),
+      changed: res.headers.get("x-keep-rest-changed"),
+    });
+
+    // The fake model sends another picture: the mask alone decides.
+    const other = (await maskedEdit()).edit;
+    const fake = await server.request((await state(other.id)).areaUrl!);
+    expect(headersOf(fake)).toMatchObject({ fellBack: "no_match", lineUp: "none" });
+
+    // Written before anything reads it: the server remembers what it compared.
+    await storeResult(edit.id, await modelLike(baseBytes));
+    const url = `/files/keep-rest-area/${edit.id}?sensitivity=60`;
+    const smart = await server.request(url);
+    expect(smart.status).toBe(200);
+    const found = headersOf(smart);
+    expect(found.fellBack).toBe("none");
+    expect(found.lineUp).toMatch(/^-?[\d.]+,-?[\d.]+,[\d.]+,[\d.]+$/);
+    const [dx, dy, scaleX, scaleY] = found.lineUp!.split(",").map(Number);
+    expect(Math.abs(dx!)).toBeLessThan(1);
+    expect(Math.abs(dy!)).toBeLessThan(1);
+    expect(scaleX).toBeCloseTo(1, 2);
+    expect(scaleY).toBeCloseTo(1, 2);
+    expect(Number(found.changed)).toBeGreaterThan(0);
+    expect(Number(found.changed)).toBeLessThan(1);
+
+    const again = await server.request(url, { headers: { "if-none-match": smart.headers.get("etag")! } });
+    expect(again.status).toBe(304);
+    expect(headersOf(again)).toEqual(found);
+
+    // The mask alone moves nothing and falls back from nothing.
+    const mask = await server.request(`/files/keep-rest-area/${edit.id}?mode=mask`);
+    expect(headersOf(mask)).toMatchObject({ fellBack: "none", lineUp: "none" });
+    expect(mask.headers.get("etag")).not.toBe(smart.headers.get("etag"));
+  }, 30_000);
+});
+
 describe("saving the model's result touched up", () => {
   test("puts the original back where painted, and finds the same copy when saved again", async () => {
     server = await ready();
