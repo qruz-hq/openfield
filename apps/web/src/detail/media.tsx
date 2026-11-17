@@ -60,6 +60,11 @@ interface MediaProps {
   /** Drawn over the image, inside its zoomed and panned box: the Edit tab's mask. */
   layer?: ReactNode;
   /**
+   * Drawn in place of the image's own pixels, inside the same box: a layer stack put together, or
+   * one layer where it sits on its canvas.
+   */
+  pixels?: ReactNode;
+  /**
    * Unscaled, over the part of the image that's on screen as it's zoomed and panned: labels on its
    * corners (Generating, Before and After). A function is told where the whole image is.
    */
@@ -110,6 +115,7 @@ export function Media({
   inset = expanded ? EDGE_TO_EDGE : INSET,
   panAnywhere = false,
   layer,
+  pixels,
   pinned,
   children,
   ref,
@@ -259,7 +265,7 @@ export function Media({
               transform: `translate(-50%, -50%) translate(${view.x}px, ${view.y}px) scale(${scale})`,
             }}
           >
-            <ImageLayers item={item} zoom={zoom} />
+            {pixels ?? <ImageLayers item={item} zoom={zoom} />}
             {layer}
           </div>
         ) : null}

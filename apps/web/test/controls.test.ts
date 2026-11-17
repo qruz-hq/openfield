@@ -26,7 +26,7 @@ import {
   resolveValues,
   runSpeed,
 } from "@openfield/providers/manifest";
-import { banana, flare, flareEdit, lite, pro, speedSettings } from "./fixtures";
+import { banana, flare, flareEdit, lite, pro, sketcher, speedSettings } from "./fixtures";
 
 const labels = { quality: qualityLabel };
 const ULID = "01K6BQ8000000000000000ZZZZ";
@@ -391,6 +391,38 @@ describe("edits", () => {
       width: 768,
       height: 1024,
     });
+  });
+
+  test("marks go with an edit only to a model that reads them", () => {
+    const marks = [{ kind: "point" as const, at: { x: 0.25, y: 0.5 }, color: "#C8102E" }];
+    const one = resolveValues(sketcher.capabilities, {}, 1);
+    const body = editBody(sketcher, one, "make it red", ULID, { base, marks });
+    expect(editBodySchema.safeParse(body).success).toBe(true);
+    expect(body).toMatchObject({ op: "edit", marks });
+    expect(editBody(banana, bananaTwo, "x", ULID, { base, marks })).not.toHaveProperty("marks");
+  });
+
+  test("Sketch & point runs without a painted area", () => {
+    const one = resolveValues(sketcher.capabilities, {}, 1);
+    const state = editState({
+      model: sketcher,
+      anyReady: true,
+      prompt: "add a bird",
+      resolved: one,
+      edit: { base, masked: false, sketch: true },
+    });
+    expect(state.kind).toBe("ready");
+  });
+
+  test("a related set is priced from one image up to the count", () => {
+    const four = resolveValues(sketcher.capabilities, {}, 4);
+    const single = estimateRun(sketcher, four, "x");
+    expect([single.min, single.max]).toEqual([0.14, 0.14]);
+    const set = estimateRun(sketcher, four, "x", "standard", { providerOptions: { relatedSet: true } });
+    expect([set.min, set.max, set.confidence]).toEqual([0.035, 0.14, "estimated"]);
+    const body = generateBody(sketcher, four, "x", ULID, [], { relatedSet: true });
+    expect(body.providerOptions).toEqual({ relatedSet: true });
+    expect(generateBody(sketcher, four, "x", ULID, [], {})).not.toHaveProperty("providerOptions");
   });
 
   test("walks the states of the Edit tab's Generate button", () => {

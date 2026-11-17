@@ -1275,47 +1275,6 @@ exports[`higgsfield 24. speed on the wire: golden payloads per sync speed, and c
 }
 `;
 
-exports[`fake 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: fake:resumable-image 1`] = `
-{
-  "inpaint": {
-    "error": "capability_unsupported",
-  },
-  "t2i": [
-    {
-      "body": {
-        "aspect_ratio": "3:4",
-        "prompt": "A red kite over a green hill",
-        "size": "1K",
-      },
-      "url": "https://fake.openfield.invalid/v1/images",
-    },
-    {
-      "body": {
-        "aspect_ratio": "3:4",
-        "prompt": "A red kite over a green hill",
-        "size": "1K",
-      },
-      "url": "https://fake.openfield.invalid/v1/images",
-    },
-  ],
-}
-`;
-
-exports[`fake 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: fake:resumable-image speeds 1`] = `
-{
-  "standard": [
-    {
-      "body": {
-        "aspect_ratio": "1:1",
-        "prompt": "A red kite over a green hill",
-        "size": "1K",
-      },
-      "url": "https://fake.openfield.invalid/v1/images",
-    },
-  ],
-}
-`;
-
 exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:dreamina-seedance-2-5-260628 1`] = `
 {
   "startAndEnd": [
@@ -1915,6 +1874,255 @@ exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references
 }
 `;
 
+exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:dola-seedream-5-0-pro-260628 1`] = `
+{
+  "edit": [
+    {
+      "body": {
+        "image": [
+          "<base64 image/png>",
+          "<base64 image/png>",
+          "<base64 image/png>",
+        ],
+        "model": "dola-seedream-5-0-pro-260628",
+        "output_format": "png",
+        "prompt": "Make the sky stormy",
+        "response_format": "b64_json",
+        "size": "1536x1536",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+  ],
+  "inpaint": {
+    "note": "whole_image",
+    "op": "edit",
+  },
+  "t2i": [
+    {
+      "body": {
+        "model": "dola-seedream-5-0-pro-260628",
+        "output_format": "png",
+        "prompt": "A red kite over a green hill",
+        "response_format": "b64_json",
+        "size": "864x1152",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+    {
+      "body": {
+        "model": "dola-seedream-5-0-pro-260628",
+        "output_format": "png",
+        "prompt": "A red kite over a green hill",
+        "response_format": "b64_json",
+        "size": "864x1152",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:dola-seedream-5-0-flash-260915 1`] = `
+{
+  "edit": [
+    {
+      "body": {
+        "image": [
+          "<base64 image/png>",
+          "<base64 image/png>",
+          "<base64 image/png>",
+        ],
+        "model": "dola-seedream-5-0-flash-260915",
+        "output_format": "png",
+        "prompt": "Make the sky stormy",
+        "response_format": "b64_json",
+        "size": "1536x1536",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+  ],
+  "inpaint": {
+    "note": "whole_image",
+    "op": "edit",
+  },
+  "t2i": [
+    {
+      "body": {
+        "model": "dola-seedream-5-0-flash-260915",
+        "output_format": "png",
+        "prompt": "A red kite over a green hill",
+        "response_format": "b64_json",
+        "size": "864x1152",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+    {
+      "body": {
+        "model": "dola-seedream-5-0-flash-260915",
+        "output_format": "png",
+        "prompt": "A red kite over a green hill",
+        "response_format": "b64_json",
+        "size": "864x1152",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:seedream-5-0-260128 1`] = `
+{
+  "edit": [
+    {
+      "body": {
+        "image": [
+          "<base64 image/png>",
+          "<base64 image/png>",
+          "<base64 image/png>",
+        ],
+        "model": "seedream-5-0-260128",
+        "output_format": "png",
+        "prompt": "Make the sky stormy",
+        "response_format": "b64_json",
+        "size": "2048x2048",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+  ],
+  "inpaint": {
+    "note": "whole_image",
+    "op": "edit",
+  },
+  "t2i": [
+    {
+      "body": {
+        "model": "seedream-5-0-260128",
+        "output_format": "png",
+        "prompt": "A red kite over a green hill",
+        "response_format": "b64_json",
+        "size": "1728x2304",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+    {
+      "body": {
+        "model": "seedream-5-0-260128",
+        "output_format": "png",
+        "prompt": "A red kite over a green hill",
+        "response_format": "b64_json",
+        "size": "1728x2304",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:seedream-4-5-251128 1`] = `
+{
+  "edit": [
+    {
+      "body": {
+        "image": [
+          "<base64 image/png>",
+          "<base64 image/png>",
+          "<base64 image/png>",
+        ],
+        "model": "seedream-4-5-251128",
+        "prompt": "Make the sky stormy",
+        "response_format": "b64_json",
+        "size": "2048x2048",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+  ],
+  "inpaint": {
+    "note": "whole_image",
+    "op": "edit",
+  },
+  "t2i": [
+    {
+      "body": {
+        "model": "seedream-4-5-251128",
+        "prompt": "A red kite over a green hill",
+        "response_format": "b64_json",
+        "size": "1728x2304",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+    {
+      "body": {
+        "model": "seedream-4-5-251128",
+        "prompt": "A red kite over a green hill",
+        "response_format": "b64_json",
+        "size": "1728x2304",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:seedream-4-0-250828 1`] = `
+{
+  "edit": [
+    {
+      "body": {
+        "image": [
+          "<base64 image/png>",
+          "<base64 image/png>",
+          "<base64 image/png>",
+        ],
+        "model": "seedream-4-0-250828",
+        "prompt": "Make the sky stormy",
+        "response_format": "b64_json",
+        "size": "2048x2048",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+  ],
+  "inpaint": {
+    "note": "whole_image",
+    "op": "edit",
+  },
+  "t2i": [
+    {
+      "body": {
+        "model": "seedream-4-0-250828",
+        "prompt": "A red kite over a green hill",
+        "response_format": "b64_json",
+        "size": "864x1152",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+    {
+      "body": {
+        "model": "seedream-4-0-250828",
+        "prompt": "A red kite over a green hill",
+        "response_format": "b64_json",
+        "size": "864x1152",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+  ],
+}
+`;
+
 exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: byteplus:dreamina-seedance-2-5-260628 speeds 1`] = `
 {
   "standard": [
@@ -2101,255 +2309,6 @@ exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cos
 }
 `;
 
-exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:dola-seedream-5-0-pro-260628 1`] = `
-{
-  "edit": [
-    {
-      "body": {
-        "image": [
-          "<base64 image/png>",
-          "<base64 image/png>",
-          "<base64 image/png>",
-        ],
-        "model": "dola-seedream-5-0-pro-260628",
-        "output_format": "png",
-        "prompt": "Make the sky stormy",
-        "response_format": "b64_json",
-        "size": "2048x2048",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-  ],
-  "inpaint": {
-    "note": "whole_image",
-    "op": "edit",
-  },
-  "t2i": [
-    {
-      "body": {
-        "model": "dola-seedream-5-0-pro-260628",
-        "output_format": "png",
-        "prompt": "A red kite over a green hill",
-        "response_format": "b64_json",
-        "size": "864x1152",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-    {
-      "body": {
-        "model": "dola-seedream-5-0-pro-260628",
-        "output_format": "png",
-        "prompt": "A red kite over a green hill",
-        "response_format": "b64_json",
-        "size": "864x1152",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-  ],
-}
-`;
-
-exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:dola-seedream-5-0-flash-260915 1`] = `
-{
-  "edit": [
-    {
-      "body": {
-        "image": [
-          "<base64 image/png>",
-          "<base64 image/png>",
-          "<base64 image/png>",
-        ],
-        "model": "dola-seedream-5-0-flash-260915",
-        "output_format": "png",
-        "prompt": "Make the sky stormy",
-        "response_format": "b64_json",
-        "size": "2048x2048",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-  ],
-  "inpaint": {
-    "note": "whole_image",
-    "op": "edit",
-  },
-  "t2i": [
-    {
-      "body": {
-        "model": "dola-seedream-5-0-flash-260915",
-        "output_format": "png",
-        "prompt": "A red kite over a green hill",
-        "response_format": "b64_json",
-        "size": "864x1152",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-    {
-      "body": {
-        "model": "dola-seedream-5-0-flash-260915",
-        "output_format": "png",
-        "prompt": "A red kite over a green hill",
-        "response_format": "b64_json",
-        "size": "864x1152",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-  ],
-}
-`;
-
-exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:seedream-5-0-260128 1`] = `
-{
-  "edit": [
-    {
-      "body": {
-        "image": [
-          "<base64 image/png>",
-          "<base64 image/png>",
-          "<base64 image/png>",
-        ],
-        "model": "seedream-5-0-260128",
-        "output_format": "png",
-        "prompt": "Make the sky stormy",
-        "response_format": "b64_json",
-        "size": "2048x2048",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-  ],
-  "inpaint": {
-    "note": "whole_image",
-    "op": "edit",
-  },
-  "t2i": [
-    {
-      "body": {
-        "model": "seedream-5-0-260128",
-        "output_format": "png",
-        "prompt": "A red kite over a green hill",
-        "response_format": "b64_json",
-        "size": "1728x2304",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-    {
-      "body": {
-        "model": "seedream-5-0-260128",
-        "output_format": "png",
-        "prompt": "A red kite over a green hill",
-        "response_format": "b64_json",
-        "size": "1728x2304",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-  ],
-}
-`;
-
-exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:seedream-4-5-251128 1`] = `
-{
-  "edit": [
-    {
-      "body": {
-        "image": [
-          "<base64 image/png>",
-          "<base64 image/png>",
-          "<base64 image/png>",
-        ],
-        "model": "seedream-4-5-251128",
-        "prompt": "Make the sky stormy",
-        "response_format": "b64_json",
-        "size": "2048x2048",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-  ],
-  "inpaint": {
-    "note": "whole_image",
-    "op": "edit",
-  },
-  "t2i": [
-    {
-      "body": {
-        "model": "seedream-4-5-251128",
-        "prompt": "A red kite over a green hill",
-        "response_format": "b64_json",
-        "size": "1728x2304",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-    {
-      "body": {
-        "model": "seedream-4-5-251128",
-        "prompt": "A red kite over a green hill",
-        "response_format": "b64_json",
-        "size": "1728x2304",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-  ],
-}
-`;
-
-exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:seedream-4-0-250828 1`] = `
-{
-  "edit": [
-    {
-      "body": {
-        "image": [
-          "<base64 image/png>",
-          "<base64 image/png>",
-          "<base64 image/png>",
-        ],
-        "model": "seedream-4-0-250828",
-        "prompt": "Make the sky stormy",
-        "response_format": "b64_json",
-        "size": "2048x2048",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-  ],
-  "inpaint": {
-    "note": "whole_image",
-    "op": "edit",
-  },
-  "t2i": [
-    {
-      "body": {
-        "model": "seedream-4-0-250828",
-        "prompt": "A red kite over a green hill",
-        "response_format": "b64_json",
-        "size": "864x1152",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-    {
-      "body": {
-        "model": "seedream-4-0-250828",
-        "prompt": "A red kite over a green hill",
-        "response_format": "b64_json",
-        "size": "864x1152",
-        "watermark": false,
-      },
-      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
-    },
-  ],
-}
-`;
-
 exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: byteplus:dola-seedream-5-0-pro-260628 speeds 1`] = `
 {
   "priority": [
@@ -2362,7 +2321,7 @@ exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cos
         "output_format": "png",
         "prompt": "A red kite over a green hill",
         "response_format": "b64_json",
-        "size": "2048x2048",
+        "size": "1536x1536",
         "watermark": false,
       },
       "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
@@ -2375,7 +2334,7 @@ exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cos
         "output_format": "png",
         "prompt": "A red kite over a green hill",
         "response_format": "b64_json",
-        "size": "2048x2048",
+        "size": "1536x1536",
         "watermark": false,
       },
       "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
@@ -2393,7 +2352,7 @@ exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cos
         "output_format": "png",
         "prompt": "A red kite over a green hill",
         "response_format": "b64_json",
-        "size": "2048x2048",
+        "size": "1536x1536",
         "watermark": false,
       },
       "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
@@ -2464,6 +2423,47 @@ exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cos
         "watermark": false,
       },
       "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+  ],
+}
+`;
+
+exports[`fake 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: fake:resumable-image 1`] = `
+{
+  "inpaint": {
+    "error": "capability_unsupported",
+  },
+  "t2i": [
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "size": "1K",
+      },
+      "url": "https://fake.openfield.invalid/v1/images",
+    },
+    {
+      "body": {
+        "aspect_ratio": "3:4",
+        "prompt": "A red kite over a green hill",
+        "size": "1K",
+      },
+      "url": "https://fake.openfield.invalid/v1/images",
+    },
+  ],
+}
+`;
+
+exports[`fake 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: fake:resumable-image speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "aspect_ratio": "1:1",
+        "prompt": "A red kite over a green hill",
+        "size": "1K",
+      },
+      "url": "https://fake.openfield.invalid/v1/images",
     },
   ],
 }

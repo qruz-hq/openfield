@@ -33,6 +33,8 @@ import {
   isSpeedField,
   optionAvailability,
   optionPriceRange,
+  speedChangesPrice,
+  standardOnlyNote,
 } from "../lib/provider-settings";
 import { SettingRow } from "./section";
 
@@ -216,6 +218,10 @@ export function SettingsPanelBody({
         onChange={onChange}
       />,
     );
+    // With every speed at one price the cards show none, so this line is what says which models
+    // never change speed. Where speeds differ in price (OpenAI, Google), each card's own range does.
+    const standardOnly = !speedChangesPrice(field, models) && standardOnlyNote(field, models);
+    if (standardOnly) blocks.push(<PanelNote key={`standard-${field.id}`} message={standardOnly} />);
     if (field.kind === "select" && isSpeedField(field) && isAsyncSpeed(String(values[field.id]), models)) {
       blocks.push(
         <PanelNote
@@ -267,6 +273,8 @@ function BlockField({
 
   let control: ReactNode = null;
   if (field.kind === "select") {
+    // Speeds that cost the same leave their prices off (design GGmHeIoPpk).
+    const priced = !isSpeedField(field) || speedChangesPrice(field, models);
     control = (
       <RadioGroup
         value={String(value ?? field.default)}
@@ -275,7 +283,7 @@ function BlockField({
         aria-labelledby={labelId}
       >
         {field.options.map((option) => {
-          const range = optionPriceRange(field, option, models, speedFieldId);
+          const range = priced ? optionPriceRange(field, option, models, speedFieldId) : undefined;
           return (
             <OptionCard
               key={option.value}

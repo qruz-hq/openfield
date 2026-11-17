@@ -4,7 +4,8 @@ import { create } from "zustand";
 
 // Which image the detail view shows. It rides in ?asset=<id> through replaceState, so a reload
 // reopens the same image in the same list and closing never adds a history entry (§4.0, §4.5).
-// The Edit tab rides beside it as &tab=edit; Info is the default and leaves no trace.
+// The Edit and Layers tabs ride beside it as &tab=edit or &tab=layers; Info is the default and
+// leaves no trace.
 
 export const DETAIL_PARAM = "asset";
 
@@ -12,16 +13,16 @@ export const DETAIL_PARAM = "asset";
 export const PANEL_GUTTER = 360;
 export const TAB_PARAM = "tab";
 
-export type DetailTab = "info" | "edit";
+export type DetailTab = "info" | "edit" | "layers";
 
-const tabOf = (value: string | null): DetailTab => (value === "edit" ? "edit" : "info");
+const tabOf = (value: string | null): DetailTab => (value === "edit" || value === "layers" ? value : "info");
 
 /** The search params with `id` shown on `tab`, or with neither when `id` is null. */
 function withDetail(prev: URLSearchParams, id: string | null, tab: DetailTab = "info"): URLSearchParams {
   const next = new URLSearchParams(prev);
   if (id) next.set(DETAIL_PARAM, id);
   else next.delete(DETAIL_PARAM);
-  if (id && tab === "edit") next.set(TAB_PARAM, tab);
+  if (id && tab !== "info") next.set(TAB_PARAM, tab);
   else next.delete(TAB_PARAM);
   return next;
 }

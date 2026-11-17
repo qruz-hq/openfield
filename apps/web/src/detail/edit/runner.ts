@@ -20,6 +20,10 @@ export interface EditRequest {
   count: number;
   /** The mask's version when it was read, to know whether the mask saved for it still matches. */
   maskVersion: number;
+  /** The marks' version when they were read, to tell whether the edit has moved on since. */
+  marksVersion: number;
+  /** Sketch & point: any mask is made from the marks, so it's never the painted one to send again. */
+  sketch?: boolean;
   /** What it asked for, to tell whether the edit has moved on since. */
   prompt: string;
   /** Keep the rest of the image was asked for. */
@@ -83,7 +87,8 @@ export function useEditRunner(): EditRunner {
       useEditSession.getState().setTurned(false);
       start(request.input, {
         onSuccess: ({ maskAssetId }) => {
-          if (maskAssetId) useEditSession.getState().setSavedMask(maskAssetId, request.maskVersion);
+          if (maskAssetId && !request.sketch)
+            useEditSession.getState().setSavedMask(maskAssetId, request.maskVersion);
         },
         onError: (error) => {
           inFlight.current = false;
@@ -121,7 +126,8 @@ export function useEditRunner(): EditRunner {
     const request = last.current;
     if (!request) return;
     const saved = useEditSession.getState().savedMask;
-    const mask = saved && saved.version === request.maskVersion ? saved.assetId : request.input.mask;
+    const mask =
+      saved && !request.sketch && saved.version === request.maskVersion ? saved.assetId : request.input.mask;
     submit(request.estimate, async () => ({
       ...request,
       input: { ...request.input, ...(mask !== undefined && { mask }) },
@@ -156,6 +162,7 @@ export function useEditRunner(): EditRunner {
     if (outcome.kind !== "saved" || !request) return;
     useEditSession.getState().setKept({
       maskVersion: request.maskVersion,
+      marksVersion: request.marksVersion,
       prompt: request.prompt,
       references: request.references,
     });

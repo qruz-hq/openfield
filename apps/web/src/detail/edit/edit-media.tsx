@@ -17,7 +17,10 @@ import { tooLargeToMask } from "./plan";
 import { GeneratingLabel, ResultsStrip } from "./results";
 import type { EditRunner } from "./runner";
 import { useEditSession } from "./session";
+import { ModeSwitch, SketchHint, SketchToolbar } from "./sketch-chrome";
+import { useSketchSurface } from "./sketch-surface";
 import { useShownSideways, useTurnedPhoto } from "./turned";
+import { useEditModel } from "./use-edit-model";
 
 // An image in the detail view, on either tab. On Info it's Media as it always was. On Edit the same
 // Media (so zoom and the loaded pixels carry over) takes the mask's layer and the pointer, with the
@@ -51,6 +54,10 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
   const media = useRef<MediaHandle>(null);
   const [zoom, setZoom] = useState(0);
   const tool = useEditSession((s) => s.tool);
+  const sketchTool = useEditSession((s) => s.sketchTool);
+  const picking = useEditSession((s) => s.selectedMark !== null);
+  // Sketch & point in place of the mask, for a model that reads marks.
+  const { model, sketch } = useEditModel();
   const spaceHeld = useSpaceHeld(editing);
   const turned = useTurnedPhoto(item, editing);
   const tooLarge = tooLargeToMask(item);
@@ -64,7 +71,7 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
   const [split, setSplit] = useState(SPLIT_START);
   // While a run goes, and on an image that can't take a mask, the mask stays as it is.
   const resting = runner.busy || turned || tooLarge;
-  const panning = editing && !compared && (tool === "pan" || spaceHeld || resting);
+  const panning = editing && !compared && ((sketch ? sketchTool : tool) === "pan" || spaceHeld || resting);
   const paint = usePaintSurface({
     width: item.width,
     height: item.height,
@@ -73,6 +80,7 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
     enabled: editing && !tooLarge,
     resting: runner.busy,
   });
+  const marks = useSketchSurface({ panning });
   // The strip shows a run on its way and what it made; one that came to nothing leaves it out.
   const results = runner.busy || runner.outcome.kind === "saved";
 
@@ -87,7 +95,7 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
     zoomOut: () => media.current?.zoomOut(),
     fit: () => media.current?.fit(),
     toggle: () => media.current?.toggle(),
-    cancel: paint.cancel,
+    cancel: () => (sketch ? marks.cancel() : paint.cancel()),
   }));
 
   return (
@@ -109,7 +117,11 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
               <DifferenceLayer item={item} resultId={compared} />
             )
           ) : editing && !turned && !tooLarge ? (
-            paint.layer
+            sketch ? (
+              marks.layer
+            ) : (
+              paint.layer
+            )
           ) : null
         }
         pinned={
@@ -119,12 +131,19 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
             ) : (
               <DifferenceLegend />
             )
+          ) : editing && sketch && !turned && !tooLarge ? (
+            (frame) => (
+              <>
+                {marks.pinned(frame)}
+                {runner.busy ? <GeneratingLabel /> : null}
+              </>
+            )
           ) : editing && runner.busy ? (
             <GeneratingLabel />
           ) : null
         }
       >
-        {editing && !resting && !compared ? paint.input : null}
+        {editing && !resting && !compared ? (sketch ? marks.input : paint.input) : null}
       </Media>
       {compared ? (
         <>
@@ -135,7 +154,7 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
             onZoomIn={() => media.current?.zoomIn()}
             onZoomOut={() => media.current?.zoomOut()}
           />
-          <EditMaskButton onClick={() => runner.show(null)} />
+          <EditMaskButton sketch={sketch} onClick={() => runner.show(null)} />
         </>
       ) : editing ? (
         <>
@@ -144,12 +163,25 @@ export function ImageMedia({ item, expanded, label, editing, runner, onZoomedCha
             onZoomIn={() => media.current?.zoomIn()}
             onZoomOut={() => media.current?.zoomOut()}
           />
-          {resting ? null : tool === "brush" || tool === "eraser" ? (
-            <BrushOptions />
-          ) : tool === "lasso" || tool === "rect" ? (
-            <ShapeOptions tool={tool} />
-          ) : null}
-          <EditToolbar resting={resting} />
+          {sketch ? (
+            <>
+              {/* The picked mark's popover says what to do with it instead. */}
+              {resting || picking ? null : <SketchHint model={model?.displayName} />}
+              <SketchToolbar resting={resting} />
+            </>
+          ) : (
+            <>
+              {resting ? null : tool === "brush" || tool === "eraser" ? (
+                <BrushOptions />
+              ) : tool === "lasso" || tool === "rect" ? (
+                <ShapeOptions tool={tool} />
+              ) : null}
+              <EditToolbar
+                resting={resting}
+                modeSwitch={model?.capabilities.marks && !tooLarge ? <ModeSwitch /> : undefined}
+              />
+            </>
+          )}
           {results ? (
             <ResultsStrip
               originalId={item.id}

@@ -241,6 +241,8 @@ export class Outcomes {
           rootAssetId,
           op: set.op,
           opParams: opParamsOf(call, undefined, layer.image.layer),
+          // The layer's own words, so search finds "vase" as well as the split's prompt.
+          tags: [layer.image.layer?.name, layer.image.layer?.description].filter(Boolean).join(" "),
           maskAssetId: null,
           generative: true,
           approximate: false,
@@ -286,7 +288,13 @@ export class Outcomes {
       jobSetId: set.id,
       jobId: job.id,
       idx: job.idx,
-      asset: toAssetListItem(committed, false, job.rerunAt !== null),
+      // A split's base comes with how many layers were filed beside it.
+      asset: toAssetListItem(
+        committed,
+        false,
+        job.rerunAt !== null,
+        committed.jobSetId && layers.length ? new Map([[committed.jobSetId, layers.length]]) : undefined,
+      ),
     });
     this.deps.jobLog({
       event: "job.succeeded",

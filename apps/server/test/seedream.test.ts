@@ -582,9 +582,10 @@ describe("agents", () => {
     const { s, c } = await connected();
     const source = await upload(s, await texture(1024, 1024));
     const priced = await call(c, "separate_layers", { image: source.id, model: PRO, dryRun: true });
-    expect(priced.json).toMatchObject({ dryRun: true, price: { usd: 0.765, minUsd: 0.045 } });
+    // Auto keeps the image's 1024 × 1024, which bills at Pro's lower layer rate: 2 to 17 × $0.0225.
+    expect(priced.json).toMatchObject({ dryRun: true, price: { usd: 0.3825, minUsd: 0.045 } });
 
-    const made = await call(c, "separate_layers", { image: source.id, model: PRO, confirmCost: 0.765 });
+    const made = await call(c, "separate_layers", { image: source.id, model: PRO, confirmCost: 0.3825 });
     expect(made.isError).toBe(false);
     expect(made.json.status).toBe("succeeded");
     const layers = made.json.layers as unknown as { role: string; name?: string; box: number[] }[];
@@ -612,8 +613,9 @@ describe("agents", () => {
     expect(models.find((m) => m.key === FLASH)?.speed).toBe("Standard");
     const fast = await call(c, "estimate", { model: PRO, prompt: "A lighthouse" });
     expect(fast.json.speed).toBe("Fast");
-    expect(fast.json.price).toMatchObject({ usd: 0.09, basis: "1 × $0.09 (2K, Fast)" });
-    expect(standard.json.price).toMatchObject({ usd: 0.09 });
+    // 5.0 Pro starts at 1.5K.
+    expect(fast.json.price).toMatchObject({ usd: 0.045, basis: "1 × $0.045 (1.5K, Fast)" });
+    expect(standard.json.price).toMatchObject({ usd: 0.045 });
 
     const made = await call(c, "generate_image", { model: PRO, prompt: "A lighthouse", confirmCost: 1 });
     expect(made.json.status).toBe("succeeded");

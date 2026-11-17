@@ -482,7 +482,7 @@ export async function downloadZip(ids: readonly string[]): Promise<void> {
   }
 }
 
-function saveBlob(blob: Blob, name: string) {
+export function saveBlob(blob: Blob, name: string) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
