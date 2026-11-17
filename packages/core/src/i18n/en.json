@@ -1631,6 +1631,15 @@
           "hardnessHint": "Lower is softer at the edge of each stroke.",
           "maskHint": "How strongly the mask shows over the photo.",
           "save": "Save mask"
+        },
+        "marks": "Marks",
+        "marksCount": "{count, plural, =0 {No marks yet. Add them to point at what to change.} one {# mark on the input image} other {# marks on the input image}}",
+        "mark": "Mark",
+        "editMarks": "Edit marks",
+        "markWindow": {
+          "title": "Mark the image",
+          "hint": "Point, box or sketch where the image should change. Say what to do in the prompt.",
+          "save": "Save marks"
         }
       },
       "variations": {
@@ -1667,6 +1676,21 @@
         "removeModel": "Remove {model}",
         "source": "Image {index}"
       },
+      "layers": {
+        "label": "Layers",
+        "description": "Split an image into separate layers",
+        "count": "{count, plural, one {# layer and a base} other {# layers and a base}}",
+        "separating": "Separating",
+        "hint": "Layers show up here after a run.",
+        "gone": "Not in the last run",
+        "image": "Image",
+        "from": "From {name}, {width} × {height}",
+        "fromNode": "From {name}",
+        "noImage": "Connect an image to split",
+        "what": "What to separate",
+        "optional": "Optional",
+        "whatPlaceholder": "Every main part"
+      },
       "ports": {
         "prompt": "Prompt",
         "text": "Text",
@@ -1676,10 +1700,13 @@
         "style": "Style",
         "many": "{name} ×n",
         "noReferences": "This model doesn't take reference images",
+        "sketchNoReferences": "Sketch & point doesn't use reference images",
         "startFrame": "Start frame",
         "endFrame": "End frame",
         "video": "Video",
-        "mask": "Mask"
+        "mask": "Mask",
+        "base": "Base",
+        "layer": "Layer"
       },
       "connect": {
         "mismatch": "{from, select, text {Text} image {An image} mask {A mask} preset {A style} other {This}} can't go into {to, select, text {a text} image {an image} mask {a mask} preset {a style} other {this}} input on {node}.",
@@ -1751,7 +1778,9 @@
         "noMask": "Paint a mask or connect one to run this",
         "maskStale": "The image changed. Paint the mask again.",
         "maskSeveral": "A painted mask fits one image. Connect one image, or connect a mask.",
-        "noDescription": "Describe the change to run this"
+        "noDescription": "Describe the change to run this",
+        "noMarks": "This model can't read marks. Pick Seedream 5.0 Pro or Flash, or paint a mask.",
+        "layersSeveral": "Layers split one image at a time. Connect one image."
       },
       "collapsed": {
         "expand": "Expand {name}",
@@ -1927,11 +1956,15 @@
         "promptText": "A Prompt node holds at most {max} characters. This text has {count}.",
         "generatePrompt": "A Generate prompt can be at most {max} characters. This one has {count}.",
         "editPrompt": "An Edit prompt can be at most {max} characters. This one has {count}.",
+        "layersPrompt": "What to separate can be at most {max} characters. This one has {count}.",
         "takes": "New takes makes {min} to {max} images. This asks for {count}.",
         "prompts": "Variations takes at most {max} prompts. This has {count}.",
         "promptLine": "Each Variations prompt can be at most {max} characters. Prompt {index} has {count}.",
-        "models": "Variations takes at most {max} models. This has {count}."
-      }
+        "models": "Variations takes at most {max} models. This has {count}.",
+        "marksImage": "Marks go on the image being edited, as Sketch & point doesn't send reference images. Mark {index} is on image {image}: leave its image out or set it to 1."
+      },
+      "whichLayer": "{node} has an output per layer. Say which one: {ports}.",
+      "sketchMask": "{node} points with marks, so it has no mask input. Paint a mask in it first to connect one."
     },
     "agents": {
       "editing": "{name} is editing",

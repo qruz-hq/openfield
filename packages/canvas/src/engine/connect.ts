@@ -66,6 +66,11 @@ export function checkConnection(
   if (!out || !into || out.hidden || into.hidden) {
     return refuse(null);
   }
+  // An input the node hides for now: an Edit node that sketches takes no mask.
+  if (!registry.nodePorts(doc, target, "in").some((p) => p.id === into.id)) {
+    const label = to.title?.trim() || t(registry.get(to.type)!.label);
+    return refuse(t("canvas.edits.sketchMask", { node: label }));
+  }
   const flow = portFlow(out.type, into.type);
   if (flow === "no") {
     const label = to.title?.trim() || t(registry.get(to.type)!.label);
@@ -137,7 +142,6 @@ export function planGroupConnect(
 
   let current = doc;
   for (const id of others) {
-    const node = current.nodes[id]!;
     const linked = Object.values(current.edges).some(
       (e) =>
         e.kind === "data" &&
@@ -146,10 +150,10 @@ export function planGroupConnect(
     if (linked) continue;
     // Inputs to try, the dropped one first: on the drop node when it's fed, on this node otherwise
     // (where the dragged link's input is the one to match).
-    const inputs = registry.ports(feeds ? dropNode.type : node.type, "in");
+    const inputs = registry.nodePorts(current, feeds ? drop : id, "in");
     const dropped = targetHandle;
     const ordered = [...inputs].sort((a, b) => Number(b.id === dropped) - Number(a.id === dropped));
-    const outputs = registry.ports(feeds ? node.type : dropNode.type, "out");
+    const outputs = registry.nodePorts(current, feeds ? id : drop, "out").filter((p) => !p.gone);
     let full: PortSpec | null = null;
     for (const into of ordered) {
       const fits = (out: PortSpec) => {
@@ -219,7 +223,7 @@ export function bodyDropPort(
   if (!node || nodeId === origin.nodeId || isAnnotationHandle(origin.handleId))
     return { ok: false, reason: null };
   const feeds = origin.handleType === "source";
-  const ports = registry.ports(node.type, feeds ? "in" : "out");
+  const ports = registry.nodePorts(doc, nodeId, feeds ? "in" : "out").filter((p) => !p.gone);
   let best: { ends: ConnectionEnds; port: PortSpec; rank: number } | null = null;
   let reason: string | null = null;
   for (const port of ports) {

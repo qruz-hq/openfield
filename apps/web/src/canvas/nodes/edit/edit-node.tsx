@@ -1,11 +1,11 @@
 import { EMPTY_ENGINE_CONTEXT } from "@openfield/canvas/engine/context-base";
 import { joinPrompt } from "@openfield/canvas/engine/inputs";
-import type { NodeDisplay } from "@openfield/canvas/engine/types";
-import { type EditParams, editModelKeyOf, editSpec } from "@openfield/canvas/nodes/edit/spec";
+import type { NodeDisplay, PortSpec } from "@openfield/canvas/engine/types";
+import { type EditParams, editModelKeyOf, editPortsOf, editSpec } from "@openfield/canvas/nodes/edit/spec";
 import type { CardLayout } from "@openfield/canvas/nodes/generate/card-size";
 import { t } from "@openfield/core";
 import { Button } from "@openfield/ui";
-import { Brush, Image as ImageIcon } from "lucide-react";
+import { Brush, Image as ImageIcon, type LucideIcon, Pencil } from "lucide-react";
 import { memo, useMemo } from "react";
 import { useStore } from "zustand";
 import { useNodeAnalysis } from "../../engine/engine-store";
@@ -28,7 +28,8 @@ import { editCardView } from "./card-state";
 // image, the mask, words, then reference images. On hover the bottom bar has the words over Edit mask
 // and Run. With no mask yet the card waits under a scrim with Paint mask in the middle (No mask,
 // YyIfrxsFFt). The mask is painted in its own window (mask-window.tsx); model, sizes and Keep the
-// rest live in the inspector.
+// rest live in the inspector. In Sketch & point the Mask input is hidden, and Edit marks takes Edit
+// mask's place: the marks are drawn in the same window (design EB0kxH1YLE).
 
 const NO_IMAGES: readonly string[] = [];
 
@@ -53,12 +54,14 @@ export const EditNode = memo(function EditNode(props: NodeComponentProps) {
   const model = ctx.model(editModelKeyOf(params.model, ctx));
   const noRefs =
     model && !model.capabilities.references.supported ? t("canvas.nodes.ports.noReferences") : null;
+  const ports = editPortsOf(params);
 
   return (
     <NodeShell
       {...props}
       variant="card"
       spec={editSpec}
+      ports={ports}
       title={frame.title}
       collapsed={frame.collapsed}
       changed={display.state === "stale"}
@@ -82,6 +85,7 @@ export const EditNode = memo(function EditNode(props: NodeComponentProps) {
         own={own}
         prompt={prompt}
         params={params}
+        ports={ports}
       />
     </NodeShell>
   );
@@ -124,9 +128,10 @@ interface EditCardProps {
   own: readonly string[];
   prompt: string;
   params: EditParams;
+  ports: readonly PortSpec[];
 }
 
-function EditCard({ id, name, selected, display, layout, own, prompt, params }: EditCardProps) {
+function EditCard({ id, name, selected, display, layout, own, prompt, params, ports }: EditCardProps) {
   const basics = useNodeBasics(id);
   const ctx = basics?.ctx ?? EMPTY_ENGINE_CONTEXT;
   const analysis = useNodeAnalysis(id);
@@ -144,11 +149,14 @@ function EditCard({ id, name, selected, display, layout, own, prompt, params }: 
   const several = own.length > 1;
   const partial = display.state === "running" ? (runtime?.partialThumbUrl ?? null) : null;
   const paint = () => actions.setUi({ maskNodeId: id });
-  // Edit mask beside Run, for a mask painted here; one on the Mask input is changed where it comes from.
-  const maskButton =
-    paintable && !analysis?.maskLinked && params.maskAssetId ? (
-      <MaskButton label={t("canvas.nodes.edit.editMask")} onPaint={paint} />
-    ) : null;
+  const sketch = params.mode === "sketch";
+  // Edit mask beside Run, for a mask painted here; one on the Mask input is changed where it comes
+  // from. Sketching, Edit marks is always there: marks are optional.
+  const maskButton = !paintable ? null : sketch ? (
+    <MaskButton label={t("canvas.nodes.edit.editMarks")} icon={Pencil} onPaint={paint} />
+  ) : !analysis?.maskLinked && params.maskAssetId ? (
+    <MaskButton label={t("canvas.nodes.edit.editMask")} onPaint={paint} />
+  ) : null;
 
   return (
     <ImageCard
@@ -162,7 +170,7 @@ function EditCard({ id, name, selected, display, layout, own, prompt, params }: 
       narrow={layout.narrow}
       short={layout.short}
       several={several}
-      rail={{ ports: editSpec.ports, middle: layout.h / 2 }}
+      rail={{ ports, middle: layout.h / 2 }}
       shape={(view) => editCardView(view, { own: own.length > 0, covered })}
       media={(opacity, view) =>
         partial ? (
@@ -219,13 +227,24 @@ function EditCard({ id, name, selected, display, layout, own, prompt, params }: 
   );
 }
 
-/** Button / Overlay / S / Icon with the brush: Paint mask in the middle, Edit mask beside Run. */
-function MaskButton({ label, onPaint }: { label: string; onPaint: () => void }) {
+/**
+ * Button / Overlay / S / Icon: Paint mask in the middle and Edit mask beside Run with the brush, Edit
+ * marks with the pencil.
+ */
+function MaskButton({
+  label,
+  icon = Brush,
+  onPaint,
+}: {
+  label: string;
+  icon?: LucideIcon;
+  onPaint: () => void;
+}) {
   return (
     <Button
       variant="overlay"
       size="s"
-      icon={Brush}
+      icon={icon}
       className="nodrag"
       onClick={(event) => {
         event.stopPropagation();

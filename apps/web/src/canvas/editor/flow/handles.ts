@@ -6,7 +6,7 @@ import {
   type PortSpec,
 } from "@openfield/canvas/engine/types";
 import { type NodeHandle, Position } from "@xyflow/react";
-import { railLayout } from "../../nodes/shell/rail";
+import { portY, railLayout } from "../../nodes/shell/rail";
 
 // Where each node's handles are, worked out from its box the way the DOM lays them out, and handed
 // to React Flow with the node. React Flow then draws links to a node it hasn't measured (or mounted)
@@ -54,13 +54,14 @@ export function nodeHandles(
   const out: NodeHandle[] = [];
   const half = PORT_SIZE / 2;
   for (const direction of ["in", "out"] as const) {
-    for (const { port, offset } of railLayout(ports, direction)) {
+    for (const entry of railLayout(ports, direction)) {
+      const { port } = entry;
       out.push({
         id: port.id,
         type: direction === "in" ? "target" : "source",
         position: direction === "in" ? Position.Left : Position.Right,
         x: direction === "in" ? -half : w - half,
-        y: h / 2 + (collapsed ? 0 : offset) - half,
+        y: (collapsed ? h / 2 : portY(entry, h)) - half,
         width: PORT_SIZE,
         height: PORT_SIZE,
       });

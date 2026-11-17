@@ -1,3 +1,4 @@
+import { LAYERS_MEDIA_HEIGHT, layerOutputs } from "@openfield/canvas/nodes/layers/spec";
 import type { CanvasEdge } from "@openfield/core/canvas";
 import { type InternalNode, Position, useStoreApi } from "@xyflow/react";
 import { useEffect, useRef } from "react";
@@ -57,7 +58,8 @@ const HANDOFF_MIN_MS = 120;
 const FADE_MS = 150;
 
 type Tile =
-  | { kind: "image"; assetIds: readonly string[]; grid: boolean }
+  /** `media`: the images fill only this much of the top, a panel below (a Layers node's rows). */
+  | { kind: "image"; assetIds: readonly string[]; grid: boolean; media?: number }
   | { kind: "fill"; fill: keyof Colors; line: keyof Colors; radius: number };
 
 const RUNNING = new Set(["running", "queued"]);
@@ -100,6 +102,11 @@ function tileOf(
       const made = c.doc.results[id]?.assetIds ?? NO_IDS;
       return made.length ? { kind: "image", assetIds: made.slice(0, 4), grid: true } : panel;
     }
+    case "image.layers": {
+      // The base its last run split off stands for the image it splits, over the rows' panel.
+      const base = layerOutputs(c.doc.results[id] ?? null).get("base")?.assetId;
+      return base ? { kind: "image", assetIds: [base], grid: false, media: LAYERS_MEDIA_HEIGHT } : panel;
+    }
     case "image.asset":
     case "image.upload": {
       const own = stringIds(c.doc.params[id]?.assetIds);
@@ -119,7 +126,14 @@ interface Cell {
 }
 
 /** A tile's images laid out like the Assets card: rows of two, the last row as wide as it needs. */
-function cellsOf(tile: Extract<Tile, { kind: "image" }>, x: number, y: number, w: number, h: number): Cell[] {
+function cellsOf(
+  tile: Extract<Tile, { kind: "image" }>,
+  x: number,
+  y: number,
+  w: number,
+  full: number,
+): Cell[] {
+  const h = tile.media !== undefined ? Math.min(full, tile.media) : full;
   if (!tile.grid || tile.assetIds.length === 1) return [{ assetId: tile.assetIds[0]!, x, y, w, h }];
   const rows = [tile.assetIds.slice(0, 2), tile.assetIds.slice(2, 4)].filter((r) => r.length);
   const rowH = (h - GRID_GAP * (rows.length - 1)) / rows.length;
@@ -320,6 +334,10 @@ export function CanvasLayer() {
           if (!over || images.some((image) => !image)) {
             ctx.fillStyle = colors.surface;
             ctx.fillRect(x, y, w, h);
+          }
+          if (!over && tile.media !== undefined && h > tile.media) {
+            ctx.fillStyle = colors.elevated;
+            ctx.fillRect(x, y + tile.media, w, h - tile.media);
           }
           cells.forEach((cell, i) => {
             const image = images[i];

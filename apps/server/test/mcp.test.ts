@@ -165,6 +165,7 @@ describe("the connection", () => {
         "recreate",
         "search_assets",
         "separate_layers",
+        "set_node_marks",
         "update_assets",
         "update_folder",
         "view_asset",

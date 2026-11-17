@@ -29,7 +29,8 @@ export function imagesOf(doc: DocSlice, id: string): readonly string[] {
 export function editableOutput(doc: DocSlice, registry: NodeRegistry, id: string): string | null {
   const frame = doc.nodes[id];
   const def = frame ? registry.get(frame.type) : undefined;
-  const port = def?.ports.find((p) => p.direction === "out" && p.type === "image" && !p.hidden);
+  // Its own ports, as drawn: a Layers node's top layer, never a place its last run didn't make.
+  const port = def && registry.nodePorts(doc, id, "out").find((p) => p.type === "image" && !p.gone);
   return port && imagesOf(doc, id).length > 0 ? port.id : null;
 }
 

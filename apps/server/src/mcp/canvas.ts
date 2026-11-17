@@ -3,10 +3,13 @@ import {
   blockerFromReason,
   type DocSlice,
   editBaseNow,
+  editModelKeyOf,
   editSpec,
   evaluateGraph,
   fromDocument,
   incomingEdges,
+  layerOutputs,
+  layersSpec,
   lockedBy,
   nodeRect,
   nodeTitle,
@@ -135,7 +138,11 @@ const SHOWN_PARAMS: Partial<Record<string, readonly string[]>> = {
     "quality",
     "batch",
     "seed",
+    "mode",
+    "marks",
+    "sketchKeepOriginal",
   ],
+  "image.layers": ["model", "prompt", "size"],
   "image.variations": ["strategy", "count", "model", "models", "prompts", "size", "resolution", "quality"],
   "video.generate": ["model", "prompt", "size", "resolution", "seconds", "sound", "cameraFixed", "seed"],
   note: ["text"],
@@ -168,6 +175,8 @@ export interface NodeView {
   images?: string[];
   error?: string;
   costUsd?: number | null;
+  /** A Layers node's outputs: one per layer its last run made, and any other still connected. */
+  outputs?: { port: string; name: string; description?: string; image?: string; gone?: true }[];
 }
 
 export interface CanvasView {
@@ -223,6 +232,19 @@ export async function describeCanvas(
     if (error && (view.state === "failed" || view.state === "canceled")) view.error = error;
     if (node.result?.costUsd !== undefined && node.result.costUsd !== null)
       view.costUsd = node.result.costUsd;
+    if (node.type === layersSpec.type) {
+      const made = layerOutputs(node.result);
+      view.outputs = specRegistry.nodePorts(slice, node.id, "out").map((p) => {
+        const o = made.get(p.id);
+        return {
+          port: p.id,
+          name: p.name ?? p.id,
+          ...(o?.layer?.description && { description: o.layer.description }),
+          ...(o && { image: o.assetId }),
+          ...(p.gone && { gone: true as const }),
+        };
+      });
+    }
     return view;
   });
   const edges = doc.edges.map((e) => ({
@@ -320,6 +342,50 @@ export async function maskTarget(ctx: ToolContext, canvasId: string, nodeId: str
     wiredFrom: masked ? titleOf(masked.source) : null,
     base: why ? { why } : { assetId: now[0]! },
   };
+}
+
+/**
+ * Reads an Edit node for set_node_marks: refuses anything else, a locked node, a model that can't
+ * read marks and a mask wired into it (Sketch & point ignores that input, so the person would
+ * lose track of which one counts).
+ */
+export async function marksTarget(
+  ctx: ToolContext,
+  canvasId: string,
+  nodeId: string,
+): Promise<{ title: string }> {
+  const row = getCanvas(ctx.svc.db, canvasId);
+  if (!row) return missing(canvasId);
+  const doc = readDocument(row.graph);
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node) throw new Refusal(t("canvas.edits.noNode", { id: nodeId }));
+  const title = nodeTitle(node, specRegistry);
+  if (node.type !== editSpec.type)
+    throw new Refusal(`${title} isn't an Edit node. Only Edit nodes take marks.`);
+  const { slice } = fromDocument(doc);
+  const by = lockedBy(slice, nodeId);
+  if (by !== null) {
+    throw new Refusal(
+      by === nodeId
+        ? t("canvas.edits.locked", { node: title })
+        : t("canvas.edits.lockedByFrame", { node: title, frame: nodeTitle(slice.nodes[by]!, specRegistry) }),
+    );
+  }
+  const engine = serverEngineContext(ctx.svc);
+  const key = editModelKeyOf(editSpec.parseParams(node.params, engine).model, engine);
+  const model = engine.model(key);
+  if (!model?.capabilities.marks) {
+    throw new Refusal(
+      `${model?.displayName ?? "Its model"} can't read marks. Pick one whose list_models entry has marks first, with update_node.`,
+    );
+  }
+  const masked = incomingEdges(slice, nodeId, "mask")[0];
+  if (masked) {
+    throw new Refusal(
+      `${nodeTitle(slice.nodes[masked.source]!, specRegistry)} is connected to its mask input, which Sketch & point ignores. Disconnect it first.`,
+    );
+  }
+  return { title };
 }
 
 function stateOf(result: CanvasNodeResult | null, current: boolean): NodeState {

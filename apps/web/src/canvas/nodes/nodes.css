@@ -44,6 +44,11 @@
   pointer-events: none;
 }
 
+/* A Layers output its last run didn't make, kept while something is linked to it. */
+.of-port.react-flow__handle.of-port-gone {
+  opacity: 0.35;
+}
+
 /* The model can't use what comes in here: greyed, but the tooltip still says why. */
 .of-port.react-flow__handle.of-port-off {
   opacity: 0.35;
@@ -504,4 +509,165 @@
   .of-pill-long
   .of-pill-text {
   display: none;
+}
+
+/*
+ * Canvas / Node / Layers (design AvNxGiFbq7, Ready hJET2AMcq3, Separating wTRrNWjboM): the Card is
+ * a column, the image 240 tall over the rows. The image card's own frame (.of-card) draws its fill,
+ * radius and hairline.
+ */
+.of-layers {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Media: a column padded 10, the pill first. Ready centres Run instead, 8 apart. */
+.of-layers-media {
+  position: relative;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 240px;
+  padding: 10px;
+  overflow: hidden;
+  background: var(--of-surface);
+}
+
+.of-layers-media[data-ready] {
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+  padding: 0;
+}
+
+/* Scrim: the dark $scrim in both themes, under everything else on the image. */
+.of-layers-scrim {
+  position: absolute;
+  inset: 0;
+  background: #0000008c;
+  pointer-events: none;
+}
+
+/* Sweep: 90 wide and the image's height, clear to bone and back, crossing while it separates. */
+.of-layers-sweep {
+  position: absolute;
+  top: 0;
+  left: 120px;
+  width: 90px;
+  height: 240px;
+  background: linear-gradient(90deg, #e9e3d800, #e9e3d82e, #e9e3d800);
+  pointer-events: none;
+  animation: of-layers-sweep 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes of-layers-sweep {
+  from {
+    transform: translateX(-210px);
+  }
+  to {
+    transform: translateX(200px);
+  }
+}
+
+/* Still under reduced motion, where the design draws it. */
+@media (prefers-reduced-motion: reduce) {
+  .of-layers-sweep {
+    animation: none;
+  }
+}
+
+.of-layers-top {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.of-layers-action {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+}
+
+.of-layers-message {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px 20px;
+  pointer-events: none;
+}
+
+.of-layers-message > * {
+  pointer-events: auto;
+}
+
+/* Outputs: a column padded 4 top and bottom, a 40 tall row per output. */
+.of-layers-outputs {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.of-layers-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0 28px 0 12px;
+}
+
+/* A place the last run didn't make, kept while something is linked to it: dimmed like its port. */
+.of-layers-row[data-gone] {
+  opacity: 0.35;
+}
+
+/* Thumb: 28, radius 6, $elevated-2 with a hairline; the layer inside a 24 crop 2 in. */
+.of-layers-thumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--of-elevated-2);
+  box-shadow: inset 0 0 0 1px var(--of-border);
+}
+
+.of-layers-crop {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 24px;
+  height: 24px;
+  overflow: hidden;
+}
+
+/* Before and during a run: one 48 tall row, the hint or two placeholder bars. */
+.of-layers-foot {
+  display: flex;
+  align-items: center;
+  height: 48px;
+  padding: 0 28px 0 12px;
+}
+
+/* Out · Layers before a run: where the layers will come out, at 35%, not yet a port. */
+.of-layers-placeholder-port {
+  position: absolute;
+  top: 252px;
+  left: 308px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border: 1px solid var(--of-border-strong);
+  border-radius: 12px;
+  background: var(--of-elevated-2);
+  color: var(--of-text-secondary);
+  opacity: 0.35;
+  pointer-events: none;
 }

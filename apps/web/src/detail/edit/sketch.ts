@@ -1,4 +1,4 @@
-import { MARK_STROKE_POINTS_MAX, type Mark, type MarkPoint } from "@openfield/core";
+import { MARK_STROKE_POINTS_MAX, type Mark, type MarkPoint, marksArea } from "@openfield/core";
 import { createMask, type Mask } from "./mask";
 
 // Sketch & point: marks on the image instead of a painted area, for models that read them
@@ -36,11 +36,6 @@ export const MARK_OF_TOOL = {
 
 /** A drag shorter than this, in screen px, is a click: it makes no box, circle or arrow. */
 export const MIN_DRAG_PX = 4;
-
-/** A point's area when Keep the rest needs one: a circle this share of the image's short side across. */
-const POINT_AREA = 0.2;
-/** How far a line or an arrow's area reaches past it, as a share of the image's short side. */
-const LINE_PAD = 0.04;
 
 export interface Rect {
   left: number;
@@ -125,51 +120,12 @@ export function previewLine(mark: Mark, name: string, kind: string): string {
 }
 
 /**
- * The area Keep the rest puts the original back outside of, at the image's stored size: each box
- * and circle as drawn, a disc around each point, and the box around each line or arrow with a
- * little room. A model reads the marks themselves; this only says what may change.
+ * The area Keep the rest puts the original back outside of, at the image's stored size (core
+ * marksArea): what may change. A model reads the marks themselves.
  */
 export function maskOfMarks(marks: readonly Mark[], width: number, height: number): Mask {
   const mask = createMask(width, height);
-  const short = Math.min(width, height);
-  const fill = (
-    x0: number,
-    y0: number,
-    x1: number,
-    y1: number,
-    inside: (x: number, y: number) => boolean,
-  ) => {
-    const left = Math.max(0, Math.floor(x0));
-    const top = Math.max(0, Math.floor(y0));
-    const right = Math.min(width, Math.ceil(x1));
-    const bottom = Math.min(height, Math.ceil(y1));
-    for (let y = top; y < bottom; y++)
-      for (let x = left; x < right; x++) if (inside(x + 0.5, y + 0.5)) mask.data[y * width + x] = 255;
-  };
-  for (const mark of marks) {
-    if (mark.kind === "point") {
-      const cx = mark.at.x * width;
-      const cy = mark.at.y * height;
-      const r = (short * POINT_AREA) / 2;
-      fill(cx - r, cy - r, cx + r, cy + r, (x, y) => (x - cx) ** 2 + (y - cy) ** 2 <= r * r);
-      continue;
-    }
-    const { from, to } = boundsOf(mark);
-    let [x0, y0, x1, y1] = [from.x * width, from.y * height, to.x * width, to.y * height];
-    if (mark.kind === "circle") {
-      const cx = (x0 + x1) / 2;
-      const cy = (y0 + y1) / 2;
-      const rx = Math.max(0.5, (x1 - x0) / 2);
-      const ry = Math.max(0.5, (y1 - y0) / 2);
-      fill(x0, y0, x1, y1, (x, y) => ((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1);
-      continue;
-    }
-    if (mark.kind !== "box") {
-      const pad = short * LINE_PAD;
-      [x0, y0, x1, y1] = [x0 - pad, y0 - pad, x1 + pad, y1 + pad];
-    }
-    fill(x0, y0, x1, y1, () => true);
-  }
+  marksArea(marks, width, height, mask.data);
   return mask;
 }
 
