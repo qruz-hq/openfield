@@ -113,10 +113,17 @@ export class KeepRestService {
   }
 
   /** The decided area as a grey PNG, for these settings or the stored ones. */
-  async area(id: string, query: KeepRestAreaQuery): Promise<{ png: Uint8Array<ArrayBuffer>; etag: string }> {
+  /** The area map, or only its etag when the caller already has that one: making it is the slow part. */
+  async area(
+    id: string,
+    query: KeepRestAreaQuery,
+    known?: string,
+  ): Promise<{ png?: Uint8Array<ArrayBuffer>; etag: string }> {
     const it = this.#adjustable(id, { trashed: true });
     const settings = this.#settingsOf(it, query);
-    const etag = `"${it.row.sha256.slice(0, 16)}-${it.keep.revision}-${settings.mode}-${settings.sensitivity}-${settings.expandPx}-${settings.featherPx}"`;
+    // The original can be adjusted too, and the fix layer changes the revision.
+    const etag = `"${it.base.sha256.slice(0, 12)}-${it.row.sha256.slice(0, 12)}-${it.keep.revision}-${settings.mode}-${settings.sensitivity}-${settings.expandPx}-${settings.featherPx}"`;
+    if (known === etag) return { etag };
     const sharp = await this.#sharp();
     const fixes = await this.#storedFixes(it.row);
     const made = await areaMap(
@@ -131,14 +138,20 @@ export class KeepRestService {
     return { png: made.png, etag };
   }
 
-  /** The model's result as the server blends it, at the original's size (composite fittedResult). */
-  async fitted(id: string): Promise<Uint8Array<ArrayBuffer>> {
+  /**
+   * The model's result as the server blends it, at the original's size (composite fittedResult), or
+   * only its etag when the caller already has that one.
+   */
+  async fitted(id: string, known?: string): Promise<{ png?: Uint8Array<ArrayBuffer>; etag: string }> {
     const it = this.#adjustable(id, { trashed: true });
     const { ingest } = this.deps;
-    return fittedResult(await this.#sharp(), ingest, {
+    const etag = `"fit-${it.row.id}-${it.base.sha256.slice(0, 16)}"`;
+    if (known === etag) return { etag };
+    const png = await fittedResult(await this.#sharp(), ingest, {
       base: ingest.fileOf(it.base.path),
       result: ingest.fileOf(it.resultPath),
     });
+    return { png, etag };
   }
 
   /** Where the model's own result is, for /files/model-result. Undefined when there's none. */

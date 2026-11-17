@@ -992,7 +992,8 @@ export class CanvasRunService {
   async #withSavedMask(request: GenerateRequest, keep?: CanvasRunCall["mask"]): Promise<GenerateRequest> {
     const { mask, base, marks } = request;
     // Sketch & point keeping the rest: the marks' area is the mask, saved as the Edit tab saves it.
-    if (!mask && base && marks?.length && keep?.composite) {
+    // Only marks on the base itself (image 1) say where it changes.
+    if (!mask && base && marks?.some((m) => (m.image ?? 1) === 1) && keep?.composite) {
       const saved = await saveMarksMask(this.deps, marks, { baseAssetId: base.assetId });
       return { ...request, mask: { ...keep, assetId: saved.asset.id } };
     }

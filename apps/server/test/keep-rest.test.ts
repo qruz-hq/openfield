@@ -211,6 +211,13 @@ describe("the model's own result", () => {
       const size = url === s.modelResult!.url ? [768, 573] : [W, H];
       expect([meta.width, meta.height], url).toEqual(size);
     }
+    // The made-up files are revalidated, and answered without being made again when unchanged.
+    for (const url of [s.modelResult!.fittedUrl, s.areaUrl!]) {
+      const etag = (await server.request(url)).headers.get("etag");
+      expect(etag, url).toBeTruthy();
+      const again = await server.request(url, { headers: { "if-none-match": etag! } });
+      expect(again.status, url).toBe(304);
+    }
     const original = await server.request(s.modelResult!.url);
     expect(new Uint8Array(await original.arrayBuffer())).toEqual(
       new Uint8Array(await Bun.file(server.services.ingest.fileOf(edit.resultPath!)).arrayBuffer()),

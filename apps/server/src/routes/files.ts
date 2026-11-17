@@ -89,14 +89,10 @@ export const filesRoutes = new Hono<Env>()
       if (!c.req.valid("query").fit)
         return sendFile(c, stored.file, { type: stored.mime, etag: stored.etag, cache: IMMUTABLE });
       // Made from the original too, which an adjusted edit may itself be, so it's checked each time.
-      const png = await keepRest.fitted(id);
-      return new Response(png, {
-        headers: {
-          "content-type": "image/png",
-          "cache-control": "no-cache",
-          "content-length": String(png.byteLength),
-        },
-      });
+      const { png, etag } = await keepRest.fitted(id, c.req.header("if-none-match"));
+      const headers = { "content-type": "image/png", "cache-control": "no-cache", etag };
+      if (!png) return new Response(null, { status: 304, headers });
+      return new Response(png, { headers: { ...headers, "content-length": String(png.byteLength) } });
     },
   )
   // The area an edit takes from the model, white to black, for the Difference view. Other settings
@@ -107,9 +103,10 @@ export const filesRoutes = new Hono<Env>()
     zValidator("query", keepRestAreaQuerySchema.extend({ v: z.string().optional() }), onInvalid),
     async (c) => {
       const { v: _v, ...query } = c.req.valid("query");
-      const { png, etag } = await c.var.svc.keepRest.area(c.req.valid("param").id, query);
+      const id = c.req.valid("param").id;
+      const { png, etag } = await c.var.svc.keepRest.area(id, query, c.req.header("if-none-match"));
       const headers = { "content-type": "image/png", "cache-control": "no-cache", etag };
-      if (c.req.header("if-none-match") === etag) return new Response(null, { status: 304, headers });
+      if (!png) return new Response(null, { status: 304, headers });
       return new Response(png, { headers: { ...headers, "content-length": String(png.byteLength) } });
     },
   )
