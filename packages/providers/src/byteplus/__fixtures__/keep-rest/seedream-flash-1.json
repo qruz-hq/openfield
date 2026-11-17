@@ -1,0 +1,62 @@
+{
+  "recorded": "2026-11-17",
+  "note": "One real edit through Openfield (POST /api/masks or marks, then POST /api/edit) on a made-up 1024 x 1024 room, measured again with the final core at full size. Images here are scaled to 256 px; the numbers come from the full-size pair.",
+  "model": "byteplus:dola-seedream-5-0-flash-260915",
+  "kind": "mask",
+  "prompt": "A single bright red apple sitting on the table.",
+  "area": {
+    "mask": {
+      "x": 352,
+      "y": 600,
+      "w": 320,
+      "h": 300
+    }
+  },
+  "costUsd": 0.018,
+  "estimateUsd": 0.018,
+  "modelSent": {
+    "width": 1024,
+    "height": 1024,
+    "mime": "image/png"
+  },
+  "meanDiffOutsideMask": 3.99,
+  "lineUp": {
+    "dx": 0,
+    "dy": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "confidence": 0.996
+  },
+  "noise": {
+    "median": 0.85,
+    "spread": 1.26
+  },
+  "bySensitivity": {
+    "0": {
+      "changed": 0.02,
+      "farFromMaskKept": 0,
+      "fellBack": null
+    },
+    "25": {
+      "changed": 0.021,
+      "farFromMaskKept": 0,
+      "fellBack": null
+    },
+    "50": {
+      "changed": 0.021,
+      "farFromMaskKept": 0,
+      "fellBack": null
+    },
+    "75": {
+      "changed": 0.021,
+      "farFromMaskKept": 0,
+      "fellBack": null
+    },
+    "100": {
+      "changed": 0.021,
+      "farFromMaskKept": 0,
+      "fellBack": null
+    }
+  },
+  "analyseMs": 361
+}

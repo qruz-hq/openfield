@@ -1,0 +1,62 @@
+{
+  "recorded": "2026-11-17",
+  "note": "One real edit through Openfield (POST /api/masks or marks, then POST /api/edit) on a made-up 1024 x 1024 room, measured again with the final core at full size. Images here are scaled to 256 px; the numbers come from the full-size pair.",
+  "model": "openai:gpt-image-2",
+  "kind": "mask",
+  "prompt": "A single bright red apple sitting on the table.",
+  "area": {
+    "mask": {
+      "x": 352,
+      "y": 600,
+      "w": 320,
+      "h": 300
+    }
+  },
+  "costUsd": 0.014152,
+  "estimateUsd": 0.014132,
+  "modelSent": {
+    "width": 1024,
+    "height": 1024,
+    "mime": "image/png"
+  },
+  "meanDiffOutsideMask": 4.21,
+  "lineUp": {
+    "dx": 0.011,
+    "dy": 0.772,
+    "scaleX": 1,
+    "scaleY": 1.002,
+    "confidence": 0.985
+  },
+  "noise": {
+    "median": 0.15,
+    "spread": 0.222
+  },
+  "bySensitivity": {
+    "0": {
+      "changed": 0.049,
+      "farFromMaskKept": 0,
+      "fellBack": null
+    },
+    "25": {
+      "changed": 0.051,
+      "farFromMaskKept": 0,
+      "fellBack": null
+    },
+    "50": {
+      "changed": 0.053,
+      "farFromMaskKept": 0,
+      "fellBack": null
+    },
+    "75": {
+      "changed": 0.059,
+      "farFromMaskKept": 0,
+      "fellBack": null
+    },
+    "100": {
+      "changed": 0.066,
+      "farFromMaskKept": 0,
+      "fellBack": null
+    }
+  },
+  "analyseMs": 358
+}
