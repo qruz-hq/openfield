@@ -110,6 +110,13 @@ async function masked(
   return { asset, call };
 }
 
+/** The record of an edit whose model result is stored, before anything was decided. */
+const stored = { mode: "smart", sensitivity: 50, start: "mask", revision: 0, stored: true } as const;
+
+/** The record of one laid over its base: what was decided varies with the pictures. */
+const kept = (decided: Record<string, unknown> = {}) =>
+  expect.objectContaining({ ...stored, lineUp: expect.any(Object), changed: expect.any(Number), ...decided });
+
 const stage = (png: Uint8Array) =>
   server.services.ingest.stage(new Blob([png as Uint8Array<ArrayBuffer>]).stream());
 
@@ -184,10 +191,13 @@ describe("compositeEdit", () => {
           featherPx: 8,
           resizedFrom: { width: made[0], height: made[1] },
         },
+        // Noise against a gradient: nothing lines up, so the mask alone decides.
+        keepRest: kept({ fellBack: "no_match" }),
       });
       expect(out!.staged).toMatchObject({ width: asset.width, height: asset.height, mime: "image/png" });
-      // The model's own file made way for the composite.
-      expect(existsSync(fileOf(result))).toBe(false);
+      // The model's own file stays, to be kept hidden with the edit.
+      expect(out!.result).toBe(result);
+      expect(existsSync(fileOf(result))).toBe(true);
       await expectKept(base, fileOf(out!.staged), hole, 12);
     }, 30_000);
   }
@@ -359,14 +369,16 @@ describe("compositeEdit", () => {
     expect(out?.edit).toEqual({
       composite: { applied: true, expandPx: 4, featherPx: 8 },
       fallback: "whole_image",
+      keepRest: kept({ fellBack: "no_match" }),
     });
 
     const off = await masked(base, hole, { composite: false, expandPx: 2, featherPx: 0 });
     const result = await stage(await gradientPng(256, 192, 2));
-    const kept = await compositeEdit(server.services, off.call(), result);
-    expect(kept).toEqual({
+    const skipped = await compositeEdit(server.services, off.call(), result);
+    expect(skipped).toEqual({
       staged: result,
-      edit: { composite: { applied: false, expandPx: 2, featherPx: 0, reason: "off" } },
+      result,
+      edit: { composite: { applied: false, expandPx: 2, featherPx: 0, reason: "off" }, keepRest: stored },
     });
     expect(existsSync(fileOf(result))).toBe(true);
   });
@@ -384,7 +396,8 @@ describe("compositeEdit", () => {
     const out = await compositeEdit(server.services, gone, result);
     expect(out).toEqual({
       staged: result,
-      edit: { composite: { applied: false, expandPx: 4, featherPx: 8, reason: "failed" } },
+      result,
+      edit: { composite: { applied: false, expandPx: 4, featherPx: 8, reason: "failed" }, keepRest: stored },
     });
     expect(existsSync(fileOf(result))).toBe(true);
   });
@@ -423,9 +436,11 @@ describe("compositeEdit", () => {
     const out = await compositeEdit(noSharp, call("edit"), result);
     expect(out).toEqual({
       staged: result,
+      result,
       edit: {
         composite: { applied: false, expandPx: 4, featherPx: 8, reason: "unavailable" },
         fallback: "whole_image",
+        keepRest: stored,
       },
     });
     expect(existsSync(fileOf(result))).toBe(true);
@@ -464,12 +479,78 @@ describe("compositeEdit", () => {
     const out = await compositeEdit(svc, call, result);
     expect(out).toEqual({
       staged: result,
-      edit: { composite: { applied: false, expandPx: 4, featherPx: 8, reason: "turned" } },
+      result,
+      edit: { composite: { applied: false, expandPx: 4, featherPx: 8, reason: "turned" }, keepRest: stored },
     });
     expect(maskOutcome({ opParams: { edit: out!.edit } })).toEqual({
       keptOutsideMask: false,
       why: "The image is saved on its side, so this is the model's whole result.",
     });
+  });
+
+  test("a Sketch & point edit without a mask stores its result, never calling it whole-image", async () => {
+    const svc = server.services;
+    const { asset } = await saveUpload(svc, new Blob([await rgbNoise(320, 240)]));
+    const result = await stage(await gradientPng(320, 240, 12));
+    const call = {
+      op: "edit",
+      jobId: "job",
+      prompt: "a mug here",
+      base: { assetId: asset.id, role: "base" },
+      marks: [{ kind: "box", from: { x: 0.1, y: 0.1 }, to: { x: 0.4, y: 0.5 } }],
+    } as unknown as NormalizedRequest;
+    expect(await compositeEdit(svc, call, result)).toEqual({
+      staged: result,
+      result,
+      edit: {
+        composite: { applied: false, expandPx: 4, featherPx: 8, reason: "off" },
+        keepRest: { ...stored, start: "marks" },
+      },
+    });
+  });
+
+  test("lays a model-like result over its base where it really changed", async () => {
+    const width = 640;
+    const height = 480;
+    const raw = noise(width * height * 3, 21);
+    // Coarse, as a photo is at this scale, so the comparison has something to line up on.
+    const base = new Uint8Array(
+      await sharp(raw, { raw: { width, height, channels: 3 } })
+        .resize(width / 4, height / 4)
+        .resize(width, height, { kernel: "nearest" })
+        .png()
+        .toBuffer(),
+    );
+    const hole = { x: 100, y: 100, w: 160, h: 120 };
+    const { call } = await masked(base, hole);
+    const { data } = await sharp(base).raw().toBuffer({ resolveWithObject: true });
+    const model = new Uint8Array(data);
+    // Changed in the hole and 30 px past its right edge; the rest as it was.
+    for (let y = 120; y < 200; y++)
+      for (let x = 120; x < 290; x++) model.set([240, 20, 20], (y * width + x) * 3);
+    const result = await stage(
+      new Uint8Array(
+        await sharp(model, { raw: { width, height, channels: 3 } })
+          .png()
+          .toBuffer(),
+      ),
+    );
+    const out = await compositeEdit(server.services, call(), result);
+    expect(out?.edit.composite).toEqual({ applied: true, expandPx: 4, featherPx: 8 });
+    expect(out?.edit.keepRest).toMatchObject({ ...stored, lineUp: { dx: 0, dy: 0, scaleX: 1, scaleY: 1 } });
+    expect(out?.edit.keepRest?.fellBack).toBeUndefined();
+    expect(out?.edit.keepRest?.lineUp?.confidence).toBeGreaterThan(0.9);
+    const made = await decoded(fileOf(out!.staged));
+    const at = (x: number, y: number) =>
+      Array.from(made.values.subarray((y * width + x) * 3, (y * width + x) * 3 + 3));
+    // Past the mask, where the change spilled, the model's.
+    expect(at(285, 160)).toEqual([240, 20, 20]);
+    // Inside the mask, where nothing changed, the original's own values.
+    const original = await decoded(base);
+    const was = (x: number, y: number) =>
+      Array.from(original.values.subarray((y * width + x) * 3, (y * width + x) * 3 + 3));
+    expect(at(105, 105)).toEqual(was(105, 105));
+    expect(at(500, 400)).toEqual(was(500, 400));
   });
 
   test("leaves anything but a masked image edit alone", async () => {

@@ -176,7 +176,13 @@ describe("an Edit node's run", () => {
     server = await ready();
     const { canvasId, mask, edit } = await editCanvas({ keepOriginal: false });
     const { set, made } = await runAll(canvasId, edit);
-    expect(set.requestJson.mask).toEqual({ assetId: mask, composite: false, expandPx: 4, featherPx: 8 });
+    expect(set.requestJson.mask).toEqual({
+      assetId: mask,
+      composite: false,
+      expandPx: 4,
+      featherPx: 8,
+      sensitivity: 50,
+    });
     expect(made.opParams).toMatchObject({ edit: { composite: { applied: false, reason: "off" } } });
   });
 });

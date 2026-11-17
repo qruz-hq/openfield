@@ -1270,8 +1270,8 @@ export class Runner {
       let posterPath: string | null = null;
       if (isVideoMime(staged.mime)) posterPath = await this.deps.ingest.poster(staged, still);
       else if (still) this.deps.ingest.discard(still);
-      // A masked edit keeps the original outside its mask. If a cancel wins meanwhile, no file is
-      // left behind: a composite already replaced the result's own file, and succeed() discards it.
+      // A masked edit keeps the original outside its mask, and the model's own result hidden with
+      // it. If a cancel wins meanwhile, no file is left behind: succeed() discards both.
       const kept = await this.outcomes.composite(call, staged);
       const committed = this.outcomes.succeed({
         set,
@@ -1285,6 +1285,7 @@ export class Runner {
         usage: result.usage,
         posterPath,
         edit: kept.edit,
+        result: kept.result,
       });
       // A cancel won while the poster was made: the poster goes with the file.
       if (!committed && posterPath && !staged.duplicate) this.deps.ingest.discardPath(posterPath);

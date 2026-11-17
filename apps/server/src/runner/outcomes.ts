@@ -120,13 +120,13 @@ export class Outcomes {
   /**
    * A masked edit's result laid over its base, so everything outside the mask stays the original
    * (§0.9), with the record of it for succeed(). Anything else comes back as it is. Runs first:
-   * succeed() files in one synchronous transaction, which can't wait for pixels. When a composite is
-   * made, the result's own file is discarded and the composite is what's returned to file.
+   * succeed() files in one synchronous transaction, which can't wait for pixels. An edit with a
+   * mask or marks also hands back the model's own result, which succeed() keeps hidden with it.
    */
   async composite(
     call: NormalizedRequest,
     staged: StagedFile,
-  ): Promise<{ staged: StagedFile; edit?: EditOpParams }> {
+  ): Promise<{ staged: StagedFile; edit?: EditOpParams; result?: StagedFile }> {
     return (await compositeEdit(this.deps, call, staged)) ?? { staged };
   }
 
@@ -148,6 +148,8 @@ export class Outcomes {
     posterPath?: string | null;
     /** A masked edit's record, from composite(). */
     edit?: EditOpParams | undefined;
+    /** The model's own result, from composite(), kept hidden with the edit. May be `staged`. */
+    result?: StagedFile | undefined;
     /**
      * A layer separation's layers, filed beside its base (the job's own image) in the same
      * transaction. Each is a library image of its own, derived from the separated image.
@@ -198,6 +200,7 @@ export class Outcomes {
         // A mask deleted for good while the run was out is no longer there to point at.
         maskAssetId:
           call.mask && getAsset(tx, call.mask.assetId, { includeDeleted: true }) ? call.mask.assetId : null,
+        ...(args.result && { resultPath: args.result.path, resultBytes: args.result.bytes }),
         generative: true,
         // A model that can't take a mask changed the whole image (§0.9).
         approximate: edit?.fallback !== undefined,
@@ -281,6 +284,7 @@ export class Outcomes {
 
     if (!committed) {
       this.deps.ingest.discard(staged);
+      if (args.result && args.result.path !== staged.path) this.deps.ingest.discard(args.result);
       for (const layer of layers) this.deps.ingest.discard(layer.staged);
       return undefined;
     }
