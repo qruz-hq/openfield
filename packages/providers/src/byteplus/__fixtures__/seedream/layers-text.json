@@ -1,0 +1,101 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/images/generations"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "model": "dola-seedream-5-5-261028",
+      "created": 1794920400,
+      "data": [
+        {
+          "b64_json": "<png>",
+          "size": "1536x2048",
+          "output_format": "png",
+          "z_index": 0
+        },
+        {
+          "b64_json": "<png-alpha>",
+          "size": "233x53",
+          "output_format": "png",
+          "z_index": 1,
+          "bounding_box": {
+            "absolute": [1195, 629, 1427, 681],
+            "normalized": [778, 307, 929, 333]
+          },
+          "name": "Presenter credit",
+          "description": "Two lines of small navy text",
+          "text_recognition": {
+            "text": "Presented By :\nAnna Katrina Marchesi",
+            "lines": [
+              {
+                "bounding_box": {
+                  "absolute": [1196, 629, 1358, 658],
+                  "normalized": [779, 307, 884, 321]
+                },
+                "runs": [
+                  {
+                    "text": "Presented By :",
+                    "style": {
+                      "similar_font_family": "Helvetica Neue",
+                      "foreground_color": "#193366",
+                      "bold": true,
+                      "italic": false,
+                      "underline": false,
+                      "strikethrough": false,
+                      "shadow": false,
+                      "translucent": false
+                    }
+                  }
+                ]
+              },
+              {
+                "bounding_box": {
+                  "absolute": [1195, 651, 1427, 681],
+                  "normalized": [778, 318, 929, 333]
+                },
+                "runs": [
+                  {
+                    "text": "Anna Katrina Marchesi",
+                    "style": {
+                      "similar_font_family": "Helvetica Neue",
+                      "foreground_color": "#46597E",
+                      "bold": false,
+                      "italic": false,
+                      "underline": false,
+                      "strikethrough": false,
+                      "shadow": false,
+                      "translucent": false
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "b64_json": "<png-alpha>",
+          "size": "601x281",
+          "output_format": "png",
+          "z_index": 2,
+          "bounding_box": {
+            "absolute": [460, 1500, 1060, 1780],
+            "normalized": [299, 732, 690, 869]
+          },
+          "name": "Hand-lettered title",
+          "description": "Brush script title. Hand-lettered text has no text_recognition"
+        }
+      ],
+      "usage": {
+        "generated_images": 3,
+        "input_images": 1,
+        "output_tokens": 24576,
+        "total_tokens": 24576
+      }
+    }
+  }
+}

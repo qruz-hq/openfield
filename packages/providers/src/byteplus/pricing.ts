@@ -48,7 +48,39 @@ const flat = (usd: number): Extract<PriceModel, { kind: "per_image" }> => ({
   tiers: [{ usd }],
 });
 
+/**
+ * 5.5's line between its two rates: "up to 2,601,123.84 px". Pixels are whole, so this is exact. Its
+ * top, 4,624,220.16, is the most any size it makes can have.
+ */
+export const V55_TIER_PIXELS = 2_601_123;
+
 export const SEEDREAM_PRICES = {
+  // From the same page on 2026-11-17. Every input image is $0.008, none free. A separation bills
+  // its base and each layer by their own pixels on the same two rates. The table starts at
+  // 921,600 px, but a cropped layer can be smaller: the lower rate is assumed for those (README).
+  "dola-seedream-5-5-261028": {
+    kind: "per_image",
+    currency: "USD",
+    pricedAt: "2026-11-17",
+    sourceUrl: SOURCE,
+    tiers: [
+      { tier: "1K", usd: 0.02 },
+      { tier: "1.5K", usd: 0.02 },
+      { tier: "2K", usd: 0.035 },
+    ],
+    byPixels: [{ maxPixels: V55_TIER_PIXELS, usd: 0.02 }, { usd: 0.035 }],
+    inputImage: { usd: 0.008, freePerCall: 0 },
+    decompose: {
+      tiers: [
+        { tier: "1K", usd: 0.02 },
+        { tier: "1.5K", usd: 0.02 },
+        { tier: "2K", usd: 0.035 },
+      ],
+      byPixels: [{ maxPixels: V55_TIER_PIXELS, usd: 0.02 }, { usd: 0.035 }],
+      // A base and 1 to 99 layers. How many at most is the person's choice (layers.choose).
+      outputs: { min: 2, max: 100 },
+    },
+  },
   "dola-seedream-5-0-pro-260628": {
     kind: "per_image",
     ...seedreamPriced,

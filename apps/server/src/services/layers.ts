@@ -6,6 +6,7 @@ import {
   type LayerOpParams,
   type LayerStackResponse,
   type LayersBody,
+  type LayerText,
   LOCAL_PROVIDER_ID,
   layerOpParamsSchema,
   type StackEntry,
@@ -65,6 +66,8 @@ interface Placed {
   box: LayerBox;
   name: string;
   zIndex: number;
+  /** The words the model read on the layer it is, or came from. */
+  text?: LayerText;
 }
 
 /** How far up an edited image's parents to look for the layer it came from. */
@@ -108,6 +111,7 @@ export class LayerService {
         box: layer.box ?? [0, 0, canvas.width, canvas.height],
         name: layer.name ?? null,
         description: layer.description ?? null,
+        text: layer.text ?? null,
       })),
     };
   }
@@ -126,6 +130,7 @@ export class LayerService {
         box: item.layer.box ?? full,
         name: nameOf(item),
         zIndex: item.layer.zIndex,
+        ...(item.layer.text && { text: item.layer.text }),
       }));
     }
     const out: Placed[] = [];
@@ -146,7 +151,13 @@ export class LayerService {
           userMessage: t("errors.layerNotInStack"),
         });
       }
-      out.push({ row, box, name: from ? nameOf(from) : t("layers.layer", { n: i }), zIndex: i });
+      out.push({
+        row,
+        box,
+        name: from ? nameOf(from) : t("layers.layer", { n: i }),
+        zIndex: i,
+        ...(from?.layer.text && { text: from.layer.text }),
+      });
     }
     if (!out.length) {
       throw new ApiFailure(400, "bad_request", "Every layer is hidden", {
@@ -243,14 +254,24 @@ export class LayerService {
     const files: { name: string; bytes: Uint8Array }[] = [];
     const names = new Set<string>();
     const manifest = { canvas: stack.canvas, layers: [] as Record<string, unknown>[] };
+    // Wide enough that the files sort in stack order however many there are.
+    const digits = Math.max(2, String(placed.length - 1).length);
     for (const [i, p] of placed.entries()) {
-      const name = uniqueName(`${String(i).padStart(2, "0")} ${safeName(p.name)}.png`, names);
+      const name = uniqueName(`${String(i).padStart(digits, "0")} ${safeName(p.name)}.png`, names);
       const png = await sharp(await this.#read(p.row))
         .rotate()
         .png()
         .toBuffer();
       files.push({ name, bytes: new Uint8Array(png) });
-      manifest.layers.push({ file: name, name: p.name, box: p.box, zIndex: i, assetId: p.row.id });
+      manifest.layers.push({
+        file: name,
+        name: p.name,
+        box: p.box,
+        zIndex: i,
+        assetId: p.row.id,
+        // The words on a text layer, for a design tool to set as live text.
+        ...(p.text && { text: p.text }),
+      });
     }
     const flat = await this.#compose(sharp, stack, placed).then((img) => img.png().toBuffer());
     files.push({ name: "flattened.png", bytes: new Uint8Array(flat) });
@@ -338,7 +359,12 @@ export function layersRequest(body: LayersBody): GenerateRequest {
     op: "decompose",
     prompt: body.prompt ?? "",
     base: { assetId: body.image, role: "base" },
-    ...(body.size && { layers: { size: body.size } }),
+    ...((body.size || body.maxLayers !== undefined) && {
+      layers: {
+        ...(body.size && { size: body.size }),
+        ...(body.maxLayers !== undefined && { maxLayers: body.maxLayers }),
+      },
+    }),
     size: { kind: "auto" },
     batch: 1,
     source: body.source ?? "detail_editor",

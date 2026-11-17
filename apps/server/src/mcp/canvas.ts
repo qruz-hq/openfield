@@ -142,7 +142,7 @@ const SHOWN_PARAMS: Partial<Record<string, readonly string[]>> = {
     "marks",
     "sketchKeepOriginal",
   ],
-  "image.layers": ["model", "prompt", "size"],
+  "image.layers": ["model", "prompt", "size", "maxLayers"],
   "image.variations": ["strategy", "count", "model", "models", "prompts", "size", "resolution", "quality"],
   "video.generate": ["model", "prompt", "size", "resolution", "seconds", "sound", "cameraFixed", "seed"],
   note: ["text"],

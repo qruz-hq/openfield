@@ -52,6 +52,7 @@ function entry(role: "base" | "layer", zIndex: number, name: string | null, box?
     box: box ?? [0, 0, CANVAS.width, CANVAS.height],
     name,
     description: null,
+    text: null,
   };
 }
 

@@ -63,7 +63,8 @@ export {
   referenceInputsFor,
   resolveValues,
 } from "./manifest/controls";
-export { type EstimateRequest, editPricing, estimate } from "./manifest/estimate";
+export { type EstimateRequest, editPricing, estimate, layerOutputs } from "./manifest/estimate";
+export { chosenLayers, mostLayers } from "./manifest/layers";
 export {
   checkSettingsPatch,
   conditionHolds,

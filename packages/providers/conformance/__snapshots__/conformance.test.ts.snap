@@ -2468,3 +2468,72 @@ exports[`fake 24. speed on the wire: golden payloads per sync speed, and cost fo
   ],
 }
 `;
+
+exports[`byteplus 20. golden payloads: t2i 3:4 at 1K ×2, edit with 2 references, inpaint with a mask: byteplus:dola-seedream-5-5-261028 1`] = `
+{
+  "edit": [
+    {
+      "body": {
+        "image": [
+          "<base64 image/png>",
+          "<base64 image/png>",
+          "<base64 image/png>",
+        ],
+        "model": "dola-seedream-5-5-261028",
+        "output_format": "png",
+        "prompt": "Make the sky stormy",
+        "response_format": "b64_json",
+        "size": "1536x1536",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+  ],
+  "inpaint": {
+    "note": "whole_image",
+    "op": "edit",
+  },
+  "t2i": [
+    {
+      "body": {
+        "model": "dola-seedream-5-5-261028",
+        "output_format": "png",
+        "prompt": "A red kite over a green hill",
+        "response_format": "b64_json",
+        "size": "864x1152",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+    {
+      "body": {
+        "model": "dola-seedream-5-5-261028",
+        "output_format": "png",
+        "prompt": "A red kite over a green hill",
+        "response_format": "b64_json",
+        "size": "864x1152",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+  ],
+}
+`;
+
+exports[`byteplus 24. speed on the wire: golden payloads per sync speed, and cost follows the speed served: byteplus:dola-seedream-5-5-261028 speeds 1`] = `
+{
+  "standard": [
+    {
+      "body": {
+        "model": "dola-seedream-5-5-261028",
+        "output_format": "png",
+        "prompt": "A red kite over a green hill",
+        "response_format": "b64_json",
+        "size": "1536x1536",
+        "watermark": false,
+      },
+      "url": "https://ark.ap-southeast.bytepluses.com/api/v3/images/generations",
+    },
+  ],
+}
+`;

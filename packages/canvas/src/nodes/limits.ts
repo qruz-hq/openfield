@@ -1,4 +1,11 @@
-import { BATCH_MAX, GENERATE_PROMPT_MAX, LAYERS_PROMPT_MAX, MASK_COMPOSITE_MAX_PX, t } from "@openfield/core";
+import {
+  BATCH_MAX,
+  GENERATE_PROMPT_MAX,
+  LAYERS_MAX,
+  LAYERS_PROMPT_MAX,
+  MASK_COMPOSITE_MAX_PX,
+  t,
+} from "@openfield/core";
 import { PROMPT_MAX } from "./prompt/spec";
 import { LIST_MAX, TAKES_MAX, TAKES_MIN } from "./variations/spec";
 
@@ -18,7 +25,7 @@ export const NODE_LIMITS = {
     // Sketch & point sends no references: every mark is on the image being edited.
     marks: { image: 1 },
   },
-  "image.layers": { prompt: { maxChars: LAYERS_PROMPT_MAX } },
+  "image.layers": { prompt: { maxChars: LAYERS_PROMPT_MAX }, maxLayers: { min: 1, max: LAYERS_MAX } },
   "image.variations": {
     count: { min: TAKES_MIN, max: TAKES_MAX },
     prompts: { maxItems: LIST_MAX, maxChars: PROMPT_MAX },
@@ -63,9 +70,17 @@ export function limitProblem(type: string, params: Readonly<Record<string, unkno
     }
     case "image.layers": {
       const count = chars(params.prompt);
-      return count > LAYERS_PROMPT_MAX
-        ? t("canvas.edits.limits.layersPrompt", { max: LAYERS_PROMPT_MAX, count })
-        : null;
+      if (count > LAYERS_PROMPT_MAX)
+        return t("canvas.edits.limits.layersPrompt", { max: LAYERS_PROMPT_MAX, count });
+      const most = params.maxLayers;
+      if (
+        most !== undefined &&
+        most !== null &&
+        (typeof most !== "number" || !Number.isInteger(most) || most < 1 || most > LAYERS_MAX)
+      ) {
+        return t("canvas.edits.limits.maxLayers", { max: LAYERS_MAX, count: String(most) });
+      }
+      return null;
     }
     case "image.variations": {
       const { count, prompts, models } = params;

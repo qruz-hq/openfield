@@ -89,7 +89,7 @@ const response = (exchange: RecordedExchange) =>
   });
 
 describe("the BytePlus catalog", () => {
-  test("seven Seedance video models, then five Seedream image models, all parsing strictly", () => {
+  test("seven Seedance video models, then six Seedream image models, all parsing strictly", () => {
     expect(BYTEPLUS_MODELS.map((m) => m.displayName)).toEqual([
       "Seedance 2.5",
       "Seedance 2.0",
@@ -98,6 +98,7 @@ describe("the BytePlus catalog", () => {
       "Seedance 1.5 Pro",
       "Seedance 1.0 Pro",
       "Seedance 1.0 Pro Fast",
+      "Seedream 5.5",
       "Seedream 5.0 Pro",
       "Seedream 5.0 Flash",
       "Seedream 5.0 Lite",

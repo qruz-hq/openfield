@@ -133,9 +133,10 @@ async function imageBody(
 
   let transparent = false;
   if (req.background === "transparent" && spec.transparency) {
-    // Only an edit of exactly one PNG that has transparency can come out transparent.
+    // 5.5 makes one from words or any references. On Pro and Flash only an edit of exactly one PNG
+    // that has transparency can come out transparent.
     const only = assets.length === 1 ? assets[0] : undefined;
-    if (only?.mimeType !== "image/png" || !pngHasAlpha(only.bytes)) {
+    if (!spec.rgba && (only?.mimeType !== "image/png" || !pngHasAlpha(only.bytes))) {
       throw new ProviderError("invalid_request", {
         field: "background",
         message: "A transparent background needs exactly one PNG input with alpha",
@@ -147,7 +148,11 @@ async function imageBody(
   return toSeedreamBody(
     spec,
     req,
-    { images: assets.map(dataUrlOf), transparent },
+    {
+      images: assets.map(dataUrlOf),
+      transparent,
+      opaque: req.background === "opaque" && spec.transparency && spec.sendsOpaque,
+    },
     { fast: ctx.speed === "priority" },
   );
 }

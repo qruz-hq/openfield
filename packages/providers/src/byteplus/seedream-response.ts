@@ -1,7 +1,13 @@
 import {
   type CostActual,
   formatMoney,
+  LAYER_FONT_MAX,
+  LAYER_TEXT_LINES_MAX,
+  LAYER_TEXT_MAX,
+  LAYER_TEXT_RUNS_MAX,
   type LayerOpParams,
+  type LayerText,
+  type LayerTextStyle,
   layerGridToPixels,
   type NormalizedRequest,
   type PriceModel,
@@ -34,6 +40,29 @@ export interface SeedreamItem {
   bounding_box?: { absolute?: number[]; normalized?: number[] };
   name?: string;
   description?: string;
+  /** 5.5, on a plain text layer when text_recognition was asked for. */
+  text_recognition?: SeedreamTextRecognition;
+}
+
+/** data[].text_recognition, as the image generation API describes it. */
+export interface SeedreamTextRecognition {
+  text?: string;
+  lines?: {
+    bounding_box?: { absolute?: number[]; normalized?: number[] };
+    runs?: {
+      text?: string;
+      style?: {
+        similar_font_family?: string;
+        foreground_color?: string;
+        bold?: boolean;
+        italic?: boolean;
+        underline?: boolean;
+        strikethrough?: boolean;
+        shadow?: boolean;
+        translucent?: boolean;
+      };
+    }[];
+  }[];
 }
 
 export interface SeedreamResponse {
@@ -183,6 +212,7 @@ function layerOf(
 ): LayerOpParams {
   const common = { canvas: { width: canvas.width, height: canvas.height } };
   if (isBase) return { role: "base", zIndex: 0, ...common };
+  const text = layerTextOf(item.text_recognition, canvas);
   const absolute = item.bounding_box?.absolute;
   const grid = item.bounding_box?.normalized;
   const box =
@@ -206,7 +236,56 @@ function layerOf(
     }),
     ...(item.name && { name: item.name.slice(0, 200) }),
     ...(item.description && { description: item.description.slice(0, 2000) }),
+    ...(text && { text }),
   };
+}
+
+/**
+ * A text layer's words, trimmed to what a layer can store so a long poster never makes the layer
+ * itself unreadable. Anything malformed is left out rather than failing the split.
+ */
+export function layerTextOf(
+  ocr: SeedreamTextRecognition | undefined,
+  canvas: { width: number; height: number },
+): LayerText | undefined {
+  if (!ocr || typeof ocr !== "object") return undefined;
+  const lines: LayerText["lines"] = [];
+  for (const line of Array.isArray(ocr.lines) ? ocr.lines.slice(0, LAYER_TEXT_LINES_MAX) : []) {
+    const runs = (Array.isArray(line?.runs) ? line.runs : [])
+      .filter((r) => typeof r?.text === "string")
+      .slice(0, LAYER_TEXT_RUNS_MAX)
+      .map((r) => ({ text: r.text!.slice(0, LAYER_TEXT_MAX), style: styleOf(r.style) }));
+    const absolute = boxOf(line?.bounding_box?.absolute, 65_536);
+    const grid = boxOf(line?.bounding_box?.normalized, 1000);
+    const box = absolute ?? (grid && layerGridToPixels(grid, canvas.width, canvas.height));
+    lines.push({ ...(box && { box }), ...(grid && { boxGrid: grid }), runs });
+  }
+  const text =
+    typeof ocr.text === "string" ? ocr.text : lines.map((l) => l.runs.map((r) => r.text).join("")).join("\n");
+  if (!text.trim()) return undefined;
+  return { text: text.slice(0, LAYER_TEXT_MAX), lines };
+}
+
+function styleOf(
+  style: NonNullable<NonNullable<SeedreamTextRecognition["lines"]>[number]["runs"]>[number]["style"],
+): LayerTextStyle {
+  if (!style || typeof style !== "object") return {};
+  const font = typeof style.similar_font_family === "string" ? style.similar_font_family.trim() : "";
+  const color = typeof style.foreground_color === "string" ? style.foreground_color.toUpperCase() : "";
+  const out: LayerTextStyle = {};
+  // "unknown" is the model saying it couldn't tell.
+  if (font && font.toLowerCase() !== "unknown") out.font = font.slice(0, LAYER_FONT_MAX);
+  if (/^#[0-9A-F]{6}$/.test(color)) out.color = color;
+  for (const flag of ["bold", "italic", "underline", "strikethrough", "shadow", "translucent"] as const)
+    if (typeof style[flag] === "boolean") out[flag] = style[flag];
+  return out;
+}
+
+/** Four whole numbers from 0 to `max`, or nothing. */
+function boxOf(values: number[] | undefined, max: number): [number, number, number, number] | undefined {
+  if (!Array.isArray(values) || values.length !== 4 || !values.every((v) => Number.isFinite(v)))
+    return undefined;
+  return values.map((v) => Math.min(max, Math.max(0, Math.round(v)))) as [number, number, number, number];
 }
 
 function sizeOf(size: string | undefined): { width: number; height: number } | undefined {
