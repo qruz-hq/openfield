@@ -5,10 +5,13 @@ import {
   type EditOpParams,
   editOpParamsSchema,
   errorCopy,
+  isStackLayer,
   isTerminalState,
   type NormalizedRequest,
+  type SpeedId,
 } from "@openfield/core";
 import { type AssetRow, getJobSetBundle } from "@openfield/db";
+import { speedLabel } from "@openfield/providers/manifest";
 import { describeImages, type ImageInfo } from "./images";
 import { Refusal, type ToolContext } from "./kit";
 
@@ -51,6 +54,13 @@ export interface RunSummary {
   next?: string;
 }
 
+/** A speed as the person sees it for this model: "Fast" on BytePlus, never its "priority" id. */
+export function speedNameFor(ctx: ToolContext, modelKey: string, speed: SpeedId): string {
+  const model = ctx.svc.models.get(modelKey);
+  const providerId = model?.providerId ?? modelKey.split(":")[0]!;
+  return speedLabel(model, ctx.svc.providerSettings.forRun(providerId).schema, speed);
+}
+
 export async function describeRun(
   ctx: ToolContext,
   runId: string,
@@ -60,7 +70,7 @@ export async function describeRun(
   if (!bundle) throw new Refusal(`There's no run with the id ${runId}.`);
   const { jobSet, jobs, assets } = bundle;
   const made = jobs.flatMap((job) => {
-    const asset = assets.find((a) => a.jobId === job.id);
+    const asset = assets.find((a) => a.jobId === job.id && !isStackLayer(a.opParams));
     return asset ? [{ job, asset }] : [];
   });
   const { images, blocks } = await describeImages(
@@ -81,7 +91,7 @@ export async function describeRun(
     modelName,
     prompt: jobSet.prompt,
     ...(edit && { edit }),
-    speed: jobSet.speed,
+    speed: speedNameFor(ctx, key, jobSet.speed),
     estimateUsd: jobSet.costEstimateUsd,
     spentUsd: jobSet.costActualUsd,
     images: images.map((image, i) => ({ jobId: made[i]!.job.id, ...image, ...maskOutcome(made[i]!.asset) })),

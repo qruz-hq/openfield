@@ -9,6 +9,7 @@ import {
   formatMoney,
   isTerminalState,
   type JobState,
+  type LayerOpParams,
   type ModelManifest,
   type NormalizedRequest,
   type SpeedId,
@@ -147,8 +148,16 @@ export class Outcomes {
     posterPath?: string | null;
     /** A masked edit's record, from composite(). */
     edit?: EditOpParams | undefined;
+    /**
+     * A layer separation's layers, filed beside its base (the job's own image) in the same
+     * transaction. Each is a library image of its own, derived from the separated image.
+     */
+    layers?: readonly { image: GeneratedImage; staged: StagedFile; costUsd: number | null }[];
+    /** The usage row's cost when it isn't the image's own: a separation logs its whole cost once. */
+    usageCostUsd?: number | null;
   }): AssetRow | undefined {
     const { set, job, call, image, staged, cost, speedUsed, latencyMs, edit } = args;
+    const layers = args.layers ?? [];
     const base = call.base?.assetId;
     const video = staged.mime.startsWith("video/");
     // A video's frames are its inputs, in the order it plays them: start, then end.
@@ -162,6 +171,9 @@ export class Outcomes {
         { from: IN_FLIGHT },
       );
       if (!moved) return undefined;
+      const rootAssetId = base
+        ? (getAsset(tx, base, { includeDeleted: true })?.rootAssetId ?? base)
+        : staged.assetId;
       const asset = insertAsset(tx, {
         id: staged.assetId,
         kind: set.op === "generate" || set.op === "variation" ? "generated" : "edited",
@@ -180,11 +192,9 @@ export class Outcomes {
         params: paramsOf(call),
         costUsd: cost.costUsd,
         parentAssetId: base ?? null,
-        rootAssetId: base
-          ? (getAsset(tx, base, { includeDeleted: true })?.rootAssetId ?? base)
-          : staged.assetId,
+        rootAssetId,
         op: set.op,
-        opParams: opParamsOf(call, edit),
+        opParams: opParamsOf(call, edit, image.layer),
         // A mask deleted for good while the run was out is no longer there to point at.
         maskAssetId:
           call.mask && getAsset(tx, call.mask.assetId, { includeDeleted: true }) ? call.mask.assetId : null,
@@ -209,6 +219,39 @@ export class Outcomes {
           ordinal,
         })),
       ]);
+      for (const layer of layers) {
+        insertAsset(tx, {
+          id: layer.staged.assetId,
+          kind: "edited",
+          jobId: job.id,
+          jobSetId: set.id,
+          path: layer.staged.path,
+          mime: layer.staged.mime,
+          width: layer.staged.width,
+          height: layer.staged.height,
+          bytes: layer.staged.bytes,
+          sha256: layer.staged.sha256,
+          seed: null,
+          providerId: set.providerId,
+          modelId: set.modelId,
+          prompt: call.prompt,
+          params: paramsOf(call),
+          costUsd: layer.costUsd,
+          parentAssetId: base ?? null,
+          rootAssetId,
+          op: set.op,
+          opParams: opParamsOf(call, undefined, layer.image.layer),
+          maskAssetId: null,
+          generative: true,
+          approximate: false,
+          approximateReason: null,
+          modality: "image",
+        });
+        if (base)
+          insertAssetEdges(tx, [
+            { parentAssetId: base, childAssetId: layer.staged.assetId, relation: "derived" },
+          ]);
+      }
       insertUsage(tx, {
         providerId: set.providerId,
         modelId: set.modelId,
@@ -223,7 +266,7 @@ export class Outcomes {
         units: unitsOf(args.usage),
         estimateMin: cost.each.min,
         estimateMax: cost.each.max,
-        costUsd: cost.costUsd,
+        costUsd: args.usageCostUsd === undefined ? cost.costUsd : args.usageCostUsd,
         costSource: cost.costSource,
         priceAsOf: cost.each.pricedAt || null,
         latencyMs,
@@ -236,6 +279,7 @@ export class Outcomes {
 
     if (!committed) {
       this.deps.ingest.discard(staged);
+      for (const layer of layers) this.deps.ingest.discard(layer.staged);
       return undefined;
     }
     this.deps.events.publish("job.output", {
@@ -469,12 +513,18 @@ export function finalReason(error: ProviderError): string | null {
 }
 
 /** What the op did beyond its params: where on a canvas it ran, and a masked edit's record. */
-function opParamsOf(call: NormalizedRequest, edit: EditOpParams | undefined): Record<string, unknown> | null {
-  if (!call.canvas && !edit) return null;
+function opParamsOf(
+  call: NormalizedRequest,
+  edit: EditOpParams | undefined,
+  layer?: LayerOpParams,
+): Record<string, unknown> | null {
+  if (!call.canvas && !edit && !layer) return null;
   return {
     // Drives "Open in Canvas" in the detail view (§7.1).
     ...(call.canvas && { source: canvasSource(call.canvas.canvasId, call.canvas.nodeId) }),
     ...(edit && { edit }),
+    // A separation's base or layer: its place in the stack, its box on the canvas, its name.
+    ...(layer && { layer }),
   };
 }
 

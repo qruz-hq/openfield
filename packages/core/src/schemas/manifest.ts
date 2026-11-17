@@ -29,6 +29,8 @@ import {
   videoResolutionSchema,
 } from "./common";
 import { priceModelSchema } from "./cost";
+import { LAYERS_MAX, layerSizeSchema } from "./layers";
+import { MARK_KINDS, MARKS_MAX } from "./marks";
 
 // The capability manifest (§0.3, §6.3). Objects are strict: conformance test 1 parses every
 // static catalog with no unknown fields, so a typo fails loudly instead of hiding a control.
@@ -211,6 +213,10 @@ export const capabilitiesSchema = z.strictObject({
       maxPixels: z.int().positive().optional(),
       weights: z.boolean(),
       strengthMode: z.enum(REFERENCE_STRENGTH_MODES),
+      /** Every image one call takes, an edit's base included. Absent: `max` references plus the base. */
+      maxInputs: z.int().positive().optional(),
+      /** Images sent in plus images made, at most, in one call (Seedream's group output: 15). */
+      maxInputsAndOutputs: z.int().positive().optional(),
     })
     .refine((r) => r.supported || r.max === 0, { message: "max is 0 when references are unsupported" }),
 
@@ -231,7 +237,15 @@ export const capabilitiesSchema = z.strictObject({
     })
     .optional(),
 
-  batch: z.strictObject({ max: z.int().min(1).max(BATCH_MAX), native: z.boolean() }),
+  batch: z.strictObject({
+    max: z.int().min(1).max(BATCH_MAX),
+    native: z.boolean(),
+    /**
+     * An Advanced toggle (an extraSchema boolean) that sends the whole count as one call making a
+     * related set, which the model may answer with fewer images than asked. Off: one call each.
+     */
+    groupOption: z.string().min(1).optional(),
+  }),
   seed: z.strictObject({ supported: z.boolean(), range: pair.optional(), echoed: z.boolean() }),
 
   negativePrompt: z.boolean(),
@@ -308,6 +322,33 @@ export const capabilitiesSchema = z.strictObject({
 
   /** Video models only. */
   video: videoCapabilitySchema.optional(),
+
+  /** Points, boxes and drawn shapes an edit can carry to say where and what (core marks.ts). */
+  marks: z
+    .strictObject({
+      kinds: z.array(z.enum(MARK_KINDS)).min(1),
+      max: z.int().min(1).max(MARKS_MAX),
+    })
+    .optional(),
+
+  /** Layer separation's own rules, on models with ops.decomposeLayers. */
+  layers: z
+    .strictObject({
+      sizes: z.array(layerSizeSchema).min(1),
+      default: layerSizeSchema,
+      mimeTypes: z.array(z.string().min(1)).min(1),
+      maxBytes: z.int().positive(),
+      minPixels: z.int().positive(),
+      maxPixels: z.int().positive(),
+      /** The long side over the short one, at most. */
+      maxRatio: z.number().min(1),
+      maxLayers: z.int().min(1).max(LAYERS_MAX),
+    })
+    .refine((l) => l.sizes.includes(l.default), {
+      message: "default must be one of sizes",
+      path: ["default"],
+    })
+    .optional(),
 });
 
 /**
@@ -318,6 +359,8 @@ export const capabilitiesSchema = z.strictObject({
 export const speedOfferSchema = z
   .strictObject({
     id: speedIdSchema.exclude(["standard"]),
+    /** The company's own name for it where Openfield's would mislead ("Fast" on BytePlus). */
+    label: z.string().min(1).max(40).optional(),
     price: priceModelSchema,
     /** async: results arrive later from a provider batch. */
     delivery: z.enum(SPEED_DELIVERIES),
@@ -396,6 +439,16 @@ export const modelManifestSchema = z
     message: "a video model declares capabilities.video, and only a video model does",
     path: ["capabilities", "video"],
   })
+  .refine((m) => m.capabilities.ops.decomposeLayers === (m.capabilities.layers !== undefined), {
+    message: "a model that separates layers declares capabilities.layers, and only such a model does",
+    path: ["capabilities", "layers"],
+  })
+  .refine(
+    (m) =>
+      !m.capabilities.batch.groupOption ||
+      m.capabilities.extraSchema?.properties[m.capabilities.batch.groupOption]?.type === "boolean",
+    { message: "batch.groupOption names a boolean extraSchema field", path: ["capabilities", "batch"] },
+  )
   .refine((m) => m.price.kind !== "video_tokens" || m.capabilities.video !== undefined, {
     message: "a video price needs capabilities.video for its sizes",
     path: ["price"],

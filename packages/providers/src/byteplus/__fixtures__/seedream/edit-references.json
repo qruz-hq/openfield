@@ -1,0 +1,29 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/images/generations"
+  },
+  "response": {
+    "status": 200,
+    "headers": {
+      "content-type": "application/json"
+    },
+    "body": {
+      "model": "dola-seedream-5-0-pro-260628",
+      "created": 1757323290,
+      "data": [
+        {
+          "b64_json": "<png>",
+          "size": "1424x800",
+          "output_format": "png"
+        }
+      ],
+      "usage": {
+        "generated_images": 1,
+        "input_images": 3,
+        "output_tokens": 4450,
+        "total_tokens": 4450
+      }
+    }
+  }
+}

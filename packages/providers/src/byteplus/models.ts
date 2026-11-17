@@ -1,10 +1,11 @@
 import type { ModelManifest } from "@openfield/core";
 import { type SeedanceSpec, seedanceCapabilities } from "./capabilities";
 import { PRICES } from "./pricing";
+import { SEEDREAM_SPECS, seedreamManifest } from "./seedream";
 
 // The static catalog: every Seedance model on ModelArk that makes a video from words or frames,
-// checked against the Create task reference and the model list on 2026-09-29. Our ids are
-// BytePlus's own, so the wire id and the key agree.
+// checked against the Create task reference and the model list on 2026-09-29, then the Seedream
+// image models (seedream.ts). Our ids are BytePlus's own, so the wire id and the key agree.
 
 export const SPECS: readonly SeedanceSpec[] = [
   {
@@ -151,4 +152,8 @@ function manifestOf(spec: SeedanceSpec): ModelManifest {
   };
 }
 
-export const BYTEPLUS_MODELS: readonly ModelManifest[] = SPECS.map(manifestOf);
+/** Seedance first: the video models were here before Seedream, and keep their place. */
+export const BYTEPLUS_MODELS: readonly ModelManifest[] = [
+  ...SPECS.map(manifestOf),
+  ...SEEDREAM_SPECS.map(seedreamManifest),
+];

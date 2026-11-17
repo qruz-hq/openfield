@@ -1,0 +1,20 @@
+{
+  "request": {
+    "method": "POST",
+    "path": "/api/v3/images/generations"
+  },
+  "response": {
+    "status": 404,
+    "headers": {
+      "content-type": "application/json; charset=utf-8"
+    },
+    "body": {
+      "error": {
+        "code": "InvalidEndpointOrModel.NotFound",
+        "message": "The model or endpoint dola-seedream-5-0-pro-260628 does not exist or you do not have access to it. Request id: 021794909552482e04d4405dfa8354a322f6f89cfd0177121fc0a",
+        "param": "",
+        "type": "Not Found"
+      }
+    }
+  }
+}
