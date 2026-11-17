@@ -11,6 +11,7 @@ import { canvasRunTools } from "./tools/canvas-runs";
 import { canvasScriptTools } from "./tools/canvas-script";
 import { folderTools } from "./tools/folders";
 import { generateTools } from "./tools/generate";
+import { keepRestTools } from "./tools/keep-rest";
 import { layerTools } from "./tools/layers";
 import { libraryTools } from "./tools/library";
 import { modelTools } from "./tools/models";
@@ -27,6 +28,7 @@ export const TOOL_GROUPS: readonly ToolGroup[] = [
   layerTools,
   runTools,
   libraryTools,
+  keepRestTools,
   folderTools,
   canvasTools,
   archiveTools,

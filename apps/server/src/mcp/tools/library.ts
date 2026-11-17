@@ -17,6 +17,7 @@ import { z } from "zod";
 import { filterOf } from "../../routes/assets";
 import { ancestorsOf } from "../../services/library";
 import { imageInfo, PREVIEW_EDGE, preview } from "../images";
+import { keepRestOf } from "../keep-rest";
 import { guarded, Refusal, reply, type ToolContext } from "../kit";
 import { IMAGE_REF_HINT, resolveImage } from "../refs";
 import { maskOutcome } from "../runs";
@@ -103,7 +104,7 @@ export function libraryTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "Image details",
       description:
-        "Everything about one image: its prompt, model and settings, the run that made it, the images it came from and was made into, its folders, and a preview.",
+        "Everything about one image: its prompt, model and settings, the run that made it, the images it came from and was made into, its folders, and a preview. For an edit made with a mask or marks, keepRest says how it keeps the rest of the image: on, mode, sensitivity, expandPx, featherPx, startsFrom (mask or marks), lineUp (how the model's result lined up with the original), fellBack (why only the mask decided, with a note), changed (the share of the image the model's result is used in), touchedUp, and available (false, with a note, when it can't be adjusted). adjust_edit and save_model_result change it.",
       inputSchema: {
         assetId: assetIdField,
         preview: z.boolean().optional().describe("Include a preview. Default true."),
@@ -117,13 +118,16 @@ export function libraryTools(server: McpServer, ctx: ToolContext): void {
       const brief = (a: AssetRow) => ({ assetId: a.id, prompt: a.prompt, kind: a.kind });
       const set = row.jobSetId ? getJobSet(db, row.jobSetId) : undefined;
       const block = withPreview === false ? null : await preview(ctx, row);
+      const keepRest = keepRestOf(ctx, row.id);
       return reply(
         {
           ...listed(ctx, { ...row, isFavourite: isFavourite(db, row.id) }),
           ...(row.deletedAt && { inTrash: true }),
           seed: row.seed,
           settings: row.params,
-          ...(row.maskAssetId && { mask: row.maskAssetId, ...maskOutcome(row) }),
+          ...(row.maskAssetId && { mask: row.maskAssetId }),
+          ...maskOutcome(row),
+          ...(keepRest && { keepRest }),
           runId: row.jobSetId,
           ...(set && { runPrompt: set.prompt, runStatus: set.status }),
           references: referencesOf(db, row.id).map(brief),

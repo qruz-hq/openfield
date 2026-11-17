@@ -41,6 +41,7 @@ import {
   restoreOps,
   saw,
 } from "../canvas";
+import { settleKeepRest } from "../keep-rest";
 import { guarded, Refusal, reply, type ToolContext } from "../kit";
 import { IMAGE_REF_HINT, MASK_RULE, resolveMask } from "../refs";
 import { changesSince } from "../since";
@@ -69,13 +70,16 @@ const SETTINGS: Partial<Record<string, Record<string, string>>> = {
   },
   "image.edit": {
     model:
-      "A model key from list_models that can edit an image. One with masks: true takes the mask itself; any other edits the whole image, then Openfield puts back everything outside the mask. Leave out for the default.",
+      "A model key from list_models that can edit an image. One with masks: true takes the mask itself; any other edits the whole image, then Openfield keeps the rest of the image (keepOriginal). Leave out for the default.",
     prompt: `What to change. A connected Prompt node's text comes first, then this; together at most ${GENERATE_PROMPT_MAX} characters.`,
     maskAssetId:
       "The mask for the image on its image input: where that image may change. Set it with set_node_mask, which saves it for that image. A mask connected to its mask input is used instead.",
     maskFor: "The image the mask was made for, which set_node_mask sets. The mask fits only that image.",
     keepOriginal:
-      "true (default): put the original back everywhere outside the mask, so only that area changes. false keeps the model's whole result.",
+      "Keep the rest of the image. true (default): keep the original wherever the model didn't really change it, starting from the mask. false keeps the model's whole result.",
+    keepRestMode:
+      '"smart" (default): follow what the model really changed, so changes that spill out of the mask stay, and grain or colour drift doesn\'t. "mask": keep exactly the mask, grown and softened.',
+    sensitivity: `"smart" only: 0 to 100, how readily the model's small changes count as real. Higher keeps more of them. Default 50.`,
     expandPx: `Grow the area to change by this many pixels first, 0 to ${MASK_COMPOSITE_MAX_PX}.`,
     featherPx: `Blend the edit into the original over this many more pixels, 0 to ${MASK_COMPOSITE_MAX_PX}.`,
     resolution:
@@ -87,7 +91,7 @@ const SETTINGS: Partial<Record<string, Record<string, string>>> = {
     marks:
       "Sketch & point: the marks, set with set_node_marks. Without marks the prompt alone says what to change.",
     sketchKeepOriginal:
-      "Sketch & point: true puts the original back outside the area the marks cover. false (default) keeps the model's whole result, so the change can blend in.",
+      "Sketch & point: true keeps the original wherever the model didn't really change it, starting from the area the marks cover. false (default) keeps the model's whole result, so the change can blend in.",
   },
   "image.layers": {
     model:
@@ -109,6 +113,10 @@ const SETTINGS: Partial<Record<string, Record<string, string>>> = {
   text: { text: "The text." },
   shape: { shape: '"rectangle" or "ellipse".', text: "Text inside it." },
 };
+
+/** How an Edit node's keep-the-rest settings work after it ran, for list_node_types. */
+const EDIT_KEEP_REST_NOTE =
+  "Once an Edit node has run, changing only keepOriginal or sketchKeepOriginal to true, keepRestMode, sensitivity, expandPx or featherPx blends its images again, for free and in place: the node stays done and the nodes after it go out of date. Turning keep the rest off waits for the next Run; save_model_result keeps the model's own result now, for free.";
 
 /** How a Layers node's outputs work, for list_node_types. */
 const LAYERS_OUTPUTS_NOTE = `One output per layer its last run made: "layer-N" is the layer at place N in the stack, N from 1 to ${LAYERS_MAX} (a higher N sits on top), and "base" is the base. get_canvas lists the ones it has, with the name the model gave each and, on a text layer, the words on it with their font and colour. Connect by port, as "l.layer-2"; before a run any place can be connected. A run that makes fewer layers keeps the connection, but that port hands on nothing until a run makes that layer again, and what reads it waits.`;
@@ -216,6 +224,7 @@ export async function applyEdits(
       );
     }
   }
+  const was = row && readDocument(row.graph);
   let result: ReturnType<typeof ctx.svc.canvases.edit>;
   try {
     result = ctx.svc.canvases.edit(canvas.id, edits.map(tidy), actorOf(ctx), {
@@ -232,6 +241,8 @@ export async function applyEdits(
     }
     throw error;
   }
+  // Only how an Edit node keeps the rest changed: its images are blended again, for free.
+  const keepRest = was ? await settleKeepRest(ctx, canvas.id, was, result.touched) : [];
   if (opts.compact) {
     const now = getCanvas(ctx.svc.db, canvas.id);
     if (now) saw(ctx, canvas.id, now.graphVersion, readDocument(now.graph));
@@ -247,6 +258,7 @@ export async function applyEdits(
         versionSaved: `Saved the canvas as a version first ("${t("canvas.agents.versionLabel", { name: ctx.session.client })}"), so the person can go back.`,
       }),
       ...(result.notes?.length && { nudged: [...result.notes, t("canvas.agents.exactHint")] }),
+      ...(keepRest.length && { keepRest }),
       ...(result.touched.length === 0 && { note: "Nothing needed changing." }),
     });
   }
@@ -263,6 +275,7 @@ export async function applyEdits(
     }),
     changed: view.nodes.filter((n) => touched.has(n.id)),
     ...(result.notes?.length && { nudged: [...result.notes, t("canvas.agents.exactHint")] }),
+    ...(keepRest.length && { keepRest }),
     ...(result.touched.length === 0 && { note: "Nothing needed changing." }),
   });
 }
@@ -563,6 +576,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
               ]
             : specRegistry.ports(spec.type, "out").map((p) => ({ port: p.id, gives: p.type })),
         ...(spec.type === layersSpec.type && { outputsNote: LAYERS_OUTPUTS_NOTE }),
+        ...(spec.type === "image.edit" && { keepRestNote: EDIT_KEEP_REST_NOTE }),
         settings: SETTINGS[spec.type] ?? {},
         defaults: spec.defaults(engine),
         ...(spec.size && { size: spec.size }),
