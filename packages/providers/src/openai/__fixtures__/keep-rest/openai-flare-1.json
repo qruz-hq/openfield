@@ -28,8 +28,8 @@
     "confidence": 0.996
   },
   "noise": {
-    "median": 0.25,
-    "spread": 0.371
+    "median": 0.05,
+    "spread": 0.074
   },
   "bySensitivity": {
     "0": {
@@ -58,5 +58,5 @@
       "fellBack": null
     }
   },
-  "analyseMs": 321
+  "analyseMs": 326
 }

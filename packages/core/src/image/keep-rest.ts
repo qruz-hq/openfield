@@ -51,8 +51,10 @@ export const KEEP_REST_ANALYSIS_EDGE = 512;
  *   no_match       the result couldn't be lined up with the original, or isn't the same picture
  *   other_shape    the model sent a different shape, stretched to fit
  *   too_different  so much changed that real changes can't be told from drift
+ *   faint          next to nothing in the mask stood out from the drift: a soft edit (a tint, a
+ *                  blur) the comparison can't see, which the mask alone keeps rather than undoes
  */
-export const KEEP_REST_FALLBACKS = ["no_match", "other_shape", "too_different"] as const;
+export const KEEP_REST_FALLBACKS = ["no_match", "other_shape", "too_different", "faint"] as const;
 export type KeepRestFallback = (typeof KEEP_REST_FALLBACKS)[number];
 
 /** smart: the mask and what really changed; mask: the mask alone (Expand and Feather), as before. */
@@ -95,6 +97,11 @@ export const KEEP_REST_LIMITS = {
   maxNoise: 18,
   /** Share of the picture away from the mask that may come from the model before falling back. */
   maxChangedOutside: 0.5,
+  /**
+   * What must stand out as changed, anywhere, as a share of the mask's own area (grown by
+   * expandPx). Below it the edit was likely soft, and the mask alone keeps it.
+   */
+  minKeptInMask: 0.03,
   /** The smallest clear change kept away from the mask, as a share of the picture. */
   minClearArea: 0.0004,
   /**
@@ -211,7 +218,7 @@ export function analyzeKeepRest(
 
   const moved = warpFloat(r, aw, ah, 4, found);
   const difference = differenceOf(blur(b, aw, ah), blur(moved, aw, ah), weight, aw, ah);
-  const noise = noiseOf(difference, near);
+  const noise = noiseOf(difference, near, aw, ah);
   const analysis: KeepRestAnalysis = {
     width,
     height,
@@ -273,6 +280,17 @@ export function decideKeepRest(
   const keep = keptRegions(changedLow, changedHigh, seeded, aw, ah, minArea);
   fillHoles(keep, aw, ah, minArea);
   const kept = dilate(keep, aw, ah);
+
+  // Next to nothing stood out, in the mask or anywhere: the edit was soft (a tint, a blur), and
+  // putting the original back would quietly undo it. A change beside the mask still counts, as
+  // when a model that edits the whole image puts the new thing next to it.
+  let inMask = 0;
+  let keptAnywhere = 0;
+  for (let i = 0; i < n; i++) {
+    if (seeded[i]) inMask++;
+    if (kept[i]) keptAnywhere++;
+  }
+  if (inMask && keptAnywhere / inMask < KEEP_REST_LIMITS.minKeptInMask) return maskOnly("faint");
 
   let farKept = 0;
   let far = 0;
@@ -1055,25 +1073,66 @@ function differenceOf(
   return out;
 }
 
-/** The median difference away from the mask, and its spread (1.4826 x the median absolute deviation). */
-function noiseOf(difference: Float32Array, near: Uint8Array): { median: number; spread: number } {
+/** Side of the tiles the noise is sampled in, in analysis pixels. */
+const NOISE_TILE = 16;
+
+/**
+ * The median difference away from the mask, and its spread (1.4826 x the median absolute
+ * deviation), measured in the calmer half of the picture: tiles are ranked by their mean
+ * difference and only the lower half is measured. A model that redraws a big part of the picture
+ * (Gemini restaging a whole tabletop) would otherwise count its own change as noise, and raise the
+ * cut-off past it.
+ */
+function noiseOf(
+  difference: Float32Array,
+  near: Uint8Array,
+  width: number,
+  height: number,
+): { median: number; spread: number } {
+  const cols = Math.ceil(width / NOISE_TILE);
+  const rows = Math.ceil(height / NOISE_TILE);
+  const sum = new Float64Array(cols * rows);
+  const count = new Uint32Array(cols * rows);
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      if (near[i]) continue;
+      const t = Math.floor(y / NOISE_TILE) * cols + Math.floor(x / NOISE_TILE);
+      sum[t] = sum[t]! + difference[i]!;
+      count[t] = count[t]! + 1;
+    }
+  // Tiles mostly under the mask say little; when every tile is, all of them count.
+  const enough = (NOISE_TILE * NOISE_TILE) / 4;
+  let tiles = [...count.keys()].filter((t) => count[t]! >= enough);
+  if (!tiles.length) tiles = [...count.keys()].filter((t) => count[t]! > 0);
+  const means = tiles.map((t) => sum[t]! / count[t]!).sort((a, b) => a - b);
+  const calm = means[Math.floor((means.length - 1) / 2)] ?? 0;
+  const measured = new Uint8Array(cols * rows);
+  for (const t of tiles) if (sum[t]! / count[t]! <= calm) measured[t] = 1;
+  const use = (i: number, x: number, y: number) =>
+    !near[i] && measured[Math.floor(y / NOISE_TILE) * cols + Math.floor(x / NOISE_TILE)] === 1;
+
   const bins = 2560;
   const step = 0.1;
   const hist = new Uint32Array(bins);
-  let count = 0;
-  for (let i = 0; i < difference.length; i++) {
-    if (near[i]) continue;
-    hist[Math.min(bins - 1, Math.floor(difference[i]! / step))]!++;
-    count++;
-  }
-  if (!count) return { median: 0, spread: 0 };
-  const median = (histMedian(hist, count) - 0.5 + 0.5) * step;
+  let n = 0;
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      if (!use(i, x, y)) continue;
+      hist[Math.min(bins - 1, Math.floor(difference[i]! / step))]!++;
+      n++;
+    }
+  if (!n) return { median: 0, spread: 0 };
+  const median = histMedian(hist, n) * step;
   hist.fill(0);
-  for (let i = 0; i < difference.length; i++) {
-    if (near[i]) continue;
-    hist[Math.min(bins - 1, Math.floor(Math.abs(difference[i]! - median) / step))]!++;
-  }
-  const mad = histMedian(hist, count) * step;
+  for (let y = 0; y < height; y++)
+    for (let x = 0; x < width; x++) {
+      const i = y * width + x;
+      if (!use(i, x, y)) continue;
+      hist[Math.min(bins - 1, Math.floor(Math.abs(difference[i]! - median) / step))]!++;
+    }
+  const mad = histMedian(hist, n) * step;
   return { median, spread: 1.4826 * mad };
 }
 

@@ -2546,6 +2546,7 @@
       "no_match": "Kept by your mask only: the new image didn't line up with the original.",
       "other_shape": "Kept by your mask only: the model sent back a different shape.",
       "too_different": "Kept by your mask only: the model changed too much of the picture to tell what's new.",
+      "faint": "Kept by your mask only: the change was too soft to tell apart from the rest.",
       "failed": "Kept by your mask only."
     },
     "offInPlace": "To keep the model's whole result, save it as a new image.",

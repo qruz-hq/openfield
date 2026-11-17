@@ -95,14 +95,13 @@ describe("Keep the rest on real models' results", () => {
       });
       expect(decided.fallback).toBeUndefined();
       // The apple and its shadow: more than a speck, much less than the picture. Gemini's first run
-      // also redrew the tabletop under the apple, lighter, a real change at the edge of what the
-      // default keeps: put back at full size, kept at this scale (see the README).
+      // also redrew the whole tabletop under it, lighter: a big clear change, kept (see the README).
       expect(decided.changed).toBeGreaterThan(0.01);
-      expect(decided.changed).toBeLessThan(label === "gemini-1" ? 0.4 : 0.12);
-      // Gemini sometimes puts the apple beside the mask, as it edits the whole image: that's kept.
+      expect(decided.changed).toBeLessThan(label === "gemini-1" ? 0.45 : 0.12);
+      // Gemini edits the whole image, so its changes can lie beside the mask: they're kept.
       const away = farKept(decided.weights, box, 10);
-      if (label === "gemini-1") return;
-      if (label === "gemini-2") expect(away).toBeGreaterThan(0.02);
+      if (label === "gemini-1") expect(away).toBeGreaterThan(0.15);
+      else if (label === "gemini-2") expect(away).toBeGreaterThan(0.02);
       else expect(away).toBeLessThan(0.005);
     });
   }

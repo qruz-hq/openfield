@@ -407,6 +407,21 @@ describe("falling back to the mask", () => {
     expect(d.weights).toEqual(exact(m));
   });
 
+  test("when the change is too soft to stand out, so the mask keeps it rather than undoing it", () => {
+    const base = made({ grain: 3, mask });
+    // A faint tint over the mask only: real, but no stronger than the grain.
+    const result = { ...base.result, data: new Uint8Array(base.result.data) };
+    for (let y = mask.y; y < mask.y + mask.h; y++)
+      for (let x = mask.x; x < mask.x + mask.w; x++)
+        for (let c = 0; c < 3; c++) {
+          const i = (y * base.width + x) * 3 + c;
+          result.data[i] = Math.min(255, result.data[i]! + 3);
+        }
+    const d = decideKeepRest(analyzeKeepRest(base.base, result, base.area), base.area, SETTINGS);
+    expect(d.fallback).toBe("faint");
+    expect(d.weights).toEqual(exact(base));
+  });
+
   test("when the shift is too large to be a small one", () => {
     const m = made({ move: { dx: 60, dy: 0 }, mask });
     const a = analyzeKeepRest(m.base, m.result, m.area);

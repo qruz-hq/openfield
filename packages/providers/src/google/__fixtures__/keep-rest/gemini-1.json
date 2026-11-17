@@ -28,35 +28,35 @@
     "confidence": 0.997
   },
   "noise": {
-    "median": 3.25,
-    "spread": 3.781
+    "median": 1.45,
+    "spread": 2.15
   },
   "bySensitivity": {
     "0": {
-      "changed": 0.028,
-      "farFromMaskKept": 0,
-      "fellBack": null
-    },
-    "25": {
       "changed": 0.041,
       "farFromMaskKept": 0,
       "fellBack": null
     },
+    "25": {
+      "changed": 0.117,
+      "farFromMaskKept": 0.049,
+      "fellBack": null
+    },
     "50": {
-      "changed": 0.044,
-      "farFromMaskKept": 0,
+      "changed": 0.329,
+      "farFromMaskKept": 0.244,
       "fellBack": null
     },
     "75": {
-      "changed": 0.221,
-      "farFromMaskKept": 0.142,
+      "changed": 0.33,
+      "farFromMaskKept": 0.245,
       "fellBack": null
     },
     "100": {
-      "changed": 0.328,
-      "farFromMaskKept": 0.244,
+      "changed": 0.331,
+      "farFromMaskKept": 0.246,
       "fellBack": null
     }
   },
-  "analyseMs": 335
+  "analyseMs": 338
 }

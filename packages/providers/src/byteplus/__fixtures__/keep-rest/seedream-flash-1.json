@@ -28,12 +28,12 @@
     "confidence": 0.996
   },
   "noise": {
-    "median": 0.85,
-    "spread": 1.26
+    "median": 0.55,
+    "spread": 0.815
   },
   "bySensitivity": {
     "0": {
-      "changed": 0.02,
+      "changed": 0.021,
       "farFromMaskKept": 0,
       "fellBack": null
     },
@@ -48,15 +48,15 @@
       "fellBack": null
     },
     "75": {
-      "changed": 0.021,
+      "changed": 0.022,
       "farFromMaskKept": 0,
       "fellBack": null
     },
     "100": {
-      "changed": 0.021,
+      "changed": 0.024,
       "farFromMaskKept": 0,
       "fellBack": null
     }
   },
-  "analyseMs": 361
+  "analyseMs": 363
 }
