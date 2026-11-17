@@ -861,6 +861,10 @@
             "label": "Make images",
             "rule": "Default: asks above {amount}"
           },
+          "adjust_edits": {
+            "label": "Adjust edits",
+            "rule": "Default: allowed. Free: changes how an edit keeps the rest, or saves the model's own result."
+          },
           "run_canvases": {
             "label": "Run canvases",
             "rule": "Default: asks above {amount}"

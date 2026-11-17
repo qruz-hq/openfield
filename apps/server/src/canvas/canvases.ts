@@ -78,6 +78,7 @@ import type { EventHub } from "../events/hub";
 import { probeImage } from "../files/probe";
 import { ApiFailure, envelope } from "../http/errors";
 import type { Logger } from "../log/logger";
+import { fileVersionOf } from "../mappers/asset";
 import {
   canvasPreviewUrl,
   previewTakenAt,
@@ -279,11 +280,12 @@ export class CanvasService {
   get(id: string): CanvasDetail {
     const row = this.#row(id);
     const doc = readDocument(row.graph);
-    const { missing, sizes } = this.#assets(doc);
+    const { missing, sizes, versions } = this.#assets(doc);
     return {
       ...toCanvasDetail(row, doc),
       missingAssetIds: missing,
       assetSizes: sizes,
+      ...(Object.keys(versions).length > 0 && { assetVersions: versions }),
       previewAt: previewTakenAt(row, this.deps.paths),
     };
   }
@@ -824,17 +826,24 @@ export class CanvasService {
   }
 
   /** Images the document names that aren't in the library (or whose file is gone), and the size of the rest. */
-  #assets(doc: CanvasDocument): { missing: string[]; sizes: Record<string, { w: number; h: number }> } {
+  #assets(doc: CanvasDocument): {
+    missing: string[];
+    sizes: Record<string, { w: number; h: number }>;
+    versions: Record<string, string>;
+  } {
     const ids = documentAssetIds(doc);
     const sizes: Record<string, { w: number; h: number }> = {};
-    if (!ids.length) return { missing: [], sizes };
+    const versions: Record<string, string> = {};
+    if (!ids.length) return { missing: [], sizes, versions };
     const here = new Set<string>();
     for (const a of getAssets(this.deps.db, ids)) {
       if (a.fileState !== "ok") continue;
       here.add(a.id);
       if (a.width > 0 && a.height > 0) sizes[a.id] = { w: a.width, h: a.height };
+      const version = fileVersionOf(a);
+      if (version) versions[a.id] = version;
     }
-    return { missing: ids.filter((assetId) => !here.has(assetId)), sizes };
+    return { missing: ids.filter((assetId) => !here.has(assetId)), sizes, versions };
   }
 
   /** The canvas's library folder follows a rename, unless the person already renamed the folder. */

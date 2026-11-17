@@ -1,6 +1,7 @@
 import {
   type CompositeSettings,
   KEEP_REST_SENSITIVITY,
+  type KeepRestMode,
   MASK_COMPOSITE_DEFAULTS,
   MASK_COMPOSITE_MAX_PX,
   type Mark,
@@ -81,6 +82,11 @@ export interface EditParams {
    * the default (50), so a node saved before it hashes as it always has.
    */
   sensitivity?: number;
+  /**
+   * "mask" keeps exactly the mask, grown and softened, rather than following what the model really
+   * changed. Unset is the smart way, so a node saved before it hashes as it always has.
+   */
+  keepRestMode?: KeepRestMode;
   /** Unset: the model's default, as the chip shows. */
   resolution?: ResolutionTier;
   /** Unset: the model's default. */
@@ -234,13 +240,18 @@ const compositeOf = (p: EditParams): CompositeSettings => ({
   expandPx: p.expandPx,
   featherPx: p.featherPx,
   sensitivity: p.sensitivity ?? MASK_COMPOSITE_DEFAULTS.sensitivity,
+  ...(p.keepRestMode === "mask" && { mode: "mask" as const }),
 });
 
-/** The sensitivity a node hashes with: only one moved off the default, so older nodes stay cached. */
-const hashedSensitivity = (p: EditParams) =>
-  p.sensitivity !== undefined && p.sensitivity !== MASK_COMPOSITE_DEFAULTS.sensitivity
-    ? { sensitivity: p.sensitivity }
-    : {};
+/**
+ * The sensitivity and mode a node hashes with: only ones moved off the default, so older nodes stay
+ * cached.
+ */
+const hashedSensitivity = (p: EditParams) => ({
+  ...(p.sensitivity !== undefined &&
+    p.sensitivity !== MASK_COMPOSITE_DEFAULTS.sensitivity && { sensitivity: p.sensitivity }),
+  ...(p.keepRestMode === "mask" && { mode: "mask" }),
+});
 
 /**
  * The size, tier and quality an edit sends. "auto" asks for the base's shape, which the server reads
@@ -505,7 +516,7 @@ export const editSpec: NodeSpec<EditParams> = {
   annotation: false,
   ports: EDIT_PORTS,
   portsOf: (node) => editPortsOf(node.params),
-  optionalSettings: ["mode", "marks", "sketchKeepOriginal", "sensitivity"],
+  optionalSettings: ["mode", "marks", "sketchKeepOriginal", "sensitivity", "keepRestMode"],
   defaults: (ctx) => ({
     ...(ctx.defaultEditModel && { model: ctx.defaultEditModel }),
     prompt: "",
@@ -533,6 +544,7 @@ export const editSpec: NodeSpec<EditParams> = {
         KEEP_REST_SENSITIVITY.default,
       ),
     }),
+    ...(raw.keepRestMode === "mask" && { keepRestMode: "mask" as const }),
     resolution: readResolution(raw.resolution),
     quality: readQuality(raw.quality),
     batch: readBatch(raw.batch, 1),

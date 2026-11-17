@@ -83,6 +83,7 @@ export const AGENT_ACTION_IDS = [
   "versions",
   "show",
   "make_images",
+  "adjust_edits",
   "run_canvases",
   "stop_runs",
   "import_images",
@@ -107,6 +108,8 @@ export const AGENT_ACTIONS: Record<AgentAction, { group: AgentActionGroup; rule:
   versions: { group: "build", rule: "allow" },
   show: { group: "build", rule: "allow" },
   make_images: { group: "images", rule: "spend" },
+  // Free: blends an edit again in place, or saves the model's own result as an image.
+  adjust_edits: { group: "images", rule: "allow" },
   run_canvases: { group: "images", rule: "spend" },
   stop_runs: { group: "images", rule: "allow" },
   import_images: { group: "organise", rule: "allow" },
