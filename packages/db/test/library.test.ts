@@ -64,6 +64,9 @@ interface ImageOpts {
   parent?: string;
   /** The mask an edit was made with. */
   mask?: string;
+  /** An edit's stored model result, and its fix layer. */
+  result?: { path: string; bytes: number };
+  fixes?: { path: string; bytes: number };
 }
 
 /** An image made `at` minutes past ten; ids sort in the same order as the times. */
@@ -83,6 +86,8 @@ function image(id: string, o: ImageOpts = {}) {
     createdAt: minute(o.at ?? 0),
     ...(o.parent && { parentAssetId: o.parent }),
     ...(o.mask && { maskAssetId: o.mask }),
+    ...(o.result && { resultPath: o.result.path, resultBytes: o.result.bytes }),
+    ...(o.fixes && { fixesPath: o.fixes.path, fixesBytes: o.fixes.bytes }),
   });
 }
 
@@ -468,6 +473,41 @@ describe("trash", () => {
     expect(getAssetIds()).toEqual([]);
   });
 
+  test("an edit's stored model result and fixes stay through the Trash and go with it for good", () => {
+    image("R1", {
+      result: { path: "assets/r1-model.png", bytes: 30 },
+      fixes: { path: "uploads/r1-fix.png", bytes: 2 },
+    });
+    softDeleteAssets(db(), ["R1"]);
+    restoreAssets(db(), ["R1"]);
+    softDeleteAssets(db(), ["R1"]);
+    const gone = emptyTrash(db());
+    expect(gone.files.sort()).toEqual(["assets/R1.png", "assets/r1-model.png", "uploads/r1-fix.png"]);
+    expect(gone.reclaimedBytes).toBe(42);
+  });
+
+  test("a stored result that shares a file keeps it while anything else names it", () => {
+    // Keep the rest off: the edit's file is the model's result.
+    image("R2", { path: "assets/same.png", result: { path: "assets/same.png", bytes: 10 } });
+    // Identical bytes: the model's result is another image's file.
+    image("R3", { path: "assets/other.png", sha: "1".repeat(64), at: 1 });
+    image("R4", { at: 2, result: { path: "assets/other.png", bytes: 10 } });
+    // Saved as an image of its own: the new image names the stored result's file.
+    image("R5", { at: 3, result: { path: "assets/r5-model.png", bytes: 25 } });
+    image("R6", { at: 4, path: "assets/r5-model.png", sha: "2".repeat(64), bytes: 25 });
+
+    expect(purgeAssets(db(), ["R2"], { includeLive: true }).files).toEqual(["assets/same.png"]);
+    // R4's result still needs R3's file.
+    expect(purgeAssets(db(), ["R3"], { includeLive: true }).files).toEqual([]);
+    expect(purgeAssets(db(), ["R4"], { includeLive: true }).files.sort()).toEqual([
+      "assets/R4.png",
+      "assets/other.png",
+    ]);
+    // The saved copy keeps the file when the edit goes, and frees it when it goes itself.
+    expect(purgeAssets(db(), ["R5"], { includeLive: true }).files).toEqual(["assets/R5.png"]);
+    expect(purgeAssets(db(), ["R6"], { includeLive: true }).files).toEqual(["assets/r5-model.png"]);
+  });
+
   test("a mask stays while its image is live, whatever happens to its edits", () => {
     image("B2");
     image("M3", { kind: "mask", parent: "B2", at: 1 });
@@ -489,6 +529,19 @@ describe("views, search and filters", () => {
     expect(libraryCounts(db()).all).toBe(1);
     // Settings > Storage and agents count images; the masks' bytes are on disk all the same.
     expect(libraryStats(db())).toEqual({ assets: 1, bytes: 12, trash: { count: 1, bytes: 21 } });
+  });
+
+  test("a stored model result and fixes count toward the library's size, once each", () => {
+    image("Q1", {
+      bytes: 10,
+      result: { path: "assets/q1-model.png", bytes: 7 },
+      fixes: { path: "f.png", bytes: 1 },
+    });
+    // Keep the rest off: one file, counted once.
+    image("Q2", { at: 1, bytes: 20, path: "assets/q2.png", result: { path: "assets/q2.png", bytes: 20 } });
+    image("Q3", { at: 2, bytes: 5, result: { path: "assets/q3-model.png", bytes: 4 } });
+    softDeleteAssets(db(), ["Q3"]);
+    expect(libraryStats(db())).toEqual({ assets: 2, bytes: 38, trash: { count: 1, bytes: 9 } });
   });
 
   test("search takes the folder, model, company and date filters, pages on the shared cursor, and counts", () => {
