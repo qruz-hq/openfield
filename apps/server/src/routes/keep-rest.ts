@@ -16,8 +16,9 @@ import { ApiFailure, onInvalid } from "../http/errors";
 //   GET  /api/assets/:id/keep-rest        what can be adjusted, and the files to show it with
 //   POST /api/assets/:id/keep-rest        made again with other settings, in place, for free
 //   POST /api/assets/:id/keep-rest/save   the model's own result as an image of its own
-// The POST takes JSON, or multipart with the settings as JSON in "settings" and a fix layer PNG in
-// "fixes". The files themselves are under /files (routes/files.ts).
+// Both POSTs take JSON, or multipart with the settings as JSON in "settings" and a fix layer PNG in
+// "fixes"; save reads only the fix layer, whose "use the original" strokes put the original back.
+// The files themselves are under /files (routes/files.ts).
 
 export const keepRestRoutes = new Hono<Env>()
   .get("/assets/:id/keep-rest", zValidator("param", idParamSchema, onInvalid), (c) => {
@@ -30,7 +31,8 @@ export const keepRestRoutes = new Hono<Env>()
     return c.json(out satisfies KeepRestApplyResponse, 200);
   })
   .post("/assets/:id/keep-rest/save", zValidator("param", idParamSchema, onInvalid), async (c) => {
-    const out = await c.var.svc.keepRest.save(c.req.valid("param").id);
+    const { fixes } = await applyBodyOf(c.req.raw);
+    const out = await c.var.svc.keepRest.save(c.req.valid("param").id, fixes);
     return c.json(out satisfies KeepRestSaveResponse, out.existing ? 200 : 201);
   });
 

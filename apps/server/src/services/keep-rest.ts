@@ -4,6 +4,7 @@ import {
   assetFileUrl,
   type EditOpParams,
   editOpParamsSchema,
+  FIX_ORIGINAL,
   fixesFromRgba,
   fixesToRgba,
   isEmptyFixes,
@@ -23,6 +24,7 @@ import {
 import {
   type AssetRow,
   type Db,
+  findLiveAssetBySha256,
   getAsset,
   hashesInUse,
   insertAsset,
@@ -107,9 +109,12 @@ export class KeepRestService {
     return this.#serial(id, () => this.#apply(id, body, fixes));
   }
 
-  /** POST /api/assets/:id/keep-rest/save: the model's own result as a library image of its own. */
-  save(id: string): Promise<{ asset: Asset; existing: boolean }> {
-    return this.#serial(id, () => this.#save(id));
+  /**
+   * POST /api/assets/:id/keep-rest/save: the model's own result as a library image of its own.
+   * With a fix layer, its "use the original" strokes put the original back there first.
+   */
+  save(id: string, fixes?: Uint8Array): Promise<{ asset: Asset; existing: boolean }> {
+    return this.#serial(id, () => this.#save(id, fixes));
   }
 
   /** The decided area as a grey PNG, for these settings or the stored ones. */
@@ -173,20 +178,22 @@ export class KeepRestService {
   }
 
   async #apply(id: string, body: KeepRestApplyBody, upload?: Uint8Array) {
-    if (body.keep === false) {
+    const it = this.#adjustable(id);
+    // Off is only a view of the model's result; it's saved with "Save as new image", never in place.
+    // An edit that's off now (Sketch & point, by default) is turned on by asking for it.
+    if (!(body.keep ?? it.edit.composite.applied)) {
       throw new ApiFailure(400, "bad_request", "Keep the rest can't be turned off in place", {
         field: "keep",
         userMessage: t("keepRest.offInPlace"),
       });
     }
-    const it = this.#adjustable(id);
     const { db, ingest, logger } = this.deps;
     const settings = this.#settingsOf(it, body);
     const sharp = await this.#sharp();
 
     // A new fix layer replaces the stored one, "clear" drops it, and otherwise the stored one stays.
     let fixes: Uint8Array | undefined;
-    if (upload) fixes = await canonicalFixes(sharp, upload, it.base);
+    if (upload) fixes = (await canonicalFixes(sharp, upload, it.base))?.png;
     else if (body.fixes !== "clear") fixes = await this.#storedFixes(it.row);
     const keptFixes = upload ? fixes : undefined;
 
@@ -265,9 +272,13 @@ export class KeepRestService {
     };
   }
 
-  async #save(id: string): Promise<{ asset: Asset; existing: boolean }> {
+  async #save(id: string, upload?: Uint8Array): Promise<{ asset: Asset; existing: boolean }> {
     const it = this.#adjustable(id);
     const { db, ingest } = this.deps;
+    // Only "use the original" strokes change the model's own result; "use the model" ones are moot.
+    const fixes = upload && (await canonicalFixes(await this.#sharp(), upload, it.base));
+    if (fixes?.codes.includes(FIX_ORIGINAL)) return this.#saveTouchedUp(it, fixes.png);
+
     const saved = it.keep.savedAs && getAsset(db, it.keep.savedAs);
     if (saved) return { asset: toAsset(saved, isFavourite(db, saved.id), false), existing: true };
 
@@ -280,6 +291,70 @@ export class KeepRestService {
       });
     }
     const sha256 = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+    const asset = this.#insertSaved(
+      it,
+      {
+        path: it.resultPath,
+        mime: probed.mime,
+        width: probed.width,
+        height: probed.height,
+        bytes: bytes.byteLength,
+        sha256,
+      },
+      { savedAs: true },
+    );
+    return { asset, existing: false };
+  }
+
+  /**
+   * The model's result at the original's size, with the original put back where the fix layer says
+   * so: the whole picture is the area, so nothing else is decided. Saving the same strokes again
+   * finds the copy already made.
+   */
+  async #saveTouchedUp(it: Adjustable, fixes: Uint8Array): Promise<{ asset: Asset; existing: boolean }> {
+    const { db, ingest, logger } = this.deps;
+    const files: KeepFiles = {
+      base: ingest.fileOf(it.base.path),
+      result: ingest.fileOf(it.resultPath),
+      area: { everywhere: true },
+      fixes,
+    };
+    const settings: KeepSettings = {
+      mode: "mask",
+      sensitivity: KEEP_REST_SENSITIVITY.default,
+      expandPx: 0,
+      featherPx: 0,
+    };
+    let made: Awaited<ReturnType<typeof keptVersion>>;
+    try {
+      made = await keptVersion(await this.#sharp(), ingest, files, settings, logger);
+    } catch (err) {
+      logger.warn("Couldn't touch up an edit's model result", {
+        assetId: it.row.id,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      throw new ApiFailure(500, "internal", "The touched-up result couldn't be made", {
+        userMessage: t("keepRest.failed"),
+      });
+    }
+    if (made === "turned") throw turned();
+    const staged = await this.#stage(made.png);
+    const before = findLiveAssetBySha256(db, staged.sha256);
+    if (before && before.opParams?.savedFrom === it.row.id) {
+      ingest.discard(staged);
+      return { asset: toAsset(before, isFavourite(db, before.id), false), existing: true };
+    }
+    const asset = this.#insertSaved(it, staged, { savedAs: false });
+    return { asset, existing: false };
+  }
+
+  /** Adds a saved copy of an edit's model result to the library, a child of the original. */
+  #insertSaved(
+    it: Adjustable,
+    file: Pick<AssetRow, "path" | "mime" | "width" | "height" | "bytes" | "sha256">,
+    opts: { savedAs: boolean },
+  ): Asset {
+    const { db } = this.deps;
     const { row } = it;
     const record: EditOpParams = {
       composite: {
@@ -297,12 +372,12 @@ export class KeepRestService {
         // Not one of the run's own images, so a canvas node or a job set never lists it.
         jobId: null,
         jobSetId: null,
-        path: it.resultPath,
-        mime: probed.mime,
-        width: probed.width,
-        height: probed.height,
-        bytes: bytes.byteLength,
-        sha256,
+        path: file.path,
+        mime: file.mime,
+        width: file.width,
+        height: file.height,
+        bytes: file.bytes,
+        sha256: file.sha256,
         seed: row.seed,
         providerId: row.providerId,
         modelId: row.modelId,
@@ -325,6 +400,8 @@ export class KeepRestService {
         insertAssetEdges(tx, [
           { parentAssetId: row.parentAssetId, childAssetId: made.id, relation: "derived" },
         ]);
+      // The edit points at the model's own result saved as it is; touched-up copies are found by hash.
+      if (!opts.savedAs) return made;
       const edit = { ...it.edit, keepRest: { ...it.keep, savedAs: made.id } };
       replaceKeptFile(tx, row.id, {
         path: row.path,
@@ -342,7 +419,7 @@ export class KeepRestService {
     this.deps.library.announceUpdated([row.id, asset.id]);
     const rung = THUMB_RUNGS[this.deps.settings.get().feedZoom] ?? 456;
     this.deps.thumbs.warm(asset, Thumbs.sizeFor({ h: rung }));
-    return { asset: toAsset(asset, false, false), existing: false };
+    return toAsset(asset, false, false);
   }
 
   /** Deletes the old kept file, fix layer and thumbnails once no row names them. */
@@ -547,7 +624,7 @@ async function canonicalFixes(
   sharp: Sharp,
   upload: Uint8Array,
   base: AssetRow,
-): Promise<Uint8Array | undefined> {
+): Promise<{ png: Uint8Array; codes: Uint8Array } | undefined> {
   let decoded: { data: Buffer; info: { width: number; height: number; channels: number } };
   try {
     decoded = await sharp(upload, { failOn: "truncated", limitInputPixels: base.width * base.height })
@@ -580,7 +657,7 @@ async function canonicalFixes(
   })
     .png({ compressionLevel: 9 })
     .toBuffer();
-  return new Uint8Array(png);
+  return { png: new Uint8Array(png), codes: fixes };
 }
 
 /** The marks on the image being edited (1); those on references say nothing about its area. */

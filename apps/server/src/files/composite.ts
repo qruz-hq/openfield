@@ -69,11 +69,14 @@ export interface KeepSettings {
   sensitivity: number;
 }
 
-/** The files a kept version is made from, absolute. `area` is a mask file, or marks on the base. */
+/**
+ * The files a kept version is made from, absolute. `area` is a mask file, marks on the base, or the
+ * whole picture (the model's own result, with only the fix layer putting the original back).
+ */
 export interface KeepFiles {
   base: string;
   result: string;
-  area: { mask: string } | { marks: readonly Mark[] };
+  area: { mask: string } | { marks: readonly Mark[] } | { everywhere: true };
   /** A fix layer: an RGBA PNG at the base's size (core fixesFromRgba). */
   fixes?: Uint8Array;
 }
@@ -238,7 +241,9 @@ async function readAll(sharp: Sharp, ingest: Ingest, files: KeepFiles): Promise<
   const area =
     "mask" in files.area
       ? await maskAlpha(sharp, files.area.mask, width, height)
-      : marksAlpha(files.area.marks, width, height);
+      : "marks" in files.area
+        ? marksAlpha(files.area.marks, width, height)
+        : new Uint8Array(width * height);
   if (isEmptyMask(area)) throw new Error("The mask marks nothing to change");
 
   const base = await pixels(

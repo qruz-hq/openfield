@@ -400,6 +400,10 @@ describe("adjusting an edit in place", () => {
     const { baseBytes, edit } = await maskedEdit({ composite: false });
     // The stored result is the edit's own file, so write one at the base's size over both.
     await storeResult(edit.id, await modelLike(baseBytes));
+    // Off is a view, not something to apply: settings alone don't turn it on, asking does.
+    const stillOff = await apply(edit.id, { sensitivity: 60 });
+    expect(stillOff.status).toBe(400);
+    expect(stillOff.body).toMatchObject({ error: { field: "keep" } });
     const out = keepRestApplyResponseSchema.parse((await apply(edit.id, { keep: true })).body);
     expect(out.state).toMatchObject({ keep: true, revision: 1 });
     const row = getAsset(server.services.db, edit.id)!;
@@ -494,6 +498,49 @@ describe("saving the model's result as a new image", () => {
     await server.json(`/api/assets/${edit.id}?hard=1`, { method: "DELETE" });
     expect(existsSync(server.services.ingest.fileOf(row.path))).toBe(true);
     expect((await server.request(`/files/asset/${saved.asset.id}`)).status).toBe(200);
+  }, 30_000);
+});
+
+describe("saving the model's result touched up", () => {
+  test("puts the original back where painted, and finds the same copy when saved again", async () => {
+    server = await ready();
+    const { baseBytes, edit } = await maskedEdit();
+    const result = await modelLike(baseBytes);
+    await storeResult(edit.id, result);
+    const save = async (png: Uint8Array) => {
+      const form = new FormData();
+      form.append("fixes", new File([png as Uint8Array<ArrayBuffer>], "fixes.png"));
+      return server!.request(`/api/assets/${edit.id}/keep-rest/save`, { method: "POST", body: form });
+    };
+    const strokes = await fixesPng(PATCH, FIX_ORIGINAL);
+    const first = await save(strokes);
+    expect(first.status).toBe(201);
+    const saved = keepRestSaveResponseSchema.parse(await first.json());
+    expect(saved.asset).toMatchObject({ kind: "edited", width: W, height: H, mime: "image/png" });
+
+    const made = await pixelsOf(fileOfRow(saved.asset.id));
+    const original = await pixelsOf(baseBytes);
+    const model = await pixelsOf(result);
+    // The original inside the strokes, the model's own result everywhere else (its far square too).
+    expect(made.at(PATCH.x + 20, PATCH.y + 20)).toEqual(original.at(PATCH.x + 20, PATCH.y + 20));
+    expect(made.at(FAR.x + 10, FAR.y + 10)).toEqual(model.at(FAR.x + 10, FAR.y + 10));
+    expect(made.at(10, 10)).toEqual(model.at(10, 10));
+
+    const again = await save(strokes);
+    expect(again.status).toBe(200);
+    expect(keepRestSaveResponseSchema.parse(await again.json())).toMatchObject({
+      existing: true,
+      asset: { id: saved.asset.id },
+    });
+    // The edit still points at no plain copy; "use the model" strokes alone save the plain one.
+    expect((await state(edit.id)).modelResult!.savedAs).toBeNull();
+    const plain = await save(await fixesPng(PATCH, FIX_MODEL));
+    expect(plain.status).toBe(201);
+    const plainAsset = keepRestSaveResponseSchema.parse(await plain.json()).asset;
+    expect(plainAsset.id).not.toBe(saved.asset.id);
+    expect((await state(edit.id)).modelResult!.savedAs).toBe(plainAsset.id);
+    // The kept version itself is untouched.
+    expect(getAsset(server.services.db, edit.id)!.sha256).toBe(edit.sha256);
   }, 30_000);
 });
 
