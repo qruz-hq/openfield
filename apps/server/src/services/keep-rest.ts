@@ -32,7 +32,14 @@ import {
   replaceKeptFile,
 } from "@openfield/db";
 import { isProviderError } from "@openfield/providers/server";
-import { areaMap, fittedResult, type KeepFiles, type KeepSettings, keptVersion } from "../files/composite";
+import {
+  AnalysisCache,
+  areaMap,
+  fittedResult,
+  type KeepFiles,
+  type KeepSettings,
+  keptVersion,
+} from "../files/composite";
 import type { Ingest, StagedFile } from "../files/ingest";
 import { probeImage } from "../files/probe";
 import { loadSharp, type Sharp } from "../files/sharp";
@@ -76,6 +83,8 @@ type Resolved = { ok: true; it: Adjustable } | { ok: false; why: KeepRestUnavail
 export class KeepRestService {
   /** One change at a time per edit, so two quick Applies can't interleave their files. */
   readonly #queue = new Map<string, Promise<unknown>>();
+  /** Comparing the two pictures is the slow part; deciding again for a slider is quick. */
+  readonly #analyses = new AnalysisCache();
 
   constructor(private readonly deps: KeepRestDeps) {}
 
@@ -110,7 +119,14 @@ export class KeepRestService {
     const etag = `"${it.row.sha256.slice(0, 16)}-${it.keep.revision}-${settings.mode}-${settings.sensitivity}-${settings.expandPx}-${settings.featherPx}"`;
     const sharp = await this.#sharp();
     const fixes = await this.#storedFixes(it.row);
-    const made = await areaMap(sharp, this.deps.ingest, this.#files(it, fixes), settings, this.deps.logger);
+    const made = await areaMap(
+      sharp,
+      this.deps.ingest,
+      this.#files(it, fixes),
+      settings,
+      this.deps.logger,
+      this.#cached(it),
+    );
     if (made === "turned") throw turned();
     return { png: made.png, etag };
   }
@@ -163,7 +179,7 @@ export class KeepRestService {
 
     let made: Awaited<ReturnType<typeof keptVersion>>;
     try {
-      made = await keptVersion(sharp, ingest, this.#files(it, fixes), settings, logger);
+      made = await keptVersion(sharp, ingest, this.#files(it, fixes), settings, logger, this.#cached(it));
     } catch (err) {
       logger.warn("Couldn't make an edit's kept version again", {
         assetId: id,
@@ -370,6 +386,12 @@ export class KeepRestService {
       expandPx: asked.expandPx ?? it.edit.composite.expandPx ?? MASK_COMPOSITE_DEFAULTS.expandPx,
       featherPx: asked.featherPx ?? it.edit.composite.featherPx ?? MASK_COMPOSITE_DEFAULTS.featherPx,
     };
+  }
+
+  /** Same original, same model result, same area: same comparison. */
+  #cached(it: Adjustable) {
+    const area = it.mask ? `mask:${it.mask.id}` : `marks:${JSON.stringify(it.marks)}`;
+    return { cache: this.#analyses, key: `${it.base.sha256}|${it.resultPath}|${area}` };
   }
 
   #files(it: Adjustable, fixes?: Uint8Array): KeepFiles {

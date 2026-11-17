@@ -10,6 +10,7 @@ import {
   fixesToRgba,
   isEmptyFixes,
   isStill,
+  KEEP_REST_LIMITS,
   KEEP_REST_SENSITIVITY,
   type PixelImage,
 } from "../src/image/keep-rest";
@@ -364,6 +365,10 @@ describe("falling back to the mask", () => {
     const unrelated = toImage(scene(m.width, m.height, 12345), m.width, m.height);
     const a = analyzeKeepRest(m.base, unrelated, m.area);
     expect(a.fallback).toBe("no_match");
+    // Reported as no movement at all, with a confidence still between 0 and 1.
+    expect(a.lineUp).toMatchObject({ dx: 0, dy: 0, scaleX: 1, scaleY: 1 });
+    expect(a.lineUp.confidence).toBeGreaterThanOrEqual(0);
+    expect(a.lineUp.confidence).toBeLessThan(KEEP_REST_LIMITS.confidence);
     const d = decideKeepRest(a, m.area, SETTINGS);
     expect(d.fallback).toBe("no_match");
     expect(d.weights).toEqual(exact(m));

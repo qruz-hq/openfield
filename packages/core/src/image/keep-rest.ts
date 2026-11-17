@@ -25,14 +25,23 @@ export interface PixelImage<T extends Pixels = Pixels> {
 
 /**
  * How readily a change counts as real. Higher keeps more of the model's changes (the cut-off
- * drops), lower keeps fewer. 50 sits at the noise the pair itself shows; each 25 either way halves
- * or doubles the cut-off.
+ * drops), lower keeps fewer. The cut-off sits that many noise spreads above the pair's typical
+ * difference (spreadsFor): 12 at 0, 4 at 50, 2.5 at 100. Below about 2.5, live checks showed the
+ * re-encode grain of a GPT Image or Seedream result joining up into large false areas.
  */
 export const KEEP_REST_SENSITIVITY = {
   min: 0,
   max: 100,
   default: MASK_COMPOSITE_DEFAULTS.sensitivity,
 } as const;
+
+/** Noise spreads above the typical difference at which a change counts, for a Sensitivity. */
+export function spreadsFor(sensitivity: number): number {
+  const s = clampSensitivity(sensitivity);
+  const half = KEEP_REST_SENSITIVITY.default;
+  // Geometric either side of the default, so equal steps feel alike.
+  return s <= half ? 4 * 3 ** ((half - s) / half) : 4 * 0.625 ** ((s - half) / (100 - half));
+}
 
 /** The long edge of the analysis pass. The blend itself is always at full size. */
 export const KEEP_REST_ANALYSIS_EDGE = 512;
@@ -88,8 +97,12 @@ export const KEEP_REST_LIMITS = {
   maxChangedOutside: 0.5,
   /** The smallest clear change kept away from the mask, as a share of the picture. */
   minClearArea: 0.0004,
-  /** The lowest cut-off, in 8-bit levels, so a near-perfect copy doesn't keep rounding noise. */
-  minCutoff: 1.5,
+  /**
+   * The lowest cut-off at the default Sensitivity, in 8-bit levels past what the neighbouring
+   * pixels span, so a near-perfect copy doesn't keep rounding noise. It moves with Sensitivity
+   * like the rest of the cut-off, so the slider still does something on a very clean result.
+   */
+  minCutoff: 3,
   /** How much stronger a change must be to count as clear, away from the mask. */
   clearFactor: 2.5,
 } as const;
@@ -194,10 +207,10 @@ export function analyzeKeepRest(
     Math.abs(lineUp.scaleY - 1) > KEEP_REST_LIMITS.maxScale
   )
     // Not used, so not reported: a failed search's numbers mean nothing. Its confidence does.
-    return empty("no_match", { ...identity, confidence: found.confidence });
+    return empty("no_match", { ...identity, confidence: Math.max(0, Math.min(1, found.confidence)) });
 
   const moved = warpFloat(r, aw, ah, 4, found);
-  const difference = differenceOf(blur(b, aw, ah), blur(moved, aw, ah), weight, n);
+  const difference = differenceOf(blur(b, aw, ah), blur(moved, aw, ah), weight, aw, ah);
   const noise = noiseOf(difference, near);
   const analysis: KeepRestAnalysis = {
     width,
@@ -208,7 +221,7 @@ export function analyzeKeepRest(
     lineUp,
     difference,
     noise,
-    cutoff: noise.median + 4 * noise.spread,
+    cutoff: noise.median + spreadsFor(KEEP_REST_SENSITIVITY.default) * noise.spread,
     near,
   };
   if (noise.median > KEEP_REST_LIMITS.maxNoise) analysis.fallback = "too_different";
@@ -234,9 +247,10 @@ export function decideKeepRest(
   if (area.length !== width * height) throw new RangeError(`Expected ${width * height} mask values`);
   if (fixes && fixes.length !== width * height) throw new RangeError(`Expected ${width * height} fixes`);
   const sensitivity = clampSensitivity(settings.sensitivity);
+  const spreads = spreadsFor(sensitivity);
   const cutoff = Math.max(
-    KEEP_REST_LIMITS.minCutoff,
-    analysis.cutoff * 2 ** ((KEEP_REST_SENSITIVITY.default - sensitivity) / 25),
+    (KEEP_REST_LIMITS.minCutoff * spreads) / spreadsFor(KEEP_REST_SENSITIVITY.default),
+    analysis.noise.median + spreads * analysis.noise.spread,
   );
   const maskOnly = (fallback: KeepRestFallback): KeepRestDecision => {
     const weights = maskOnlyWeights(area, width, height, settings, fixes);
@@ -540,20 +554,40 @@ function findLineUp(
   w: number,
   h: number,
 ): Fit {
-  const levels: Level[] = [{ w, h, base, result, weight }];
+  const raw: Level = { w, h, base, result, weight };
+  // Fitted on softened copies: on sharp per-pixel grain, interpolation smooths a half-pixel shift
+  // and pulls the fit toward whole pixels. The detail match still reads the sharp ones.
+  const soft = (src: Float32Array) => blurPlane(blurPlane(src, w, h), w, h);
+  const levels: Level[] = [{ w, h, base: soft(base), result: soft(result), weight }];
   while (levels.length < 5) {
     const last = levels[levels.length - 1]!;
     if (Math.min(last.w, last.h) < 48) break;
     levels.push(half(last));
   }
-  const top = levels[levels.length - 1]!;
-  let fit = coarseShift(top, Math.max(2, Math.ceil(KEEP_REST_LIMITS.maxShift * Math.max(top.w, top.h)) + 1));
-  for (let l = levels.length - 1; l >= 0; l--) {
-    if (l < levels.length - 1) fit = { ...fit, tx: fit.tx * 2, ty: fit.ty * 2 };
-    fit = refine(levels[l]!, fit);
+  // The coarse search runs one level above the smallest when there is one: at about 32 px a
+  // repeating pattern (bricks, tiles) aliases, and its best match can be the wrong one.
+  const start = Math.max(0, levels.length - 2);
+  const top = levels[start]!;
+  const radius = Math.max(2, Math.ceil(KEEP_REST_LIMITS.maxShift * Math.max(top.w, top.h)) + 1);
+  // A few of the best whole-pixel shifts at a few scales, each refined; the one that matches the
+  // detail best wins. One start alone can settle a period away, or miss a 2% scale entirely.
+  // Each start is refined down to the next-to-finest level and judged there; only the best goes
+  // on to the finest, which costs as much as all the others together.
+  const judge = Math.min(1, levels.length - 1);
+  let best: Fit | undefined;
+  for (const candidate of coarseSearch(top, radius, COARSE_SCALES, 3)) {
+    let fit = candidate;
+    for (let l = start; l >= judge; l--) {
+      if (l < start) fit = { ...fit, tx: fit.tx * 2, ty: fit.ty * 2 };
+      fit = refine(levels[l]!, fit);
+    }
+    const scored = { ...fit, confidence: detailMatch(levels[judge]!, fit) };
+    if (!best || scored.confidence > best.confidence) best = scored;
   }
-  const level = levels[0]!;
-  const lined = { ...fit, confidence: detailMatch(level, fit) };
+  if (best && judge > 0) best = refine(levels[0]!, { ...best, tx: best.tx * 2, ty: best.ty * 2 });
+  if (best) best = { ...best, confidence: detailMatch(raw, best) };
+  const level = raw;
+  const lined = best ?? { tx: 0, ty: 0, sx: 1, sy: 1, confidence: -1 };
   const still = {
     tx: 0,
     ty: 0,
@@ -564,6 +598,9 @@ function findLineUp(
   // A line-up that doesn't match the detail better than leaving it isn't worth the resampling.
   return lined.confidence > still.confidence + 0.002 ? lined : still;
 }
+
+/** Scales the coarse search tries, within KEEP_REST_LIMITS.maxScale. */
+const COARSE_SCALES = [0.95, 0.975, 1, 1.025, 1.05];
 
 function half(l: Level): Level {
   const w = Math.floor(l.w / 2);
@@ -583,39 +620,72 @@ function half(l: Level): Level {
   return { w, h, base: pick(l.base), result: pick(l.result), weight };
 }
 
-/** The whole-pixel shift with the best correlation, scale left at 1. */
-function coarseShift(l: Level, radius: number): Fit {
-  let best = { tx: 0, ty: 0, sx: 1, sy: 1, confidence: -2 };
-  for (let ty = -radius; ty <= radius; ty++)
-    for (let tx = -radius; tx <= radius; tx++) {
-      let n = 0;
-      let sb = 0;
-      let sr = 0;
-      let sbb = 0;
-      let srr = 0;
-      let sbr = 0;
-      for (let y = Math.max(0, -ty); y < Math.min(l.h, l.h - ty); y++)
-        for (let x = Math.max(0, -tx); x < Math.min(l.w, l.w - tx); x++) {
-          const i = y * l.w + x;
-          if (!l.weight[i]) continue;
-          const b = l.base[i]!;
-          const r = l.result[(y + ty) * l.w + x + tx]!;
-          n++;
-          sb += b;
-          sr += r;
-          sbb += b * b;
-          srr += r * r;
-          sbr += b * r;
-        }
-      if (n < 16) continue;
-      const cov = sbr - (sb * sr) / n;
-      const vb = sbb - (sb * sb) / n;
-      const vr = srr - (sr * sr) / n;
-      const ncc = vb > 0 && vr > 0 ? cov / Math.sqrt(vb * vr) : 0;
-      // Ties go to the smaller shift.
-      if (ncc > best.confidence + 1e-6) best = { tx, ty, sx: 1, sy: 1, confidence: ncc };
+/**
+ * The `count` best whole-pixel shifts by correlation, over a few scales, each a different
+ * start: no two within a pixel of each other at the same scale. Ties go to the smaller shift.
+ */
+function coarseSearch(l: Level, radius: number, scales: readonly number[], count: number): Fit[] {
+  const cx = (l.w - 1) / 2;
+  const cy = (l.h - 1) / 2;
+  const found: Fit[] = [];
+  for (const scale of scales) {
+    // The result resampled at this scale about the centre, once per scale.
+    const scaled = new Float32Array(l.w * l.h);
+    const inside = new Uint8Array(l.w * l.h);
+    for (let y = 0; y < l.h; y++) {
+      const v = scale * (y - cy) + cy;
+      if (v < 0 || v > l.h - 1) continue;
+      const y0 = Math.min(l.h - 2, Math.floor(v));
+      for (let x = 0; x < l.w; x++) {
+        const u = scale * (x - cx) + cx;
+        if (u < 0 || u > l.w - 1) continue;
+        const x0 = Math.min(l.w - 2, Math.floor(u));
+        scaled[y * l.w + x] = bilerp(l.result, y0 * l.w + x0, l.w, u - x0, v - y0);
+        inside[y * l.w + x] = 1;
+      }
     }
-  return best;
+    for (let ty = -radius; ty <= radius; ty++)
+      for (let tx = -radius; tx <= radius; tx++) {
+        let n = 0;
+        let sb = 0;
+        let sr = 0;
+        let sbb = 0;
+        let srr = 0;
+        let sbr = 0;
+        for (let y = Math.max(0, -ty); y < Math.min(l.h, l.h - ty); y++)
+          for (let x = Math.max(0, -tx); x < Math.min(l.w, l.w - tx); x++) {
+            const i = y * l.w + x;
+            const j = (y + ty) * l.w + x + tx;
+            if (!l.weight[i] || !inside[j]) continue;
+            const b = l.base[i]!;
+            const r = scaled[j]!;
+            n++;
+            sb += b;
+            sr += r;
+            sbb += b * b;
+            srr += r * r;
+            sbr += b * r;
+          }
+        if (n < 16) continue;
+        const cov = sbr - (sb * sr) / n;
+        const vb = sbb - (sb * sb) / n;
+        const vr = srr - (sr * sr) / n;
+        const ncc = vb > 0 && vr > 0 ? cov / Math.sqrt(vb * vr) : 0;
+        // A small bias toward no movement, so ties go to the smaller shift and scale.
+        const score = ncc - 1e-4 * (Math.abs(tx) + Math.abs(ty)) - 1e-3 * Math.abs(scale - 1) * 40;
+        found.push({ tx, ty, sx: scale, sy: scale, confidence: score });
+      }
+  }
+  found.sort((a, b) => b.confidence - a.confidence);
+  const picked: Fit[] = [];
+  for (const f of found) {
+    if (picked.length >= count) break;
+    const near = picked.some(
+      (p) => p.sx === f.sx && Math.abs(p.tx - f.tx) <= 1 && Math.abs(p.ty - f.ty) <= 1,
+    );
+    if (!near) picked.push(f);
+  }
+  return picked;
 }
 
 /** Shift, scale, gain and offset, as refine() moves them. */
@@ -913,8 +983,10 @@ function differenceOf(
   base: Float32Array,
   result: Float32Array,
   weight: Float32Array,
-  n: number,
+  w: number,
+  h: number,
 ): Float32Array {
+  const n = w * h;
   const gain = [1, 1, 1, 1];
   const offset = [0, 0, 0, 0];
   for (let k = 0; k < 4; k++) {
@@ -948,16 +1020,38 @@ function differenceOf(
       cut = Math.max(1, (1.5 * abs) / Math.max(1, sw));
     }
   }
+  // Compared against each other's 3x3 neighbourhood: a pixel counts as changed only by how far
+  // it falls outside the range its neighbours span in the other picture. An edge a fraction of a
+  // pixel off, or softened by resampling, stays inside that range; something new doesn't.
+  const fitted = new Float32Array(n * 4);
+  for (let p = 0, i = 0; p < n; p++, i += 4)
+    for (let k = 0; k < 4; k++) fitted[i + k] = gain[k]! * base[i + k]! + offset[k]!;
+  const outside = (src: Float32Array, x: number, y: number, k: number, v: number) => {
+    let lo = Number.POSITIVE_INFINITY;
+    let hi = Number.NEGATIVE_INFINITY;
+    for (let yy = Math.max(0, y - 1); yy <= Math.min(h - 1, y + 1); yy++)
+      for (let xx = Math.max(0, x - 1); xx <= Math.min(w - 1, x + 1); xx++) {
+        const s = src[(yy * w + xx) * 4 + k]!;
+        if (s < lo) lo = s;
+        if (s > hi) hi = s;
+      }
+    return v < lo ? lo - v : v > hi ? v - hi : 0;
+  };
   const out = new Float32Array(n);
-  for (let p = 0, i = 0; p < n; p++, i += 4) {
-    let sum = 0;
-    for (let k = 0; k < 3; k++) {
-      const e = result[i + k]! - (gain[k]! * base[i + k]! + offset[k]!);
-      sum += e * e;
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const p = y * w + x;
+      const i = p * 4;
+      let sum = 0;
+      for (let k = 0; k < 3; k++) {
+        const e = Math.min(
+          outside(fitted, x, y, k, result[i + k]!),
+          outside(result, x, y, k, fitted[i + k]!),
+        );
+        sum += e * e;
+      }
+      out[p] = Math.sqrt(sum / 3) + 0.5 * Math.abs(result[i + 3]! - fitted[i + 3]!);
     }
-    const a = result[i + 3]! - (gain[3]! * base[i + 3]! + offset[3]!);
-    out[p] = Math.sqrt(sum / 3) + 0.5 * Math.abs(a);
-  }
   return out;
 }
 

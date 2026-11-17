@@ -9,6 +9,7 @@ import {
   type EditOpParams,
   fixesFromRgba,
   isEmptyMask,
+  type KeepRestAnalysis,
   type KeepRestMode,
   type KeepRestRecord,
   type Mark,
@@ -275,11 +276,42 @@ async function readAll(sharp: Sharp, ingest: Ingest, files: KeepFiles): Promise<
   };
 }
 
+/**
+ * The last few analyses, by a key the caller makes from what they read (the original's hash, the
+ * stored result and the area), so dragging a slider decides again without comparing again.
+ */
+export class AnalysisCache {
+  readonly #entries = new Map<string, KeepRestAnalysis>();
+  constructor(private readonly size = 4) {}
+
+  get(key: string): KeepRestAnalysis | undefined {
+    const hit = this.#entries.get(key);
+    if (hit) {
+      this.#entries.delete(key);
+      this.#entries.set(key, hit);
+    }
+    return hit;
+  }
+
+  set(key: string, analysis: KeepRestAnalysis): void {
+    this.#entries.delete(key);
+    this.#entries.set(key, analysis);
+    while (this.#entries.size > this.size) this.#entries.delete(this.#entries.keys().next().value!);
+  }
+}
+
+/** Where a kept version may find, and leave, its analysis. */
+export interface Cached {
+  cache: AnalysisCache;
+  key: string;
+}
+
 /** The weights for these settings, and the result moved by the line-up where they take it. */
 function decide(
   read: Read,
   settings: KeepSettings,
   logger?: Logger,
+  cached?: Cached,
 ): { weights: Uint8Array; moved: Values; decided: Decided } {
   const { width, height, layout, area, fixes } = read;
   const colours = layout.grey ? 1 : 3;
@@ -300,9 +332,12 @@ function decide(
   };
   if (settings.mode === "mask") return maskOnly();
   try {
-    const analysis = analyzeKeepRest(image(read.base, layout.alpha), resultImage, area, {
-      ...(read.resizedFrom && { sentSize: read.resizedFrom }),
-    });
+    const analysis =
+      cached?.cache.get(cached.key) ??
+      analyzeKeepRest(image(read.base, layout.alpha), resultImage, area, {
+        ...(read.resizedFrom && { sentSize: read.resizedFrom }),
+      });
+    cached?.cache.set(cached.key, analysis);
     const decision = decideKeepRest(analysis, area, settings, fixes);
     const lineUp = roundLineUp(analysis.lineUp);
     // A fallback reads the result where it lies: a line-up that failed is no line-up at all.
@@ -336,11 +371,12 @@ export async function keptVersion(
   files: KeepFiles,
   settings: KeepSettings,
   logger?: Logger,
+  cached?: Cached,
 ): Promise<Kept | "turned"> {
   const read = await readAll(sharp, ingest, files);
   if (read === "turned") return "turned";
   const { width, height, layout, icc } = read;
-  const { weights, moved, decided } = decide(read, settings, logger);
+  const { weights, moved, decided } = decide(read, settings, logger, cached);
   const result = read.seeThrough ? foldAlpha(moved, weights, layout) : moved;
   const channels = (layout.grey ? 1 : 3) + (layout.alpha ? 1 : 0);
   const blended = blendPixels(read.base, result, weights, channels, { alpha: layout.alpha });
@@ -358,10 +394,11 @@ export async function areaMap(
   files: KeepFiles,
   settings: KeepSettings,
   logger?: Logger,
+  cached?: Cached,
 ): Promise<{ png: Uint8Array<ArrayBuffer>; decided: Decided } | "turned"> {
   const read = await readAll(sharp, ingest, files);
   if (read === "turned") return "turned";
-  const { weights, decided } = decide(read, settings, logger);
+  const { weights, decided } = decide(read, settings, logger, cached);
   const png = await sharp(weights, { raw: { width: read.width, height: read.height, channels: 1 } })
     .png({ compressionLevel: 6 })
     .toBuffer();
