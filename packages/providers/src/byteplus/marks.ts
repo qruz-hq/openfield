@@ -1,11 +1,12 @@
 import { isDrawnMark, type Mark, type MarkPoint, toEditGrid } from "@openfield/core";
 import type { MarkDrawing } from "../types";
 
-// Marks to Seedream's interactive editing (5.0 Pro and Flash editing guide). Points and boxes become
-// <point>x y</point> and <bbox>x1 y1 x2 y2</bbox> tags on the 0 to 999 grid, after "Image n", the
-// image they're on. Circles, strokes and arrows have no tag: they're drawn onto that image in a
-// colour of their own, and the prompt names them by it. Colour and material go next to each mark
-// in words, since the API has no field for them. Pure, so tests snapshot it.
+// Marks to Seedream's interactive editing (5.0 Pro and Flash editing guide, which 5.5 follows too).
+// Points and boxes become <point>x y</point> and <bbox>x1 y1 x2 y2</bbox> tags on the 0 to 999
+// grid, after "Image n", the image they're on. Circles, strokes and arrows have no tag: they're
+// drawn onto that image in a colour of their own, and the prompt names them by it. Colour and
+// material go next to each mark in words, since the API has no field for them. Pure, so tests
+// snapshot it.
 
 /** Inks for drawn marks, picked to stand out on most photos. Cycled in mark order. */
 export const MARK_INKS = [

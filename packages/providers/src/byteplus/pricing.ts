@@ -34,9 +34,9 @@ export const PRICES = {
 } satisfies Record<string, PriceModel>;
 
 // Seedream: USD per output image, from the same page on 2026-11-09. Only images that come back are
-// billed, and every image of a related set or a separation counts on its own. 5.0 Pro bills by the
-// pixels of each image (2.61M is the line between its two rates), and its input images after the
-// first; every other model takes input images free.
+// billed, and every image of a related set or a separation counts on its own. 5.5 and 5.0 Pro bill
+// by the pixels of each image, each with a line between two rates, and their input images (all of
+// 5.5's, Pro's after the first); every other model takes input images free.
 
 const seedreamPriced = { currency: "USD", pricedAt: "2026-11-09", sourceUrl: SOURCE } as const;
 /** "up to 2.61M px" on the pricing page. Every 1K and 1.5K size is under it; every 2K size over. */
