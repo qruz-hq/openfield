@@ -135,15 +135,17 @@ describe("askedComposite", () => {
       composite: false,
       featherPx: 3,
       expandPx: 1,
+      sensitivity: 50,
     });
     // A put-back that failed was still asked for.
     expect(
       askedComposite({ opParams: record({ applied: false, reason: "failed", featherPx: 5 }), params: null }),
-    ).toEqual({ composite: true, featherPx: 5, expandPx: 4 });
+    ).toEqual({ composite: true, featherPx: 5, expandPx: 4, sensitivity: 50 });
     expect(askedComposite({ opParams: null, params: null })).toEqual({
       composite: true,
       featherPx: 8,
       expandPx: 4,
+      sensitivity: 50,
     });
   });
 });
@@ -173,7 +175,7 @@ describe("reopenedEdit", () => {
       model: "openai:gpt-image-2.5",
       values: { resolution: "1K", quality: "medium" },
       batch: 2,
-      composite: { composite: true, featherPx: 8, expandPx: 4 },
+      composite: { composite: true, featherPx: 8, expandPx: 4, sensitivity: 50 },
       references: [reference.id],
     });
   });

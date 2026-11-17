@@ -166,6 +166,7 @@ describe("normalize", () => {
           composite: true,
           expandPx: 4,
           featherPx: 8,
+          sensitivity: 50,
         });
       }
       const set = await run(inpainter, {
@@ -178,6 +179,7 @@ describe("normalize", () => {
         composite: false,
         expandPx: 0,
         featherPx: 32,
+        sensitivity: 50,
       });
     });
 

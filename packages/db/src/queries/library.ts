@@ -381,29 +381,21 @@ function dropUnusedMasks(tx: Executor, deleted: AssetRow[]): AssetRow[] {
 
 /**
  * The files and thumbnails no remaining row uses, of the rows deleted. `alsoGone` are rows that
- * went with them (their masks), whose files count but which aren't reported as deleted.
+ * went with them (their masks), whose files count but which aren't reported as deleted. An edit's
+ * stored model result and fix layer go with it, unless another row still names the same file.
  */
 function orphansOf(db: Executor, deleted: AssetRow[], alsoGone: AssetRow[] = []): PurgeResult {
   const gone = [...deleted, ...alsoGone];
   const bytesByPath = new Map<string, number>();
-  for (const row of gone) bytesByPath.set(row.path, row.bytes);
+  for (const row of gone) {
+    bytesByPath.set(row.path, row.bytes);
+    if (row.resultPath) bytesByPath.set(row.resultPath, row.resultBytes ?? 0);
+    if (row.fixesPath) bytesByPath.set(row.fixesPath, row.fixesBytes ?? 0);
+  }
   const hashes = new Set(gone.map((row) => row.sha256));
 
-  const stillUsed = (column: typeof assets.path | typeof assets.sha256, values: string[]) => {
-    const used = new Set<string>();
-    for (const part of chunked(values)) {
-      for (const row of db
-        .selectDistinct({ value: column })
-        .from(assets)
-        .where(inArray(column, part))
-        .all()) {
-        used.add(row.value);
-      }
-    }
-    return used;
-  };
-  const usedPaths = stillUsed(assets.path, [...bytesByPath.keys()]);
-  const usedHashes = stillUsed(assets.sha256, [...hashes]);
+  const usedPaths = pathsInUse(db, [...bytesByPath.keys()]);
+  const usedHashes = hashesInUse(db, [...hashes]);
   const orphaned = [...bytesByPath.keys()].filter((path) => !usedPaths.has(path));
   // A video's poster goes with its file: identical videos share both.
   const posters = gone.flatMap((row) =>
@@ -416,4 +408,32 @@ function orphansOf(db: Executor, deleted: AssetRow[], alsoGone: AssetRow[] = [])
     hashes: [...hashes].filter((sha) => !usedHashes.has(sha)),
     reclaimedBytes: files.reduce((sum, path) => sum + (bytesByPath.get(path) ?? 0), 0),
   };
+}
+
+/** Which of these hashes a row still has, so its thumbnails stay. */
+export function hashesInUse(db: Executor, hashes: readonly string[]): Set<string> {
+  const used = new Set<string>();
+  for (const part of chunked([...new Set(hashes)]))
+    for (const row of db
+      .selectDistinct({ value: assets.sha256 })
+      .from(assets)
+      .where(inArray(assets.sha256, part))
+      .all())
+      used.add(row.value);
+  return used;
+}
+
+/**
+ * Which of these files a row still names: as its image, its stored model result or its fix layer.
+ * A file is only deleted once none does.
+ */
+export function pathsInUse(db: Executor, paths: readonly string[]): Set<string> {
+  const used = new Set<string>();
+  for (const part of chunked([...new Set(paths)])) {
+    for (const column of [assets.path, assets.resultPath, assets.fixesPath]) {
+      for (const row of db.selectDistinct({ value: column }).from(assets).where(inArray(column, part)).all())
+        if (row.value) used.add(row.value);
+    }
+  }
+  return used;
 }

@@ -225,6 +225,19 @@ export class LibraryService {
     return { changed, reclaimedBytes: result.reclaimedBytes };
   }
 
+  /**
+   * Deletes files and thumbnails a row let go of without being deleted itself (an edit whose kept
+   * version was made again). The caller has checked no row still names them.
+   */
+  async removeLeftovers(files: readonly string[], hashes: readonly string[]): Promise<void> {
+    await this.#removeFiles({ deleted: [], files: [...files], hashes: [...hashes], reclaimedBytes: 0 });
+  }
+
+  /** asset.updated for each of these that is live, as a list item, so other tabs can patch it. */
+  announceUpdated(ids: readonly string[]): void {
+    this.#announceUpdated(ids);
+  }
+
   /** The rows are already gone, so a file that won't delete is logged, never thrown. */
   async #removeFiles(result: PurgeResult): Promise<void> {
     const { paths, logger } = this.deps;

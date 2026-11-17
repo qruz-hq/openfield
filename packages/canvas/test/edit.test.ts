@@ -171,7 +171,7 @@ describe("the Edit node", () => {
         resolution: "1K",
         batch: 2,
         seed: null,
-        mask: { composite: true, expandPx: 4, featherPx: 12 },
+        mask: { composite: true, expandPx: 4, featherPx: 12, sensitivity: 50 },
       },
     ]);
     expect(compiled.item.inputs).toEqual([
@@ -187,7 +187,7 @@ describe("the Edit node", () => {
     const compiled = out.items[0]!;
     const call = compiled.item.calls[0]!;
     expect(call.op).toBe("edit");
-    expect(call.mask).toEqual({ composite: true, expandPx: 4, featherPx: 8 });
+    expect(call.mask).toEqual({ composite: true, expandPx: 4, featherPx: 8, sensitivity: 50 });
     expect(compiled.item.inputs.map((i) => i.port)).toEqual(["image", "mask"]);
     // One job per image, priced as the server prices the plan: the base is billed as an image sent
     // in, the mask never is.
@@ -198,7 +198,12 @@ describe("the Edit node", () => {
 
     // Off, the mask still goes along with the run, which then keeps the model's image as it is.
     const off = await compile(painted({ model: banana.key, keepOriginal: false }));
-    expect(off.items[0]!.item.calls[0]!.mask).toEqual({ composite: false, expandPx: 4, featherPx: 8 });
+    expect(off.items[0]!.item.calls[0]!.mask).toEqual({
+      composite: false,
+      expandPx: 4,
+      featherPx: 8,
+      sensitivity: 50,
+    });
   });
 
   test("with approximate area edits off, a whole-image model waits and edits start on one that takes a mask", async () => {

@@ -2532,5 +2532,27 @@
       "fullScreen": "Full screen",
       "exitFullScreen": "Exit full screen"
     }
+  },
+  "keepRest": {
+    "unavailable": {
+      "not_an_edit": "Only edits made with a painted area or with marks can be adjusted.",
+      "not_stored": "This edit was made before the model's result was kept.",
+      "original_gone": "The original image isn't in your library anymore, so this edit can't be adjusted.",
+      "area_gone": "The area this edit was made with isn't saved anymore, so it can't be adjusted.",
+      "in_trash": "This edit is in the Trash. Restore it to adjust it.",
+      "saved_result": "This is the model's own result, saved as an image of its own."
+    },
+    "maskOnly": {
+      "no_match": "Kept by your mask only: the new image didn't line up with the original.",
+      "other_shape": "Kept by your mask only: the model sent back a different shape.",
+      "too_different": "Kept by your mask only: the model changed too much of the picture to tell what's new.",
+      "faint": "Kept by your mask only: the change was too soft to tell apart from the rest.",
+      "failed": "Kept by your mask only."
+    },
+    "offInPlace": "To keep the model's whole result, save it as a new image.",
+    "fixesWrongSize": "These fixes are {fixWidth} × {fixHeight} and the image is {width} × {height}. Paint them over the image itself, then try again.",
+    "fixesUnreadable": "These fixes can't be read. Paint them again and try once more.",
+    "cantOpen": "Openfield can't open images on this computer, so it can't adjust this edit.",
+    "failed": "This edit couldn't be adjusted. Try again."
   }
 }

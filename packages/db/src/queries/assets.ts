@@ -187,16 +187,19 @@ export interface LibraryStats {
 
 /**
  * Settings > Storage counts (§8.2.2). Thumbnail and database sizes come from the disk. Masks are
- * never counted as images, as the library never lists them, but their bytes are on disk too.
+ * never counted as images, as the library never lists them, but their bytes are on disk too, as
+ * are an edit's stored model result and fix layer, counted with the edit (in the Trash with it). A
+ * stored result that is the edit's own file (Keep the rest off) isn't counted twice.
  */
 export function libraryStats(db: Executor): LibraryStats {
   const image = sql`${assets.kind} <> 'mask'`;
+  const extra = sql`(CASE WHEN ${assets.resultPath} IS NOT NULL AND ${assets.resultPath} <> ${assets.path} THEN coalesce(${assets.resultBytes}, 0) ELSE 0 END + coalesce(${assets.fixesBytes}, 0))`;
   const row = db
     .select({
       assets: sql<number>`coalesce(sum(${assets.deletedAt} IS NULL AND ${image}), 0)`,
-      bytes: sql<number>`coalesce(sum(CASE WHEN ${assets.deletedAt} IS NULL THEN ${assets.bytes} END), 0)`,
+      bytes: sql<number>`coalesce(sum(CASE WHEN ${assets.deletedAt} IS NULL THEN ${assets.bytes} + ${extra} END), 0)`,
       trashCount: sql<number>`coalesce(sum(${assets.deletedAt} IS NOT NULL AND ${image}), 0)`,
-      trashBytes: sql<number>`coalesce(sum(CASE WHEN ${assets.deletedAt} IS NOT NULL THEN ${assets.bytes} END), 0)`,
+      trashBytes: sql<number>`coalesce(sum(CASE WHEN ${assets.deletedAt} IS NOT NULL THEN ${assets.bytes} + ${extra} END), 0)`,
     })
     .from(assets)
     .get();
@@ -205,4 +208,30 @@ export function libraryStats(db: Executor): LibraryStats {
     bytes: row?.bytes ?? 0,
     trash: { count: row?.trashCount ?? 0, bytes: row?.trashBytes ?? 0 },
   };
+}
+
+/**
+ * Swaps an edit's kept file for another, after its Keep the rest settings changed (§0.9): the
+ * file, its size and hash, its record, and its fix layer. Live edits only. The model's own result
+ * stays where it is. Returns the row as it was and as it is now, so the caller can delete the old
+ * files no row names any more.
+ */
+export function replaceKeptFile(
+  db: Executor,
+  id: string,
+  next: Pick<
+    AssetRow,
+    "path" | "bytes" | "sha256" | "mime" | "width" | "height" | "opParams" | "fixesPath" | "fixesBytes"
+  >,
+  at = nowIso(),
+): { before: AssetRow; after: AssetRow } | undefined {
+  const before = getAsset(db, id);
+  if (!before) return undefined;
+  const after = db
+    .update(assets)
+    .set({ ...next, updatedAt: at })
+    .where(and(eq(assets.id, id), isNull(assets.deletedAt)))
+    .returning()
+    .get();
+  return after ? { before, after } : undefined;
 }

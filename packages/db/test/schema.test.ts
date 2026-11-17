@@ -232,6 +232,10 @@ const COLUMNS: Record<string, string[]> = {
     "duration_ms integer",
     "has_audio integer",
     "poster_path text",
+    "result_path text",
+    "result_bytes integer",
+    "fixes_path text",
+    "fixes_bytes integer",
   ],
   asset_edges: [
     "parent_asset_id text not null pk1",
@@ -677,18 +681,18 @@ describe("boot (§8.2.4)", () => {
   });
 
   test("every migration is in the journal and applied, newest tag reported", () => {
-    expect(opened.schemaTag).toBe("0008_video");
-    expect(raw.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 9 });
+    expect(opened.schemaTag).toBe("0009_keep_rest");
+    expect(raw.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 10 });
   });
 
   test("reopening applies nothing twice", () => {
     const again = openDb(file);
-    expect(again.schemaTag).toBe("0008_video");
-    expect(again.db.$client.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 9 });
+    expect(again.schemaTag).toBe("0009_keep_rest");
+    expect(again.db.$client.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 10 });
     again.close();
   });
 
-  test("0003 to 0008 keep existing rows: Standard runs, real spend, no settings, no restarts, canvases, images", () => {
+  test("0003 to 0009 keep existing rows: Standard runs, real spend, no settings, no restarts, canvases, images", () => {
     // A library last opened at 0002, with a run and its usage row in it.
     const folder = join(dir, "migrations-0002");
     cpSync(MIGRATIONS_FOLDER, folder, { recursive: true });
@@ -744,11 +748,17 @@ describe("boot (§8.2.4)", () => {
 
     const upgraded = openDb(path);
     const db = upgraded.db.$client;
-    expect(upgraded.schemaTag).toBe("0008_video");
+    expect(upgraded.schemaTag).toBe("0009_keep_rest");
     // 0008: everything made before video is an image, with no length, sound or poster.
     expect(
       db.query("SELECT modality, duration_ms, has_audio, poster_path FROM assets WHERE id = 'asset1'").get(),
     ).toEqual({ modality: "image", duration_ms: null, has_audio: null, poster_path: null });
+    // 0009: edits made before the model's own result was kept have none.
+    expect(
+      db
+        .query("SELECT result_path, result_bytes, fixes_path, fixes_bytes FROM assets WHERE id = 'asset1'")
+        .get(),
+    ).toEqual({ result_path: null, result_bytes: null, fixes_path: null, fixes_bytes: null });
     expect(db.query("SELECT modality FROM job_sets").get()).toEqual({ modality: "image" });
     // 0007: runs made before agents existed were made by a person.
     expect(db.query("SELECT speed, cost_actual_usd, request_json, agent FROM job_sets").get()).toEqual({
@@ -847,8 +857,8 @@ describe("boot (§8.2.4)", () => {
 
     const upgraded = openDb(path);
     const db = upgraded.db.$client;
-    expect(upgraded.schemaTag).toBe("0008_video");
-    expect(db.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 9 });
+    expect(upgraded.schemaTag).toBe("0009_keep_rest");
+    expect(db.query("SELECT count(*) AS n FROM __drizzle_migrations").get()).toEqual({ n: 10 });
     expect(db.query("SELECT name FROM sqlite_master WHERE name = 'provider_batches'").get()).toEqual({
       name: "provider_batches",
     });
@@ -861,7 +871,7 @@ describe("boot (§8.2.4)", () => {
     upgraded.close();
     // And the next boot has nothing left to do.
     const again = openDb(path);
-    expect(again.schemaTag).toBe("0008_video");
+    expect(again.schemaTag).toBe("0009_keep_rest");
     again.close();
   });
 
