@@ -422,10 +422,67 @@ describe("falling back to the mask", () => {
     expect(d.weights).toEqual(exact(base));
   });
 
+  test("never for a small crisp change in a generous mask", () => {
+    const big: Box = { x: 100, y: 60, w: 300, h: 250 };
+    const patch: Box = { x: 230, y: 160, w: 30, h: 30 };
+    const m = made({
+      grain: 3,
+      tint: { gain: 1.03, offset: 3 },
+      mask: big,
+      paint: [{ box: patch, colour: [240, 20, 20] }],
+    });
+    const d = decideKeepRest(analyzeKeepRest(m.base, m.result, m.area), m.area, SETTINGS);
+    expect(d.fallback).toBeUndefined();
+    expect(everyIn(m, d.weights, patch, 2, (w) => w === 255)).toBe(true);
+    // The rest of the mask goes back to the original.
+    expect(at(m, d.weights, big.x + 20, big.y + 20)).toBe(0);
+  });
+
   test("when the shift is too large to be a small one", () => {
     const m = made({ move: { dx: 60, dy: 0 }, mask });
     const a = analyzeKeepRest(m.base, m.result, m.area);
     expect(a.fallback).toBe("no_match");
+  });
+});
+
+describe("a picture half flat", () => {
+  // A plain backdrop over a textured half: the calm tiles are the flat ones, so the noise reads
+  // low, and the textured half's grain mustn't flood in.
+  test("keeps only the change, at the default and above", () => {
+    const width = 512;
+    const height = 384;
+    const mask: Box = { x: 200, y: 240, w: 100, h: 80 };
+    const patch: Box = { x: 220, y: 255, w: 50, h: 40 };
+    const textured = made({
+      width,
+      height,
+      grain: 3,
+      tint: { gain: 1.04, offset: 4 },
+      mask,
+      paint: [{ box: patch, colour: [240, 20, 20] }],
+    });
+    const flatten = (img: PixelImage<Uint8Array>, value: number) => {
+      const data = new Uint8Array(img.data);
+      data.fill(value, 0, (height / 2) * width * 3);
+      return { ...img, data };
+    };
+    const base = flatten(textured.base, 180);
+    const result = flatten(textured.result, Math.round(180 * 1.04 + 4));
+    const analysis = analyzeKeepRest(base, result, textured.area);
+    for (const sensitivity of [50, 75]) {
+      const d = decideKeepRest(analysis, textured.area, { ...SETTINGS, sensitivity });
+      expect(d.fallback).toBeUndefined();
+      expect(everyIn(textured, d.weights, patch, 2, (w) => w === 255)).toBe(true);
+      let far = 0;
+      let kept = 0;
+      for (let y = 0; y < height; y++)
+        for (let x = 0; x < width; x++) {
+          if (inBox(x, y, { x: mask.x - 40, y: mask.y - 40, w: mask.w + 80, h: mask.h + 80 })) continue;
+          far++;
+          if (d.weights[y * width + x]! > 0) kept++;
+        }
+      expect(kept / far, `at ${sensitivity}`).toBeLessThan(0.01);
+    }
   });
 });
 

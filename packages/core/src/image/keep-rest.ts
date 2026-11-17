@@ -281,16 +281,21 @@ export function decideKeepRest(
   fillHoles(keep, aw, ah, minArea);
   const kept = dilate(keep, aw, ah);
 
-  // Next to nothing stood out, in the mask or anywhere: the edit was soft (a tint, a blur), and
-  // putting the original back would quietly undo it. A change beside the mask still counts, as
-  // when a model that edits the whole image puts the new thing next to it.
+  // Next to nothing stood out, in the mask or anywhere, and none of it clearly: the edit was soft
+  // (a tint, a blur), and putting the original back would quietly undo it. A change beside the
+  // mask still counts, as when a model that edits the whole image puts the new thing next to it,
+  // and a small crisp change in a big mask is a real edit, not a soft one.
   let inMask = 0;
   let keptAnywhere = 0;
+  let keptClear = 0;
   for (let i = 0; i < n; i++) {
     if (seeded[i]) inMask++;
-    if (kept[i]) keptAnywhere++;
+    if (!kept[i]) continue;
+    keptAnywhere++;
+    if (changedHigh[i]) keptClear++;
   }
-  if (inMask && keptAnywhere / inMask < KEEP_REST_LIMITS.minKeptInMask) return maskOnly("faint");
+  const faint = inMask && keptAnywhere / inMask < KEEP_REST_LIMITS.minKeptInMask && keptClear < MIN_TOUCHING;
+  if (faint) return maskOnly("faint");
 
   let farKept = 0;
   let far = 0;
