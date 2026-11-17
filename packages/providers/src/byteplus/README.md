@@ -85,7 +85,8 @@ Every error body is `{"error": {"code", "message"}}`, and a failed task carries 
 |---|---|
 | `AuthenticationError`, 401 | `auth_invalid` |
 | `ModelNotOpen` (404), `OperationDenied.ServiceNotOpen`, any other 403 | `auth_forbidden`, "Turn on {model} in BytePlus first, then try again." |
-| `InvalidEndpointOrModel.*` | `auth_forbidden`, "Your key can't use {model}." |
+| `InvalidEndpointOrModel.NotFound` (404) | `auth_forbidden`, "Turn on {model} in BytePlus first, then try again." Seen live on 2026-11-17: an account with no models turned on answers this for every model, Seedream and Seedance alike (fixture `seedream/not-found-live.json`). |
+| Other `InvalidEndpointOrModel.*` | `auth_forbidden`, "Your key can't use {model}." |
 | `AccountOverdueError` | `billing_required` |
 | `QuotaExceeded` (5-hour, weekly or monthly quota) | `quota_exceeded`, not retried |
 | `SetLimitExceeded` (Safe Experience Mode paused the model) | `quota_exceeded`, not retried: only the person can lift it |
@@ -103,7 +104,7 @@ Every error body is `{"error": {"code", "message"}}`, and a failed task carries 
 
 - The storage host of generated videos (see Hosts), and whether a 2.5 URL's 100-download limit matters for anything but retries.
 - The exact status and code a running task's DELETE answers (the fixture guesses 409 `InvalidParameter.TaskStatus`); anything that isn't retryable ends the cancel quietly, so the guess doesn't change behaviour.
-- Which code a not-yet-activated 2.x model answers with on this endpoint: the error page lists both `ModelNotOpen` (404) and `OperationDenied.ServiceNotOpen` (403), and both give the same tile.
+- Which code a not-yet-activated 2.x model answers with on this endpoint: the error page lists both `ModelNotOpen` (404) and `OperationDenied.ServiceNotOpen` (403), and both give the same tile. On images, an account with nothing turned on got `InvalidEndpointOrModel.NotFound` instead (2026-11-17), which now gives that tile too.
 - `limits.typicalLatencyMs` is a placeholder, not 10 measured runs. `maxConcurrent` is the model list's individual-account figure (3 on 2.x, 10 on 1.x).
 
 ## Seedream images
