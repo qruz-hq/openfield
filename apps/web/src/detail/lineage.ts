@@ -4,6 +4,7 @@ import {
   type CompositeSettings,
   compositeSettingsOf,
   editOpParamsSchema,
+  MASK_COMPOSITE_DEFAULTS,
   type ModelKey,
   maskInputSchema,
   t,
@@ -53,9 +54,15 @@ const editRecord = (asset: Pick<Asset, "opParams">) =>
 export function askedComposite(asset: Pick<Asset, "opParams" | "params">): CompositeSettings {
   const mask = maskInputSchema.safeParse(asset.params?.mask).data;
   if (mask) return compositeSettingsOf(mask);
-  const composite = editRecord(asset)?.composite;
+  const record = editRecord(asset);
+  const composite = record?.composite;
   return composite
-    ? { composite: composite.reason !== "off", expandPx: composite.expandPx, featherPx: composite.featherPx }
+    ? {
+        composite: composite.reason !== "off",
+        expandPx: composite.expandPx,
+        featherPx: composite.featherPx,
+        sensitivity: record.keepRest?.sensitivity ?? MASK_COMPOSITE_DEFAULTS.sensitivity,
+      }
     : compositeSettingsOf();
 }
 

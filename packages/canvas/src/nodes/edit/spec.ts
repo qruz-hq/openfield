@@ -1,5 +1,6 @@
 import {
   type CompositeSettings,
+  KEEP_REST_SENSITIVITY,
   MASK_COMPOSITE_DEFAULTS,
   MASK_COMPOSITE_MAX_PX,
   type Mark,
@@ -75,6 +76,11 @@ export interface EditParams {
   featherPx: number;
   /** Grow the mask by this many pixels first. */
   expandPx: number;
+  /**
+   * How readily the model's changes count as real while the rest is put back, 0 to 100. Unset is
+   * the default (50), so a node saved before it hashes as it always has.
+   */
+  sensitivity?: number;
   /** Unset: the model's default, as the chip shows. */
   resolution?: ResolutionTier;
   /** Unset: the model's default. */
@@ -227,7 +233,14 @@ const compositeOf = (p: EditParams): CompositeSettings => ({
   composite: p.keepOriginal,
   expandPx: p.expandPx,
   featherPx: p.featherPx,
+  sensitivity: p.sensitivity ?? MASK_COMPOSITE_DEFAULTS.sensitivity,
 });
+
+/** The sensitivity a node hashes with: only one moved off the default, so older nodes stay cached. */
+const hashedSensitivity = (p: EditParams) =>
+  p.sensitivity !== undefined && p.sensitivity !== MASK_COMPOSITE_DEFAULTS.sensitivity
+    ? { sensitivity: p.sensitivity }
+    : {};
 
 /**
  * The size, tier and quality an edit sends. "auto" asks for the base's shape, which the server reads
@@ -255,7 +268,7 @@ function fingerprintParams(node: EngineNode<EditParams>, ctx: EngineContext): Fi
   const keep = sketch ? !!p.sketchKeepOriginal : p.keepOriginal;
   const common = {
     prompt: p.prompt.trim(),
-    composite: keep ? { expandPx: p.expandPx, featherPx: p.featherPx } : false,
+    composite: keep ? { expandPx: p.expandPx, featherPx: p.featherPx, ...hashedSensitivity(p) } : false,
     providerOptions: p.providerOptions,
     // Only a node that sketches says so, so every node that paints hashes as it always has. The
     // marks as they're sent: a box drawn either way round is the same box.
@@ -376,7 +389,7 @@ export const editEngine: NodeEngine<EditParams> = {
     const marks = sketch && p.marks?.length ? p.marks.map(cornerFirst) : null;
     const settled = sketch
       ? marks && p.sketchKeepOriginal
-        ? { composite: true, expandPx: p.expandPx, featherPx: p.featherPx }
+        ? { ...compositeOf(p), composite: true }
         : null
       : mask.length > 0
         ? compositeOf(p)
@@ -492,7 +505,7 @@ export const editSpec: NodeSpec<EditParams> = {
   annotation: false,
   ports: EDIT_PORTS,
   portsOf: (node) => editPortsOf(node.params),
-  optionalSettings: ["mode", "marks", "sketchKeepOriginal"],
+  optionalSettings: ["mode", "marks", "sketchKeepOriginal", "sensitivity"],
   defaults: (ctx) => ({
     ...(ctx.defaultEditModel && { model: ctx.defaultEditModel }),
     prompt: "",
@@ -511,6 +524,15 @@ export const editSpec: NodeSpec<EditParams> = {
     keepOriginal: readBoolean(raw, "keepOriginal", MASK_COMPOSITE_DEFAULTS.composite),
     featherPx: readInt(raw, "featherPx", 0, MASK_COMPOSITE_MAX_PX, MASK_COMPOSITE_DEFAULTS.featherPx),
     expandPx: readInt(raw, "expandPx", 0, MASK_COMPOSITE_MAX_PX, MASK_COMPOSITE_DEFAULTS.expandPx),
+    ...(raw.sensitivity !== undefined && {
+      sensitivity: readInt(
+        raw,
+        "sensitivity",
+        KEEP_REST_SENSITIVITY.min,
+        KEEP_REST_SENSITIVITY.max,
+        KEEP_REST_SENSITIVITY.default,
+      ),
+    }),
     resolution: readResolution(raw.resolution),
     quality: readQuality(raw.quality),
     batch: readBatch(raw.batch, 1),

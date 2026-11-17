@@ -1,6 +1,7 @@
 import {
   BATCH_MAX,
   GENERATE_PROMPT_MAX,
+  KEEP_REST_SENSITIVITY,
   LAYERS_MAX,
   LAYERS_PROMPT_MAX,
   MASK_COMPOSITE_MAX_PX,
@@ -22,6 +23,7 @@ export const NODE_LIMITS = {
     batch: { min: 1, max: BATCH_MAX },
     featherPx: { min: 0, max: MASK_COMPOSITE_MAX_PX },
     expandPx: { min: 0, max: MASK_COMPOSITE_MAX_PX },
+    sensitivity: { min: KEEP_REST_SENSITIVITY.min, max: KEEP_REST_SENSITIVITY.max },
     // Sketch & point sends no references: every mark is on the image being edited.
     marks: { image: 1 },
   },
