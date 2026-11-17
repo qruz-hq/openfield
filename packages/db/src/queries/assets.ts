@@ -219,7 +219,10 @@ export function libraryStats(db: Executor): LibraryStats {
 export function replaceKeptFile(
   db: Executor,
   id: string,
-  next: Pick<AssetRow, "path" | "bytes" | "sha256" | "opParams" | "fixesPath" | "fixesBytes">,
+  next: Pick<
+    AssetRow,
+    "path" | "bytes" | "sha256" | "mime" | "width" | "height" | "opParams" | "fixesPath" | "fixesBytes"
+  >,
   at = nowIso(),
 ): { before: AssetRow; after: AssetRow } | undefined {
   const before = getAsset(db, id);

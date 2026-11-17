@@ -1,4 +1,4 @@
-import { closeSync, openSync, readSync } from "node:fs";
+import { closeSync, existsSync, openSync, readSync } from "node:fs";
 import {
   type Asset,
   assetFileUrl,
@@ -180,7 +180,7 @@ export class KeepRestService {
     const same = staged.sha256 === it.row.sha256;
     if (same) {
       ingest.discard(staged);
-      staged = { ...staged, path: it.row.path, bytes: it.row.bytes };
+      staged = { ...staged, path: it.row.path, bytes: it.row.bytes, mime: it.row.mime as StagedFile["mime"] };
     }
     const fixesStaged = keptFixes ? await this.#stage(keptFixes, "uploads") : undefined;
     const fixesPath = fixesStaged ? fixesStaged.path : fixes ? it.row.fixesPath : null;
@@ -209,6 +209,10 @@ export class KeepRestService {
         path: staged.path,
         bytes: staged.bytes,
         sha256: staged.sha256,
+        // A kept version is a PNG at the original's size, whatever the model sent.
+        mime: staged.mime,
+        width: staged.width,
+        height: staged.height,
         opParams: { ...it.row.opParams, edit: clean(edit) },
         fixesPath,
         fixesBytes,
@@ -297,6 +301,9 @@ export class KeepRestService {
         path: row.path,
         bytes: row.bytes,
         sha256: row.sha256,
+        mime: row.mime,
+        width: row.width,
+        height: row.height,
         opParams: { ...row.opParams, edit: clean(edit) },
         fixesPath: row.fixesPath,
         fixesBytes: row.fixesBytes,
@@ -335,12 +342,14 @@ export class KeepRestService {
     const edit = editOpParamsSchema.safeParse(row.opParams?.edit).data;
     if (!edit) return { ok: false, why: "not_an_edit", row };
     const keep = edit.keepRest;
-    if (!keep?.stored || !row.resultPath) return { ok: false, why: "not_stored", row };
+    // A file gone from disk (moved by hand, say) is as good as never kept.
+    if (!keep?.stored || !row.resultPath || !existsSync(this.deps.ingest.fileOf(row.resultPath)))
+      return { ok: false, why: "not_stored", row };
     if (row.deletedAt && !opts.trashed) return { ok: false, why: "in_trash", row };
     const base = row.parentAssetId ? getAsset(db, row.parentAssetId, { includeDeleted: true }) : undefined;
     if (!base) return { ok: false, why: "original_gone", row };
     const mask = row.maskAssetId ? getAsset(db, row.maskAssetId, { includeDeleted: true }) : undefined;
-    const marks = marksSchema.safeParse(row.params?.marks).data;
+    const marks = onBase(marksSchema.safeParse(row.params?.marks).data);
     // An edit with a mask needs it; Sketch & point without one needs its marks.
     if (keep.start === "mask" ? !mask : !mask && !marks) return { ok: false, why: "area_gone", row };
     return { ok: true, it: { row, edit, keep, base, mask, marks, resultPath: row.resultPath } };
@@ -537,6 +546,12 @@ async function canonicalFixes(
     .png({ compressionLevel: 9 })
     .toBuffer();
   return new Uint8Array(png);
+}
+
+/** The marks on the image being edited (1); those on references say nothing about its area. */
+function onBase(marks: Mark[] | undefined): Mark[] | undefined {
+  const mine = marks?.filter((m) => (m.image ?? 1) === 1);
+  return mine?.length ? mine : undefined;
 }
 
 /** The record without fields left undefined, so the stored JSON stays tidy. */

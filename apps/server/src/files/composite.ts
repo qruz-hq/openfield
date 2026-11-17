@@ -91,7 +91,9 @@ export async function compositeEdit(
   staged: StagedFile,
 ): Promise<CompositeOutcome | undefined> {
   const { base, mask } = call;
-  const marks = call.marks?.length ? call.marks : undefined;
+  // Only marks on the image being edited (1) say where it changes; others are on references.
+  const onBase = call.marks?.filter((m) => (m.image ?? 1) === 1);
+  const marks = onBase?.length ? onBase : undefined;
   if (
     !base ||
     (!mask && !marks) ||

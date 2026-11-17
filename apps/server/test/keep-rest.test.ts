@@ -268,6 +268,8 @@ describe("adjusting an edit in place", () => {
     // The file changed in place, so its URLs changed with it.
     expect(out.asset.fileUrl).toMatch(/\?v=[0-9a-f]{12}$/);
     expect(out.asset.thumbUrl).toMatch(/&v=[0-9a-f]{12}$/);
+    for (const url of [out.asset.fileUrl, out.asset.thumbUrl])
+      expect((await server.request(url)).status, url).toBe(200);
     expect(out.asset.sha256).not.toBe(edit.sha256);
     const afterPath = getAsset(server.services.db, edit.id)!.path;
     expect(server.events.slice(events).some((e) => e.event === "asset.updated")).toBe(true);
@@ -395,6 +397,10 @@ describe("adjusting an edit in place", () => {
     expect(out.state).toMatchObject({ keep: true, revision: 1 });
     const row = getAsset(server.services.db, edit.id)!;
     expect(row.path).not.toBe(row.resultPath);
+    // Filed at the model's size; now the original's, as a PNG.
+    expect(edit.width).toBe(768);
+    expect(row).toMatchObject({ width: W, height: H, mime: "image/png" });
+    expect(out.asset).toMatchObject({ width: W, height: H, mime: "image/png" });
     // The model's result, which was the edit's file, stays.
     expect(existsSync(server.services.ingest.fileOf(row.resultPath!))).toBe(true);
     const made = await pixelsOf(fileOfRow(edit.id));
@@ -431,6 +437,7 @@ describe("a Sketch & point edit", () => {
 
     const out = keepRestApplyResponseSchema.parse((await apply(edit.id, { keep: true })).body);
     expect(out.state).toMatchObject({ keep: true, start: "marks", revision: 1 });
+    expect(getAsset(db(), edit.id)).toMatchObject({ width: W, height: H, mime: "image/png" });
     const base = await pixelsOf(baseBytes);
     const made = await pixelsOf(fileOfRow(edit.id));
     expect(made.at(200, 140)).toEqual(RED);
