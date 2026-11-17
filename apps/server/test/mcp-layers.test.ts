@@ -75,11 +75,14 @@ describe("Layers nodes", () => {
     const types = j(await call(c, "list_node_types")).types as Json[];
     const layers = types.find((t) => t.type === "image.layers")!;
     expect(layers.inputs).toEqual([{ port: "image", takes: "image", required: true }]);
-    expect(layers.outputs[0]).toEqual({ port: "layer-16", gives: "image" });
+    expect(layers.outputs).toEqual([
+      { port: "layer-N (N 1 to 99)", gives: "image" },
+      { port: "base", gives: "image" },
+    ]);
     expect(layers.outputs.at(-1)).toEqual({ port: "base", gives: "image" });
     expect(layers.outputsNote).toContain('"layer-N"');
-    expect(Object.keys(layers.settings)).toEqual(["model", "prompt", "size"]);
-    expect(layers.limits).toEqual({ prompt: { maxChars: 4000 } });
+    expect(Object.keys(layers.settings)).toEqual(["model", "prompt", "size", "maxLayers"]);
+    expect(layers.limits).toEqual({ prompt: { maxChars: 4000 }, maxLayers: { min: 1, max: 99 } });
     const edit = types.find((t) => t.type === "image.edit")!;
     expect(Object.keys(edit.settings)).toContain("marks");
   });
@@ -99,7 +102,7 @@ describe("Layers nodes", () => {
       ],
     });
     expect(vague.isError).toBe(true);
-    expect(vague.text).toContain("Say which one: layer-1 to layer-16, or base.");
+    expect(vague.text).toContain("Say which one: layer-1 to layer-99, or base.");
   });
 
   test("run_canvas splits the image, and get_canvas lists its layers by name", async () => {

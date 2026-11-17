@@ -355,7 +355,7 @@ describe("listings by modality", () => {
     // BytePlus's Seedream models are images; its Seedance models only list as videos.
     expect(images.body.models.every((m) => m.modality === "image")).toBe(true);
     expect(images.body.models.filter((m) => m.providerId === "byteplus").map((m) => m.family)).toEqual(
-      Array(5).fill("Seedream"),
+      Array(6).fill("Seedream"),
     );
 
     const videos = await server.json<ModelsListResponse>("/api/models?modality=video");

@@ -11,6 +11,7 @@ test.describe.configure({ mode: "serial" });
 test.use({ colorScheme: "dark" });
 
 const PRO = "byteplus:dola-seedream-5-0-pro-260628";
+const V55 = "byteplus:dola-seedream-5-5-261028";
 
 interface Stack {
   runId: string;
@@ -28,12 +29,18 @@ async function source(page: Page): Promise<{ token: string; id: string }> {
 }
 
 /** Splits an image through the API and waits for its stack. */
-async function split(page: Page, token: string, image: string): Promise<Stack> {
+async function split(
+  page: Page,
+  token: string,
+  image: string,
+  extra: Record<string, unknown> = { model: PRO },
+): Promise<Stack> {
   const accepted = await api<{ jobSet: { id: string } }>(page.request, token, "POST", "/api/layers", {
     idempotencyKey: newId(),
     model: PRO,
     image,
     size: "1K",
+    ...extra,
   });
   await expect
     .poll(
@@ -148,6 +155,8 @@ test("an image splits from the Layers tab: Start, Separating, then the stack", a
   const dialog = page.getByRole("dialog", { name: "Image details" });
   const panel = dialog.getByRole("tabpanel", { name: "Layers" });
   await expect(panel.getByText("Split into layers")).toBeVisible({ timeout: 15_000 });
+  // Seedream 5.5 comes first; this is the design drawn for 5.0 Pro.
+  await pickModel(page, panel, "Seedream 5.0 Pro");
 
   // Start (Y9i4rJZWjE)
   await settled(page);
@@ -478,4 +487,120 @@ test("the split image's Info tab lists its layers and opens them", async ({ page
   await dialog.getByRole("tab", { name: "Info" }).click();
   await thumbs.first().click();
   await expect(dialog.getByText("Layer 1 of 3 · Layer 3")).toBeVisible();
+});
+
+/** Picks a model in the Layers tab's Model field. */
+async function pickModel(page: Page, panel: Locator, name: string) {
+  await panel.getByRole("button", { name: "Model" }).click();
+  await page.getByRole("option", { name: new RegExp(`^${name.replace(/\./g, "\\.")}`) }).click();
+  await expect(panel.getByRole("button", { name: "Model" })).toContainText(name);
+}
+
+test("Seedream 5.5 asks how many layers at most, and the price follows the number", async ({ page }) => {
+  const { id } = await source(page);
+  let sent: Record<string, unknown> | undefined;
+  await page.route("**/api/layers", async (route) => {
+    if (route.request().method() === "POST") sent = route.request().postDataJSON();
+    await route.continue();
+  });
+  await page.goto(`/assets?asset=${id}&tab=layers`);
+  const panel = page.getByRole("dialog", { name: "Image details" }).getByRole("tabpanel", { name: "Layers" });
+  await expect(panel.getByText("Split into layers")).toBeVisible({ timeout: 15_000 });
+  await pickModel(page, panel, "Seedream 5.5");
+  await settled(page);
+
+  // Most layers: the Edit tab's Images row, value for value (a 13/500 label, the 38 tall stepper).
+  const label = panel.getByText("Most layers", { exact: true });
+  await expect(label).toBeVisible();
+  const row = label.locator("..");
+  expect(await drawn(row)).toMatchObject({
+    padding: "0px 2px 0px 2px",
+    justify: "space-between",
+    align: "center",
+  });
+  expect(await font(label)).toMatch(/^Inter 13px\/\S+ 500 /);
+  const stepper = panel.getByRole("group", { name: "Most layers" });
+  expect(await drawn(stepper)).toMatchObject({
+    h: 38,
+    radius: "10px",
+    padding: "0px 4px 0px 4px",
+    gap: "2px",
+  });
+  await expect(stepper.locator("output")).toHaveText("16");
+  expect(await font(stepper.locator("output"))).toMatch(/^JetBrains Mono 13px\/\S+ 400 /);
+
+  // The price box has the image sent in on a row of its own, and the most reads 16.
+  await expect(panel.getByText("The image you're splitting")).toBeVisible();
+  await expect(panel.getByText("The image you're splitting").locator("+ span")).toHaveText("$0.008");
+  await expect(panel.getByText("Up to 16 layers")).toBeVisible();
+  const separate = panel.getByRole("button", { name: /^Separate layers/ });
+  const before = await separate.textContent();
+
+  for (let i = 0; i < 4; i++) await stepper.getByRole("button", { name: "More layers" }).click();
+  await expect(stepper.locator("output")).toHaveText("20");
+  await expect(panel.getByText("Up to 20 layers")).toBeVisible();
+  await expect(panel.getByText("Up to 16 layers")).toHaveCount(0);
+  expect(await separate.textContent()).not.toBe(before);
+
+  // It goes out as maxLayers; more than 16 come back.
+  await panel.getByRole("textbox", { name: "What to separate" }).fill("#fake-layers:20");
+  await separate.click();
+  await expect(panel.getByText("20 layers and a base")).toBeVisible({ timeout: 20_000 });
+  expect(sent).toMatchObject({ model: V55, image: id, maxLayers: 20 });
+  const list = panel.getByRole("list", { name: "Layers, top first" });
+  await expect(list.locator("li")).toHaveCount(21);
+  // The list scrolls inside the tab rather than growing the view.
+  const scroller = await panel.evaluate((node) => ({
+    overflow: getComputedStyle(node).overflowY,
+    scrolls: node.scrollHeight > node.clientHeight,
+  }));
+  expect(scroller).toEqual({ overflow: "auto", scrolls: true });
+});
+
+test("Pro and Flash keep their fixed 16, with no Most layers", async ({ page }) => {
+  const { id } = await source(page);
+  await page.goto(`/assets?asset=${id}&tab=layers`);
+  const panel = page.getByRole("dialog", { name: "Image details" }).getByRole("tabpanel", { name: "Layers" });
+  await expect(panel.getByText("Split into layers")).toBeVisible({ timeout: 15_000 });
+  for (const name of ["Seedream 5.0 Pro", "Seedream 5.0 Flash"]) {
+    await pickModel(page, panel, name);
+    await expect(panel.getByText("Up to 16 layers")).toBeVisible();
+    await expect(panel.getByText("Most layers", { exact: true })).toHaveCount(0);
+    await expect(panel.getByText("The image you're splitting")).toHaveCount(0);
+  }
+});
+
+test("a text layer's row shows the words on it, with their colour and font", async ({ page }) => {
+  const { token, id } = await source(page);
+  const stack = await split(page, token, id, { model: V55, maxLayers: 4, prompt: "#fake-layers:4" });
+  expect(stack.layers).toHaveLength(5);
+  await page.goto(`/assets?asset=${id}&tab=layers`);
+  const panel = page.getByRole("dialog", { name: "Image details" }).getByRole("tabpanel", { name: "Layers" });
+  const list = panel.getByRole("list", { name: "Layers, top first" });
+  await expect
+    .poll(() => rowNames(list), { timeout: 15_000 })
+    .toEqual(["Layer 4", "Layer 3", "Layer 2", "Layer 1", "Base"]);
+  const top = list.locator("[data-layer-row]").filter({ hasText: "Layer 4" });
+  const words = top.getByText("\u201cPresented By : Anna Katrina Marchesi\u201d");
+  await expect(words).toBeVisible();
+  await expect(words).toHaveAttribute("title", "Words on this layer: Presented By :\nAnna Katrina Marchesi");
+  expect(await font(words)).toMatch(/^Inter 12px\/\S+ 400 /);
+  const look = top.getByText("Helvetica Neue · #193366");
+  await expect(look).toBeVisible();
+  expect(await font(look)).toMatch(/^Inter 12px\/\S+ 400 /);
+  const swatch = look.locator("xpath=preceding-sibling::span[1]");
+  expect(await drawn(swatch)).toMatchObject({ w: 8, h: 8, background: "rgb(25, 51, 102)" });
+  // A layer with no words keeps its description.
+  await expect(list.locator("[data-layer-row]").filter({ hasText: "Layer 3" })).toContainText(
+    "Part 3 of the picture",
+  );
+  // The API hands back the same words, line by line.
+  const read = await api<{ layers: { zIndex: number; text: { lines: unknown[] } | null }[] }>(
+    page.request,
+    token,
+    "GET",
+    `/api/layers/${stack.runId}`,
+  );
+  expect(read.layers.find((l) => l.zIndex === 4)?.text?.lines).toHaveLength(2);
+  expect(read.layers.filter((l) => l.text)).toHaveLength(1);
 });

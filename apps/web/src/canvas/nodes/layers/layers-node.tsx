@@ -27,6 +27,7 @@ import {
   Lock,
 } from "lucide-react";
 import { memo, useMemo } from "react";
+import { LayerTextLook, LayerWords } from "../../../detail/layers/layer-text";
 import { useNodeAnalysis } from "../../engine/engine-store";
 import { useCanvas, useNodeResult, useNodeRuntime, useReadOnly } from "../../store/context";
 import { CardImage, CardPill, type CardPillProps } from "../generate/card";
@@ -272,9 +273,13 @@ function MediaMessage({ id, display, model }: { id: string; display: NodeDisplay
   return message ? <div className="of-layers-message">{message}</div> : null;
 }
 
-/** Output · {name} (oH1BxKKt3A): a 28 thumb, the name and the model's description, one line each. */
+/**
+ * Output · {name} (oH1BxKKt3A): a 28 thumb, the name and the model's description, one line each. A
+ * text layer shows its words, colour and font in place of the description.
+ */
 function LayerRow({ port, made }: { port: PortSpec; made: CanvasOutput | undefined }) {
   const image = port.gone ? null : (made?.assetId ?? null);
+  const words = port.gone ? undefined : made?.layer?.text;
   // The model's description, or for a plain base what it is; a place the last run didn't make says so.
   const description = port.gone
     ? t("canvas.nodes.layers.gone")
@@ -290,7 +295,12 @@ function LayerRow({ port, made }: { port: PortSpec; made: CanvasOutput | undefin
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-1">
         <span className="truncate text-caption font-medium text-text-primary">{port.name}</span>
-        {description ? (
+        {words ? (
+          <span className="flex w-full min-w-0 items-center gap-6 text-micro text-text-tertiary">
+            <LayerWords text={words} className="min-w-0 text-text-secondary" />
+            <LayerTextLook text={words} hex={false} className="shrink-0" />
+          </span>
+        ) : description ? (
           <span className="truncate text-micro text-text-tertiary" title={description}>
             {description}
           </span>

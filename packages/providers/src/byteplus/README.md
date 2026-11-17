@@ -109,7 +109,7 @@ Every error body is `{"error": {"code", "message"}}`, and a failed task carries 
 
 ## Seedream images
 
-Five image models on the same key, read from BytePlus's docs on 2026-11-09 (sections expanded, official pages only). **Nothing here has run live yet**: every value is from these pages, and the list at the end says what a first live run has to confirm.
+Six image models on the same key, read from BytePlus's docs on 2026-11-09, and Seedream 5.5 from its own tutorial and the pricing page on 2026-11-17 (sections expanded, official pages only). **Nothing here has run live yet**: every value is from these pages, and the list at the end says what a first live run has to confirm.
 
 Sources:
 
@@ -118,7 +118,8 @@ Sources:
 - Image generation tutorial (size tables, capability table): <https://docs.byteplus.com/en/docs/modelark/image-generation-tutorial>
 - Seedream 5.0 pro / flash tutorial (layers, sketch edits): <https://docs.byteplus.com/en/docs/modelark/seedream-5-0-pro>
 - Seedream 5.0 pro / flash interactive editing guide (`<point>`, `<bbox>`): <https://docs.byteplus.com/en/docs/modelark/seedream-5-0-pro-editing-guide>
-- Pricing: <https://docs.byteplus.com/en/docs/modelark/model-pricing>
+- Dola Seedream 5.5 tutorial (transparent images, up to 99 layers, `max_images`, `text_recognition`; updated 2026-11-13): <https://docs.byteplus.com/en/docs/modelark/seedream-5-5>
+- Pricing: <https://docs.byteplus.com/en/docs/modelark/model-pricing> (5.5's rows read from <https://docs.byteplus.com/en/docs/ModelArk/1099320> on 2026-11-17)
 - Error codes: <https://docs.byteplus.com/en/docs/modelark/error-codes>
 
 ### Endpoint
@@ -129,25 +130,29 @@ Sources:
 
 | Model | Id | Tiers | Inputs | Formats | Related sets | Fast | Marks and layers |
 |---|---|---|---|---|---|---|---|
+| Seedream 5.5 | `dola-seedream-5-5-261028` | 1K, 1.5K, 2K | 10 | PNG (its default), JPEG | no | no | yes, up to 99 layers with their text, and transparent backgrounds from words or any references |
 | Seedream 5.0 Pro | `dola-seedream-5-0-pro-260628` | 1K, 1.5K, 2K | 10 | PNG, JPEG | no | yes | yes, and transparent backgrounds |
 | Seedream 5.0 Flash | `dola-seedream-5-0-flash-260915` | 1K, 1.5K, 2K | 10 | PNG, JPEG | no | no | yes, and transparent backgrounds |
 | Seedream 5.0 Lite | `seedream-5-0-260128` (also `seedream-5-0-lite-260128`) | 2K, 3K, 4K | 14 | PNG, JPEG | yes | no | no |
 | Seedream 4.5 | `seedream-4-5-251128` | 2K, 4K | 14 | JPEG only | yes | no | no |
 | Seedream 4.0 | `seedream-4-0-250828` | 1K, 2K, 4K | 14 | JPEG only | yes | yes | no |
 
-- Region: everything here is on ap-southeast-1, the base Openfield calls. Pro and Flash are only there; Lite is also on eu-west-1, which Openfield doesn't use. Keys and model activation are kept apart per region at BytePlus.
+- Region: everything here is on ap-southeast-1, the base Openfield calls. 5.5, Pro and Flash are only there; Lite is also on eu-west-1, which Openfield doesn't use. Keys and model activation are kept apart per region at BytePlus.
 - SeedEdit 3.0 (`seededit-3-0-i2i-250628`) is on the pricing page only, not on the model list or the API page, so it's left out.
 - Prompts: the API page asks for at most 600 English words (300 Chinese characters). Pro and Flash also read 14 more languages.
-- Seedance stays first in the catalog: `catalog()[0]` is what the conformance suite takes as the company's sample model.
-- Fields a model doesn't list are **never sent** (4.5 and 4.0 get no `output_format`, Pro and Flash no `sequential_image_generation` or `stream`, Flash no fast mode): whether BytePlus ignores or refuses them isn't documented. The fake (`src/testing/byteplus-images.ts`) refuses them, so the conformance suite catches a manifest that offers too much.
-- Sizes: `seedream.ts` holds each tier's exact WxH per ratio (the tutorial's tables), sent as `"WxH"`. `auto` sends the tier alone and lets the model pick the shape (the docs' Method 1). Exact sizes are checked against each model's pixel range and the 1:16 ratio limit.
+- Seedance stays first in the catalog: `catalog()[0]` is what the conformance suite takes as the company's sample model. Among the Seedream models 5.5 comes first, so it's the one a Layers tab or node starts on when the default model can't split.
+- Fields a model doesn't list are **never sent** (4.5 and 4.0 get no `output_format`, 5.5, Pro and Flash no `sequential_image_generation` or `stream`, 5.5 and Flash no fast mode, only 5.5 `layer_decomposition_options`): whether BytePlus ignores or refuses them isn't documented. The fake (`src/testing/byteplus-images.ts`) refuses them, so the conformance suite catches a manifest that offers too much.
+- Sizes: `seedream.ts` holds each tier's exact WxH per ratio (the tutorial's tables), sent as `"WxH"`. 5.5's tutorial gives Pro's tiers and pixel range (1280×720 to 2048×2048×1.1025) but no table of its own, so it uses Pro's. `auto` sends the tier alone and lets the model pick the shape (the docs' Method 1). Exact sizes are checked against each model's pixel range and the 1:16 ratio limit.
 - Inputs: PNG, JPEG or WebP data URLs, under 30 MB, sides over 14 px, at most 36 million pixels, within 1:16. The edited image goes first (Image 1), then the references in order.
 - No seed (it isn't a parameter of this API). A negative prompt is folded into the prompt by Openfield.
 - **Fast** is BytePlus's fast prompt optimizer (`optimize_prompt_options.mode: "fast"`). Openfield has no speed id for it, so it rides on the Priority id, labelled "Fast" in the company's Speed setting, at the Standard price (the pricing page charges nothing for it). The docs list it on Pro and 4.0 only. The id is stored as `priority` on job sets and usage rows, but people and agents only ever see "Fast": every surface names a speed through `speedLabel` or `speedName` (the model's offer label, then the company's Speed option), and the canvas's stock Priority note ("Costs more") is skipped when the company names the speed itself.
 - **Related sets** (Lite, 4.5, 4.0): by default a count of 4 is four calls of one image, so a moderated image fails on its own. Turning on Related set in the composer's Images chip (`providerOptions.relatedSet`, from a count of 2) sends one call with `sequential_image_generation: "auto"` and `max_images` up to the count, within "inputs plus outputs at most 15". The model may make fewer: those images fail one by one with "made fewer images than you asked for", and the estimate is a range from one image to the count. A moderated image in a set comes back as `data[].error`, and only that image fails.
 - **Transparent backgrounds** (Pro, Flash): only an edit of exactly one PNG with an alpha channel, sent with `background: "transparent"` and PNG out. Anything else is refused before it's sent.
+- **Transparent backgrounds** (5.5): from words alone (no `image`), or from up to 10 references of any kind, none needing an alpha channel. Always PNG out: JPEG with `transparent` is an error. 5.5's own default is `background: "auto"` (the model decides), so Opaque is sent as `"opaque"`; on Pro and Flash opaque is the default and nothing is sent. Never sent on a separation, where BytePlus answers it with an error.
 
-### Marks (Pro, Flash)
+### Marks (5.5, Pro, Flash)
+
+5.5's interactive editing "uses the same workflow as Seedream 5.0 pro / flash", so it takes the same marks.
 
 There's no mask or sketch parameter: everything goes in the image and the prompt (`marks.ts`, pure).
 
@@ -157,9 +162,11 @@ There's no mask or sketch parameter: everything goes in the image and the prompt
 - Marks add to the prompt: 20 marks with long notes can pass the 600-word guidance. Nothing trims them.
 - A masked edit still works (it's a whole-image edit, then the composite puts the original back outside the mask), but with marks the composite is off by default, since marks don't say where the edit ends.
 
-### Layers (Pro, Flash)
+### Layers (5.5, Pro, Flash)
 
 A separation (`op: "decompose"`) sends one PNG or JPEG of at least 512×512 pixels with `layer_decomposition: true` and a resolution level (`auto`, 1K, 1.5K, 2K; `auto` keeps the image's size within the model's range). It answers a base (`z_index` 0, the whole canvas) and up to 16 layers, each a **cropped** PNG with its own `bounding_box` (`absolute` pixels on the base, and `normalized` 0 to 1000), a `name` and a `description`. If any layer fails, the whole call fails ("Partial success is not supported").
+
+**5.5** makes a base and up to 99 layers. `layer_decomposition_options.max_images` sets the most images it answers, base included (2 to 100, BytePlus's default 30). Openfield asks for a number of layers, 1 to 99, 16 unless the person picks another (the Most layers stepper in the Layers tab and on a canvas Layers node, `maxLayers` on `POST /api/layers`, `separate_layers` and the node's settings), and sends that number plus one. Pro and Flash take no number: they make up to 16. Every 5.5 separation also sends `text_recognition: true`: a plain text layer then answers `data[].text_recognition` with its whole text (lines split by `\n`), each line's box (`absolute` pixels on the base and `normalized` 0 to 1000) and its runs, each with an approximate `similar_font_family` (`"unknown"` when unsure, which Openfield drops), `foreground_color` (`#RRGGBB`) and bold, italic, underline, strikethrough, shadow and translucent flags. Base images, other layers, artistic and handwritten text have none. Openfield keeps it on the layer as `opParams.layer.text`, trimmed to 4,000 characters, 100 lines and 20 runs a line so a long poster can't make the layer unreadable. It's shown read only beside the layer, returned by `GET /api/layers/:runId` and over MCP, written into `stack.json` in a ZIP export, and carried in short (the text, the first font and colour) on a canvas Layers node's outputs. A PSD export keeps pixels only: no editable text layers.
 
 Every image of a separation is a library image derived from the image separated. The base is the job's own image; each layer is filed beside it in the same transaction, and `opParams.layer` records its role, `zIndex`, the canvas size, its box in pixels (from `absolute`, falling back to `normalized`), its box on the 0 to 1000 grid, its name and its description. One usage row carries the whole call. The server reads a stack back by its run id, flattens it into one image (op `overlay`, made locally, free) and exports it as a zip of PNGs with `stack.json` or as a PSD.
 
@@ -169,17 +176,18 @@ Every image of a separation is a library image derived from the image separated.
 
 | Model | Each image | Input images |
 |---|---|---|
+| Seedream 5.5 | $0.020 up to 2,601,123.84 pixels (1K, 1.5K), $0.035 above, up to 4,624,220.16 (2K). Layers: the same two rates, each image by its own pixels | $0.008 each, none free |
 | Seedream 5.0 Pro | $0.045 up to 2.61 million pixels (1K, 1.5K), $0.09 above (2K). Layers: $0.0225 and $0.045 on the same line | first free, then $0.003 each |
 | Seedream 5.0 Flash | $0.018 (layers assumed the same) | free |
 | Seedream 5.0 Lite | $0.035 | free |
 | Seedream 4.5 | $0.04 | free |
 | Seedream 4.0 | $0.03 | free |
 
-A separation's estimate runs from a base and one layer to a base and 16 (17 images): at Pro 2K that's $0.09 to $0.765.
+A separation's estimate runs from a base and one layer to a base and 16 (17 images): at Pro 2K that's $0.09 to $0.765. On 5.5 it runs to the number of layers asked for, plus the $0.008 image sent in: at 2K with the default 16 that's $0.078 to $0.603, and with 99 up to $3.508. Pixels are whole numbers, so 5.5's line is held at 2,601,123.
 
 ### Errors
 
-The same envelope and table as Seedance. The ones to expect here: `ModelNotOpen` and `OperationDenied.ServiceNotOpen` ("Turn on {model} in BytePlus first"), `ModelAccountIpmRateLimitExceeded` (429, 500 images a minute per model; a separation reserves 17) as `rate_limited`, `QuotaExceeded` (a used-up free trial) as `quota_exceeded`, `OutputImageSensitiveContentDetected` as `content_refused`. A separation that fails on BytePlus's side says "couldn't separate this image into layers".
+The same envelope and table as Seedance. The ones to expect here: `ModelNotOpen` and `OperationDenied.ServiceNotOpen` ("Turn on {model} in BytePlus first"), `ModelAccountIpmRateLimitExceeded` (429, 500 images a minute per model; a separation reserves 17, and on 5.5 it reserves `max_images` and gives back what it didn't make) as `rate_limited`, `QuotaExceeded` (a used-up free trial) as `quota_exceeded`, `OutputImageSensitiveContentDetected` as `content_refused`. A separation that fails on BytePlus's side says "couldn't separate this image into layers".
 
 ### Unconfirmed until a live run
 
@@ -191,7 +199,10 @@ The same envelope and table as Seedance. The ones to expect here: `ModelNotOpen`
 - What a `<point>` or `<bbox>` value of 1000 does (Openfield never sends one), and what a prompt past 600 words does (many marks with long notes can get there).
 - Whether BytePlus reads EXIF orientation. Openfield sends every marked image upright either way, so the marks land where they were placed.
 - Whether a fresh account has a free quota per model (`QuotaExceeded` suggests so), and whether Pro and Flash need turning on in the console by hand.
-- `limits.typicalLatencyMs` is a placeholder. `maxConcurrent` is 4 per model, and the scheduler counts runs at once per company, so Seedance and Seedream share BytePlus's slots.
+- `limits.typicalLatencyMs` is a placeholder. `maxConcurrent` is 4 per model, and the scheduler counts runs at once per company, so Seedance and Seedream share BytePlus's slots. A 5.5 separation gets 10 minutes rather than 5, since it can make 100 images; how long one takes isn't known.
+- 5.5's price for a layer under 921,600 pixels: the pricing table starts there, and cropped layers are often smaller. Assumed $0.020, its lower rate.
+- Whether 5.5's `max_images` counts the base as documented ("the total number of base image and layers"), so that 17 brings a base and at most 16 layers.
+- 5.5's exact sizes per ratio (Pro's table is assumed), whether it reports `usage.input_images` as Pro does (the adapter falls back to the images it sent), and whether `text_recognition` comes back the same with `b64_json` (the docs only show URLs).
 
 ## Fixtures
 

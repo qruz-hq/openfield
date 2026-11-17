@@ -42,6 +42,8 @@ interface LayersState {
   promptFor: string | null;
   model: ModelKey | null;
   size: LayerSize | null;
+  /** The most layers, on models that take a number. Null: the model's default. */
+  maxLayers: number | null;
 }
 
 export const useLayers = create<LayersState>()(() => ({
@@ -51,6 +53,7 @@ export const useLayers = create<LayersState>()(() => ({
   promptFor: null,
   model: null,
   size: null,
+  maxLayers: null,
 }));
 
 const followers = new Map<string, RunFollower>();

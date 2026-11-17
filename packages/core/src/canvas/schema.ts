@@ -16,7 +16,7 @@ import {
   ulidSchema,
   usdSchema,
 } from "../schemas/common";
-import { layerOpParamsSchema } from "../schemas/layers";
+import { layerOpParamsSchema, layerTextSummarySchema } from "../schemas/layers";
 import { sizeSpecSchema } from "../schemas/request";
 
 // The canvas document (§7.8). One JSON object per canvas: the canvases.graph column, the
@@ -48,8 +48,14 @@ export const canvasOutputSchema = z.object({
   call: z.int().nonnegative().optional(),
   /** Which fanned-out input it came from. */
   source: z.int().nonnegative().optional(),
-  /** A Layers node's base or layer: where it sits in the stack and what the model called it. */
-  layer: layerOpParamsSchema.pick({ role: true, zIndex: true, name: true, description: true }).optional(),
+  /**
+   * A Layers node's base or layer: where it sits in the stack and what the model called it. A text
+   * layer keeps a short summary of its words here; the full lines stay on the image.
+   */
+  layer: layerOpParamsSchema
+    .pick({ role: true, zIndex: true, name: true, description: true })
+    .extend({ text: layerTextSummarySchema.optional() })
+    .optional(),
 });
 
 export const canvasNodeResultSchema = z.object({

@@ -1,16 +1,22 @@
 import {
   type Asset,
   type AssetDetailResponse,
+  type AssetListItem,
+  type CostEstimate,
   DEFAULT_CURRENCY,
   formatLocale,
+  formatPrice,
   type LayerBox,
   type LayerOpParams,
+  type LayerSize,
   type LayerStackResponse,
   layerOpParamsSchema,
   type ModelListItem,
   type StackEntry,
   type StackLayer,
+  t,
 } from "@openfield/core";
+import { chosenLayers, estimate, layerOutputs, priceFor } from "@openfield/providers/manifest";
 
 // A layer stack as the Layers tab shows it, and what it sends back. The server lists a stack bottom
 // up with the base first; the tab lists it top first with the base pinned at the bottom, the way
@@ -137,3 +143,57 @@ export const formatRate = (amount: number, currency: string = DEFAULT_CURRENCY) 
     minimumFractionDigits: 2,
     maximumFractionDigits: 4,
   }).format(amount);
+
+export interface Pricing {
+  estimate: CostEstimate;
+  /** One image's rate, the base's and each layer's. */
+  rate: string;
+  /** What the image sent in costs, on models that charge for it. */
+  input: string | null;
+  /** The most layers, besides the base. */
+  most: number;
+  atMost: string;
+}
+
+/**
+ * What a split of this image costs: the range for the button, the rates for the price box. An
+ * image whose size isn't known yet (a canvas input still to be made) is priced over every rate.
+ * `maxLayers` is the most asked for, on models that take a number.
+ */
+export function pricingOf(
+  model: ModelListItem,
+  image: Pick<AssetListItem, "id"> & Partial<Pick<AssetListItem, "width" | "height">>,
+  size: LayerSize,
+  maxLayers?: number,
+): Pricing | null {
+  const price = priceFor(model, "standard");
+  if (price.kind !== "per_image" || !price.decompose) return null;
+  const most = chosenLayers(model.capabilities.layers, maxLayers);
+  const layers = { size, ...(most !== undefined && { maxLayers: most }) };
+  const outputs = layerOutputs(model, price, { layers });
+  const cost = estimate(model, {
+    batch: 1,
+    op: "decompose",
+    base: { assetId: image.id, role: "base" },
+    layers,
+    ...(image.width && image.height && { inputImageSizes: [{ width: image.width, height: image.height }] }),
+    speed: "standard",
+  });
+  if (cost.confidence === "unknown") return null;
+  // The one image sent in is in the estimate; the rates are for what comes out.
+  const rule = price.inputImage;
+  const input = rule && "usd" in rule ? Math.max(0, 1 - rule.freePerCall) * rule.usd : 0;
+  const low = (cost.min - input) / outputs.min;
+  const high = (cost.max - input) / outputs.max;
+  const rate =
+    formatRate(low, cost.currency) === formatRate(high, cost.currency)
+      ? formatRate(low, cost.currency)
+      : t("cost.range", { min: formatRate(low, cost.currency), max: formatRate(high, cost.currency) });
+  return {
+    estimate: cost,
+    rate,
+    input: input > 0 ? formatRate(input, cost.currency) : null,
+    most: outputs.max - 1,
+    atMost: t("layers.price.atMost", { cost: formatPrice(cost.max, cost.currency) }),
+  };
+}

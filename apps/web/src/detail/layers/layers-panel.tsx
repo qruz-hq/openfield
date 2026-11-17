@@ -1,15 +1,15 @@
 import {
   type AssetListItem,
-  type CostEstimate,
   formatPrice,
   LAYER_SIZES,
   type LayerSize,
+  layerTextSummary,
   type ModelListItem,
   newId,
   type StackLayer,
   t,
 } from "@openfield/core";
-import { estimate, priceFor } from "@openfield/providers/manifest";
+import { chosenLayers } from "@openfield/providers/manifest";
 import {
   Button,
   cn,
@@ -25,6 +25,7 @@ import {
   Segmented,
   SegmentedItem,
   Spinner,
+  Stepper,
   useFieldControl,
 } from "@openfield/ui";
 import {
@@ -43,7 +44,7 @@ import {
   Lock,
   TriangleAlert,
 } from "lucide-react";
-import { type KeyboardEvent, type PointerEvent, useRef, useState } from "react";
+import { type KeyboardEvent, type PointerEvent, useId, useRef, useState } from "react";
 import { queryClient, queryKeys } from "../../api/client";
 import { useAuthedImage } from "../../api/hooks/images";
 import { exportStack, flattenStack } from "../../api/hooks/layers";
@@ -58,7 +59,16 @@ import { logoFor } from "../../lib/provider";
 import { downloadOriginal } from "../actions";
 import { thumbAt } from "../format";
 import type { DetailTab } from "../use-detail";
-import { formatRate, layerInputProblem, layerModels, moveLayer, stackCost, stackEntries } from "./stack";
+import { LayerTextLook, LayerWords } from "./layer-text";
+import {
+  layerInputProblem,
+  layerModels,
+  moveLayer,
+  type Pricing,
+  pricingOf,
+  stackCost,
+  stackEntries,
+} from "./stack";
 import { promptFor, startSeparation, updateView, useLayers } from "./store";
 import type { LayersTab } from "./use-layers-tab";
 
@@ -82,48 +92,60 @@ export function LayersPanel({ item, tab, onOpen }: LayersPanelProps) {
   return <SplitForm item={item} status={tab.separation?.status} />;
 }
 
-export interface Pricing {
-  estimate: CostEstimate;
-  /** One image's rate, the base's and each layer's. */
-  rate: string;
-  /** The most layers, besides the base. */
-  most: number;
-  atMost: string;
+/** The price box (Layers Price), shared with a canvas Layers node's settings. */
+export function LayersPriceBox({ pricing, className }: { pricing: Pricing; className?: string }) {
+  return (
+    <div className={cn("flex w-full shrink-0 flex-col gap-8 rounded-14 bg-surface p-12", className)}>
+      {pricing.input ? <PriceRow label={t("layers.price.input")} value={pricing.input} /> : null}
+      <PriceRow label={t("layers.price.base")} value={pricing.rate} />
+      <PriceRow label={t("layers.price.each")} value={pricing.rate} />
+      <PriceRow label={t("layers.price.upTo", { count: pricing.most })} value={pricing.atMost} />
+      <p className="w-full text-caption leading-[1.45] text-text-tertiary">{t("layers.price.note")}</p>
+    </div>
+  );
 }
 
 /**
- * What a split of this image costs: the range for the button, the rates for the price box. An
- * image whose size isn't known yet (a canvas input still to be made) is priced over every rate.
+ * Most layers: a label and the Images stepper, as the Edit tab's Images row draws it. Only on
+ * models that let you choose; the number is held to the model's range.
  */
-export function pricingOf(
-  model: ModelListItem,
-  image: Pick<AssetListItem, "id"> & Partial<Pick<AssetListItem, "width" | "height">>,
-  size: LayerSize,
-): Pricing | null {
-  const price = priceFor(model, "standard");
-  if (price.kind !== "per_image" || !price.decompose) return null;
-  const { outputs } = price.decompose;
-  const cost = estimate(model, {
-    batch: 1,
-    op: "decompose",
-    base: { assetId: image.id, role: "base" },
-    layers: { size },
-    ...(image.width && image.height && { inputImageSizes: [{ width: image.width, height: image.height }] }),
-    speed: "standard",
-  });
-  if (cost.confidence === "unknown") return null;
-  const low = cost.min / outputs.min;
-  const high = cost.max / outputs.max;
-  const rate =
-    formatRate(low, cost.currency) === formatRate(high, cost.currency)
-      ? formatRate(low, cost.currency)
-      : t("cost.range", { min: formatRate(low, cost.currency), max: formatRate(high, cost.currency) });
-  return {
-    estimate: cost,
-    rate,
-    most: outputs.max - 1,
-    atMost: t("layers.price.atMost", { cost: formatPrice(cost.max, cost.currency) }),
-  };
+export function MostLayersRow({
+  model,
+  value,
+  onChange,
+  disabled,
+  readOnly,
+  className,
+}: {
+  model: ModelListItem | undefined;
+  value: number | undefined;
+  onChange: (most: number) => void;
+  disabled?: boolean;
+  readOnly?: boolean;
+  className?: string;
+}) {
+  const label = useId();
+  const rules = model?.capabilities.layers;
+  const most = chosenLayers(rules, value);
+  if (!rules?.choose || most === undefined) return null;
+  return (
+    <div className={cn("flex w-full items-center justify-between px-2", className)}>
+      <span id={label} className="text-small font-medium text-text-primary">
+        {t("layers.most.label")}
+      </span>
+      <Stepper
+        aria-labelledby={label}
+        value={most}
+        min={rules.choose.min}
+        max={rules.maxLayers}
+        disabled={disabled}
+        readOnly={readOnly}
+        onValueChange={onChange}
+        decrementLabel={t("layers.most.fewer")}
+        incrementLabel={t("layers.most.more")}
+      />
+    </div>
+  );
 }
 
 function SplitForm({
@@ -137,14 +159,16 @@ function SplitForm({
   const defaultModel = useSettings().data?.defaultModel;
   const picked = useLayers((s) => s.model);
   const pickedSize = useLayers((s) => s.size);
+  const pickedMost = useLayers((s) => s.maxLayers);
   const prompt = useLayers((s) => (s.promptFor === item.id ? s.prompt : ""));
   const model =
     models.find((m) => m.key === picked) ?? models.find((m) => m.key === defaultModel) ?? models[0];
   const rules = model?.capabilities.layers;
   const size: LayerSize =
     pickedSize && rules?.sizes.includes(pickedSize) ? pickedSize : (rules?.default ?? "auto");
+  const most = chosenLayers(rules, pickedMost ?? undefined);
   const problem = layerInputProblem(item, model);
-  const pricing = model ? pricingOf(model, item, size) : null;
+  const pricing = model ? pricingOf(model, item, size, most) : null;
   const running = status === "running";
   const failed = status === "failed";
   const ready = model !== undefined && !problem && !running;
@@ -157,6 +181,7 @@ function SplitForm({
       model: model.key,
       image: item.id,
       size,
+      ...(most !== undefined && { maxLayers: most }),
       ...(words && { prompt: words }),
       source: "detail_editor",
     });
@@ -220,18 +245,15 @@ function SplitForm({
           </p>
         </Field>
       ) : null}
+      {/* Most layers */}
+      <MostLayersRow
+        model={model}
+        value={most}
+        onChange={(next) => useLayers.setState({ maxLayers: next })}
+        className={cn("shrink-0", rest)}
+      />
       {/* Price */}
-      {pricing ? (
-        <div
-          inert={running}
-          className={cn("flex w-full shrink-0 flex-col gap-8 rounded-14 bg-surface p-12", rest)}
-        >
-          <PriceRow label={t("layers.price.base")} value={pricing.rate} />
-          <PriceRow label={t("layers.price.each")} value={pricing.rate} />
-          <PriceRow label={t("layers.price.upTo", { count: pricing.most })} value={pricing.atMost} />
-          <p className="w-full text-caption leading-[1.45] text-text-tertiary">{t("layers.price.note")}</p>
-        </div>
-      ) : null}
+      {pricing ? <LayersPriceBox pricing={pricing} className={rest} /> : null}
       {/* Footer */}
       <div className="flex w-full flex-1 flex-col justify-end gap-10">
         {running ? (
@@ -471,6 +493,7 @@ function StackPanel({
           const selected = tab.view.selected === id && !isBase;
           const hidden = tab.hidden.has(id);
           const name = row.name ?? (isBase ? t("layers.base") : t("layers.layer", { n: row.zIndex }));
+          const words = layerTextSummary(row.text);
           return (
             <li key={id} className="flex flex-col">
               <div
@@ -512,11 +535,21 @@ function StackPanel({
                   <LayerThumb asset={row.asset} dimmed={hidden} />
                   <span className={cn("flex min-w-0 flex-1 flex-col gap-2", hidden && "opacity-40")}>
                     <span className="truncate text-small font-medium text-text-primary">{name}</span>
-                    <span className="flex w-full">
-                      <span className="truncate text-caption text-text-tertiary">
-                        {row.description ?? (isBase ? t("layers.baseDescription") : "")}
+                    {words ? (
+                      // A text layer: what it says, then its colour and font, in place of the description.
+                      <>
+                        <span className="flex w-full">
+                          <LayerWords text={words} className="text-caption text-text-secondary" />
+                        </span>
+                        <LayerTextLook text={words} className="w-full text-caption text-text-tertiary" />
+                      </>
+                    ) : (
+                      <span className="flex w-full">
+                        <span className="truncate text-caption text-text-tertiary">
+                          {row.description ?? (isBase ? t("layers.baseDescription") : "")}
+                        </span>
                       </span>
-                    </span>
+                    )}
                   </span>
                 </button>
                 <button

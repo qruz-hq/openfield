@@ -12,7 +12,7 @@ describe("BytePlus speed", () => {
     const field = BYTEPLUS_SETTINGS.panels[0]!.fields[0]!;
     const images = BYTEPLUS_MODELS.filter((m) => m.modality !== "video").map((m) => m.key);
     expect(field.models).toEqual(images);
-    expect(images).toHaveLength(5);
+    expect(images).toHaveLength(6);
   });
 
   test("Fast runs on 5.0 Pro and 4.0, and every other model stays at Standard without a fallback", () => {
@@ -21,6 +21,7 @@ describe("BytePlus speed", () => {
     expect(at("Seedream 5.0 Pro").speed).toBe("priority");
     expect(at("Seedream 4.0").speed).toBe("priority");
     expect(at("Seedream 5.0 Flash")).toMatchObject({ speed: "standard", speedRequested: "priority" });
+    expect(at("Seedream 5.5")).toMatchObject({ speed: "standard", speedRequested: "priority" });
     // Seedance has no prompt rewrite, so Fast never reaches it, and it never says it fell back.
     const video = BYTEPLUS_MODELS.find((m) => m.modality === "video")!;
     expect(resolveProviderSettings(BYTEPLUS_SETTINGS, stored, video)).toMatchObject({
