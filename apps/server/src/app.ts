@@ -18,6 +18,7 @@ import { foldersRoutes } from "./routes/folders";
 import { generateRoutes } from "./routes/generate";
 import { healthRoutes } from "./routes/health";
 import { jobSetsRoutes } from "./routes/job-sets";
+import { keepRestRoutes } from "./routes/keep-rest";
 import { keysRoutes } from "./routes/keys";
 import { layersRoutes } from "./routes/layers";
 import { libraryRoutes } from "./routes/library";
@@ -50,6 +51,7 @@ const api = new Hono<Env>()
   .route("/", usageRoutes)
   .route("/", uploadsRoutes)
   .route("/", masksRoutes)
+  .route("/", keepRestRoutes)
   .route("/", canvasesRoutes)
   .route("/", canvasRunsRoutes)
   .route("/", canvasArchivesRoutes)
@@ -80,6 +82,13 @@ export const LARGER_BODIES: { method: string; path: RegExp; maxSize: number; use
     {
       method: "POST",
       path: /^\/api\/masks$/,
+      maxSize: UPLOAD_MAX_BYTES + 64 * 1024,
+      userMessage: () => t("errors.maskTooLarge", { size: formatBytes(UPLOAD_MAX_BYTES) }),
+    },
+    // Fixes painted on a finished edit come as a PNG the size of the image.
+    {
+      method: "POST",
+      path: /^\/api\/assets\/[^/]+\/keep-rest$/,
       maxSize: UPLOAD_MAX_BYTES + 64 * 1024,
       userMessage: () => t("errors.maskTooLarge", { size: formatBytes(UPLOAD_MAX_BYTES) }),
     },

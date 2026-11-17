@@ -14,6 +14,7 @@ import type { CallContexts } from "./runner/provider-fetch";
 import type { Runner } from "./runner/runner";
 import type { AgentService } from "./services/agents";
 import type { CredentialService } from "./services/credentials";
+import type { KeepRestService } from "./services/keep-rest";
 import type { LayerService } from "./services/layers";
 import type { LibraryService } from "./services/library";
 import type { ModelService } from "./services/models";
@@ -52,6 +53,8 @@ export interface Services {
   library: LibraryService;
   /** Layer stacks a separation made: read, flattened and exported. */
   layers: LayerService;
+  /** Keep the rest of the image after an edit's run: adjusted again in place, or saved apart. */
+  keepRest: KeepRestService;
   runner: Runner;
   canvases: CanvasService;
   canvasRuns: CanvasRunService;
