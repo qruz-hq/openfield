@@ -37,6 +37,7 @@ import { isProviderError } from "@openfield/providers/server";
 import {
   AnalysisCache,
   areaMap,
+  type Decided,
   fittedResult,
   type KeepFiles,
   type KeepSettings,
@@ -87,6 +88,8 @@ export class KeepRestService {
   readonly #queue = new Map<string, Promise<unknown>>();
   /** Comparing the two pictures is the slow part; deciding again for a slider is quick. */
   readonly #analyses = new AnalysisCache();
+  /** What each recent area map decided, by its etag, so a 304 can say it too without the work. */
+  readonly #decisions = new Remembered<Decided>(64);
 
   constructor(private readonly deps: KeepRestDeps) {}
 
@@ -117,18 +120,21 @@ export class KeepRestService {
     return this.#serial(id, () => this.#save(id, fixes));
   }
 
-  /** The decided area as a grey PNG, for these settings or the stored ones. */
-  /** The area map, or only its etag when the caller already has that one: making it is the slow part. */
+  /**
+   * The decided area as a grey PNG, for these settings or the stored ones, with what deciding it
+   * found. Only the etag and that when the caller already has this one: making it is the slow part.
+   */
   async area(
     id: string,
     query: KeepRestAreaQuery,
     known?: string,
-  ): Promise<{ png?: Uint8Array<ArrayBuffer>; etag: string }> {
+  ): Promise<{ png?: Uint8Array<ArrayBuffer>; etag: string; decided: Decided }> {
     const it = this.#adjustable(id, { trashed: true });
     const settings = this.#settingsOf(it, query);
     // The original can be adjusted too, and the fix layer changes the revision.
     const etag = `"${it.base.sha256.slice(0, 12)}-${it.row.sha256.slice(0, 12)}-${it.keep.revision}-${settings.mode}-${settings.sensitivity}-${settings.expandPx}-${settings.featherPx}"`;
-    if (known === etag) return { etag };
+    const remembered = known === etag ? this.#decisions.get(etag) : undefined;
+    if (remembered) return { etag, decided: remembered };
     const sharp = await this.#sharp();
     const fixes = await this.#storedFixes(it.row);
     const made = await areaMap(
@@ -140,7 +146,9 @@ export class KeepRestService {
       this.#cached(it),
     );
     if (made === "turned") throw turned();
-    return { png: made.png, etag };
+    this.#decisions.set(etag, made.decided);
+    // A 304 made the long way (after a restart, say) still says what was decided.
+    return { ...(known !== etag && { png: made.png }), etag, decided: made.decided };
   }
 
   /**
@@ -658,6 +666,22 @@ async function canonicalFixes(
     .png({ compressionLevel: 9 })
     .toBuffer();
   return { png: new Uint8Array(png), codes: fixes };
+}
+
+/** A small map that forgets its oldest entries past `size`. */
+class Remembered<T> {
+  readonly #entries = new Map<string, T>();
+  constructor(private readonly size: number) {}
+
+  get(key: string): T | undefined {
+    return this.#entries.get(key);
+  }
+
+  set(key: string, value: T): void {
+    this.#entries.delete(key);
+    this.#entries.set(key, value);
+    while (this.#entries.size > this.size) this.#entries.delete(this.#entries.keys().next().value!);
+  }
 }
 
 /** The marks on the image being edited (1); those on references say nothing about its area. */
