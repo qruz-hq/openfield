@@ -69,10 +69,12 @@ export async function reblendImages(
  * own (the same one again when it was saved already). With a fix layer, its "use the original"
  * strokes put the original back first. The saved images' ids, in order.
  */
-export async function saveModelResults(assetIds: readonly string[], fixes?: Blob): Promise<string[]> {
+export async function saveModelResults(assetIds: readonly string[], given?: Blob): Promise<string[]> {
   const out: string[] = [];
   for (const id of assetIds) {
     const init: RequestInit = { method: "POST" };
+    // Spots already fixed by hand go with it, the way the Edit tab saves the model's result.
+    const fixes = given ?? (await storedFixes(id));
     if (fixes) {
       const form = new FormData();
       form.set("fixes", new File([fixes], "fixes.png", { type: "image/png" }));
@@ -83,6 +85,15 @@ export async function saveModelResults(assetIds: readonly string[], fixes?: Blob
     out.push(keepRestSaveResponseSchema.parse(await res.json()).asset.id);
   }
   return out;
+}
+
+/** The fix layer painted on an image's edit, when there is one. */
+async function storedFixes(assetId: string): Promise<Blob | undefined> {
+  const state = await queryClient.fetchQuery(keepRestQuery(assetId));
+  if (!state.fixesUrl) return undefined;
+  const res = await rawFetch(state.fixesUrl);
+  if (!res.ok) throw await toApiError(res);
+  return res.blob();
 }
 
 /**

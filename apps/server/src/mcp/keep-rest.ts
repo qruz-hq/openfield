@@ -114,7 +114,12 @@ export async function settleKeepRest(
       if (!now.keep) {
         // Off after a run: the model's own results, saved as images of their own, stand in.
         const saved = [];
-        for (const assetId of result.assetIds) saved.push((await ctx.svc.keepRest.save(assetId)).asset.id);
+        // Spots fixed by hand go with it, the way the Edit tab saves the model's result.
+        for (const assetId of result.assetIds) {
+          const fixes = ctx.svc.keepRest.fixesFile(assetId);
+          const png = fixes ? await Bun.file(fixes.file).bytes() : undefined;
+          saved.push((await ctx.svc.keepRest.save(assetId, png)).asset.id);
+        }
         swap = { assetIds: saved, keptEdits: result.assetIds };
       } else {
         // On again: back to the kept edits it was showing, blended with the settings it has now.

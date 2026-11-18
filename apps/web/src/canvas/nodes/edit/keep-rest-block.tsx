@@ -52,7 +52,7 @@ export function KeepRestBlock({
   const settled = resting || busy || old;
 
   const [draft, setDraft] = useState<{ key: SliderKey; value: number } | null>(null);
-  const valueOf = (key: SliderKey) => (draft?.key === key ? draft.value : sliderValue(params, key));
+  const shownValue = (key: SliderKey) => (draft?.key === key ? draft.value : sliderValue(params, key));
   const change = (key: SliderKey, value: number) => {
     if (ran) setDraft({ key, value });
     else setParams({ [key]: value }, key);
@@ -66,7 +66,7 @@ export function KeepRestBlock({
   };
 
   const slider = (key: SliderKey, label: string, hint: string, opts: { dim: boolean }) => {
-    const value = valueOf(key);
+    const value = shownValue(key);
     return (
       <Field
         label={label}
@@ -164,7 +164,7 @@ export function KeepRestBlock({
           )}
         </>
       )}
-      {ran && !old && onTouchUp ? (
+      {ran && !old && !own && onTouchUp ? (
         // Fix spots by hand: row gap 16 pad 4 2, space between, centred.
         <div className="flex w-full items-center justify-between gap-16 px-2 py-4">
           <div className="flex min-w-0 flex-1 flex-col gap-2">
