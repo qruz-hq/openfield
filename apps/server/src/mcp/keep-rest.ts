@@ -68,7 +68,9 @@ export function nodesHolding(ctx: ToolContext, assetId: string): NodeHolding[] {
     if (!row) continue;
     const { slice } = fromDocument(readDocument(row.graph));
     for (const [nodeId, result] of Object.entries(slice.results)) {
-      if (!result?.assetIds.includes(assetId)) continue;
+      // A node turned off still holds the kept edit it shows again when turned on.
+      const holds = result?.assetIds.includes(assetId) || result?.outputs.some((o) => o.keptEdit === assetId);
+      if (!holds) continue;
       found.push({
         canvasId: row.id,
         canvasName: row.name,
@@ -104,7 +106,8 @@ export async function settleKeepRest(
     const result = slice.results[id];
     const old = editKeepRestOf(was.params[id] ?? {}, engine);
     const now = editKeepRestOf(slice.params[id] ?? {}, engine);
-    if (!result || sameKeepRest(old, now)) continue;
+    // Off already: it shows the model's own result, and settings that only matter on wait.
+    if (!result || sameKeepRest(old, now) || (!old.keep && !now.keep)) continue;
     // With its old keep-the-rest settings back, a node that only changed those is as it ran.
     const back = Object.fromEntries(KEEP_REST_PARAMS.map((key) => [key, was.params[id]?.[key]]));
     const asRan = await fingerprintAfter(slice, specRegistry, engine, id, back);

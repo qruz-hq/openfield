@@ -121,6 +121,14 @@ describe("an Edit node after it ran", () => {
     expect(await stateOf(c, canvasId, e)).toBe("done");
     expect(await stateOf(c, canvasId, g)).toBe("stale");
 
+    // Off already, other settings wait: nothing is saved again and it stays done.
+    const still = j(await call(c, "update_node", { canvas: canvasId, id: e, params: { featherPx: 2 } }));
+    expect(still.keepRest).toBeUndefined();
+    expect(await imagesOf(e)).toEqual([saved]);
+    expect(await stateOf(c, canvasId, e)).toBe("done");
+    // The kept edit is still the node's: adjusting it on its own is refused like any image a node holds.
+    expect((await call(c, "adjust_edit", { assetId: edited, featherPx: 0 })).text).toContain(e);
+
     // What reads it runs again on the model's result; then on again goes back to the kept edit.
     expect(j(await call(c, "run_canvas", { canvas: canvasId })).status).toBe("succeeded");
     const ranAgain = runs();

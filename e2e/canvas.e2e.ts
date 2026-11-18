@@ -1485,6 +1485,17 @@ test("an Edit node runs its painted mask on OpenAI, shows what it made, and Keep
     await expect.poll(async () => (await shown()).assetIds).toEqual([first!.asset]);
     await expect(edit.locator('.of-card[data-phase="done"]')).toBeVisible();
     expect(sets()).toHaveLength(1);
+
+    // Off again, then new words: out of date, and its next run keeps the model's whole result.
+    await keep.click();
+    await expect.poll(async () => (await shown()).outputs[0]?.keptEdit).toBe(first!.asset);
+    await settings.getByRole("textbox", { name: "What to change" }).fill("a yellow door");
+    await expect(edit.locator('.of-card[data-phase="changed"]')).toBeVisible();
+    await settings.getByRole("button", { name: /^Run/ }).click();
+    await expect(edit.locator('.of-card[data-phase="done"]')).toBeVisible({ timeout: 20_000 });
+    const [, second] = sets();
+    expect(JSON.parse(second!.request_json).mask).toMatchObject({ composite: false });
+    expect(JSON.parse(second!.op_params)).toMatchObject({ edit: { composite: { applied: false } } });
   } finally {
     await request.delete("/api/settings/keys/openai", { headers: { [SESSION_HEADER]: token } });
   }
@@ -1627,6 +1638,8 @@ const drawn = (el: Locator) =>
       font: `${s.fontSize} ${s.fontWeight}`,
       family: s.fontFamily,
       color: s.color,
+      background: s.backgroundColor,
+      ring: s.boxShadow,
     };
   });
 
@@ -1713,7 +1726,13 @@ test("an Edit node that ran shows how it keeps the rest: smart, mask only, or ma
       gap: "6px",
       padding: "0px 12px 0px 12px",
     });
-    expect(await drawn(touchUp)).toMatchObject({ font: "13px 600" });
+    // Control: #202327 with a #FFFFFF14 line (drawn as an inset ring), words #F5F6F7.
+    expect(await drawn(touchUp)).toMatchObject({
+      font: "13px 600",
+      background: "rgb(32, 35, 39)",
+      color: "rgb(245, 246, 247)",
+    });
+    expect((await drawn(touchUp)).ring).toContain("rgba(255, 255, 255, 0.08) 0px 0px 0px 1px inset");
     expect(await touchUp.locator("svg.lucide-paintbrush").boundingBox()).toMatchObject({
       width: 14,
       height: 14,
