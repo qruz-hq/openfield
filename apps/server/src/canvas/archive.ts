@@ -82,7 +82,23 @@ export function planExport(
       poster = `assets/${asset.id}.poster.${asset.posterPath!.split(".").at(-1)!.toLowerCase()}`;
       files.push({ name: poster, size: posterFile.size, read: () => Bun.file(posterFile.path).bytes() });
     }
-    assets.push(manifestAsset(asset, name, poster, isFavourite(db, asset.id)));
+    // An edit's model result and fix layer go too, so it can still be adjusted where it lands.
+    const extra = (path: string | null, suffix: string) => {
+      // The model's result can be the image's own file: the manifest names that one again.
+      if (path && path === asset.path) return name;
+      const found = path ? fileIn(paths, path) : null;
+      if (!found) return undefined;
+      const inside = `assets/${asset.id}.${suffix}.${path!.split(".").at(-1)!.toLowerCase()}`;
+      files.push({ name: inside, size: found.size, read: () => Bun.file(found.path).bytes() });
+      return inside;
+    };
+    const modelResult = extra(asset.resultPath, "result");
+    const fixes = extra(asset.fixesPath, "fixes");
+    assets.push({
+      ...manifestAsset(asset, name, poster, isFavourite(db, asset.id)),
+      ...(modelResult && { modelResult }),
+      ...(fixes && { fixes }),
+    });
   };
   const shown = documentAssetRefs(doc).shown;
   for (const id of shown) {

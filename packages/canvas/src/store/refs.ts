@@ -9,8 +9,8 @@ import { newEdgeId, newNodeId } from "./graph";
 export interface DocumentAssetRefs {
   /**
    * The images the canvas shows: what nodes were given (params.assetIds on Upload and Assets, an
-   * Edit node's painted mask) and what their runs made (result.assetIds and outputs). No repeats,
-   * in document order.
+   * Edit node's painted mask) and what their runs made (result.assetIds and outputs, with an Edit
+   * node's kept edits). No repeats, in document order.
    */
   shown: string[];
   /**
@@ -38,7 +38,11 @@ export function documentAssetRefs(doc: CanvasDocument): DocumentAssetRefs {
     const result = node.result;
     if (!result) continue;
     for (const id of result.assetIds) shown.add(id);
-    for (const output of result.outputs) shown.add(output.assetId);
+    for (const output of result.outputs) {
+      shown.add(output.assetId);
+      // An Edit node turned off keeps the edit it came from, which turning it on shows again.
+      if (output.keptEdit) shown.add(output.keptEdit);
+    }
     for (const id of result.inputs ?? []) read.add(id);
   }
   return { shown: [...shown], read: [...read] };

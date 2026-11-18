@@ -105,6 +105,8 @@ export interface CanvasUiState {
   renamingNodeId: string | null;
   /** The Edit node whose mask is being painted (Canvas / Mask window). */
   maskNodeId: string | null;
+  /** The Edit node whose result is being touched up (Canvas / Touch up window). */
+  touchUpNodeId: string | null;
   /** A version preview: every document change is refused. */
   readOnly: boolean;
 }

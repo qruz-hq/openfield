@@ -10,6 +10,9 @@ import {
   canvasArchiveManifestSchema,
   canvasDetailSchema,
   canvasSource,
+  FIX_ORIGINAL,
+  fixesToRgba,
+  keepRestStateSchema,
   sseEventSchema,
   uploadResponseSchema,
 } from "@openfield/core";
@@ -26,6 +29,7 @@ import {
   listFolders,
   setFavourite,
 } from "@openfield/db";
+import sharp from "sharp";
 import { LAST_FRAME_JPEG, VIDEO_SILENT } from "../../../packages/providers/src/byteplus/__fixtures__/media";
 import { importArchive } from "../src/canvas/archive-import";
 import { openArchiveSource } from "../src/canvas/archive-source";
@@ -898,6 +902,44 @@ describe("Edit nodes", () => {
     expect((await upToDate(b, result.canvasId)).sort()).toEqual(edits.map((n) => n.id).sort());
   });
 
+  test("an edit's model result and fix layer travel with it, so it can still be adjusted", async () => {
+    const a = await start();
+    const made = await editedCanvas(a);
+    const edit = getAsset(a.services.db, made.first)!;
+    expect(edit.resultPath).toBeTruthy();
+    // A spot put back by hand, so the edit has a fix layer too.
+    const fixes = new Uint8Array(640 * 480);
+    fixes.fill(FIX_ORIGINAL, 0, 640 * 20);
+    const png = await sharp(fixesToRgba(fixes), { raw: { width: 640, height: 480, channels: 4 } })
+      .png()
+      .toBuffer();
+    const form = new FormData();
+    form.append("settings", JSON.stringify({ keep: true }));
+    form.append("fixes", new File([new Uint8Array(png)], "fixes.png"));
+    expect(
+      (await a.request(`/api/assets/${made.first}/keep-rest`, { method: "POST", body: form })).status,
+    ).toBe(200);
+    const fixed = getAsset(a.services.db, made.first)!;
+    expect(fixed.fixesPath).toBeTruthy();
+
+    const file = await exportZip(a, made.canvas.id);
+    const { manifest } = await readArchive(file);
+    const entry = manifest.assets.find((m) => m.id === made.first)!;
+    expect(entry.modelResult).toBeTruthy();
+    expect(entry.fixes).toBeTruthy();
+
+    const b = await start();
+    resultOf(await imported(b, file));
+    const here = getAsset(b.services.db, made.first)!;
+    const bytesOf = (s: TestServer, path: string) => Bun.file(absolutePath(s.services.paths, path)).bytes();
+    expect(await bytesOf(b, here.resultPath!)).toEqual(await bytesOf(a, fixed.resultPath!));
+    expect(await bytesOf(b, here.fixesPath!)).toEqual(await bytesOf(a, fixed.fixesPath!));
+    expect(here.resultBytes).toBe(fixed.resultBytes);
+    const state = keepRestStateSchema.parse((await b.json(`/api/assets/${made.first}/keep-rest`)).body);
+    expect(state.available).toBe(true);
+    expect(state.fixesUrl).toBeTruthy();
+  });
+
   test("a photo back from the Trash under a new id brings its painted mask with it", async () => {
     const a = await start();
     const made = await editedCanvas(a);
@@ -920,7 +962,7 @@ describe("Edit nodes", () => {
     expect(plan.blocked).toEqual([]);
   });
 
-  test("a folder sends the masks with the edits that need them, and none the library has", async () => {
+  test("a folder sends the masks and model results with the edits that need them, and none the library has", async () => {
     const a = await start();
     const made = await editedCanvas(a);
     const { zip } = await readArchive(await exportZip(a, made.canvas.id));
@@ -946,8 +988,13 @@ describe("Edit nodes", () => {
     const b = await start();
     await upload(b, await texture(640, 480));
     const png = (id: string) => `assets/${id}.png`;
+    // The edits' model results come too, so they can still be adjusted here.
+    const result = (id: string) => `assets/${id}.result.png`;
     expect(await neededIn(b)).toEqual(
-      [made.wired, made.painted, made.saved, made.first, made.second].map(png).sort(),
+      [
+        ...[made.wired, made.painted, made.saved, made.first, made.second].map(png),
+        ...[made.first, made.second].map(result),
+      ].sort(),
     );
   });
 });

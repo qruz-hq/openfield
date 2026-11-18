@@ -161,7 +161,12 @@ export function EditInspector({ nodeId }: { nodeId: string }) {
         onBatch={(batch) => setParams({ batch }, "batch")}
       />
       <Divider />
-      <KeepRestBlock nodeId={nodeId} params={params} resting={resting} />
+      <KeepRestBlock
+        nodeId={nodeId}
+        params={params}
+        resting={resting}
+        onTouchUp={() => actions.setUi({ touchUpNodeId: nodeId })}
+      />
       <InspectorRun
         estimate={waiting ? null : (analysis?.estimate ?? null)}
         models={[model]}
