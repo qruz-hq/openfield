@@ -16,6 +16,7 @@ import { notify, notifyError } from "../../lib/notify";
 import { setCanvasPresence } from "../../lib/presence";
 import { CanvasEngine } from "../engine";
 import { rememberImageSizes } from "../nodes/generate/card-media";
+import { rememberImageVersions } from "../nodes/shell/image-versions";
 import { CanvasStoreProvider, createCanvasStore } from "../store";
 import { type Autosave, createAutosave } from "./autosave";
 import { minimapPref } from "./chrome/prefs";
@@ -69,6 +70,8 @@ function createSession(detail: CanvasDetail): { session: EditorSession; attach: 
   const canvasId = detail.id;
   // Image cards open at their images' exact shape, before any thumbnail loads.
   rememberImageSizes(detail.assetSizes);
+  // Edits blended again since they ran show their file as it is now.
+  rememberImageVersions(detail.assetVersions);
   const main = createCanvasStore(detail);
   main.getState().actions.setUi({ minimapOpen: minimapPref() });
   const ui = createEditorUi();
@@ -130,6 +133,7 @@ function createSession(detail: CanvasDetail): { session: EditorSession; attach: 
 
     reloadFrom(next) {
       rememberImageSizes(next.assetSizes);
+      rememberImageVersions(next.assetVersions);
       main.getState().actions.loadDetail(next);
       ui.setState((s) => ({ flowKey: s.flowKey + 1, preview: null, findHit: null, frameDelete: null }));
     },

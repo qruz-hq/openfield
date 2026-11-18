@@ -1655,6 +1655,27 @@
           "title": "Mark the image",
           "hint": "Point, box or sketch where the image should change. Say what to do in the prompt.",
           "save": "Save marks"
+        },
+        "keepRest": {
+          "label": "Keep the rest of the image",
+          "on": "Keeps the original wherever the model didn't really change it.",
+          "off": "The model may change other parts too.",
+          "sketchOn": "Keeps the original wherever the model didn't really change it, starting from your marks.",
+          "sketchOff": "Off, so the change can blend in. Turn on to keep the original wherever the model didn't really change it.",
+          "sensitivity": "Sensitivity",
+          "sensitivityHint": "Higher keeps more of the model's small changes.",
+          "percent": "{value}%",
+          "feather": "Feather",
+          "featherHint": "Softens the edge so the change blends in.",
+          "expand": "Expand",
+          "expandHint": "Grows the mask a little past what you painted.",
+          "px": "{value} px",
+          "maskOnly": "Kept by your mask only. The model's result didn't line up with the original, so only the area you painted changed.",
+          "notStored": "This edit was made before the model's result was kept.",
+          "fixLabel": "Fix spots by hand",
+          "fixHint": "Paint where to use the model or the original.",
+          "touchUp": "Touch up",
+          "free": "Changes here update the result for free. No new generation."
         }
       },
       "variations": {

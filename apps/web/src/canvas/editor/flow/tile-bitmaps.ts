@@ -1,5 +1,6 @@
 import { pickThumbSize, thumbPixels } from "@openfield/core";
 import { rawFetch } from "../../../api/raw";
+import { imageVersions } from "../../nodes/shell/image-versions";
 import { thumbUrl } from "../../nodes/shell/thumb";
 
 // The images the zoomed-out canvas layer paints (canvas-layer.tsx). Each is fetched once at the
@@ -138,6 +139,21 @@ export function createTileBitmaps(): TileBitmaps {
     }
   };
 
+  // An image whose file changed in place (a re-blended edit) is fetched again; the old pixels stay
+  // on screen until the new ones are ready.
+  const stopVersions = imageVersions.subscribe((next, prev) => {
+    let changed = false;
+    for (const [assetId, version] of Object.entries(next.v)) {
+      const e = entries.get(assetId);
+      if (version === prev.v[assetId] || !e) continue;
+      e.file = null;
+      e.filePixels = 0;
+      e.pixels = 0;
+      changed = true;
+    }
+    if (changed) for (const listener of listeners) listener();
+  });
+
   const ask = (queue: Map<string, number>, assetId: string, pixels: number) => {
     const e = entries.get(assetId);
     if (e && (sharp(e, pixels) || e.pending >= pixels)) return;
@@ -169,6 +185,7 @@ export function createTileBitmaps(): TileBitmaps {
     },
     dispose() {
       disposed = true;
+      stopVersions();
       for (const e of entries.values()) release(e);
       entries.clear();
       urgent.clear();

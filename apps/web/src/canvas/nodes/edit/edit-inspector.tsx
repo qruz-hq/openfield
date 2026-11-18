@@ -10,7 +10,6 @@ import { Brush, Pencil } from "lucide-react";
 import { useId } from "react";
 import { useNavigate } from "react-router";
 import { useStore } from "zustand";
-import { KeepRest } from "../../../detail/edit/keep-rest";
 import { MarksListView } from "../../../detail/edit/marks-list";
 import { MaskThumb } from "../../../detail/edit/mask-thumb";
 import { ModelField } from "../../../detail/edit/model-field";
@@ -33,12 +32,13 @@ import { InspectorRun, LOCKED_DIM } from "../shell/inspector-parts";
 import { PromptCard } from "../shell/prompt-card";
 import { useNodeDisplay, useParsedParams, useRunNode, useSetParams } from "../shell/use-node";
 import { soleBase, usePaintBase } from "./base";
+import { KeepRestBlock } from "./keep-rest-block";
 import { MarksThumb } from "./marks-thumb";
 import { openOnMark } from "./mask-window";
 
 // Canvas / Inspector / Image edit (design MZI3JqbHJr): the Mask card (the mask over the image and
-// Paint), the prompt card, then the Edit tab's own Model field, Size fields (no size note) and Keep
-// the rest, with the node's values, then Run. Run waits, with no price, while there's no mask, the
+// Paint), the prompt card, then the Edit tab's own Model field, Size fields (no size note), and the
+// node's own Keep the rest (keep-rest-block.tsx), then Run. Run waits, with no price, while there's no mask, the
 // mask was painted on another image, or there are no words: the card above it says why. A mask on
 // the Mask input stands in for a painted one, and is changed where it comes from.
 //
@@ -161,17 +161,7 @@ export function EditInspector({ nodeId }: { nodeId: string }) {
         onBatch={(batch) => setParams({ batch }, "batch")}
       />
       <Divider />
-      <KeepRest
-        composite={composite}
-        featherPx={params.featherPx}
-        expandPx={params.expandPx}
-        resting={resting}
-        afterRun={false}
-        sketch={sketch}
-        onComposite={(keep) => setParams(sketch ? { sketchKeepOriginal: keep } : { keepOriginal: keep })}
-        onFeatherPx={(featherPx) => setParams({ featherPx }, "featherPx")}
-        onExpandPx={(expandPx) => setParams({ expandPx }, "expandPx")}
-      />
+      <KeepRestBlock nodeId={nodeId} params={params} resting={resting} />
       <InspectorRun
         estimate={waiting ? null : (analysis?.estimate ?? null)}
         models={[model]}
