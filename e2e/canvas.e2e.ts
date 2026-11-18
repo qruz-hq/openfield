@@ -1465,7 +1465,9 @@ test("an Edit node runs its painted mask on OpenAI, shows what it made, and Keep
     // Keep the rest, off: the node is out of date, and its next run keeps the model's whole result.
     const keep = settings.getByRole("switch", { name: "Keep the rest of the image" });
     await expect(keep).toBeChecked();
-    await expect(settings.getByText("Everything outside your mask stays exactly the same.")).toBeVisible();
+    await expect(
+      settings.getByText("Keeps the original wherever the model didn't really change it."),
+    ).toBeVisible();
     await keep.click();
     await expect(keep).not.toBeChecked();
     await expect(settings.getByText("The model may change other parts too.")).toBeVisible();

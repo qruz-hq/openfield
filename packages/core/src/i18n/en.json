@@ -2401,11 +2401,11 @@
       "label": "Model",
       "masked": "Change only what you paint",
       "whole": "Redraw the whole image",
-      "wholeKept": "{model} redraws the whole image, then everything outside your mask is put back.",
+      "wholeKept": "{model} redraws the whole image, then the original is put back wherever it didn't really change.",
       "wholeNotKept": "{model} redraws the whole image, so anything can change.",
       "needsKey": "Needs {vowel, select, yes {an} other {a}} {company} key",
       "sketch": "Sketch and point",
-      "wholeKeptSketch": "{model} redraws the whole image, then everything outside your mask is put back. For a precise change, try Sketch & point."
+      "wholeKeptSketch": "{model} redraws the whole image, then the original is put back wherever it didn't really change. For a precise change, try Sketch & point."
     },
     "size": {
       "resolution": "Resolution",
@@ -2419,7 +2419,7 @@
     },
     "keep": {
       "label": "Keep the rest of the image",
-      "on": "Everything outside your mask stays exactly the same.",
+      "on": "Keeps the original wherever the model didn't really change it.",
       "off": "The model may change other parts too.",
       "feather": "Feather",
       "featherHint": "Softens the edge so the change blends in.",
@@ -2427,8 +2427,22 @@
       "expand": "Expand",
       "expandHint": "Grows the mask a little past what you painted.",
       "expandNext": "Grows the mask on your next Generate.",
-      "sketchOff": "Off, so the change can blend in. Turn on to keep everything outside your marks exactly the same.",
-      "sketchOn": "Everything outside your marks stays exactly the same."
+      "sketchOff": "Off, so the change can blend in. Turn on to keep the original wherever the model didn't really change it.",
+      "sketchOn": "Keeps the original wherever the model didn't really change it, starting from your marks.",
+      "offAfter": "Showing the model's own result.",
+      "sensitivity": "Sensitivity",
+      "sensitivityHint": "Higher keeps more of the model's small changes.",
+      "modelResult": "Model's own result",
+      "modelResultHint": "Kept with this edit, not in your library.",
+      "saveNew": "Save as new image",
+      "free": "Changes here update the result for free. No new generation.",
+      "pending": "Previewing, not saved yet.",
+      "discard": "Discard",
+      "apply": "Apply",
+      "savedNew": "Saved as a new image.",
+      "savedAlready": "That one is already in your library.",
+      "openSaved": "Open",
+      "pendingOff": "Not saved."
     },
     "saved": {
       "done": "Saved as {count, plural, one {# new image} other {# new images}}. The original stays as it is.",
@@ -2454,7 +2468,13 @@
       "handle": "Drag to compare",
       "changed": "Changed",
       "same": "Same as the original",
-      "editMask": "Edit the mask"
+      "editMask": "Edit the mask",
+      "keep": "Keep the rest",
+      "modelResult": "The model's own result",
+      "fromModel": "From the model",
+      "fromOriginal": "From the original",
+      "yourMask": "Your mask",
+      "yourMarks": "Your marks"
     },
     "turned": {
       "title": "This photo can't be edited yet",
@@ -2464,6 +2484,13 @@
     "tooLarge": {
       "title": "This image is too large to edit",
       "body": "It's {width} × {height}. Edits with a mask take images up to {megapixels} megapixels."
+    },
+    "touchUp": {
+      "label": "Touch up",
+      "open": "Touch up",
+      "model": "Use the model here",
+      "original": "Use the original here",
+      "done": "Done"
     }
   },
   "spendGuard": {

@@ -40,7 +40,9 @@ import { speedFallbackHint, tightCost } from "../../lib/cost";
 import { notifyError } from "../../lib/notify";
 import { companyName } from "../../lib/provider";
 import { askedPrice } from "../../lib/remote-price";
-import { KeepRest } from "./keep-rest";
+import { ApplyBar, KeepRest } from "./keep-rest";
+import { savedValues, useKeepRestLive } from "./keep-rest-draft";
+import { usePreviewFellBack } from "./keep-rest-preview";
 import { MarksList } from "./marks-list";
 import { encodeMaskPng } from "./mask-png";
 import { ModelField } from "./model-field";
@@ -82,6 +84,7 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   const mode = useEditSession((s) => s.mode);
   const featherPx = useEditSession((s) => s.featherPx);
   const expandPx = useEditSession((s) => s.expandPx);
+  const sensitivity = useEditSession((s) => s.sensitivity);
   const navigate = useNavigate();
   const turned = useTurnedPhoto(item, true);
   const tooLarge = tooLargeToMask(item);
@@ -155,8 +158,13 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
     if (!editor) return;
     // What the button showed is what runs, whatever changes while the limit is asked about.
     const settled = sketch
-      ? { ...MASK_COMPOSITE_DEFAULTS, composite: true }
-      : { composite: session.composite, expandPx: session.expandPx, featherPx: session.featherPx };
+      ? { ...MASK_COMPOSITE_DEFAULTS, composite: true, sensitivity: session.sensitivity }
+      : {
+          composite: session.composite,
+          expandPx: session.expandPx,
+          featherPx: session.featherPx,
+          sensitivity: session.sensitivity,
+        };
     const words = session.prompt;
     const references = session.references;
     const marks = sketch ? marksForApi(session.marks) : [];
@@ -206,6 +214,17 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
     });
   };
 
+  // After a run, the block is live on the new image compared: its own settings, previewed for free
+  // until Apply. Painting the original again, it sets up the next Generate as before.
+  const keep = useKeepRestLive(runner.compared);
+  const kept = keep.state;
+  const adjustable = keep.available;
+  const locked = !!kept && !kept.available && kept.unavailable !== "not_an_edit";
+  const shown = adjustable ? keep.values : locked && kept ? savedValues(kept) : null;
+  // The settings on show may decide by the mask alone where the applied ones didn't, or the other way.
+  const previewed = usePreviewFellBack(adjustable ? (kept ?? null) : null, adjustable ? shown : null);
+  const fellBack = previewed !== undefined ? previewed : (kept?.fellBack ?? null);
+
   const note = savedNote(runner.outcome, runner.notKept);
   const hint =
     busy || noted
@@ -252,7 +271,8 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
           })}
         />
       ) : (
-        <>
+        // Form: scrolls between the tabs and the footer (Image edit / Panel / Smart).
+        <div className="flex min-h-0 w-full flex-1 flex-col gap-12 overflow-y-auto *:shrink-0">
           <PromptCard model={model} resting={busy} sketch={sketch} />
           <ModelField
             models={models}
@@ -278,21 +298,57 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
             onBatch={session.setBatch}
           />
           <Divider className="w-full" />
-          <KeepRest
-            composite={composite}
-            featherPx={featherPx}
-            expandPx={expandPx}
-            resting={busy}
-            afterRun={saved}
-            sketch={sketch}
-            onComposite={sketch ? session.setSketchComposite : session.setComposite}
-            onFeatherPx={session.setFeatherPx}
-            onExpandPx={session.setExpandPx}
-          />
-        </>
+          {kept && shown ? (
+            <KeepRest
+              composite={shown.keep}
+              featherPx={shown.featherPx}
+              expandPx={shown.expandPx}
+              sensitivity={shown.sensitivity}
+              resting={busy}
+              afterRun={saved}
+              live={adjustable}
+              locked={locked}
+              sketch={kept.start === "marks" || (locked && sketch)}
+              note={
+                locked ? kept.note : shown.keep && fellBack ? t(`keepRest.maskOnly.${fellBack}`) : undefined
+              }
+              maskOnly={shown.keep && !!fellBack}
+              onComposite={(on) => keep.set({ keep: on })}
+              onSensitivity={(value) => keep.set({ sensitivity: value })}
+              onFeatherPx={(px) => keep.set({ featherPx: px })}
+              onExpandPx={(px) => keep.set({ expandPx: px })}
+              {...(adjustable && { onSaveResult: () => void keep.save(onOpen) })}
+              savingResult={keep.busy === "save"}
+              applyBar={
+                keep.pending ? (
+                  <ApplyBar
+                    saveNew={!shown.keep}
+                    busy={!!keep.busy}
+                    onDiscard={keep.discard}
+                    onApply={() => void (shown.keep ? keep.apply() : keep.save(onOpen))}
+                  />
+                ) : null
+              }
+            />
+          ) : (
+            <KeepRest
+              composite={composite}
+              featherPx={featherPx}
+              expandPx={expandPx}
+              sensitivity={sensitivity}
+              resting={busy}
+              afterRun={saved}
+              sketch={sketch}
+              onComposite={sketch ? session.setSketchComposite : session.setComposite}
+              onSensitivity={session.setSensitivity}
+              onFeatherPx={session.setFeatherPx}
+              onExpandPx={session.setExpandPx}
+            />
+          )}
+        </div>
       )}
-      {/* Footer: a column at the panel's bottom, 10 apart. */}
-      <div className="flex w-full flex-1 flex-col justify-end gap-10">
+      {/* Footer: a column at the panel's bottom, 10 apart, pinned while the form scrolls. */}
+      <div className="mt-auto flex w-full shrink-0 flex-col justify-end gap-10">
         {note && !busy && !noted ? <SavedNoteRow note={note} /> : null}
         {hint ? (
           <p className="w-full text-center text-caption font-normal text-text-tertiary">{hint}</p>
