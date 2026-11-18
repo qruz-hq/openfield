@@ -1,4 +1,5 @@
 import {
+  KEEP_REST_SENSITIVITY,
   MARKS_MAX,
   MASK_COMPOSITE_DEFAULTS,
   MASK_COMPOSITE_MAX_PX,
@@ -8,6 +9,7 @@ import {
 import type { ComposerValues } from "@openfield/providers/manifest";
 import { create } from "zustand";
 import { type ReferenceSlice, referenceSlice } from "../../image/composer/store";
+import { anyKeepRestDraft, useKeepRestDrafts } from "./keep-rest-draft";
 import { MAX_BRUSH_SIZE, MaskEditor, MIN_BRUSH_SIZE, type Rect } from "./mask";
 import { DEFAULT_MARK_COLOR, DEFAULT_SKETCH_TOOL, type SketchTool } from "./sketch";
 
@@ -108,6 +110,8 @@ export interface EditSessionState extends ReferenceSlice {
   composite: boolean;
   featherPx: number;
   expandPx: number;
+  /** How readily the model's small changes count as real when the rest is kept, 0 to 100. */
+  sensitivity: number;
   /** The server turned the image away: a phone photo stored on its side (design 6YuF99zpGo). */
   turned: boolean;
   /**
@@ -177,6 +181,7 @@ export interface EditSessionState extends ReferenceSlice {
   setComposite: (composite: boolean) => void;
   setFeatherPx: (px: number) => void;
   setExpandPx: (px: number) => void;
+  setSensitivity: (sensitivity: number) => void;
   setTurned: (turned: boolean) => void;
   /** Remembers the mask saved for the current `maskVersion`. */
   setSavedMask: (assetId: string, version: number) => void;
@@ -226,6 +231,7 @@ const FRESH = {
   composite: MASK_COMPOSITE_DEFAULTS.composite,
   featherPx: MASK_COMPOSITE_DEFAULTS.featherPx,
   expandPx: MASK_COMPOSITE_DEFAULTS.expandPx,
+  sensitivity: KEEP_REST_SENSITIVITY.default,
   turned: false,
   savedMask: null,
   kept: null,
@@ -301,6 +307,7 @@ export const useEditSession = create<EditSessionState>()((set, get) => {
       const { editor } = get();
       if (get().assetId === assetId && editor?.mask.width === width && editor.mask.height === height) return;
       const next = new MaskEditor(width, height, initial ? { initial } : {});
+      useKeepRestDrafts.getState().clear();
       set({
         ...FRESH,
         references: [],
@@ -311,7 +318,10 @@ export const useEditSession = create<EditSessionState>()((set, get) => {
       });
       for (const listener of maskListeners) listener(null);
     },
-    end: () => set({ ...FRESH, references: [] }),
+    end: () => {
+      useKeepRestDrafts.getState().clear();
+      set({ ...FRESH, references: [] });
+    },
     setTool: (tool) => {
       if (get().mode === "sketch") {
         if (SKETCH_TOOLS.includes(tool)) set({ sketchTool: tool as SketchTool });
@@ -367,6 +377,12 @@ export const useEditSession = create<EditSessionState>()((set, get) => {
     setComposite: (composite) => set({ composite }),
     setFeatherPx: (px) => set({ featherPx: clampPx(px) }),
     setExpandPx: (px) => set({ expandPx: clampPx(px) }),
+    setSensitivity: (sensitivity) =>
+      set({
+        sensitivity: Math.round(
+          Math.min(KEEP_REST_SENSITIVITY.max, Math.max(KEEP_REST_SENSITIVITY.min, sensitivity)),
+        ),
+      }),
     setTurned: (turned) => set({ turned }),
     setSavedMask: (assetId, version) => set({ savedMask: { assetId, version } }),
     setKept: (kept) => set({ kept }),
@@ -387,6 +403,8 @@ const sameIds = (a: readonly string[], b: readonly string[]) =>
  */
 export function editHasWork(state: EditSessionState = useEditSession.getState()): boolean {
   if (state.assetId === null) return false;
+  // Keep the rest moved on a new image and not applied: leaving would lose it.
+  if (anyKeepRestDraft()) return true;
   if (
     state.mask.empty &&
     state.marks.length === 0 &&

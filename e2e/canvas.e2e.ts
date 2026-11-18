@@ -1467,6 +1467,9 @@ test("an Edit node runs its painted mask on OpenAI, shows what it made, and Keep
     const keep = settings.getByRole("switch", { name: "Keep the rest of the image" });
     await expect(keep).toBeChecked();
     await expect(
+      settings.getByText("Keeps the original wherever the model didn't really change it."),
+    ).toBeVisible();
+    await expect(
       settings.getByText("Changes here update the result for free. No new generation."),
     ).toBeVisible();
     const shown = async () => {
