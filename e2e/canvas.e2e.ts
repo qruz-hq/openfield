@@ -1770,3 +1770,117 @@ test("an Edit node that ran shows how it keeps the rest: smart, mask only, or ma
     await request.delete("/api/settings/keys/openai", { headers: { [SESSION_HEADER]: token } });
   }
 });
+
+test("Touch up on an Edit node that ran: brushes in a window, Apply blends it again for free, undo takes it back", async ({
+  page,
+  request,
+}) => {
+  // The design is drawn in the dark theme.
+  await page.emulateMedia({ colorScheme: "dark" });
+  const home = await libraryRoot(request, await sessionToken(request));
+  const { id, aliases, token, edit, after, settings } = await ranEditCanvas(page, request, "Touch up");
+  try {
+    const jobs = countJobs(home, id);
+    const node = async () =>
+      (await api<CanvasDetail>(request, token, "GET", `/api/canvases/${id}`)).graph.nodes.find(
+        (n) => n.id === aliases.e,
+      )!;
+    const [made] = (await node()).result!.assetIds;
+    const fixesUrl = async () =>
+      (await api<{ fixesUrl: string | null }>(request, token, "GET", `/api/assets/${made}/keep-rest`))
+        .fixesUrl;
+    expect(await fixesUrl()).toBeNull();
+
+    await settings.getByRole("button", { name: "Touch up" }).click();
+    const window = page.getByRole("dialog", { name: "Touch up the result" });
+    await expect(window).toBeVisible();
+    await expect(
+      window.getByText(
+        "Paint where to use the model and where to keep the original. It's free and shows right away.",
+      ),
+    ).toBeVisible();
+    const sources = window.locator("[data-sources]");
+    await expect(sources.locator("[data-from-model][data-ready]")).toHaveCount(1);
+    const apply = window.getByRole("button", { name: "Apply", exact: true });
+    await expect(apply).toBeDisabled();
+
+    // Canvas / Mask window / Touch up (i2iySzYlSg), measured.
+    const surface = window.locator("[data-touch-up-window]").or(window).first();
+    expect(await drawn(surface)).toMatchObject({ w: 1152, gap: "20px", padding: "24px 24px 24px 24px" });
+    const toolbar = window.getByRole("toolbar", { name: "Touch up" });
+    expect(await drawn(toolbar)).toMatchObject({ radius: "12px", gap: "2px", padding: "4px 4px 4px 4px" });
+    const stage = toolbar.locator("..");
+    expect(await drawn(stage)).toMatchObject({ h: 560, radius: "14px" });
+    const stageBox = (await stage.boundingBox())!;
+    const toolbarBox = (await toolbar.boundingBox())!;
+    expect(Math.round(stageBox.y + stageBox.height - (toolbarBox.y + toolbarBox.height))).toBe(12);
+    expect(Math.round(toolbarBox.x + toolbarBox.width / 2)).toBe(Math.round(stageBox.x + stageBox.width / 2));
+    const model = toolbar.getByRole("button", { name: "Use the model here" });
+    expect(await drawn(model)).toMatchObject({
+      h: 36,
+      radius: "8px",
+      gap: "6px",
+      padding: "0px 12px 0px 12px",
+    });
+    expect(await model.locator("svg.lucide-sparkles").boundingBox()).toMatchObject({ width: 14, height: 14 });
+    await expect(
+      toolbar.getByRole("button", { name: "Use the original here" }).locator("svg.lucide-image"),
+    ).toHaveCount(1);
+    await expect(toolbar.getByRole("button", { name: "Undo" }).locator("svg.lucide-undo-2")).toHaveCount(1);
+    // In the window the toolbar has no Size or Done: those are beside it and in the footer.
+    await expect(toolbar.getByRole("button", { name: "Done" })).toHaveCount(0);
+    const brushCard = window.locator("[data-touch-up-brush]");
+    expect(await drawn(brushCard)).toMatchObject({
+      w: 300,
+      radius: "14px",
+      gap: "12px",
+      padding: "12px 12px 12px 12px",
+    });
+    await expect(brushCard.getByText("Brush size")).toBeVisible();
+    const legend = window.getByText("From the model").locator("../..");
+    expect(await drawn(legend)).toMatchObject({
+      w: 300,
+      direction: "column",
+      radius: "14px",
+      gap: "10px",
+      padding: "12px 12px 12px 12px",
+      background: "rgb(14, 16, 18)",
+    });
+    expect(await drawn(window.getByText("From the model").locator(".."))).toMatchObject({ gap: "6px" });
+    await expect(legend.getByText("Your mask")).toBeVisible();
+    expect(await drawn(apply)).toMatchObject({ h: 40, radius: "10px" });
+
+    // The original back over part of what the model made.
+    await toolbar.getByRole("button", { name: "Use the original here" }).click();
+    await expect(toolbar.getByRole("button", { name: "Use the original here" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    const box = (await sources.boundingBox())!;
+    const from = { x: box.x + box.width / 3, y: box.y + box.height / 3 };
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(from.x + i * 6, from.y + i * 6);
+    await page.mouse.up();
+    await expect(apply).toBeEnabled();
+    await apply.click();
+    await expect(window).toBeHidden();
+
+    // Still done, what reads it out of date, the fix layer kept, and no model ran.
+    await expect.poll(async () => (await node()).params.touchUp).toMatch(/^[0-9a-f]{12}$/);
+    expect(await fixesUrl()).not.toBeNull();
+    await expect(edit.locator('.of-card[data-phase="done"]')).toBeVisible();
+    await expect(after.getByText("Inputs changed")).toBeVisible();
+    expect(countJobs(home, id)).toBe(jobs);
+
+    // Undo on the canvas takes the touch up back: no fix layer, still done.
+    await pane(page).click({ position: { x: 20, y: 400 } });
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(async () => (await node()).params.touchUp ?? null).toBeNull();
+    await expect.poll(fixesUrl).toBeNull();
+    await expect(edit.locator('.of-card[data-phase="done"]')).toBeVisible();
+    expect(countJobs(home, id)).toBe(jobs);
+  } finally {
+    await request.delete("/api/settings/keys/openai", { headers: { [SESSION_HEADER]: token } });
+  }
+});

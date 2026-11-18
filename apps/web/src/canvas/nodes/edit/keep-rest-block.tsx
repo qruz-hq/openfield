@@ -4,10 +4,10 @@ import { KEEP_REST_SENSITIVITY, type KeepRestState, MASK_COMPOSITE_MAX_PX, t } f
 import { Button, cn, Field, SliderRow, Switch } from "@openfield/ui";
 import { Info, type LucideIcon, Paintbrush, Zap } from "lucide-react";
 import { useState } from "react";
+import { useKeepRest } from "../../../api/hooks/keep-rest";
 import { useNodeAnalysis } from "../../engine/engine-store";
 import { useCanvas } from "../../store/context";
 import { useSetParams } from "../shell/use-node";
-import { useKeepRestState } from "./keep-rest-api";
 import { useKeepRestCommit } from "./reblend";
 
 // Canvas / Inspector / Image edit / Smart's Keep the rest (design KyWrAiBwam, after a run
@@ -41,7 +41,7 @@ export function KeepRestBlock({
     canReblend(s.doc, nodeId, s.fingerprints[nodeId], analysis?.inputsChanged ?? false),
   );
   const first = useCanvas((s) => (free ? (s.doc.results[nodeId]?.assetIds[0] ?? null) : null));
-  const state = useKeepRestState(first).data;
+  const state = useKeepRest(first).data;
   // An image edited without a mask or marks has no rest to keep: the settings wait for the next Run.
   const ran = free && !!state && state.unavailable !== "not_an_edit";
   // Turned off after a run: it shows the model's own result, saved as an image of its own.

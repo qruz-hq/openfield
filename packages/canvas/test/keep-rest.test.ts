@@ -160,6 +160,20 @@ describe("Keep the rest after an Edit node ran", () => {
     expect(await fingerprintOf({ keepRestMode: "mask" })).not.toBe(doc.results.e!.fingerprint);
   });
 
+  test("a touch up is a free change too: the node stays done and what reads it goes out of date", async () => {
+    const doc = await ranGraph();
+    expect(onlyKeepRest({ touchUp: "a1b2c3" })).toBe(true);
+    expect(editKeepRestOf({ touchUp: "a1b2c3" }, ctx).touchUp).toBe("a1b2c3");
+    // Anything that isn't a short hash isn't one.
+    expect(editKeepRestOf({ touchUp: "../x" }, ctx).touchUp).toBeUndefined();
+    const ops = await reblendOps(doc, specRegistry, ctx, "e", { touchUp: "a1b2c3" });
+    const set = ops[1]!;
+    expect(set.op === "setResult" && set.result?.fingerprint).not.toBe(doc.results.e!.fingerprint);
+    const after = await displays(applyOps(doc, ops).doc);
+    expect(after.e.state).toBe("done");
+    expect(after.g).toMatchObject({ state: "stale", chip: "inputs_changed" });
+  });
+
   test("the mask-only way goes with the run's keep-the-rest settings", () => {
     expect(editKeepRestOf({ keepRestMode: "mask" }, ctx).mode).toBe("mask");
     expect(editKeepRestOf({ keepRestMode: "other" }, ctx).mode).toBe("smart");

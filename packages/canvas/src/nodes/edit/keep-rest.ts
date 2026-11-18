@@ -21,6 +21,7 @@ export const KEEP_REST_PARAMS = [
   "expandPx",
   "featherPx",
   "keepRestMode",
+  "touchUp",
 ] as const;
 
 export type KeepRestParam = (typeof KEEP_REST_PARAMS)[number];
@@ -36,6 +37,8 @@ export interface EditKeepRest {
   sensitivity: number;
   expandPx: number;
   featherPx: number;
+  /** The touch up its images were last blended with (a hash of the fix layer), if any. */
+  touchUp?: string;
 }
 
 export function editKeepRestOf(raw: Readonly<Record<string, unknown>>, ctx: EngineContext): EditKeepRest {
@@ -48,6 +51,7 @@ export function editKeepRestOf(raw: Readonly<Record<string, unknown>>, ctx: Engi
     sensitivity: p.sensitivity ?? KEEP_REST_SENSITIVITY.default,
     expandPx: p.expandPx,
     featherPx: p.featherPx,
+    ...(p.touchUp && { touchUp: p.touchUp }),
   };
 }
 
@@ -57,7 +61,8 @@ export const sameKeepRest = (a: EditKeepRest, b: EditKeepRest): boolean =>
   a.mode === b.mode &&
   a.sensitivity === b.sensitivity &&
   a.expandPx === b.expandPx &&
-  a.featherPx === b.featherPx;
+  a.featherPx === b.featherPx &&
+  a.touchUp === b.touchUp;
 
 /** A params patch that touches nothing but how the rest is kept. */
 export const onlyKeepRest = (patch: Readonly<Record<string, unknown>>): boolean => {
