@@ -59,6 +59,7 @@ const initialUi = (readOnly: boolean): CanvasUiState => ({
   shortcutsOpen: false,
   renamingNodeId: null,
   maskNodeId: null,
+  touchUpNodeId: null,
   readOnly,
 });
 

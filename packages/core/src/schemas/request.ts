@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { type AdapterOp, DIAGNOSTIC_LEVELS, EDIT_OPS, type Op } from "../constants";
 import { HASH_RE } from "../hash";
-import { KEEP_REST_SENSITIVITY } from "../image/keep-rest";
+import { KEEP_REST_MODES, KEEP_REST_SENSITIVITY } from "../image/keep-rest";
 import { MASK_COMPOSITE_MAX_PX } from "../image/mask";
 import {
   aspectRatioSchema,
@@ -63,6 +63,11 @@ export const maskInputSchema = z.object({
    * higher keeps more of them, lower fewer. 0 to 100, 50 by default.
    */
   sensitivity: z.int().min(KEEP_REST_SENSITIVITY.min).max(KEEP_REST_SENSITIVITY.max).optional(),
+  /**
+   * How the rest is kept: "smart" (the default) follows what the model really changed, "mask"
+   * keeps exactly the mask, grown and softened.
+   */
+  mode: z.enum(KEEP_REST_MODES).optional(),
 });
 
 const edgePx = z.int().min(0).max(8192);

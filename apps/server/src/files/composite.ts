@@ -108,8 +108,9 @@ export async function compositeEdit(
   const { composite, expandPx, featherPx, sensitivity } = compositeSettingsOf(mask, {
     marks: Boolean(marks),
   });
+  const mode = mask?.mode ?? "smart";
   const keepRest = (decided: Decided = {}): KeepRestRecord => ({
-    mode: "smart",
+    mode,
     sensitivity,
     start: marks ? "marks" : "mask",
     ...decided,
@@ -162,7 +163,7 @@ export async function compositeEdit(
         result: ingest.fileOf(staged.path),
         area: maskRow ? { mask: ingest.fileOf(maskRow.path) } : { marks: marks! },
       },
-      { mode: "smart", expandPx, featherPx, sensitivity },
+      { mode, expandPx, featherPx, sensitivity },
       logger,
     );
   } catch (err) {

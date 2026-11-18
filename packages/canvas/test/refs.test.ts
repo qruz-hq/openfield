@@ -115,6 +115,26 @@ describe("an Edit node's painted mask", () => {
   });
 });
 
+describe("an Edit node turned off after it ran", () => {
+  // It shows the model's own result (D) and keeps the edit it came from (E) to show again.
+  const withOff = (): CanvasDocument => {
+    const d = doc();
+    const edit = node("edit", "image.edit", {
+      result: result({ assetIds: [D], outputs: [{ assetId: D, keptEdit: E }] }),
+    });
+    return { ...d, nodes: [...d.nodes, edit] };
+  };
+
+  test("holds its kept edit too, so a copy of the canvas carries it", () => {
+    expect(documentAssetRefs(withOff()).shown).toEqual([A, B, C, D, E]);
+  });
+
+  test("the kept edit moves with the rest", () => {
+    const moved = remapDocumentAssets(withOff(), new Map([[E, F]]));
+    expect(moved.nodes[4]!.result!.outputs).toEqual([{ assetId: D, keptEdit: F }]);
+  });
+});
+
 describe("remapDocumentAssets", () => {
   test("moves every asset field and keeps what it doesn't name", () => {
     const moved = remapDocumentAssets(doc(), new Map([[A, B]]));

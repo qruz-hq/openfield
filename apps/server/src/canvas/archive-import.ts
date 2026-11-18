@@ -111,7 +111,17 @@ interface Staged {
   file: StagedFile;
   /** Videos: the poster staged beside it. */
   poster: string | null;
+  /** An edit's model result and fix layer, staged beside it. */
+  kept: KeptFiles;
 }
+
+interface KeptFiles {
+  /** Null when the model's result is the image's own file. */
+  result: StagedFile | null;
+  fixes: StagedFile | null;
+}
+
+const NO_KEPT: KeptFiles = { result: null, fixes: null };
 
 export async function importArchive(
   deps: ImportDeps,
@@ -184,7 +194,11 @@ export async function importArchive(
   const sizeOf = (name: string | undefined) => (name ? (source.size(name) ?? 0) : 0);
   progress.sized(
     wanted.length,
-    wanted.reduce((sum, { entry }) => sum + sizeOf(entry.file) + sizeOf(entry.poster), 0),
+    wanted.reduce(
+      (sum, { entry }) =>
+        sum + sizeOf(entry.file) + sizeOf(entry.poster) + sizeOf(entry.modelResult) + sizeOf(entry.fixes),
+      0,
+    ),
   );
 
   const staged: Staged[] = [];
@@ -194,6 +208,8 @@ export async function importArchive(
     for (const s of staged) {
       ingest.discard(s.file);
       if (s.poster && !s.file.duplicate) ingest.discardPath(s.poster);
+      if (s.kept.result) ingest.discard(s.kept.result);
+      if (s.kept.fixes) ingest.discard(s.kept.fixes);
     }
   };
   let committed: {
@@ -212,6 +228,7 @@ export async function importArchive(
           id: want.id,
           file: { ...twin.file, duplicate: true },
           poster: twin.poster,
+          kept: await stageKept(deps, source, want.entry, progress, signal),
         });
         progress.copied(sizeOf(want.entry.file) + sizeOf(want.entry.poster));
         progress.fileDone();
@@ -230,10 +247,11 @@ export async function importArchive(
           continue;
         }
         if (want.id !== want.entry.id) moved.set(want.entry.id, want.id);
-        const record: Staged = { entry: want.entry, id: want.id, file, poster: null };
+        const record: Staged = { entry: want.entry, id: want.id, file, poster: null, kept: NO_KEPT };
         staged.push(record);
         if (isVideoMime(file.mime))
           record.poster = await stagePoster(deps, source, want.entry, file, progress, signal);
+        record.kept = await stageKept(deps, source, want.entry, progress, signal);
         bySha.set(file.sha256, record);
       } catch (error) {
         if (signal.aborted) throw signal.reason;
@@ -397,6 +415,45 @@ function counted(
   );
 }
 
+/**
+ * An edit's model result and fix layer, staged so it can still be adjusted here. One that can't be
+ * read is left out: the edit then can't be adjusted, as one made before results were kept.
+ */
+async function stageKept(
+  deps: ImportDeps,
+  source: ArchiveSource,
+  entry: CanvasArchiveAsset,
+  progress: ImportProgress,
+  signal: AbortSignal,
+): Promise<KeptFiles> {
+  const one = async (name: string | undefined, folder: "assets" | "uploads") => {
+    // The model's result can be the image's own file, already staged.
+    if (!name || name === entry.file || source.size(name) === null) return null;
+    try {
+      return await deps.ingest.stage(counted(await source.open(name), progress, signal), { folder });
+    } catch (error) {
+      if (signal.aborted) throw signal.reason;
+      deps.logger.warn("An edit's kept file in a canvas archive couldn't be read", { file: name, error });
+      return null;
+    }
+  };
+  const result = await one(entry.modelResult, "assets");
+  const fixes = result || entry.modelResult === entry.file ? await one(entry.fixes, "uploads") : null;
+  return { result, fixes };
+}
+
+/** The stored-result columns for a new image, from what was staged beside it. */
+function keptColumns(s: Staged) {
+  const own = s.entry.modelResult !== undefined && s.entry.modelResult === s.entry.file;
+  const result = own ? s.file : s.kept.result;
+  return {
+    resultPath: result?.path ?? null,
+    resultBytes: result?.bytes ?? null,
+    fixesPath: result ? (s.kept.fixes?.path ?? null) : null,
+    fixesBytes: result ? (s.kept.fixes?.bytes ?? null) : null,
+  };
+}
+
 /** A video's poster: the archive's own still, else its first frame when ffmpeg is here. */
 async function stagePoster(
   deps: ImportDeps,
@@ -529,6 +586,7 @@ function assetRow(
       hasAudio: file.hasAudio ?? entry.hasAudio,
       posterPath: s.poster,
     }),
+    ...keptColumns(s),
     createdAt: entry.createdAt,
   };
 }

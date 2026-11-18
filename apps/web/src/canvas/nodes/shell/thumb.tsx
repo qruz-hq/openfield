@@ -4,6 +4,7 @@ import { ImageOff } from "lucide-react";
 import { useRef } from "react";
 import { useAuthedImage } from "../../../api/hooks/images";
 import { useAssetMissing, usePaneZoom } from "../../store/context";
+import { imageVersionOf, useImageVersion } from "./image-versions";
 
 // A library image at the size it's drawn: the smallest thumbnail rung that covers the box in device
 // pixels, so its zoom on the pane and the screen's density both count (§7.10). /files needs the
@@ -11,8 +12,9 @@ import { useAssetMissing, usePaneZoom } from "../../store/context";
 
 const screenDensity = () => (typeof window === "undefined" ? 1 : window.devicePixelRatio || 1);
 
-export const thumbUrl = (assetId: string, size: ThumbSize) =>
-  `/files/thumb/${assetId}?h=${size.h}${size.dpr === 2 ? "&dpr=2" : ""}`;
+/** With the file's version, when it changed in place (image-versions.ts), so the cache can't hold the old one. */
+export const thumbUrl = (assetId: string, size: ThumbSize, version = imageVersionOf(assetId)) =>
+  `/files/thumb/${assetId}?h=${size.h}${size.dpr === 2 ? "&dpr=2" : ""}${version ? `&v=${version}` : ""}`;
 
 /** The one place canvas builds a thumbnail URL: nodes, index cards and the version history. */
 export function thumbPath(assetId: string, height: number, zoom = 1): string {
@@ -26,11 +28,12 @@ export function thumbPath(assetId: string, height: number, zoom = 1): string {
  */
 export function useThumbPath(assetId: string | null, height: number, pane: boolean): string | null {
   const zoom = usePaneZoom(pane);
+  const version = useImageVersion(assetId);
   const shown = useRef<ThumbSize | null>(null);
   if (!assetId) return null;
   // The same inputs give the same size, so this stays pure across repeated renders.
   shown.current = pickThumbSize(height * zoom * screenDensity(), shown.current);
-  return thumbUrl(assetId, shown.current);
+  return thumbUrl(assetId, shown.current, version);
 }
 
 export function AssetImage({

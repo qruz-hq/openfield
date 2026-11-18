@@ -141,6 +141,8 @@ const SHOWN_PARAMS: Partial<Record<string, readonly string[]>> = {
     "mode",
     "marks",
     "sketchKeepOriginal",
+    "keepRestMode",
+    "sensitivity",
   ],
   "image.layers": ["model", "prompt", "size", "maxLayers"],
   "image.variations": ["strategy", "count", "model", "models", "prompts", "size", "resolution", "quality"],
@@ -273,7 +275,7 @@ export async function describeCanvas(
  * would find. Images its nodes made, or an Edit node's painted mask, that the library no longer
  * has count as missing.
  */
-async function evaluateCanvas(ctx: ToolContext, doc: CanvasDocument) {
+export async function evaluateCanvas(ctx: ToolContext, doc: CanvasDocument) {
   const { slice } = fromDocument(doc);
   const named = doc.nodes.flatMap((n) => [
     ...(n.result?.assetIds ?? []),

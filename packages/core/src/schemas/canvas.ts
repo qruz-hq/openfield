@@ -78,6 +78,12 @@ export const canvasDetailSchema = z.object({
    * shape instead of waiting for a thumbnail's rounded one.
    */
   assetSizes: z.record(z.string(), z.object({ w: z.int().positive(), h: z.int().positive() })).optional(),
+  /**
+   * The file version of each image it names whose file changed in place (an edit's Keep the rest
+   * adjusted after the run), as its URLs carry it in ?v. File URLs are cached for good, so an image
+   * card built from the id alone would keep showing the old picture.
+   */
+  assetVersions: z.record(z.string(), z.string()).optional(),
   /** When the index card's picture was taken, so the editor knows whether it's out of date (M4-15). */
   previewAt: timestampSchema.nullable().optional(),
 });
@@ -175,7 +181,7 @@ export const canvasRunCallSchema = generateRequestSchema
      * inputs, like a video's frames.
      */
     mask: maskInputSchema
-      .pick({ composite: true, expandPx: true, featherPx: true, sensitivity: true })
+      .pick({ composite: true, expandPx: true, featherPx: true, sensitivity: true, mode: true })
       .optional(),
     /** Caption for this call's images, e.g. the prompt line. */
     label: z.string().max(CANVAS_CALL_LABEL_MAX).optional(),

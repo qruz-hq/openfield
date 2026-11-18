@@ -79,7 +79,12 @@ describe("agent permissions", () => {
     expect(groupPermission(one, "images")).toBeNull();
     const all = withPermission(one, actionsOf("images"), "allow");
     expect(groupPermission(all, "images")).toBe("allow");
-    expect(all).toEqual({ make_images: "allow", run_canvases: "allow", stop_runs: "allow" });
+    expect(all).toEqual({
+      make_images: "allow",
+      run_canvases: "allow",
+      stop_runs: "allow",
+      adjust_edits: "allow",
+    });
     // Default is kept by leaving the action out.
     expect(withPermission(all, actionsOf("images"), "default")).toEqual({});
     expect(actionsOf("delete")).toEqual([

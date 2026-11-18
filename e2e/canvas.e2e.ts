@@ -1382,7 +1382,7 @@ test("Edit on an image node adds a wired Edit node, and its mask is painted in a
   await expect(edit.getByText("Paint where the image should change.")).toBeVisible();
 });
 
-test("an Edit node runs its painted mask on OpenAI, shows what it made, and Keep the rest can be off", async ({
+test("an Edit node runs its painted mask on OpenAI, shows what it made, and Keep the rest turns off for free", async ({
   page,
   request,
 }) => {
@@ -1462,21 +1462,424 @@ test("an Edit node runs its painted mask on OpenAI, shows what it made, and Keep
     // The inspector still shows the mask it painted.
     await expect(settings.getByText("Painted on the input image")).toBeVisible();
 
-    // Keep the rest, off: the node is out of date, and its next run keeps the model's whole result.
+    // Keep the rest, off after a run: free. The node stays done and shows the model's own result,
+    // saved as an image of its own; on again goes back to the same kept edit. No new run either way.
     const keep = settings.getByRole("switch", { name: "Keep the rest of the image" });
     await expect(keep).toBeChecked();
     await expect(
       settings.getByText("Keeps the original wherever the model didn't really change it."),
     ).toBeVisible();
+    await expect(
+      settings.getByText("Changes here update the result for free. No new generation."),
+    ).toBeVisible();
+    const shown = async () => {
+      const saved = await api<CanvasDetail>(request, token, "GET", `/api/canvases/${id}`);
+      return saved.graph.nodes.find((n) => n.type === "image.edit")!.result!;
+    };
     await keep.click();
     await expect(keep).not.toBeChecked();
-    await expect(settings.getByText("The model may change other parts too.")).toBeVisible();
+    await expect(settings.getByText("Showing the model's own result.")).toBeVisible();
+    await expect.poll(async () => (await shown()).outputs[0]?.keptEdit).toBe(first!.asset);
+    const own = (await shown()).assetIds[0]!;
+    expect(own).not.toBe(first!.asset);
+    await expect(edit.locator('.of-card[data-phase="done"]')).toBeVisible();
+    await keep.click();
+    await expect(keep).toBeChecked();
+    await expect.poll(async () => (await shown()).assetIds).toEqual([first!.asset]);
+    await expect(edit.locator('.of-card[data-phase="done"]')).toBeVisible();
+    expect(sets()).toHaveLength(1);
+
+    // Off again, then new words: out of date, and its next run keeps the model's whole result.
+    await keep.click();
+    await expect.poll(async () => (await shown()).outputs[0]?.keptEdit).toBe(first!.asset);
+    await settings.getByRole("textbox", { name: "What to change" }).fill("a yellow door");
     await expect(edit.locator('.of-card[data-phase="changed"]')).toBeVisible();
     await settings.getByRole("button", { name: /^Run/ }).click();
     await expect(edit.locator('.of-card[data-phase="done"]')).toBeVisible({ timeout: 20_000 });
     const [, second] = sets();
     expect(JSON.parse(second!.request_json).mask).toMatchObject({ composite: false });
     expect(JSON.parse(second!.op_params)).toMatchObject({ edit: { composite: { applied: false } } });
+  } finally {
+    await request.delete("/api/settings/keys/openai", { headers: { [SESSION_HEADER]: token } });
+  }
+});
+
+const OPENAI_EDIT = "openai:gpt-image-2";
+
+/**
+ * A photo, an Edit node on it with a painted mask, and a node that reads what the edit made, all
+ * run once: the Edit node's settings open. Leaves OpenAI's fake key in place; the caller removes it.
+ */
+async function ranEditCanvas(page: Page, request: APIRequestContext, name: string) {
+  const token = await sessionToken(request);
+  await api(request, token, "PUT", "/api/settings/keys/openai", { apiKey: FAKE_KEY });
+  const photo = await makeImage(request, token, `a green door in a brick wall ${Date.now()}`, "3:4");
+  const { id, aliases } = await canvasOf(request, name, [
+    {
+      op: "add_node",
+      as: "u",
+      type: "image.upload",
+      position: { x: 0, y: 0 },
+      params: { assetIds: [photo] },
+    },
+    {
+      op: "add_node",
+      as: "e",
+      type: "image.edit",
+      position: { x: 420, y: 0 },
+      params: { model: OPENAI_EDIT, prompt: "a red door" },
+    },
+    {
+      op: "add_node",
+      as: "g",
+      type: "image.generate",
+      position: { x: 840, y: 0 },
+      params: { model: FLASH, prompt: "a poster of this door" },
+    },
+    { op: "connect", source: "u", sourceHandle: "images", target: "e", targetHandle: "image" },
+    { op: "connect", source: "e", sourceHandle: "images", target: "g", targetHandle: "input_images" },
+  ]);
+  await page.goto(`/canvas/${id}`);
+  const edit = pane(page).locator(`.react-flow__node[data-id="${aliases.e}"]`);
+  const after = pane(page).locator(`.react-flow__node[data-id="${aliases.g}"]`);
+  await expect(edit).toBeVisible();
+  await edit.getByRole("button", { name: "Paint mask" }).click();
+  const window = page.getByRole("dialog", { name: "Paint the mask" });
+  const box = (await window.locator("[data-paint-input]").boundingBox())!;
+  const from = { x: box.x + box.width / 3, y: box.y + box.height / 3 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  for (let i = 1; i <= 10; i++) await page.mouse.move(from.x + i * 6, from.y + i * 6);
+  await page.mouse.up();
+  await window.getByRole("button", { name: "Save mask" }).click();
+  await expect(window).toBeHidden();
+  await runEverything(page, /^Run 2 nodes/);
+  await expect(edit.locator('.of-card[data-phase="done"]')).toBeVisible({ timeout: 20_000 });
+  await expect(after.locator('.of-card[data-phase="done"]')).toBeVisible({ timeout: 20_000 });
+  await edit.dblclick({ position: { x: 160, y: 40 } });
+  const settings = page.getByRole("complementary", { name: "Edit" });
+  await expect(settings.locator('[data-keep-rest-block="after"]')).toBeVisible();
+  return { id, aliases, token, edit, after, settings };
+}
+
+/** The edit's picture on its card. */
+const cardImage = (node: Locator) => node.locator("img.of-card-image");
+
+test("after an Edit node ran, Feather and Expand blend it again for free: it stays done, what reads it goes out of date", async ({
+  page,
+  request,
+}) => {
+  const home = await libraryRoot(request, await sessionToken(request));
+  const { id, aliases, token, edit, after, settings } = await ranEditCanvas(page, request, "Free blend");
+  try {
+    const jobs = countJobs(home, id);
+    const result = async () =>
+      (await api<CanvasDetail>(request, token, "GET", `/api/canvases/${id}`)).graph.nodes.find(
+        (n) => n.id === aliases.e,
+      )!.result!;
+    const [made] = (await result()).assetIds;
+    const shaOf = () =>
+      queryDb<{ sha256: string }>(home, "select sha256 from assets where id = ?", made!)[0]!.sha256;
+    const sha = shaOf();
+    // The card draws from a blob, so what it asked the server for tells which file it shows.
+    const asked: string[] = [];
+    page.on("request", (r) => {
+      if (r.url().includes(`/files/thumb/${made}`)) asked.push(r.url());
+    });
+    const versionOf = (url: string) => new URL(url).searchParams.get("v");
+
+    // Feather all the way, by keyboard: one change, blended on release.
+    const feather = settings.locator('[data-keep-rest="featherPx"]').getByRole("slider");
+    await feather.focus();
+    await page.keyboard.press("End");
+    await expect(settings.locator('[data-keep-rest="featherPx"]')).toContainText("32 px");
+    await expect.poll(shaOf, { timeout: 15_000 }).not.toBe(sha);
+    // Expand a step more, the same way.
+    const expand = settings.locator('[data-keep-rest="expandPx"]').getByRole("slider");
+    await expand.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect.poll(async () => (await result()).assetIds).toEqual([made]);
+
+    // Still done, the same image in place, and what reads it is out of date. No model ran.
+    await expect(edit.locator('.of-card[data-phase="done"]')).toBeVisible();
+    await expect(after.getByText("Inputs changed")).toBeVisible();
+    await expect.poll(() => asked.some((url) => versionOf(url) !== null)).toBe(true);
+    expect(countJobs(home, id)).toBe(jobs);
+
+    // After a reload the card asks for the new file, not the one cached before the blend.
+    asked.length = 0;
+    await page.reload();
+    await expect(cardImage(edit)).toBeVisible();
+    await expect.poll(() => asked.length).toBeGreaterThan(0);
+    // The version is the start of the file's hash, so it names the file blended last.
+    const blended = shaOf().slice(0, 12);
+    expect(blended).not.toBe(sha.slice(0, 12));
+    expect(asked.map(versionOf)).toEqual(asked.map(() => blended));
+    await expect(edit.locator('.of-card[data-phase="done"]')).toBeVisible();
+    await expect(after.getByText("Inputs changed")).toBeVisible();
+  } finally {
+    await request.delete("/api/settings/keys/openai", { headers: { [SESSION_HEADER]: token } });
+  }
+});
+
+/** What the browser drew, for comparing against the design's node values. */
+const drawn = (el: Locator) =>
+  el.evaluate((node) => {
+    const s = getComputedStyle(node);
+    const r = node.getBoundingClientRect();
+    return {
+      w: Math.round(r.width),
+      h: Math.round(r.height),
+      radius: s.borderTopLeftRadius,
+      padding: `${s.paddingTop} ${s.paddingRight} ${s.paddingBottom} ${s.paddingLeft}`,
+      gap: s.flexDirection === "column" ? s.rowGap : s.columnGap,
+      direction: s.flexDirection,
+      align: s.alignItems,
+      justify: s.justifyContent,
+      display: s.display,
+      opacity: s.opacity,
+      font: `${s.fontSize} ${s.fontWeight}`,
+      family: s.fontFamily,
+      color: s.color,
+      background: s.backgroundColor,
+      ring: s.boxShadow,
+    };
+  });
+
+/**
+ * What the server says the edit can do, changed: the fake models always fall back to the mask, so
+ * the smart states only show this way.
+ */
+async function keepRestSays(page: Page, change: Record<string, unknown>) {
+  await page.unroute("**/api/assets/*/keep-rest");
+  await page.route("**/api/assets/*/keep-rest", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...(await response.json()), ...change } });
+  });
+}
+
+test("an Edit node that ran shows how it keeps the rest: smart, mask only, or made before results were kept", async ({
+  page,
+  request,
+}) => {
+  // The design is drawn in the dark theme.
+  await page.emulateMedia({ colorScheme: "dark" });
+  const { token, edit, settings } = await ranEditCanvas(page, request, "Keep the rest states");
+  try {
+    const block = settings.locator("[data-keep-rest-block]");
+    const keep = settings.getByRole("switch", { name: "Keep the rest of the image" });
+    const sensitivity = settings.locator('[data-keep-rest="sensitivity"]');
+    const note = (words: string | RegExp) => block.getByText(words);
+    const reopen = async () => {
+      await page.reload();
+      await edit.dblclick({ position: { x: 160, y: 40 } });
+      await expect(block).toBeVisible();
+    };
+    const FREE = "Changes here update the result for free. No new generation.";
+
+    // Smart: no note, every slider live, Fix spots by hand and the hint after them.
+    await keepRestSays(page, { available: true, keep: true, mode: "smart", fellBack: null });
+    await reopen();
+    await expect(block).toHaveAttribute("data-keep-rest-block", "after");
+    await expect(block.locator("svg.lucide-info")).toHaveCount(0);
+    await expect(sensitivity).toHaveCSS("opacity", "1");
+    await expect(settings.getByRole("button", { name: "Touch up" })).toBeEnabled();
+    await expect(note(FREE)).toBeVisible();
+
+    // Canvas / Inspector / Image edit / Smart, after a run (KyWrAiBwam, 3ydiGwTdUW), measured.
+    expect(await drawn(block)).toMatchObject({ direction: "column", gap: "4px", display: "flex" });
+    const switchRow = keep.locator("xpath=ancestor::*[contains(@class,'px-2')][1]");
+    expect(await drawn(switchRow)).toMatchObject({
+      direction: "row",
+      gap: "16px",
+      padding: "4px 2px 4px 2px",
+      justify: "space-between",
+      align: "center",
+    });
+    expect(await drawn(switchRow.getByText("Keep the rest of the image"))).toMatchObject({
+      font: "13px 500",
+    });
+    expect(await drawn(switchRow.getByText(/^Keeps the original wherever/))).toMatchObject({
+      font: "12px 400",
+    });
+    expect(await drawn(keep)).toMatchObject({ w: 32, h: 18 });
+    expect(await drawn(sensitivity)).toMatchObject({
+      direction: "column",
+      gap: "8px",
+      padding: "4px 2px 4px 2px",
+    });
+    const control = sensitivity.getByRole("slider").locator("xpath=ancestor::*[contains(@class,'h-18')][1]");
+    expect(await drawn(control)).toMatchObject({ h: 18, gap: "12px", align: "center" });
+    const value = control.getByText("50%");
+    expect(await drawn(value)).toMatchObject({ font: "12px 400" });
+    expect((await drawn(value)).family).toContain("JetBrains Mono");
+    const fixRow = settings.getByText("Fix spots by hand").locator("xpath=../..");
+    expect(await drawn(fixRow)).toMatchObject({
+      direction: "row",
+      gap: "16px",
+      padding: "4px 2px 4px 2px",
+      justify: "space-between",
+      align: "center",
+    });
+    const touchUp = settings.getByRole("button", { name: "Touch up" });
+    expect(await drawn(touchUp)).toMatchObject({
+      h: 32,
+      radius: "8px",
+      gap: "6px",
+      padding: "0px 12px 0px 12px",
+    });
+    // Control: #202327 with a #FFFFFF14 line (drawn as an inset ring), words #F5F6F7.
+    expect(await drawn(touchUp)).toMatchObject({
+      font: "13px 600",
+      background: "rgb(32, 35, 39)",
+      color: "rgb(245, 246, 247)",
+    });
+    expect((await drawn(touchUp)).ring).toContain("rgba(255, 255, 255, 0.08) 0px 0px 0px 1px inset");
+    expect(await touchUp.locator("svg.lucide-paintbrush").boundingBox()).toMatchObject({
+      width: 14,
+      height: 14,
+    });
+    const hint = note(FREE).locator("..");
+    expect(await drawn(hint)).toMatchObject({
+      direction: "row",
+      gap: "8px",
+      padding: "0px 2px 0px 2px",
+      align: "center",
+    });
+    expect(await drawn(note(FREE))).toMatchObject({ font: "12px 400" });
+    expect(await hint.locator("svg.lucide-zap").boundingBox()).toMatchObject({ width: 14, height: 14 });
+    // Note and hint words are the secondary text colour, #F5F6F79E.
+    expect((await drawn(note(FREE))).color).toBe("rgba(245, 246, 247, 0.62)");
+
+    // Mask only: the note says why, and Sensitivity has nothing to say.
+    await keepRestSays(page, { available: true, keep: true, mode: "smart", fellBack: "no_match" });
+    await reopen();
+    await expect(note(/^Kept by your mask only/)).toBeVisible();
+    await expect(sensitivity).toHaveCSS("opacity", "0.4");
+    await expect(settings.locator('[data-keep-rest="featherPx"]')).toHaveCSS("opacity", "1");
+
+    // Made before results were kept: the note, the switch resting, no touch up and nothing free.
+    await keepRestSays(page, { available: false, unavailable: "not_stored", note: undefined });
+    await reopen();
+    await expect(note("This edit was made before the model's result was kept.")).toBeVisible();
+    await expect(keep).toBeDisabled();
+    await expect(settings.getByRole("button", { name: "Touch up" })).toHaveCount(0);
+    await expect(note(FREE)).toHaveCount(0);
+  } finally {
+    await request.delete("/api/settings/keys/openai", { headers: { [SESSION_HEADER]: token } });
+  }
+});
+
+test("Touch up on an Edit node that ran: brushes in a window, Apply blends it again for free, undo takes it back", async ({
+  page,
+  request,
+}) => {
+  // The design is drawn in the dark theme.
+  await page.emulateMedia({ colorScheme: "dark" });
+  const home = await libraryRoot(request, await sessionToken(request));
+  const { id, aliases, token, edit, after, settings } = await ranEditCanvas(page, request, "Touch up");
+  try {
+    const jobs = countJobs(home, id);
+    const node = async () =>
+      (await api<CanvasDetail>(request, token, "GET", `/api/canvases/${id}`)).graph.nodes.find(
+        (n) => n.id === aliases.e,
+      )!;
+    const [made] = (await node()).result!.assetIds;
+    const fixesUrl = async () =>
+      (await api<{ fixesUrl: string | null }>(request, token, "GET", `/api/assets/${made}/keep-rest`))
+        .fixesUrl;
+    expect(await fixesUrl()).toBeNull();
+
+    await settings.getByRole("button", { name: "Touch up" }).click();
+    const window = page.getByRole("dialog", { name: "Touch up the result" });
+    await expect(window).toBeVisible();
+    await expect(
+      window.getByText(
+        "Paint where to use the model and where to keep the original. It's free and shows right away.",
+      ),
+    ).toBeVisible();
+    const sources = window.locator("[data-sources]");
+    await expect(sources.locator("[data-from-model][data-ready]")).toHaveCount(1);
+    const apply = window.getByRole("button", { name: "Apply", exact: true });
+    await expect(apply).toBeDisabled();
+
+    // Canvas / Mask window / Touch up (i2iySzYlSg), measured.
+    const surface = window.locator("[data-touch-up-window]").or(window).first();
+    expect(await drawn(surface)).toMatchObject({ w: 1152, gap: "20px", padding: "24px 24px 24px 24px" });
+    const toolbar = window.getByRole("toolbar", { name: "Touch up" });
+    expect(await drawn(toolbar)).toMatchObject({ radius: "12px", gap: "2px", padding: "4px 4px 4px 4px" });
+    const stage = toolbar.locator("..");
+    expect(await drawn(stage)).toMatchObject({ h: 560, radius: "14px" });
+    const stageBox = (await stage.boundingBox())!;
+    const toolbarBox = (await toolbar.boundingBox())!;
+    expect(Math.round(stageBox.y + stageBox.height - (toolbarBox.y + toolbarBox.height))).toBe(12);
+    expect(Math.round(toolbarBox.x + toolbarBox.width / 2)).toBe(Math.round(stageBox.x + stageBox.width / 2));
+    const model = toolbar.getByRole("button", { name: "Use the model here" });
+    expect(await drawn(model)).toMatchObject({
+      h: 36,
+      radius: "8px",
+      gap: "6px",
+      padding: "0px 12px 0px 12px",
+    });
+    expect(await model.locator("svg.lucide-sparkles").boundingBox()).toMatchObject({ width: 14, height: 14 });
+    await expect(
+      toolbar.getByRole("button", { name: "Use the original here" }).locator("svg.lucide-image"),
+    ).toHaveCount(1);
+    await expect(toolbar.getByRole("button", { name: "Undo" }).locator("svg.lucide-undo-2")).toHaveCount(1);
+    // In the window the toolbar has no Size or Done: those are beside it and in the footer.
+    await expect(toolbar.getByRole("button", { name: "Done" })).toHaveCount(0);
+    const brushCard = window.locator("[data-touch-up-brush]");
+    expect(await drawn(brushCard)).toMatchObject({
+      w: 300,
+      radius: "14px",
+      gap: "12px",
+      padding: "12px 12px 12px 12px",
+    });
+    await expect(brushCard.getByText("Brush size")).toBeVisible();
+    const legend = window.getByText("From the model").locator("../..");
+    expect(await drawn(legend)).toMatchObject({
+      w: 300,
+      direction: "column",
+      radius: "14px",
+      gap: "10px",
+      padding: "12px 12px 12px 12px",
+      background: "rgb(14, 16, 18)",
+    });
+    expect(await drawn(window.getByText("From the model").locator(".."))).toMatchObject({ gap: "6px" });
+    await expect(legend.getByText("Your mask")).toBeVisible();
+    expect(await drawn(apply)).toMatchObject({ h: 40, radius: "10px" });
+
+    // The original back over part of what the model made.
+    await toolbar.getByRole("button", { name: "Use the original here" }).click();
+    await expect(toolbar.getByRole("button", { name: "Use the original here" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    const box = (await sources.boundingBox())!;
+    const from = { x: box.x + box.width / 3, y: box.y + box.height / 3 };
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down();
+    for (let i = 1; i <= 10; i++) await page.mouse.move(from.x + i * 6, from.y + i * 6);
+    await page.mouse.up();
+    await expect(apply).toBeEnabled();
+    await apply.click();
+    await expect(window).toBeHidden();
+
+    // Still done, what reads it out of date, the fix layer kept, and no model ran.
+    await expect.poll(async () => (await node()).params.touchUp).toMatch(/^[0-9a-f]{12}$/);
+    expect(await fixesUrl()).not.toBeNull();
+    await expect(edit.locator('.of-card[data-phase="done"]')).toBeVisible();
+    await expect(after.getByText("Inputs changed")).toBeVisible();
+    expect(countJobs(home, id)).toBe(jobs);
+
+    // Undo on the canvas takes the touch up back: no fix layer, still done.
+    await pane(page).click({ position: { x: 20, y: 400 } });
+    await page.keyboard.press("ControlOrMeta+z");
+    await expect.poll(async () => (await node()).params.touchUp ?? null).toBeNull();
+    await expect.poll(fixesUrl).toBeNull();
+    await expect(edit.locator('.of-card[data-phase="done"]')).toBeVisible();
+    expect(countJobs(home, id)).toBe(jobs);
   } finally {
     await request.delete("/api/settings/keys/openai", { headers: { [SESSION_HEADER]: token } });
   }

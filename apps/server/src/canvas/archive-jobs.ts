@@ -290,6 +290,9 @@ export class CanvasArchiveService {
       if (!sent.has(asset)) continue;
       files.push(`${archive.prefix}${asset.file}`);
       if (asset.poster) files.push(`${archive.prefix}${asset.poster}`);
+      if (asset.modelResult && asset.modelResult !== asset.file)
+        files.push(`${archive.prefix}${asset.modelResult}`);
+      if (asset.fixes) files.push(`${archive.prefix}${asset.fixes}`);
     }
     return files;
   }

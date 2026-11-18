@@ -37,6 +37,13 @@ export const canvasArchiveAssetSchema = z.object({
   file: archivePathSchema,
   /** Videos: the still their thumbnails are made from. */
   poster: archivePathSchema.optional(),
+  /**
+   * An edit's model result, kept so how it keeps the rest can change later. Absent when the image
+   * is that result itself, or the edit is older than kept results.
+   */
+  modelResult: archivePathSchema.optional(),
+  /** The spots fixed by hand on an edit (a fix layer PNG). */
+  fixes: archivePathSchema.optional(),
   sha256: sha256Schema,
   bytes: z.int().nonnegative(),
   mime: z.string().min(1).max(100),
