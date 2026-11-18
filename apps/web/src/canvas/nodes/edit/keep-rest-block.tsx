@@ -44,8 +44,10 @@ export function KeepRestBlock({
   const state = useKeepRestState(first).data;
   // An image edited without a mask or marks has no rest to keep: the settings wait for the next Run.
   const ran = free && !!state && state.unavailable !== "not_an_edit";
+  // Turned off after a run: it shows the model's own result, saved as an image of its own.
+  const own = ran && state.unavailable === "saved_result";
   // An edit older than the kept result can't be adjusted: its settings rest as they were.
-  const old = ran && !state.available;
+  const old = ran && !state.available && !own;
   const fellBack = ran && state.available && state.keep && state.fellBack !== null;
   const settled = resting || busy || old;
 
@@ -112,7 +114,9 @@ export function KeepRestBlock({
               : "canvas.nodes.edit.keepRest.sketchOff"
             : keep
               ? "canvas.nodes.edit.keepRest.on"
-              : "canvas.nodes.edit.keepRest.off",
+              : own
+                ? "canvas.nodes.edit.keepRest.offAfterRun"
+                : "canvas.nodes.edit.keepRest.off",
         )}
         className={cn("px-2 py-4", old && "opacity-40")}
       >

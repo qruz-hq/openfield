@@ -1660,6 +1660,7 @@
           "label": "Keep the rest of the image",
           "on": "Keeps the original wherever the model didn't really change it.",
           "off": "The model may change other parts too.",
+          "offAfterRun": "Showing the model's own result.",
           "sketchOn": "Keeps the original wherever the model didn't really change it, starting from your marks.",
           "sketchOff": "Off, so the change can blend in. Turn on to keep the original wherever the model didn't really change it.",
           "sensitivity": "Sensitivity",

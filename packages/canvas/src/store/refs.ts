@@ -68,7 +68,11 @@ function remapResult(result: CanvasNodeResult, to: (id: string) => string): Canv
   return {
     ...result,
     assetIds: result.assetIds.map(to),
-    outputs: result.outputs.map((output) => ({ ...output, assetId: to(output.assetId) })),
+    outputs: result.outputs.map((output) => ({
+      ...output,
+      assetId: to(output.assetId),
+      ...(output.keptEdit && { keptEdit: to(output.keptEdit) }),
+    })),
     // Kept sorted and unique, the way a run writes them, so the comparison with what a node reads
     // now still holds when two ids became one.
     ...(result.inputs && { inputs: [...new Set(result.inputs.map(to))].sort() }),

@@ -116,7 +116,7 @@ const SETTINGS: Partial<Record<string, Record<string, string>>> = {
 
 /** How an Edit node's keep-the-rest settings work after it ran, for list_node_types. */
 const EDIT_KEEP_REST_NOTE =
-  "Once an Edit node has run, changing only keepOriginal or sketchKeepOriginal to true, keepRestMode, sensitivity, expandPx or featherPx blends its images again, for free and in place: the node stays done and the nodes after it go out of date. Turning keep the rest off waits for the next Run; save_model_result keeps the model's own result now, for free.";
+  "Once an Edit node has run, changing only keepOriginal, sketchKeepOriginal, keepRestMode, sensitivity, expandPx or featherPx is free: the node stays done and the nodes after it go out of date. Its images are blended again in place; turned off, it shows the model's own results, saved as new images, and turned back on it shows its kept edits again.";
 
 /** How a Layers node's outputs work, for list_node_types. */
 const LAYERS_OUTPUTS_NOTE = `One output per layer its last run made: "layer-N" is the layer at place N in the stack, N from 1 to ${LAYERS_MAX} (a higher N sits on top), and "base" is the base. get_canvas lists the ones it has, with the name the model gave each and, on a text layer, the words on it with their font and colour. Connect by port, as "l.layer-2"; before a run any place can be connected. A run that makes fewer layers keeps the connection, but that port hands on nothing until a run makes that layer again, and what reads it waits.`;

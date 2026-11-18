@@ -56,6 +56,11 @@ export const canvasOutputSchema = z.object({
     .pick({ role: true, zIndex: true, name: true, description: true })
     .extend({ text: layerTextSummarySchema.optional() })
     .optional(),
+  /**
+   * An Edit node with Keep the rest turned off after it ran shows the model's own result, saved as
+   * an image of its own: this is the edit it came from, which turning it back on shows again.
+   */
+  keptEdit: ulidSchema.optional(),
 });
 
 export const canvasNodeResultSchema = z.object({

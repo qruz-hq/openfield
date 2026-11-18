@@ -1,8 +1,10 @@
 import {
+  assetSchema,
   type KeepRestApplyBody,
   type KeepRestApplyResponse,
   type KeepRestState,
   keepRestApplyResponseSchema,
+  keepRestSaveResponseSchema,
 } from "@openfield/core";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { api, call, queryClient } from "../../../api/client";
@@ -60,4 +62,37 @@ export async function reblendImages(
     out.push(answer);
   }
   return out;
+}
+
+/**
+ * POST /api/assets/:id/keep-rest/save, for each image: the model's own result as an image of its
+ * own (the same one again when it was saved already). With a fix layer, its "use the original"
+ * strokes put the original back first. The saved images' ids, in order.
+ */
+export async function saveModelResults(assetIds: readonly string[], fixes?: Blob): Promise<string[]> {
+  const out: string[] = [];
+  for (const id of assetIds) {
+    const init: RequestInit = { method: "POST" };
+    if (fixes) {
+      const form = new FormData();
+      form.set("fixes", new File([fixes], "fixes.png", { type: "image/png" }));
+      init.body = form;
+    }
+    const res = await rawFetch(`/api/assets/${id}/keep-rest/save`, init);
+    if (!res.ok) throw await toApiError(res);
+    out.push(keepRestSaveResponseSchema.parse(await res.json()).asset.id);
+  }
+  return out;
+}
+
+/**
+ * The kept edit a saved model result came from (opParams.savedFrom), for a node whose result
+ * doesn't say; the image itself when it isn't one.
+ */
+export async function keptEditOf(assetId: string): Promise<string> {
+  const res = await rawFetch(`/api/assets/${assetId}`);
+  if (!res.ok) throw await toApiError(res);
+  const body = (await res.json()) as { asset: unknown };
+  const from = assetSchema.parse(body.asset).opParams?.savedFrom;
+  return typeof from === "string" ? from : assetId;
 }

@@ -9,6 +9,7 @@ import {
   canReblend,
   editKeepRestOf,
   keepRestBody,
+  keptEditsOf,
   onlyKeepRest,
   reblendOps,
   sameKeepRest,
@@ -166,12 +167,47 @@ describe("Keep the rest after an Edit node ran", () => {
 
   test("the switch off points the node at the model's own result, each image in its place", async () => {
     const doc = await ranGraph();
-    const ops = await reblendOps(doc, specRegistry, ctx, "e", { keepOriginal: false }, { assetIds: [SAVED] });
-    const next = applyOps(doc, ops).doc;
-    expect(next.results.e).toMatchObject({ assetIds: [SAVED], outputs: [{ assetId: SAVED }] });
+    const off = await reblendOps(
+      doc,
+      specRegistry,
+      ctx,
+      "e",
+      { keepOriginal: false },
+      { swap: { assetIds: [SAVED], keptEdits: [OUT] } },
+    );
+    const next = applyOps(doc, off).doc;
+    expect(next.results.e).toMatchObject({
+      assetIds: [SAVED],
+      outputs: [{ assetId: SAVED, keptEdit: OUT }],
+      jobSetId: doc.results.e!.jobSetId,
+      costUsd: doc.results.e!.costUsd,
+    });
+    expect(keptEditsOf(next.results.e!)).toEqual([OUT]);
     const shown = await displays(next);
     expect(shown.e.state).toBe("done");
     expect(shown.g.chip).toBe("inputs_changed");
+
+    // The node after it runs again on the model's result.
+    const fp = (await displays(next)).fingerprints;
+    const rerun = { ...next, results: { ...next.results, g: resultOf(fp.g!, [NEXT], [SAVED]) } };
+    expect((await displays(rerun)).g.state).toBe("done");
+
+    // On again: back to the same kept edit, still done, and what reads it out of date once more.
+    const on = await reblendOps(
+      rerun,
+      specRegistry,
+      ctx,
+      "e",
+      { keepOriginal: true },
+      { swap: { assetIds: [OUT] } },
+    );
+    const back = applyOps(rerun, on).doc;
+    expect(back.results.e).toMatchObject({ assetIds: [OUT], outputs: [{ assetId: OUT }] });
+    expect(back.results.e!.outputs[0]).not.toHaveProperty("keptEdit");
+    expect(back.results.e!.fingerprint).toBe(doc.results.e!.fingerprint);
+    const again = await displays(back);
+    expect(again.e.state).toBe("done");
+    expect(again.g).toMatchObject({ state: "stale", chip: "inputs_changed" });
   });
 
   test("a node that's out of date, locked, not an edit, or without images waits for its Run", async () => {

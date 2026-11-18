@@ -7,12 +7,15 @@ import {
   isLocked,
   KEEP_REST_PARAMS,
   keepRestBody,
+  keptEditsOf,
+  type ReblendSwap,
+  reblendedResult,
   sameKeepRest,
   specRegistry,
 } from "@openfield/canvas";
 import type { KeepRestState } from "@openfield/core";
 import type { CanvasDocument } from "@openfield/core/canvas";
-import { getCanvas, listCanvases } from "@openfield/db";
+import { getAsset, getCanvas, listCanvases } from "@openfield/db";
 import { readDocument } from "../canvas/documents";
 import { ApiFailure } from "../http/errors";
 import { actorOf, evaluateCanvas } from "./canvas";
@@ -106,14 +109,19 @@ export async function settleKeepRest(
     const back = Object.fromEntries(KEEP_REST_PARAMS.map((key) => [key, was.params[id]?.[key]]));
     const asRan = await fingerprintAfter(slice, specRegistry, engine, id, back);
     if (!canReblend(slice, id, asRan, evaluation.nodes.get(id)?.inputsChanged ?? false)) continue;
-    if (!now.keep) {
-      notes.push(
-        `${id}: Keep the rest is off now, so the node is out of date and its next Run makes a new image (billed). To have the model's own result now, for free, call save_model_result with its image.`,
-      );
-      continue;
-    }
+    let swap: ReblendSwap | undefined;
     try {
-      for (const assetId of result.assetIds) await ctx.svc.keepRest.apply(assetId, keepRestBody(now));
+      if (!now.keep) {
+        // Off after a run: the model's own results, saved as images of their own, stand in.
+        const saved = [];
+        for (const assetId of result.assetIds) saved.push((await ctx.svc.keepRest.save(assetId)).asset.id);
+        swap = { assetIds: saved, keptEdits: result.assetIds };
+      } else {
+        // On again: back to the kept edits it was showing, blended with the settings it has now.
+        const targets = keptEditsOf(result).map((kept, i) => kept ?? savedFrom(ctx, result.assetIds[i]!));
+        for (const assetId of targets) await ctx.svc.keepRest.apply(assetId, keepRestBody(now));
+        if (targets.some((target, i) => target !== result.assetIds[i])) swap = { assetIds: targets };
+      }
     } catch (error) {
       if (!(error instanceof ApiFailure)) throw error;
       notes.push(
@@ -121,9 +129,13 @@ export async function settleKeepRest(
       );
       continue;
     }
-    ops.push({ op: "setResult" as const, id, result: { ...result, fingerprint: fingerprints[id]! } });
+    ops.push({ op: "setResult" as const, id, result: reblendedResult(result, fingerprints[id]!, swap) });
     notes.push(
-      `${id}: blended its images again with the new settings, for free, so it's still done. The nodes after it are out of date until they run again.`,
+      !now.keep
+        ? `${id}: Keep the rest is off, so it shows the model's own result, saved as new images (${swap!.assetIds.join(", ")}), for free. The kept edits stay, and turning it back on shows them again. The nodes after it are out of date until they run again.`
+        : swap
+          ? `${id}: Keep the rest is on again, so it shows its kept edits (${swap.assetIds.join(", ")}) once more, for free. The nodes after it are out of date until they run again.`
+          : `${id}: blended its images again with the new settings, for free, so it's still done. The nodes after it are out of date until they run again.`,
     );
   }
   if (ops.length) {
@@ -139,4 +151,10 @@ export async function settleKeepRest(
     }
   }
   return notes;
+}
+
+/** The edit a saved model result came from, for nodes whose result doesn't say; else the image itself. */
+function savedFrom(ctx: ToolContext, assetId: string): string {
+  const from = getAsset(ctx.svc.db, assetId)?.opParams?.savedFrom;
+  return typeof from === "string" ? from : assetId;
 }

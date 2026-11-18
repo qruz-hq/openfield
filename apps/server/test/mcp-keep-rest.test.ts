@@ -102,17 +102,44 @@ describe("an Edit node after it ran", () => {
     });
   });
 
-  test("turning it off, or changing the prompt too, waits for the next Run", async () => {
+  test("off shows the model's own result saved as new, on goes back to the same edit, and neither runs the model", async () => {
+    const { server: s, client: c } = await ready();
+    const { canvasId, e, g, edited } = await ranEdit(s, c);
+    const runs = () =>
+      (s.services.db.$client.query("SELECT count(*) AS n FROM job_sets").get() as { n: number }).n;
+    const made = runs();
+    const imagesOf = async (id: string) =>
+      j(await call(c, "get_canvas", { canvas: canvasId })).nodes.find((n: Json) => n.id === id).images;
+
+    const off = j(await call(c, "update_node", { canvas: canvasId, id: e, params: { keepOriginal: false } }));
+    const [saved] = (await imagesOf(e)) as string[];
+    expect(saved).not.toBe(edited);
+    expect(off.keepRest[0]).toStartWith(
+      `${e}: Keep the rest is off, so it shows the model's own result, saved as new images (${saved})`,
+    );
+    expect(getAsset(s.services.db, saved!)).toMatchObject({ kind: "edited", jobId: null });
+    expect(await stateOf(c, canvasId, e)).toBe("done");
+    expect(await stateOf(c, canvasId, g)).toBe("stale");
+
+    // What reads it runs again on the model's result; then on again goes back to the kept edit.
+    expect(j(await call(c, "run_canvas", { canvas: canvasId })).status).toBe("succeeded");
+    const ranAgain = runs();
+    const on = j(await call(c, "update_node", { canvas: canvasId, id: e, params: { keepOriginal: true } }));
+    expect(on.keepRest[0]).toStartWith(
+      `${e}: Keep the rest is on again, so it shows its kept edits (${edited})`,
+    );
+    expect(await imagesOf(e)).toEqual([edited]);
+    expect(await stateOf(c, canvasId, e)).toBe("done");
+    expect(await stateOf(c, canvasId, g)).toBe("stale");
+    // One run for what read it in between, none for the edit itself.
+    expect(ranAgain).toBe(made + 1);
+    expect(runs()).toBe(ranAgain);
+  });
+
+  test("changing the prompt too waits for the next Run", async () => {
     const { server: s, client: c } = await ready();
     const { canvasId, e, edited } = await ranEdit(s, c);
     const sha = getAsset(s.services.db, edited)!.sha256;
-
-    const off = j(await call(c, "update_node", { canvas: canvasId, id: e, params: { keepOriginal: false } }));
-    expect(off.keepRest[0]).toStartWith(`${e}: Keep the rest is off now, so the node is out of date`);
-    expect(await stateOf(c, canvasId, e)).toBe("stale");
-
-    await call(c, "update_node", { canvas: canvasId, id: e, params: { keepOriginal: true } });
-    expect(await stateOf(c, canvasId, e)).toBe("done");
     const both = j(
       await call(c, "update_node", {
         canvas: canvasId,

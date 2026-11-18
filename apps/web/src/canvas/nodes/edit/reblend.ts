@@ -4,6 +4,8 @@ import {
   type EditKeepRest,
   editKeepRestOf,
   keepRestBody,
+  keptEditsOf,
+  type ReblendSwap,
   reblendOps,
   sameKeepRest,
 } from "@openfield/canvas/nodes/edit/keep-rest";
@@ -17,7 +19,7 @@ import { useEngineStore } from "../../engine/engine-store";
 import { useCanvasStoreApi } from "../../store/context";
 import type { CanvasStore } from "../../store/store";
 import { nodeRegistry } from "../registry";
-import { reblendImages } from "./keep-rest-api";
+import { keptEditOf, reblendImages, saveModelResults } from "./keep-rest-api";
 
 // Changing how an Edit node keeps the rest after it ran (§0.9): its images are blended again on the
 // server, for free, and the node stays done while the nodes after it go out of date. Undo, redo or
@@ -44,26 +46,46 @@ export function reblendable(store: CanvasStore, nodeId: string): boolean {
 }
 
 /**
- * Commits a change to how the node keeps the rest. Free when the node is up to date and the switch
- * stays on: the images are blended first, and only then is the change written, as one undo step.
+ * Commits a change to how the node keeps the rest. Free when the node is up to date: the images are
+ * blended first (turned off, the model's own results are saved as new images and stand in; turned
+ * on again, the kept edits come back), and only then is the change written, as one undo step.
  * Anything else is an ordinary setting for the next Run. False when the blend failed: nothing changed.
  */
 export function useKeepRestCommit(nodeId: string) {
   const store = useCanvasStoreApi();
   const [busy, setBusy] = useState(false);
   const commit = useCallback(
-    async (patch: Record<string, unknown>, label: string): Promise<boolean> => {
+    async (patch: Record<string, unknown>, label: string, opts: { fixes?: Blob } = {}): Promise<boolean> => {
       const { doc, actions } = store.getState();
       const ctx = useEngineStore.getState().ctx;
       const next = editKeepRestOf({ ...doc.params[nodeId], ...patch }, ctx);
       const result = doc.results[nodeId];
-      if (!result || !next.keep || !reblendable(store, nodeId)) {
+      if (!result || !reblendable(store, nodeId)) {
+        actions.apply([{ op: "setParams", id: nodeId, patch }], { label });
+        return true;
+      }
+      const before = editKeepRestOf(doc.params[nodeId] ?? {}, ctx);
+      // Off already: it shows the model's own results, which only Run or the switch changes.
+      if (!next.keep && !before.keep) {
         actions.apply([{ op: "setParams", id: nodeId, patch }], { label });
         return true;
       }
       setBusy(true);
+      let swap: ReblendSwap | undefined;
       try {
-        await reblendImages(result.assetIds, keepRestBody(next));
+        if (!next.keep) {
+          // Off after a run: the model's own results, saved as images of their own, stand in.
+          const saved = await saveModelResults(result.assetIds, opts.fixes);
+          swap = { assetIds: saved, keptEdits: result.assetIds };
+        } else {
+          // On again: back to the kept edits it was showing (the result says, or the saved image).
+          const kept = before.keep ? [] : keptEditsOf(result);
+          const targets = await Promise.all(
+            result.assetIds.map((id, i) => kept[i] ?? (before.keep ? id : keptEditOf(id))),
+          );
+          await reblendImages(targets, keepRestBody(next), opts.fixes);
+          if (targets.some((id, i) => id !== result.assetIds[i])) swap = { assetIds: targets };
+        }
       } catch (error) {
         notifyError(errorMessage(error));
         return false;
@@ -77,7 +99,12 @@ export function useKeepRestCommit(nodeId: string) {
         now.actions.apply([{ op: "setParams", id: nodeId, patch }], { label });
         return true;
       }
-      now.actions.apply(await reblendOps(now.doc, nodeRegistry, ctx, nodeId, patch), { label });
+      now.actions.apply(
+        await reblendOps(now.doc, nodeRegistry, ctx, nodeId, patch, { ...(swap && { swap }) }),
+        {
+          label,
+        },
+      );
       return true;
     },
     [store, nodeId],

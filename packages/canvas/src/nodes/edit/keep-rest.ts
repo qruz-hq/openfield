@@ -118,9 +118,16 @@ export async function fingerprintAfter(
   return fingerprint;
 }
 
+/** Images standing in for the node's own, one for one, as the switch turns off or on again. */
+export interface ReblendSwap {
+  assetIds: readonly string[];
+  /** Off: the edit each saved model result came from. On again: left out, so none is kept. */
+  keptEdits?: readonly string[];
+}
+
 /**
  * The ops that settle a re-blend: the new settings, and the result marked as made with them. With
- * `assetIds` (the switch turned off or on again), the node's images are those instead.
+ * `swap` (the switch turned off or on again), the node's images are those instead.
  */
 export async function reblendOps(
   doc: DocSlice,
@@ -128,29 +135,42 @@ export async function reblendOps(
   ctx: EngineContext,
   id: string,
   patch: Readonly<Record<string, unknown>>,
-  opts: { assetIds?: readonly string[]; cache?: FingerprintCache } = {},
+  opts: { swap?: ReblendSwap; cache?: FingerprintCache } = {},
 ): Promise<CanvasOp[]> {
   const result = doc.results[id];
   if (!result) throw new Error(`Node ${id} has no images to blend again`);
   const fingerprint = await fingerprintAfter(doc, registry, ctx, id, patch, opts.cache);
   return [
     { op: "setParams", id, patch },
-    { op: "setResult", id, result: reblended(result, fingerprint, opts.assetIds) },
+    { op: "setResult", id, result: reblendedResult(result, fingerprint, opts.swap) },
   ];
 }
 
-function reblended(
+/** A result marked as made with the settings `fingerprint` hashes, with any images swapped in. */
+export function reblendedResult(
   result: CanvasNodeResult,
   fingerprint: string,
-  assetIds: readonly string[] | undefined,
+  swap?: ReblendSwap,
 ): CanvasNodeResult {
-  if (!assetIds) return { ...result, fingerprint };
-  // One image stands in for another in place: what each was made from stays with it.
-  const swap = new Map(result.assetIds.map((from, i) => [from, assetIds[i] ?? from]));
+  if (!swap) return { ...result, fingerprint };
+  // One image stands in for another in place: what each was made from stays with it. The run's
+  // job sets and cost stay too, so the node still reads as ran, not as a new paid run.
+  const at = new Map(result.assetIds.map((from, i) => [from, i]));
   return {
     ...result,
     fingerprint,
-    assetIds: [...assetIds],
-    outputs: result.outputs.map((o) => ({ ...o, assetId: swap.get(o.assetId) ?? o.assetId })),
+    assetIds: [...swap.assetIds],
+    outputs: result.outputs.map(({ keptEdit: _kept, ...o }) => {
+      const i = at.get(o.assetId);
+      if (i === undefined) return o;
+      const kept = swap.keptEdits?.[i];
+      return { ...o, assetId: swap.assetIds[i] ?? o.assetId, ...(kept && { keptEdit: kept }) };
+    }),
   };
+}
+
+/** The kept edits an Edit node turned off points back to, one per image, where its result says. */
+export function keptEditsOf(result: CanvasNodeResult): (string | undefined)[] {
+  const byAsset = new Map(result.outputs.map((o) => [o.assetId, o.keptEdit]));
+  return result.assetIds.map((id) => byAsset.get(id));
 }
