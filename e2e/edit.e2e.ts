@@ -1109,11 +1109,14 @@ test("a turned photo the Edit tab can't read ahead is turned away by the server,
   await expect(page.getByText(/saved on its side/)).toHaveCount(0);
 });
 
-// Keep the rest after the run (§0.9, design "Keep the rest"). The fake models send back a result
-// that never lines up, so the real server keeps by the mask alone: the block says so, Feather,
-// Expand and touch-up strokes still apply in place, and the model's own result saves as its own.
+// Keep the rest after the run (§0.9, design "Keep the rest"): Feather, Expand and touch-up strokes
+// apply in place, and the model's own result saves as its own. Whether a fake result lines up with
+// the original depends on the image drawn, so how it was decided is mocked where a test needs one.
 
-/** The real keep-rest state, with some fields changed: the fake models never line up, so a kept-by-comparing or older edit is mocked. */
+/**
+ * The real keep-rest state with some fields changed, and the area map's headers to match, so the
+ * edit reads as kept by comparing, by the mask alone, or made before results were kept.
+ */
 async function mockKeepRest(page: Page, patch: Record<string, unknown>) {
   await page.route(/\/api\/assets\/[^/]+\/keep-rest$/, async (route) => {
     if (route.request().method() !== "GET") return route.fallback();
@@ -1123,7 +1126,27 @@ async function mockKeepRest(page: Page, patch: Record<string, unknown>) {
     const json = state.available || state.unavailable !== "not_an_edit" ? { ...state, ...patch } : state;
     await route.fulfill({ response, json });
   });
+  if (!("fellBack" in patch)) return;
+  const lineUp = patch.lineUp as { dx: number; dy: number; scaleX: number; scaleY: number } | null;
+  await page.route(/\/files\/keep-rest-area\//, async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      headers: {
+        ...response.headers(),
+        "x-keep-rest-fell-back": (patch.fellBack as string | null) ?? "none",
+        "x-keep-rest-line-up": lineUp
+          ? [lineUp.dx, lineUp.dy, lineUp.scaleX, lineUp.scaleY].join(",")
+          : "none",
+      },
+    });
+  });
 }
+
+// A mocked area map can still be on its way as a test ends.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
 
 const quickKeep = (page: Page) => detail(page).getByRole("switch", { name: "Keep the rest", exact: true });
 const blockKeep = (page: Page) => panelOf(page).getByRole("switch", { name: "Keep the rest of the image" });
@@ -1168,8 +1191,16 @@ test("after a run Keep the rest stays live: Feather and a touch up apply in plac
   const applied = page.waitForRequest(
     (r) => /\/api\/assets\/[^/]+\/keep-rest$/.test(r.url()) && r.method() === "POST",
   );
+  const seen: string[] = [];
+  page.on("request", (r) => seen.push(r.url()));
   await applyBar(page).getByRole("button", { name: "Apply" }).click();
-  expect((await applied).postDataJSON()).toEqual({ featherPx: 9 });
+  const request = await applied;
+  expect(request.postDataJSON()).toEqual({ featherPx: 9 });
+  // The image written in place shows from its new file: the strip's thumb asks for the new version.
+  const { asset } = (await (await request.response())!.json()) as { asset: { thumbUrl: string } };
+  const version = new URL(asset.thumbUrl, "http://x").searchParams.get("v");
+  expect(version).toBeTruthy();
+  await expect.poll(() => seen.some((url) => url.includes(`v=${version}`))).toBe(true);
   await expect(applyBar(page)).toHaveCount(0);
   await expect(page.locator("[data-keep-preview]")).toHaveCount(0);
 
@@ -1189,15 +1220,15 @@ test("after a run Keep the rest stays live: Feather and a touch up apply in plac
     (r) => /\/api\/assets\/[^/]+\/keep-rest$/.test(r.url()) && r.method() === "POST",
   );
   await applyBar(page).getByRole("button", { name: "Apply" }).click();
-  const request = await touched;
-  expect(request.headers()["content-type"]).toMatch(/^multipart\/form-data/);
+  const touchedRequest = await touched;
+  expect(touchedRequest.headers()["content-type"]).toMatch(/^multipart\/form-data/);
   await expect(applyBar(page)).toHaveCount(0);
   // The server kept the strokes as the edit's fix layer.
   const state = await api<{ fixesUrl: string | null; featherPx: number }>(
     page.request,
     token,
     "GET",
-    new URL(request.url()).pathname,
+    new URL(touchedRequest.url()).pathname,
   );
   expect(state).toMatchObject({ featherPx: 9, fixesUrl: expect.stringContaining("/files/keep-rest-fixes/") });
 
@@ -1259,6 +1290,7 @@ test("an edit that can't be adjusted shows how it was made, with nothing to move
   // Difference falls back to what changed, worked out in the browser.
   await view.getByRole("radiogroup", { name: "Compare" }).getByRole("radio", { name: "Difference" }).click();
   await expect(view.getByText("Changed", { exact: true })).toBeVisible();
-  await expect.poll(() => changeAt(page, 0.45, 0.45)).toBeGreaterThan(0);
+  // Outside the mask nothing changed; inside, what changed depends on the fake image drawn.
+  await expect(page.locator("[data-difference][data-ready]")).toBeVisible();
   expect(await changeAt(page, 0.1, 0.9)).toBe(0);
 });

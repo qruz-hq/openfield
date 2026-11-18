@@ -180,6 +180,33 @@ export interface PreviewWeights {
   fellBack: KeepRestState["fellBack"];
 }
 
+/** The area map for these settings, once they rest. None with the switch off. */
+function useAreaFor(state: KeepRestState | null, values: KeepRestValues | null): AreaMap | null {
+  const settings = useDebounced(
+    values ? `${values.sensitivity}|${values.featherPx}|${values.expandPx}` : "",
+    AREA_DEBOUNCE_MS,
+  );
+  const areaPath = useMemo(() => {
+    if (!state || !values?.keep || !settings) return null;
+    const [sensitivity, featherPx, expandPx] = settings.split("|").map(Number);
+    return keepRestAreaUrl(state, { sensitivity, featherPx, expandPx });
+  }, [state, settings, values?.keep]);
+  return useArea(areaPath);
+}
+
+/**
+ * Why the mask alone would decide with these settings, as the server says for its area map: null
+ * when it compares, undefined until it has said. A Sensitivity, Feather or Expand change can flip it.
+ */
+export function usePreviewFellBack(
+  state: KeepRestState | null,
+  values: KeepRestValues | null,
+): KeepRestState["fellBack"] | undefined {
+  const area = useAreaFor(state, values);
+  if (!values?.keep) return null;
+  return area?.fellBack;
+}
+
 /** Where the model is used for the draft's settings and strokes. Null until the area map is in. */
 export function usePreviewWeights({
   state,
@@ -188,16 +215,7 @@ export function usePreviewWeights({
   fixesVersion,
 }: PreviewInput): PreviewWeights | null {
   const { width, height } = previewSize(state.base?.width ?? 1, state.base?.height ?? 1);
-  const settings = useDebounced(
-    `${values.sensitivity}|${values.featherPx}|${values.expandPx}`,
-    AREA_DEBOUNCE_MS,
-  );
-  const areaPath = useMemo(() => {
-    if (!values.keep) return null;
-    const [sensitivity, featherPx, expandPx] = settings.split("|").map(Number);
-    return keepRestAreaUrl(state, { sensitivity, featherPx, expandPx });
-  }, [state, settings, values.keep]);
-  const area = useArea(areaPath);
+  const area = useAreaFor(state, values);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: fixesVersion stands for the fix layer's codes, which change in place.
   return useMemo(() => {

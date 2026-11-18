@@ -424,6 +424,19 @@ test("marks drawn on the image, measured against the design, then sent with the 
   await expect(view.getByRole("button", { name: "Touch up" })).toBeVisible();
   await expect(view.getByRole("button", { name: "Edit the marks" })).toHaveCount(0);
 
+  // Turned on, the change previews and Apply keeps the rest in place: the switch goes with it.
+  await panel.getByRole("switch", { name: "Keep the rest of the image" }).click();
+  const pending = panel.getByRole("group", { name: "Previewing, not saved yet." });
+  const applied = page.waitForResponse(
+    (r) => /\/api\/assets\/[^/]+\/keep-rest$/.test(r.url()) && r.request().method() === "POST",
+  );
+  await pending.getByRole("button", { name: "Apply" }).click();
+  const response = await applied;
+  expect(response.status()).toBe(200);
+  expect(response.request().postDataJSON()).toEqual({ keep: true });
+  await expect(pending).toHaveCount(0);
+  await expect(panel.getByRole("switch", { name: "Keep the rest of the image" })).toBeChecked();
+
   // Keep the rest on for the next run: the marks' area is saved as the mask.
   await view.getByRole("group", { name: "New images" }).getByRole("button", { name: "Original" }).click();
   await panel.getByRole("switch", { name: "Keep the rest of the image" }).click();

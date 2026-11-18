@@ -42,6 +42,7 @@ import { companyName } from "../../lib/provider";
 import { askedPrice } from "../../lib/remote-price";
 import { ApplyBar, KeepRest } from "./keep-rest";
 import { savedValues, useKeepRestLive } from "./keep-rest-draft";
+import { usePreviewFellBack } from "./keep-rest-preview";
 import { MarksList } from "./marks-list";
 import { encodeMaskPng } from "./mask-png";
 import { ModelField } from "./model-field";
@@ -220,6 +221,9 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
   const adjustable = keep.available;
   const locked = !!kept && !kept.available && kept.unavailable !== "not_an_edit";
   const shown = adjustable ? keep.values : locked && kept ? savedValues(kept) : null;
+  // The settings on show may decide by the mask alone where the applied ones didn't, or the other way.
+  const previewed = usePreviewFellBack(adjustable ? (kept ?? null) : null, adjustable ? shown : null);
+  const fellBack = previewed !== undefined ? previewed : (kept?.fellBack ?? null);
 
   const note = savedNote(runner.outcome, runner.notKept);
   const hint =
@@ -306,13 +310,9 @@ export function EditPanel({ item, runner, onOpen }: EditPanelProps) {
               locked={locked}
               sketch={kept.start === "marks" || (locked && sketch)}
               note={
-                locked
-                  ? kept.note
-                  : shown.keep && kept.fellBack
-                    ? t(`keepRest.maskOnly.${kept.fellBack}`)
-                    : undefined
+                locked ? kept.note : shown.keep && fellBack ? t(`keepRest.maskOnly.${fellBack}`) : undefined
               }
-              maskOnly={shown.keep && !!kept.fellBack}
+              maskOnly={shown.keep && !!fellBack}
               onComposite={(on) => keep.set({ keep: on })}
               onSensitivity={(value) => keep.set({ sensitivity: value })}
               onFeatherPx={(px) => keep.set({ featherPx: px })}

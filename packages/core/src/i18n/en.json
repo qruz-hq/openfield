@@ -2442,7 +2442,7 @@
       "savedNew": "Saved as a new image.",
       "savedAlready": "That one is already in your library.",
       "openSaved": "Open",
-      "pendingOff": "Not saved yet."
+      "pendingOff": "Not saved."
     },
     "saved": {
       "done": "Saved as {count, plural, one {# new image} other {# new images}}. The original stays as it is.",

@@ -210,7 +210,7 @@ export function ApplyBar({
       aria-label={t("edit.keep.pending")}
       className="flex w-full items-center gap-8 rounded-14 bg-surface py-6 pr-6 pl-12 inset-ring inset-ring-border"
     >
-      {/* Off, Save as new image is a longer word: the line stays on one row. */}
+      {/* Off, Save as new image is longer: a shorter line keeps the bar on one row. */}
       <p className="min-w-0 flex-1 text-caption text-text-secondary">
         {t(saveNew ? "edit.keep.pendingOff" : "edit.keep.pending")}
       </p>
