@@ -1,8 +1,10 @@
-import { assetThumbUrl, t } from "@openfield/core";
+import { t } from "@openfield/core";
 import { cn, Spinner, TileStatusPill, Tooltip } from "@openfield/ui";
 import { CircleAlert } from "lucide-react";
 import type { ComponentProps } from "react";
 import { useAuthedImage } from "../../api/hooks/images";
+import { useAssetDetail } from "../../api/hooks/library";
+import { thumbAt } from "../format";
 import type { ResultSlot } from "./plan";
 
 // Over the media area while an edit runs and after (design DFd2yqIj0C, Kb96vQFIiK): the results
@@ -81,7 +83,9 @@ function Thumb({
   selected,
   ...props
 }: Omit<ComponentProps<"button">, "children"> & { assetId: string; label: string; selected: boolean }) {
-  const image = useAuthedImage(assetThumbUrl(assetId, { h: THUMB }));
+  // From its own thumb URL, which changes when Keep the rest is applied to it in place.
+  const asset = useAssetDetail(assetId).data?.asset;
+  const image = useAuthedImage(asset ? thumbAt(asset, { h: THUMB }) : null);
   return (
     <button
       {...props}

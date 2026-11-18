@@ -133,7 +133,7 @@ test("Paint area on Seedream points to Sketch & point, and the switch opens it",
   const panel = panelOf(page);
   await expect(
     panel.getByText(
-      "Seedream 5.0 Pro redraws the whole image, then everything outside your mask is put back. For a precise change, try Sketch & point.",
+      "Seedream 5.0 Pro redraws the whole image, then the original is put back wherever it didn't really change. For a precise change, try Sketch & point.",
     ),
   ).toBeVisible();
   const paint = detail(page).getByRole("toolbar", { name: "Mask tools" });
@@ -417,10 +417,21 @@ test("marks drawn on the image, measured against the design, then sent with the 
     timeout: 20_000,
   });
 
-  // Keep the rest on: the marks' area is saved as the mask, and the original goes back outside it.
-  await view.getByRole("button", { name: "Edit the marks" }).click();
+  // After the run Keep the rest is live on the new image, off as it was made, with Touch up and no
+  // way back to the marks but the original in the strip.
+  await expect(panel.getByRole("switch", { name: "Keep the rest of the image" })).not.toBeChecked();
+  await expect(panel.getByText("Showing the model's own result.")).toBeVisible();
+  await expect(view.getByRole("button", { name: "Touch up" })).toBeVisible();
+  await expect(view.getByRole("button", { name: "Edit the marks" })).toHaveCount(0);
+
+  // Keep the rest on for the next run: the marks' area is saved as the mask.
+  await view.getByRole("group", { name: "New images" }).getByRole("button", { name: "Original" }).click();
   await panel.getByRole("switch", { name: "Keep the rest of the image" }).click();
-  await expect(panel.getByText("Everything outside your marks stays exactly the same.")).toBeVisible();
+  await expect(
+    panel.getByText(
+      "Keeps the original wherever the model didn't really change it, starting from your marks.",
+    ),
+  ).toBeVisible();
   const masks = page.waitForResponse(
     (r) => r.url().endsWith("/api/masks") && r.request().method() === "POST",
   );

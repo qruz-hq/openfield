@@ -1,7 +1,14 @@
-import { type AssetListItem, assetFileUrl, t } from "@openfield/core";
-import { Button, cn, MediaLabelPill, Segmented, SegmentedItem } from "@openfield/ui";
-import { Brush, ChevronsLeftRight } from "lucide-react";
-import { type KeyboardEvent, type MouseEvent, type PointerEvent, useLayoutEffect, useRef } from "react";
+import { type AssetListItem, t } from "@openfield/core";
+import { Button, cn, MediaLabelPill, Segmented, SegmentedItem, Switch } from "@openfield/ui";
+import { Brush, ChevronsLeftRight, Paintbrush, Sparkles } from "lucide-react";
+import {
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+  type ReactNode,
+  useLayoutEffect,
+  useRef,
+} from "react";
 import { useAuthedImage } from "../../api/hooks/images";
 import { thumbAt } from "../format";
 import { ImageLayers, type LayeredImage, type PinnedFrame, useBoxSize } from "../media";
@@ -26,7 +33,7 @@ const SPLIT_STEP = 0.01;
 /** Toolbar-like buttons keep focus on the view, so its keys keep working after a click. */
 const keepFocus = (event: MouseEvent) => event.preventDefault();
 
-/** Image edit / Compare switch: a Segmented / 2 on the overlay, over the media area, top centre. */
+/** Image edit / Compare switch: a Segmented / 2 on the overlay. */
 export function CompareSwitch({
   mode,
   onModeChange,
@@ -40,7 +47,7 @@ export function CompareSwitch({
       aria-label={t("edit.compare.label")}
       value={mode}
       onValueChange={(next) => onModeChange(next as CompareMode)}
-      className="absolute top-12 left-1/2 w-fit -translate-x-1/2 bg-overlay inset-ring inset-ring-border backdrop-blur-chip"
+      className="w-fit bg-overlay inset-ring inset-ring-border backdrop-blur-chip"
     >
       <SegmentedItem value="split" className="flex-none px-12">
         {t("edit.compare.split")}
@@ -53,15 +60,63 @@ export function CompareSwitch({
 }
 
 /**
- * A new image as ImageLayers draws one, from its id alone (thumbAt builds the URLs from it). It has
- * the original's size when the rest was kept, and about its shape otherwise, so the original's size
- * stands in for working out when to load the file.
+ * Image edit / Quick keep switch (design nF4cjNlmCp): Keep the rest for the result on show, live and
+ * free, the panel's switch following. It rests at 40% on an edit that can't be adjusted.
  */
-function resultImage(assetId: string, original: AssetListItem): LayeredImage {
+export function QuickKeepSwitch({
+  checked,
+  disabled,
+  onCheckedChange,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  onCheckedChange: (checked: boolean) => void;
+}) {
+  return (
+    <div
+      data-paint="dark"
+      className={cn(
+        "flex h-36 items-center gap-8 rounded-10 bg-overlay px-12 inset-ring inset-ring-border backdrop-blur-chip",
+        disabled && "opacity-40",
+      )}
+    >
+      <label htmlFor="quick-keep" className="text-caption font-medium whitespace-nowrap text-text-primary">
+        {t("edit.compare.keep")}
+      </label>
+      <Switch
+        id="quick-keep"
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={onCheckedChange}
+        // The bar rests as a whole; the switch doesn't dim twice.
+        className="disabled:opacity-100"
+      />
+    </div>
+  );
+}
+
+/**
+ * Image edit / Compare bar (design kyGLshKfcx): over the image, top centre, 12 from the top: the
+ * compare switch, then the quick keep switch, 8 apart.
+ */
+export function CompareBar({ children }: { children: ReactNode }) {
+  return <div className="absolute top-12 left-1/2 flex -translate-x-1/2 items-center gap-8">{children}</div>;
+}
+
+/**
+ * A new image as ImageLayers draws one. It has the original's size when the rest was kept, and about
+ * its shape otherwise, so the original's size stands in for working out when to load the file. Its
+ * own URLs carry ?v= once Keep the rest is applied in place, so they change with the file.
+ */
+function resultImage(
+  result: LayeredImage | undefined,
+  assetId: string,
+  original: AssetListItem,
+): LayeredImage {
   return {
     id: assetId,
-    thumbUrl: "",
-    fileUrl: assetFileUrl(assetId),
+    thumbUrl: result?.thumbUrl ?? "",
+    fileUrl: result?.fileUrl ?? "",
     width: original.width,
     height: original.height,
   };
@@ -76,17 +131,24 @@ function resultImage(assetId: string, original: AssetListItem): LayeredImage {
 export function AfterLayer({
   item,
   resultId,
+  result,
   split,
   zoom,
+  preview,
 }: {
   item: AssetListItem;
   resultId: string;
+  /** The new image's details, for its URLs; until they're in, nothing draws. */
+  result: LayeredImage | undefined;
   split: number;
   zoom: number;
+  /** In place of the saved file: Keep the rest's live preview, while something isn't applied. */
+  preview?: ReactNode;
 }) {
   return (
     <div data-compare-after className="absolute inset-0" style={{ clipPath: `inset(0 0 0 ${split * 100}%)` }}>
-      <ImageLayers item={resultImage(resultId, item)} zoom={zoom} stretch />
+      {preview ??
+        (result ? <ImageLayers item={resultImage(result, resultId, item)} zoom={zoom} stretch /> : null)}
     </div>
   );
 }
@@ -176,21 +238,34 @@ function CompareHandle({
   );
 }
 
-/** Over the image in Before and after: the handle, then the Before and After labels 10 in. */
+/**
+ * Over the image in Before and after: the handle, then the Before and After labels 10 in. With Keep
+ * the rest off after a run, After says it's the model's own result (Pill / Media label / Model's own
+ * result, YJhsyselNO).
+ */
 export function SplitPins({
   frame,
   split,
   onSplitChange,
+  modelResult = false,
 }: {
   frame: PinnedFrame;
   split: number;
   onSplitChange: (split: number) => void;
+  modelResult?: boolean;
 }) {
   return (
     <div data-paint="dark" className="absolute inset-0">
       <CompareHandle frame={frame} split={split} onSplitChange={onSplitChange} />
       <MediaLabelPill className="absolute top-10 left-10">{t("edit.compare.before")}</MediaLabelPill>
-      <MediaLabelPill className="absolute top-10 right-10">{t("edit.compare.after")}</MediaLabelPill>
+      {modelResult ? (
+        <MediaLabelPill className="absolute top-10 right-10 text-text-primary">
+          <Sparkles size={12} aria-hidden className="shrink-0 text-text-secondary" />
+          {t("edit.compare.modelResult")}
+        </MediaLabelPill>
+      ) : (
+        <MediaLabelPill className="absolute top-10 right-10">{t("edit.compare.after")}</MediaLabelPill>
+      )}
     </div>
   );
 }
@@ -201,12 +276,20 @@ export function SplitPins({
  * at 85% with the design's 7px blur. The change is worked out off the page (use-difference.ts) from
  * both previews, at the size the image is shown.
  */
-export function DifferenceLayer({ item, resultId }: { item: AssetListItem; resultId: string }) {
+export function DifferenceLayer({
+  item,
+  resultId,
+  result,
+}: {
+  item: AssetListItem;
+  resultId: string;
+  result: LayeredImage | undefined;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const size = useBoxSize(box);
   const before = useAuthedImage(thumbAt(item, "preview"));
-  const after = useAuthedImage(thumbAt(resultImage(resultId, item), "preview"));
+  const after = useAuthedImage(result ? thumbAt(resultImage(result, resultId, item), "preview") : null);
   const dpr = window.devicePixelRatio || 1;
   const mask = useDifference(
     before.status === "ready" ? before.src : null,
@@ -243,39 +326,67 @@ export function DifferenceLayer({ item, resultId }: { item: AssetListItem; resul
 }
 
 /** One key of the legend: an 8px swatch and its 12/500 label. */
-function LegendKey({ swatch, label }: { swatch: string; label: string }) {
+export function LegendKey({ swatch, label }: { swatch: ReactNode | string; label: string }) {
   return (
     <span className="flex items-center gap-6">
-      <span aria-hidden className={cn("size-8 shrink-0 rounded-full", swatch)} />
+      {typeof swatch === "string" ? (
+        <span aria-hidden className={cn("size-8 shrink-0 rounded-full", swatch)} />
+      ) : (
+        swatch
+      )}
       <span className="text-caption font-medium text-text-primary">{label}</span>
     </span>
   );
 }
 
+export const legendClass =
+  "absolute top-[calc(100%+14px)] left-1/2 flex h-28 -translate-x-1/2 items-center gap-14 whitespace-nowrap rounded-full bg-overlay px-12 inset-ring inset-ring-border backdrop-blur-chip";
+
 /** Image edit / Difference legend: under the image, 14 below it, centred. */
 export function DifferenceLegend() {
   return (
-    <div
-      data-paint="dark"
-      className="absolute top-[calc(100%+14px)] left-1/2 flex h-28 -translate-x-1/2 items-center gap-14 whitespace-nowrap rounded-full bg-overlay px-12 inset-ring inset-ring-border backdrop-blur-chip"
-    >
+    <div data-paint="dark" className={legendClass}>
       <LegendKey swatch="bg-accent" label={t("edit.compare.changed")} />
       <LegendKey swatch="bg-canvas inset-ring inset-ring-border-strong" label={t("edit.compare.same")} />
     </div>
   );
 }
 
-/** Edit the mask: a Button / Secondary / M where the toolbar was, back to painting the original. */
-export function EditMaskButton({ sketch = false, onClick }: { sketch?: boolean; onClick: () => void }) {
+/**
+ * Image edit / Result actions (design rwz8BLoE8L): bottom centre after a run, Edit the mask and
+ * Touch up, 8 apart, each a Button / Secondary / M. Either can be left out: Sketch & point has only
+ * Touch up, and an edit that can't be adjusted only Edit the mask.
+ */
+export function ResultActions({
+  sketch = false,
+  onEditMask,
+  onTouchUp,
+  touchUpBusy = false,
+}: {
+  /** Sketch & point goes back to its marks. */
+  sketch?: boolean;
+  onEditMask?: () => void;
+  onTouchUp?: () => void;
+  touchUpBusy?: boolean;
+}) {
   return (
-    <Button
-      variant="secondary"
-      icon={Brush}
-      onMouseDown={keepFocus}
-      onClick={onClick}
-      className="absolute bottom-18 left-1/2 -translate-x-1/2"
-    >
-      {t(sketch ? "edit.sketch.editMarks" : "edit.compare.editMask")}
-    </Button>
+    <div className="absolute bottom-18 left-1/2 flex -translate-x-1/2 items-center gap-8">
+      {onEditMask ? (
+        <Button variant="secondary" icon={Brush} onMouseDown={keepFocus} onClick={onEditMask}>
+          {t(sketch ? "edit.sketch.editMarks" : "edit.compare.editMask")}
+        </Button>
+      ) : null}
+      {onTouchUp ? (
+        <Button
+          variant="secondary"
+          icon={Paintbrush}
+          loading={touchUpBusy}
+          onMouseDown={keepFocus}
+          onClick={onTouchUp}
+        >
+          {t("edit.touchUp.open")}
+        </Button>
+      ) : null}
+    </div>
   );
 }
