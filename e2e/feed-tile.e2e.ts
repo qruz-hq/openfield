@@ -196,6 +196,8 @@ test("the composer's + adds references from a file and from the library; they re
   // Reordering: Alt and an arrow key, then a drag back.
   await strip.getByRole("button", { name: /^Reference image 2 of 2/ }).press("Alt+ArrowLeft");
   await expect.poll(order).toEqual([libraryId, uploadedId]);
+  // The tiles slide to their new places: pressed mid-way, the point can land on the other one.
+  await strip.evaluate((el) => Promise.all(el.getAnimations({ subtree: true }).map((a) => a.finished)));
   const first = await strip.getByRole("listitem").first().boundingBox();
   await page.mouse.move(first!.x + 28, first!.y + 28);
   await page.mouse.down();
