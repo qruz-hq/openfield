@@ -26,7 +26,7 @@ const common = {
    * edited, then the references in order. Default 1.
    */
   image: z.int().min(1).max(64).optional(),
-  /** The colour the marked thing should be. */
+  /** The mark's colour on screen, to tell marks apart. Never sent to the model. */
   color: hexColorSchema.optional(),
   /** What it should be made of: "brushed steel". */
   material: z.string().trim().min(1).max(MARK_MATERIAL_MAX).optional(),

@@ -171,6 +171,9 @@ describe("reopenedEdit", () => {
     expect(plan).toEqual({
       original,
       mask,
+      marks: null,
+      sketchComposite: false,
+      runId: data.asset.jobSetId,
       prompt: "Make these berries pale and dried.",
       model: "openai:gpt-image-2.5",
       values: { resolution: "1K", quality: "medium" },
@@ -180,7 +183,47 @@ describe("reopenedEdit", () => {
     });
   });
 
-  test("leaves out what the request didn't say, and needs both the original and the mask", () => {
+  test("a Sketch & point edit opens on its marks, with Keep the rest on when the marks' area was saved", () => {
+    const marks = [
+      { kind: "box", from: { x: 0.1, y: 0.2 }, to: { x: 0.4, y: 0.6 }, color: "#C8102E", material: "oak" },
+      { kind: "point", at: { x: 0.7, y: 0.3 } },
+    ];
+    const blended = detail(
+      { op: "edit", maskAssetId: null, jobSetId: "01JRUN00000000000000000000", params: { marks } },
+      { mask: null },
+    );
+    const plan = reopenedEdit(blended, editedFrom(blended, undefined)!, "Oak table");
+    expect(plan).toMatchObject({
+      marks,
+      mask: null,
+      sketchComposite: false,
+      runId: "01JRUN00000000000000000000",
+    });
+    const kept = detail({ params: { marks, mask: { assetId: mask.id, composite: true } } });
+    expect(reopenedEdit(kept, editedFrom(kept, undefined)!, "Oak table")).toMatchObject({
+      marks,
+      mask,
+      sketchComposite: true,
+    });
+    // Marks on a reference, from an agent, aren't the Edit tab's to put back.
+    const onReference = detail(
+      {
+        op: "edit",
+        maskAssetId: null,
+        params: { marks: [{ kind: "point", at: { x: 0.5, y: 0.5 }, image: 2 }] },
+      },
+      { mask: null },
+    );
+    expect(reopenedEdit(onReference, editedFrom(onReference, undefined)!, "Oak table")).toBeNull();
+    // Marks it can't read are left out, so it needs a mask again.
+    const broken = detail(
+      { op: "edit", maskAssetId: null, params: { marks: [{ kind: "box" }] } },
+      { mask: null },
+    );
+    expect(reopenedEdit(broken, editedFrom(broken, undefined)!, "Oak table")).toBeNull();
+  });
+
+  test("leaves out what the request didn't say, and needs the original and a mask or marks", () => {
     const data = detail({ params: null });
     const plan = reopenedEdit(data, editedFrom(data, undefined)!, "Pale");
     expect(plan?.model).toBeUndefined();

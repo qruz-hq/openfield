@@ -4,9 +4,10 @@ import type { MarkDrawing } from "../types";
 // Marks to Seedream's interactive editing (5.0 Pro and Flash editing guide, which 5.5 follows too).
 // Points and boxes become <point>x y</point> and <bbox>x1 y1 x2 y2</bbox> tags on the 0 to 999
 // grid, after "Image n", the image they're on. Circles, strokes and arrows have no tag: they're
-// drawn onto that image in a colour of their own, and the prompt names them by it. Colour and
-// material go next to each mark in words, since the API has no field for them. Pure, so tests
-// snapshot it.
+// drawn onto that image in a colour of their own, and the prompt names them by it. A mark's note and
+// material go next to it in words, since the API has no field for them. Its colour is only how
+// Openfield shows the mark, so it's never sent: the model would paint the marked thing that colour.
+// Pure, so tests snapshot it.
 
 /** Inks for drawn marks, picked to stand out on most photos. Cycled in mark order. */
 export const MARK_INKS = [
@@ -63,7 +64,6 @@ export function promptWithMarks(prompt: string, marks: readonly Mark[] | undefin
     }
     const details = [
       mark.note && sentence(mark.note),
-      mark.color && `Make it ${colorName(mark.color)} (${mark.color.toUpperCase()}).`,
       mark.material && `Make it look like ${mark.material.replace(/[.\s]+$/, "")}.`,
     ].filter(Boolean);
     return `${i + 1}. ${capitalise(where)}${details.length ? `: ${details.join(" ")}` : "."}`;
@@ -84,36 +84,3 @@ const sentence = (text: string) => {
   const trimmed = text.trim();
   return /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 };
-
-// A plain word for a colour helps a model that reads hex poorly. Nearest by RGB distance.
-const COLOR_WORDS: [string, number, number, number][] = [
-  ["black", 0, 0, 0],
-  ["white", 255, 255, 255],
-  ["grey", 128, 128, 128],
-  ["red", 220, 30, 30],
-  ["orange", 245, 140, 20],
-  ["yellow", 245, 220, 40],
-  ["green", 40, 160, 60],
-  ["teal", 20, 150, 140],
-  ["blue", 30, 90, 220],
-  ["navy", 20, 30, 90],
-  ["purple", 130, 50, 180],
-  ["pink", 240, 120, 170],
-  ["brown", 120, 75, 40],
-  ["beige", 225, 205, 170],
-];
-
-export function colorName(hex: string): string {
-  const n = Number.parseInt(hex.slice(1), 16);
-  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-  let best = COLOR_WORDS[0]!;
-  let bestDistance = Number.POSITIVE_INFINITY;
-  for (const word of COLOR_WORDS) {
-    const d = (word[1] - r) ** 2 + (word[2] - g) ** 2 + (word[3] - b) ** 2;
-    if (d < bestDistance) {
-      best = word;
-      bestDistance = d;
-    }
-  }
-  return best[0];
-}

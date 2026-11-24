@@ -735,7 +735,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "Give an Edit node its marks",
       description:
-        "Puts an Edit node in Sketch & point and sets its marks, as marking the image in Openfield does: points, boxes, circles, freehand lines and arrows on the image it edits, each with an optional colour, material and note, numbered from 1 in this order. Only for models whose list_models entry has marks. " +
+        "Puts an Edit node in Sketch & point and sets its marks, as marking the image in Openfield does: points, boxes, circles, freehand lines and arrows on the image it edits, each with an optional note, material and colour, numbered from 1 in this order. The colour only sets how the mark shows in Openfield and isn't sent to the model: put a colour change in the note. Only for models whose list_models entry has marks. " +
         "Coordinates are fractions of the image: x and y from 0 at the top left to 1 at the bottom right. Its mask input and reference images are ignored while it sketches: only the image being edited is sent. null clears the marks and keeps Sketch & point.",
       inputSchema: {
         canvas: z.string().describe(canvasField),
@@ -743,7 +743,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
         marks: marksSchema
           .nullable()
           .describe(
-            'The marks, such as [{"kind":"box","from":{"x":0.1,"y":0.2},"to":{"x":0.4,"y":0.6},"material":"brushed steel"}, {"kind":"point","at":{"x":0.7,"y":0.3},"color":"#C8102E"}]. Marks go on the image being edited: leave "image" out (or 1).',
+            'The marks, such as [{"kind":"box","from":{"x":0.1,"y":0.2},"to":{"x":0.4,"y":0.6},"material":"brushed steel"}, {"kind":"point","at":{"x":0.7,"y":0.3},"note":"make the mug dark red"}]. Marks go on the image being edited: leave "image" out (or 1).',
           ),
         keepRest: z
           .boolean()
