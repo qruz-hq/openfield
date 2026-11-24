@@ -2295,7 +2295,8 @@
         "notKeptExactly": "Couldn't keep the rest exactly. Try again.",
         "references": "References",
         "referenceCount": "{count, plural, one {# image from your library} other {# images from your library}}",
-        "editAgain": "Edit the original with this mask"
+        "editAgain": "Edit the original with this mask",
+        "editAgainMarks": "Edit the original with these marks"
       },
       "reused": "Loaded the prompt and settings.",
       "copyFailed": "Couldn't copy the image.",
@@ -2326,6 +2327,7 @@
   "edit": {
     "reopen": {
       "back": "Your mask and prompt are back. Change anything, then Generate.",
+      "backMarks": "Your marks and prompt are back. Change anything, then Generate.",
       "maskFailed": "Couldn't load the mask. Your prompt is back, so paint the area to change again."
     },
     "tools": {
@@ -2382,7 +2384,7 @@
       "material": "Material",
       "optional": "Optional",
       "materialPlaceholder": "Brushed steel",
-      "note": "Added to your prompt with this mark.",
+      "note": "The material is added to your prompt. The color only helps you tell marks apart.",
       "marks": "Marks",
       "clearAll": "Clear all",
       "sent": "Sent with your prompt",

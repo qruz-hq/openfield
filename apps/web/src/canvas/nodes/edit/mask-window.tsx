@@ -138,8 +138,16 @@ export function useOpenerFocus(
     // The loading frame giving way to the window isn't the window closing.
     if (store.getState().ui[which] === nodeId) return;
     const el = from.current;
+    // The Paint mask on the node's cover goes once it has a mask, but the node can still show it
+    // for a moment after a save: the node itself takes focus then, not a button about to go.
+    const params = store.getState().doc.params[nodeId] as { maskAssetId?: string } | undefined;
+    const leaving = Boolean(params?.maskAssetId) && el instanceof HTMLElement && el.closest("[data-cover]");
     const opener =
-      el instanceof HTMLElement && el !== document.body && el.isConnected && !el.matches(":disabled")
+      el instanceof HTMLElement &&
+      el !== document.body &&
+      el.isConnected &&
+      !el.matches(":disabled") &&
+      !leaving
         ? el
         : null;
     const target = opener ?? nodeWrapper(nodeId);

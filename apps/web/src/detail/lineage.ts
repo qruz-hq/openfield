@@ -5,7 +5,9 @@ import {
   compositeSettingsOf,
   editOpParamsSchema,
   MASK_COMPOSITE_DEFAULTS,
+  type Mark,
   type ModelKey,
+  marksSchema,
   maskInputSchema,
   t,
 } from "@openfield/core";
@@ -95,10 +97,17 @@ export function maskNote(
   return t("assets.detail.editedFrom.settings", { feather: composite.featherPx, expand: composite.expandPx });
 }
 
-/** Everything "Edit the original with this mask" puts back on the Edit tab. */
+/** Everything "Edit the original with this mask" (or "with these marks") puts back on the Edit tab. */
 export interface Reopened {
   original: Asset;
-  mask: Asset;
+  /** The painted mask, or the marks' area when Sketch & point kept the rest. */
+  mask: Asset | null;
+  /** Sketch & point's marks, when it was made from them: it opens on them, not on a mask. */
+  marks: Mark[] | null;
+  /** Keep the rest in Sketch & point: on when the marks' area was saved as the mask. */
+  sketchComposite: boolean;
+  /** The run that made the image, to fill the results strip again. */
+  runId: string | null;
   prompt: string;
   /** Undefined when the request doesn't say: the Edit tab picks as it would. */
   model: ModelKey | undefined;
@@ -111,11 +120,18 @@ export interface Reopened {
 
 /** What the edit that made this image asked for, to ask again on its original. */
 export function reopenedEdit(detail: AssetDetailResponse, from: EditedFrom, prompt: string): Reopened | null {
-  if (!from.original || !from.mask) return null;
-  const frozen = frozenSettings(detail.asset.params ?? detail.params);
+  const params = detail.asset.params ?? detail.params;
+  // The Edit tab marks the image being edited only: an agent's marks on a reference stay its own.
+  const parsed = marksSchema.safeParse(params?.marks).data;
+  const marks = parsed?.every((mark) => (mark.image ?? 1) === 1) ? parsed : null;
+  if (!from.original || (!from.mask && !marks)) return null;
+  const frozen = frozenSettings(params);
   return {
     original: from.original,
     mask: from.mask,
+    marks,
+    sketchComposite: marks !== null && from.mask !== null,
+    runId: detail.asset.jobSetId ?? detail.jobSet?.id ?? null,
     prompt,
     model: frozen.model,
     values: {

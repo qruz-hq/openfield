@@ -145,9 +145,9 @@ describe("mark geometry", () => {
       color: "#C8102E",
       material: "brushed steel",
     };
-    expect(previewLine(mark, "Mark 1", "box")).toBe("Mark 1 · box · #C8102E · brushed steel");
+    expect(previewLine(mark, "Mark 1", "box")).toBe("Mark 1 · box · brushed steel");
     expect(previewLine({ kind: "point", at: { x: 0, y: 0 }, color: "#E8A33D" }, "Mark 2", "point")).toBe(
-      "Mark 2 · point · #E8A33D",
+      "Mark 2 · point",
     );
   });
 });

@@ -125,7 +125,9 @@ interface DetailPanelProps {
    * An edited image's original, mask and references, shown in place of Prompt. onEditAgain opens
    * the original on Edit with the same mask; left out where that can't happen (the Trash).
    */
-  editedFrom?: { from: EditedFrom; onEditAgain?: (() => void) | undefined } | undefined;
+  editedFrom?:
+    | { from: EditedFrom; onEditAgain?: (() => void) | undefined; marked?: boolean | undefined }
+    | undefined;
   /**
    * The Info and Edit tabs, and what Edit shows. Left out for what can't be edited here (a video,
    * an image in the trash), which keeps the panel as it was, with no tabs.
@@ -193,6 +195,7 @@ export function DetailPanel({
             models={models}
             onOpen={onOpenReference}
             onEditAgain={editedFrom.onEditAgain}
+            marked={editedFrom.marked ?? false}
           />
         ) : uploadedOnly ? null : (
           <PromptSection
@@ -418,6 +421,7 @@ function EditedFromSection({
   models,
   onOpen,
   onEditAgain,
+  marked,
 }: {
   /** The edited image, under its mask when the original has gone. */
   id: string;
@@ -426,6 +430,8 @@ function EditedFromSection({
   models: readonly ModelListItem[] | undefined;
   onOpen: (asset: Asset) => void;
   onEditAgain: (() => void) | undefined;
+  /** Made in Sketch & point: editing again puts the marks back. */
+  marked: boolean;
 }) {
   const { original, mask, maskNote, references } = from;
   const first = references[0];
@@ -480,9 +486,9 @@ function EditedFromSection({
       >
         {hasPrompt ? prompt : t("assets.detail.noPrompt")}
       </p>
-      {onEditAgain && original && mask ? (
+      {onEditAgain && original ? (
         <Button variant="secondary" size="l" icon={Brush} onClick={onEditAgain} className="w-full">
-          {t("assets.detail.editedFrom.editAgain")}
+          {t(marked ? "assets.detail.editedFrom.editAgainMarks" : "assets.detail.editedFrom.editAgain")}
         </Button>
       ) : null}
     </Surface>

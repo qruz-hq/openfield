@@ -4,14 +4,15 @@ import {
   idParamSchema,
   type JobSetAccepted,
   type JobSetsListResponse,
+  type JobSetWithJobs,
   jobSetRetryBodySchema,
   jobSetsListQuerySchema,
   type OkResponse,
 } from "@openfield/core";
-import { listJobSets } from "@openfield/db";
+import { getJobSetBundle, listJobSets } from "@openfield/db";
 import { Hono } from "hono";
 import type { Env } from "../context";
-import { onInvalid } from "../http/errors";
+import { notFound, onInvalid } from "../http/errors";
 import { jobSetViews } from "../services/job-sets";
 
 export const jobSetsRoutes = new Hono<Env>()
@@ -23,6 +24,13 @@ export const jobSetsRoutes = new Hono<Env>()
       nextCursor: page.nextCursor,
     };
     return c.json(body satisfies JobSetsListResponse, 200);
+  })
+  // One run, done or not: the Edit tab's results strip, when an edit is opened again from an image it made.
+  .get("/job-sets/:id", zValidator("param", idParamSchema, onInvalid), (c) => {
+    const { db } = c.var.svc;
+    const bundle = getJobSetBundle(db, c.req.valid("param").id);
+    if (!bundle) return notFound(c, "That run");
+    return c.json(jobSetViews(db, [bundle])[0]! satisfies JobSetWithJobs, 200);
   })
   .post("/job-sets/:id/cancel", zValidator("param", idParamSchema, onInvalid), (c) => {
     const result = c.var.svc.runner.cancelJobSet(c.req.valid("param").id);

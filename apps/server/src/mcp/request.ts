@@ -102,7 +102,7 @@ export const imageRequestFields = {
           `For models with marks in list_models: up to ${MARKS_MAX} places on the image to point at, each with what to do there. ` +
             "Coordinates are fractions of the image, 0 to 1 from the top left. " +
             'kind "point" takes at; "box", "circle" and "arrow" take from and to; "stroke" takes points. ' +
-            "Each may have a note (what to do there), a color (#RRGGBB) and a material. " +
+            "Each may have a note (what to do there) and a material. color (#RRGGBB) only sets how the mark shows in Openfield: it's not sent to the model, so put a colour change in the note. " +
             "image is 1 for the image being edited, 2 and up for the references in order. Default 1.",
         ),
     })
