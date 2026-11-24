@@ -1,4 +1,4 @@
-import type { CostActual, JobState, SpeedId } from "@openfield/core";
+import type { CostActual, JobState, LayerOpParams, SpeedId } from "@openfield/core";
 import type { ProviderError } from "./errors";
 
 // §6.6, §6.7. In-process result types: they never cross HTTP as-is, so they aren't core schemas.
@@ -24,6 +24,11 @@ export interface GeneratedImage {
    * ctx.assets. The server keeps it as the poster when it can't take the first frame itself.
    */
   poster?: { assetId: string; mimeType: string };
+  /**
+   * One image of a layer separation: the base, or a layer and where it sits. The runner files the
+   * base as the job's image and each layer beside it.
+   */
+  layer?: LayerOpParams;
 }
 
 export interface ProviderUsage {
@@ -49,6 +54,11 @@ export interface SafetyVerdict {
 
 export interface JobResult {
   images: GeneratedImage[];
+  /**
+   * Outputs of the call that failed on their own while others came back (a moderated image in a
+   * related set), by index in the job set. Their jobs fail with this error, at no cost.
+   */
+  failures?: { index: number; error: ProviderError }[];
   /** Shown in the Info panel as the prompt the model actually used. */
   revisedPrompt?: string;
   usage?: ProviderUsage;

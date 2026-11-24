@@ -32,3 +32,50 @@ export const PRICES = {
   "seedance-1-0-pro-250528": price([{ perMTok: 2.5 }]),
   "seedance-1-0-pro-fast-251015": price([{ perMTok: 1.0 }]),
 } satisfies Record<string, PriceModel>;
+
+// Seedream: USD per output image, from the same page on 2026-11-09. Only images that come back are
+// billed, and every image of a related set or a separation counts on its own. 5.0 Pro bills by the
+// pixels of each image (2.61M is the line between its two rates), and its input images after the
+// first; every other model takes input images free.
+
+const seedreamPriced = { currency: "USD", pricedAt: "2026-11-09", sourceUrl: SOURCE } as const;
+/** "up to 2.61M px" on the pricing page. Every 1K and 1.5K size is under it; every 2K size over. */
+export const PRO_TIER_PIXELS = 2_610_000;
+
+const flat = (usd: number): Extract<PriceModel, { kind: "per_image" }> => ({
+  kind: "per_image",
+  ...seedreamPriced,
+  tiers: [{ usd }],
+});
+
+export const SEEDREAM_PRICES = {
+  "dola-seedream-5-0-pro-260628": {
+    kind: "per_image",
+    ...seedreamPriced,
+    tiers: [
+      { tier: "1K", usd: 0.045 },
+      { tier: "1.5K", usd: 0.045 },
+      { tier: "2K", usd: 0.09 },
+    ],
+    byPixels: [{ maxPixels: PRO_TIER_PIXELS, usd: 0.045 }, { usd: 0.09 }],
+    inputImage: { usd: 0.003, freePerCall: 1 },
+    // The base and each layer at the layer rate, by their own pixels: up to a base and 16 layers.
+    decompose: {
+      tiers: [
+        { tier: "1K", usd: 0.0225 },
+        { tier: "1.5K", usd: 0.0225 },
+        { tier: "2K", usd: 0.045 },
+      ],
+      byPixels: [{ maxPixels: PRO_TIER_PIXELS, usd: 0.0225 }, { usd: 0.045 }],
+      outputs: { min: 2, max: 17 },
+    },
+  },
+  // One rate, and no separate layer row: assumed to apply to a separation's images too (README).
+  "dola-seedream-5-0-flash-260915": {
+    ...flat(0.018),
+    decompose: { tiers: [{ usd: 0.018 }], outputs: { min: 2, max: 17 } },
+  },
+  "seedream-5-0-260128": flat(0.035),
+  "seedream-4-5-251128": flat(0.04),
+  "seedream-4-0-250828": flat(0.03),
+} satisfies Record<string, PriceModel>;

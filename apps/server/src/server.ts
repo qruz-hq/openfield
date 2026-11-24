@@ -37,6 +37,7 @@ import type { QueueOptions } from "./runner/timing";
 import { AgentService } from "./services/agents";
 import { CredentialService } from "./services/credentials";
 import { batchSnapshot, jobSetViews, markAnnounced } from "./services/job-sets";
+import { LayerService } from "./services/layers";
 import { LibraryService } from "./services/library";
 import { ModelService } from "./services/models";
 import { PresenceService } from "./services/presence";
@@ -237,6 +238,7 @@ async function boot(
   });
   jobLog({ event: "startup.recovery", ...recovery });
   const library = new LibraryService({ db, paths, events, logger, settings });
+  const layers = new LayerService({ db, paths, ingest, thumbs, settings, logger });
   const engineContext = () =>
     serverEngineContext({ db, providers, credentials, models, settings, providerSettings });
   const canvases = new CanvasService({
@@ -324,6 +326,7 @@ async function boot(
     ingest,
     thumbs,
     library,
+    layers,
     runner,
     canvases,
     canvasRuns,

@@ -174,7 +174,7 @@ export function ReferenceRow({
   const files = useRef<HTMLInputElement>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
-  const press = useRef<{ id: string; from: number; x: number; moved: boolean } | null>(null);
+  const press = useRef<{ id: string; from: number; x: number; moved: boolean; dx: number } | null>(null);
   const { list, remember } = useSlide();
   const max = referenceLimit(model);
   const count = references.length;
@@ -201,7 +201,7 @@ export function ReferenceRow({
   const onPointerDown = (event: PointerEvent<HTMLButtonElement>, id: string, from: number) => {
     if (event.button !== 0) return;
     event.currentTarget.setPointerCapture(event.pointerId);
-    press.current = { id, from, x: event.clientX, moved: false };
+    press.current = { id, from, x: event.clientX, moved: false, dx: 0 };
   };
   const onPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
     const p = press.current;
@@ -211,15 +211,18 @@ export function ReferenceRow({
     p.moved = true;
     // Kept within the row, so the tile can't wander off past either end.
     const clamped = Math.max(-p.from * SLOT, Math.min((count - 1 - p.from) * SLOT, dx));
+    p.dx = clamped;
     setDrag({ id: p.id, from: p.from, dx: clamped });
   };
   const onPointerUp = () => {
     const p = press.current;
     press.current = null;
-    if (!p?.moved || !drag) return;
-    // Remembered with the tiles where they are now, so they ease into place from there.
+    if (!p?.moved) return;
+    // From the press itself, not the last render: a quick drag can be let go of before the tile
+    // has been drawn where it was dragged to. Remembered with the tiles where they are now, so they
+    // ease into place from there.
     setDrag(null);
-    move(drag.id, to);
+    move(p.id, dropIndex(p.from, p.dx, count));
   };
   const onPointerCancel = () => {
     press.current = null;

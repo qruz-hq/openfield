@@ -9,6 +9,8 @@ import {
   type ErrorCode,
   type GenerateRequest,
   hashCanonical,
+  type LayerRequest,
+  type Mark,
   type MessageKey,
   type ModelManifest,
   modalityOf,
@@ -22,6 +24,7 @@ import {
   t,
   type VideoResolution,
 } from "@openfield/core";
+import { inOneCall, isGroupRun } from "./manifest/batch";
 import { resolveProviderSettings } from "./manifest/provider-settings";
 import { fitPixels, nearestRatio, placeholderSize, resolveSize } from "./manifest/size";
 import { plannedVideoSize, type ResolvedVideo, resolveVideo, videoSize } from "./manifest/video";
@@ -84,7 +87,14 @@ export interface NormalizeResult {
   error?: ProviderError;
 }
 
-const EDIT_SOURCE_OPS: readonly AdapterOp[] = ["edit", "inpaint", "outpaint", "upscale", "remove_bg"];
+const EDIT_SOURCE_OPS: readonly AdapterOp[] = [
+  "edit",
+  "inpaint",
+  "outpaint",
+  "upscale",
+  "remove_bg",
+  "decompose",
+];
 
 export async function normalize(
   manifest: ModelManifest,
@@ -113,7 +123,11 @@ export async function normalize(
 
   // Op (§0.4)
   const isVideo = modalityOf(manifest) === "video";
-  const op = adapterOpFor(req.op, { hasMask: Boolean(req.mask), canInpaint: caps.ops.inpaint });
+  const op = adapterOpFor(req.op, {
+    hasMask: Boolean(req.mask),
+    canInpaint: caps.ops.inpaint,
+    canDecompose: caps.ops.decomposeLayers,
+  });
   // A video model only generates: from words, or from frames.
   if (!op || (isVideo ? op !== "generate" || !caps.video : !canDo(caps, op)))
     block("op", "capability_unsupported", t("errors.capability_unsupported.reason"));
@@ -130,7 +144,9 @@ export async function normalize(
     if (opts.wholeImageFallback === false) {
       block("mask", "capability_unsupported", t("composer.areaEditOff", { model }));
     } else {
-      const keep = compositeSettingsOf(req.mask).composite ? "yes" : "no";
+      const keep = compositeSettingsOf(req.mask, { marks: Boolean(req.marks?.length) }).composite
+        ? "yes"
+        : "no";
       diagnostics.push({
         level: "warning",
         field: "mask",
@@ -169,20 +185,45 @@ export async function normalize(
     unsupported("references", t("composer.referenceLimit", { model, max: caps.references.max }));
     references = references.slice(0, caps.references.max);
   }
+  // A layer separation reads one image, and some models count an edit's base among their inputs.
+  const baseCount = op && EDIT_SOURCE_OPS.includes(op) && req.base ? 1 : 0;
+  const maxInputs = op === "decompose" ? 1 : caps.references.maxInputs;
+  if (maxInputs !== undefined && references.length + baseCount > maxInputs) {
+    const max = Math.max(0, maxInputs - baseCount);
+    unsupported(
+      "references",
+      max ? t("composer.referenceLimit", { model, max }) : t("composer.referencesNone", { model }),
+    );
+    references = references.slice(0, max);
+  }
   if (!caps.references.weights) references = references.map(({ weight: _, ...rest }) => rest);
 
-  // Size, resolution, quality (§6.5 step 3)
+  const marks = checkMarks(caps, req.marks, {
+    op,
+    images: baseCount + references.length,
+    unsupported: (message) => unsupported("marks", message),
+    block: (message) => block("marks", "invalid_request", message),
+    model,
+  });
+
+  // Size, resolution, quality (§6.5 step 3). A separation keeps its image's shape, and its size
+  // is request.layers' own.
+  const separates = op === "decompose";
   let resolution: ResolutionTier | undefined;
-  if (caps.resolution) {
+  if (separates) {
+    // Nothing to resolve: the layer size below is the only size a separation takes.
+  } else if (caps.resolution) {
     resolution = caps.resolution.default;
     if (req.resolution && caps.resolution.tiers.includes(req.resolution)) resolution = req.resolution;
     else if (req.resolution) unsupportedSetting("resolution", "composer.chips.resolution.label");
   } else if (req.resolution) {
     unsupportedSetting("resolution", "composer.chips.resolution.label");
   }
-  let size = resolveRequestSize(caps, req, resolution, () =>
-    unsupportedSetting("size", "composer.chips.aspect.label"),
-  );
+  let size: PixelSize | { aspect: AspectRatio } = separates
+    ? { aspect: "auto" }
+    : resolveRequestSize(caps, req, resolution, () =>
+        unsupportedSetting("size", "composer.chips.aspect.label"),
+      );
 
   // Video (§0.3): duration, resolution, sound and frames, by the model's own rules.
   let video: ResolvedVideo["video"] | undefined;
@@ -211,6 +252,11 @@ export async function normalize(
   if (batch > caps.batch.max) {
     unsupportedSetting("batch", "composer.chips.batch.label");
     batch = caps.batch.max;
+  }
+  // One separation per run: its base and layers are the run's images.
+  if (op === "decompose" && batch > 1) {
+    unsupportedSetting("batch", "composer.chips.batch.label");
+    batch = 1;
   }
 
   // Everything else a manifest may or may not declare
@@ -245,6 +291,26 @@ export async function normalize(
   const providerOptions = checkProviderOptions(caps, req.providerOptions, (field, setting) =>
     unsupported(field, t("composer.unsupported", { model, setting })),
   );
+
+  // A related set counts the images it's sent toward the images it may make.
+  const shared = caps.references.maxInputsAndOutputs;
+  if (shared !== undefined && isGroupRun(manifest, { providerOptions })) {
+    const room = Math.max(1, shared - baseCount - references.length);
+    if (batch > room) {
+      unsupported("batch", t("composer.groupLimit", { model, max: shared }));
+      batch = room;
+    }
+  }
+
+  let layers: LayerRequest | undefined;
+  if (op === "decompose" && caps.layers) {
+    const asked = req.layers?.size;
+    if (asked && !caps.layers.sizes.includes(asked))
+      unsupported("layers", t("errors.unsupported_param.reason"));
+    layers = { size: asked && caps.layers.sizes.includes(asked) ? asked : caps.layers.default };
+  } else if (req.layers) {
+    unsupported("layers", t("errors.unsupported_param.reason"));
+  }
 
   // Seeds (§0.11): only for models that honour them, one per output, derived from one base.
   let seed: number | undefined;
@@ -281,10 +347,12 @@ export async function normalize(
     seed,
     references: references.length ? references : undefined,
     base: op && EDIT_SOURCE_OPS.includes(op) ? req.base : undefined,
-    mask: frozenMask(op, req.mask),
+    mask: frozenMask(op, req.mask, Boolean(marks)),
     expand: op === "outpaint" ? req.expand : undefined,
     moderation,
     video,
+    marks,
+    layers,
     source: req.source,
     canvas: req.canvas,
     providerOptions,
@@ -335,7 +403,7 @@ export function planCalls(
   const caps = manifest.capabilities;
   if (jobIds.length !== request.batch)
     throw new RangeError(`Expected ${request.batch} job ids, got ${jobIds.length}`);
-  const single = request.batch === 1 || (caps.batch.native && request.speed !== "batch");
+  const single = request.batch === 1 || (inOneCall(manifest, request) && request.speed !== "batch");
   if (single) return [{ ...request, jobId: jobIds[0]!, batchIndex: 0 }];
   const [low, high] = caps.seed.range ?? [0, 4_294_967_295];
   return jobIds.map((jobId, i) => ({
@@ -351,11 +419,46 @@ export function planCalls(
  * The mask a run keeps: an inpaint's, which the model gets, and a whole-image edit's, which only
  * the composite reads. Its composite settings are filled in so Recreate replays exactly this.
  */
-function frozenMask(op: AdapterOp | null, mask: GenerateRequest["mask"]): GenerateRequest["mask"] {
+function frozenMask(
+  op: AdapterOp | null,
+  mask: GenerateRequest["mask"],
+  marks: boolean,
+): GenerateRequest["mask"] {
   if (!mask) return undefined;
   if (op === "outpaint") return mask;
   if (op !== "inpaint" && op !== "edit") return undefined;
-  return { assetId: mask.assetId, ...compositeSettingsOf(mask) };
+  return { assetId: mask.assetId, ...compositeSettingsOf(mask, { marks }) };
+}
+
+/**
+ * The marks a model takes: only on an edit, only kinds it reads, at most its own count, each on an
+ * image the call actually sends. What it can't take is dropped or refused by the manifest's policy.
+ */
+function checkMarks(
+  caps: Capabilities,
+  asked: readonly Mark[] | undefined,
+  opts: {
+    op: AdapterOp | null;
+    images: number;
+    model: string;
+    unsupported: (message: string) => void;
+    block: (message: string) => void;
+  },
+): Mark[] | undefined {
+  if (!asked?.length) return undefined;
+  const rule = caps.marks;
+  if (!rule || (opts.op !== "edit" && opts.op !== "inpaint")) {
+    opts.unsupported(t("composer.marksNone", { model: opts.model }));
+    return undefined;
+  }
+  let marks = asked.filter((m) => rule.kinds.includes(m.kind));
+  if (marks.length < asked.length) opts.unsupported(t("composer.marksKind", { model: opts.model }));
+  if (marks.length > rule.max) {
+    opts.unsupported(t("composer.marksLimit", { model: opts.model, max: rule.max }));
+    marks = marks.slice(0, rule.max);
+  }
+  if (marks.some((m) => (m.image ?? 1) > opts.images)) opts.block(t("composer.markImageMissing"));
+  return marks.length ? marks : undefined;
 }
 
 /** "a cat on a mat. Avoid: dogs, text." One trailing sentence, as §0.8 asks. */
@@ -393,6 +496,8 @@ function canDo(caps: Capabilities, op: AdapterOp): boolean {
       return caps.ops.upscale;
     case "remove_bg":
       return caps.ops.removeBackground;
+    case "decompose":
+      return caps.ops.decomposeLayers;
   }
 }
 

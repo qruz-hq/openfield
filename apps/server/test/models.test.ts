@@ -35,6 +35,11 @@ describe("model registry", () => {
       "openai:gpt-image-2.5-sunburst",
       "openai:gpt-image-2.5-flare",
       "openai:gpt-image-2",
+      "byteplus:dola-seedream-5-0-pro-260628",
+      "byteplus:dola-seedream-5-0-flash-260915",
+      "byteplus:seedream-5-0-260128",
+      "byteplus:seedream-4-5-251128",
+      "byteplus:seedream-4-0-250828",
     ]);
     expect(list.models.every((m) => !m.ready && m.enabled)).toBe(true);
     expect(list.staleAt).toBeNull();
@@ -51,6 +56,12 @@ describe("model registry", () => {
       undefined,
       undefined,
       ["batch"],
+      // Seedream: Fast (the fast prompt optimizer) on 5.0 Pro and 4.0 only.
+      ["priority"],
+      undefined,
+      undefined,
+      undefined,
+      ["priority"],
     ]);
     expect((res.body as { models: object[] }).models.every((m) => !("batch" in m))).toBe(true);
     expect(rows.map((r) => r.speeds?.length)).toEqual([3, 1, 1, undefined, undefined, 1]);

@@ -37,6 +37,7 @@ export {
   PENDING_PRICE,
   type PriceAsk,
 } from "./manifest/asked-price";
+export { inOneCall, isGroupRun } from "./manifest/batch";
 export {
   type Adjustment,
   aspectLabel,
@@ -99,6 +100,7 @@ export {
   resolveSpeed,
   resumesAfterRestart,
   type SpeedTimeouts,
+  speedLabel,
   speedOffer,
   speedTimeouts,
 } from "./manifest/speed";

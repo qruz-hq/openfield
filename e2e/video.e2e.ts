@@ -45,6 +45,9 @@ test("add the BytePlus key from the Video page's first run", async ({ page }) =>
 });
 
 test("generate a video from words, then from a start frame", async ({ page, request }) => {
+  // Two videos made one after the other, each read every 5 s like a real one, with up to 20 s to
+  // finish: more than the default 30 s on a busy machine.
+  test.setTimeout(60_000);
   const token = await sessionToken(request);
   await api(request, token, "PUT", "/api/settings/keys/byteplus", { apiKey: FAKE_KEY });
 

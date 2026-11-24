@@ -67,6 +67,11 @@ export interface FakeRoute {
   hosts: readonly string[];
   handle(request: Request, env: FakeEnv): Promise<Response>;
   fixtures: Partial<Record<FakeScenario, RecordedExchange>>;
+  /**
+   * The API says which speed served a call, so priority_standard can serve Priority at Standard.
+   * BytePlus doesn't: its Fast is a prompt setting, not a queue.
+   */
+  reportsServedSpeed?: boolean;
 }
 
 export function replay(

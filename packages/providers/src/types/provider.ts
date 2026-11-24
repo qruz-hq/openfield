@@ -114,6 +114,23 @@ export interface AssetSink {
    * only (§0.9), so this is how an adapter gets their bytes. Not in the PRD's §6.2 sketch.
    */
   read(assetId: string): Promise<StoredAsset>;
+  /**
+   * Optional: a stored image, turned upright, with shapes drawn on it, for a model that reads
+   * marks off the image itself (Seedream's sketch edits). Nothing is saved; the drawing exists for
+   * the call.
+   */
+  drawMarks?(assetId: string, drawings: readonly MarkDrawing[]): Promise<StoredAsset>;
+}
+
+/** A shape to draw onto an image. Points are fractions of the image, as on a Mark. */
+export interface MarkDrawing {
+  kind: "circle" | "stroke" | "arrow";
+  /** circle: two corners of its box; arrow: tail then head; stroke: every point in order. */
+  points: readonly { x: number; y: number }[];
+  /** "#RRGGBB". */
+  color: string;
+  /** Line width as a fraction of the image's short side. */
+  width: number;
 }
 
 export interface RedactingLogger {

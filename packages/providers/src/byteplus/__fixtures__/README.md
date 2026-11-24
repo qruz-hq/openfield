@@ -32,6 +32,24 @@ Each JSON file is one exchange:
 | `cancel-started.json` | 409 to a delete once the task runs (a guess: see the adapter README) | a cancel that ends quietly |
 | `tasks.json` | The task list, empty | a working key |
 
+## Seedream (`seedream/`)
+
+Hand-made the same way, from the Image generation API reference and the 5.0 Pro / Flash tutorial as of 2026-11-09 (`POST /api/v3/images/generations`, `data[]`, `usage.generated_images`, the layer fields). Images are placeholders: `"<png>"`, `"<png-alpha>"` and `"<jpeg>"` stand for base64 images, and the tests swap in tiny real ones, so the files stay readable.
+
+| File | What it plays back | Maps to |
+|---|---|---|
+| `generate.json` | One Pro image, PNG, with `usage` | a saved image, priced from its size |
+| `edit-references.json` | An edit with three images in (`usage.input_images: 3`) | the image, plus two inputs at $0.003 |
+| `group-partial.json` | A related set with its second image replaced by an `error` | the rest saved, that one `content_refused` |
+| `group-short.json` | A related set of 4 that came back with 2 | 2 saved, 2 failed: "made fewer images than you asked for" |
+| `layers.json` | A separation: a 2048×2048 base (`z_index` 0) and three cropped layers with `bounding_box`, `name` and `description` | a base and layers in one stack |
+| `layers-failed.json` | 500 `InternalServiceError` on a separation | `provider_unavailable`, "couldn't separate this image into layers" |
+| `not-open.json` | 404 `ModelNotOpen` | `auth_forbidden`, "Turn on … in BytePlus first" |
+| `ipm-rate-limited.json` | 429 `ModelAccountIpmRateLimitExceeded` (images per minute) | `rate_limited` |
+| `quota-exceeded.json` | 429 `QuotaExceeded` | `quota_exceeded` |
+| `output-flagged.json` | 400 `OutputImageSensitiveContentDetected` | `content_refused` |
+| `invalid.json` | 400 `InvalidParameter` naming `size` | `invalid_request` |
+
 `media.ts` holds the fake's video and last frame, base64-encoded so the fake reads no files: two 64×36 H.264 MP4s of one second at 24 fps (one with a silent mono AAC track, one without), and a 64×36 JPEG. They were made with `make-media.swift` (AVFoundation, macOS):
 
 ```sh

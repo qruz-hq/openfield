@@ -1,11 +1,11 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { formatCost, type ModelListItem, t } from "@openfield/core";
-import { estimate, pricedOp, resolveProviderSettings } from "@openfield/providers/manifest";
+import { formatCost, type ModelListItem } from "@openfield/core";
+import { estimate, pricedOp, resolveProviderSettings, speedLabel } from "@openfield/providers/manifest";
 import { z } from "zod";
 import { priceOf } from "../guard";
 import { guarded, reply, type ToolContext } from "../kit";
 import { buildRequest, imageRequestFields } from "../request";
-import { editOf } from "../runs";
+import { editOf, speedNameFor } from "../runs";
 import { modelName } from "./generate";
 
 // Which models there are, what each can do and what it costs.
@@ -17,6 +17,7 @@ const OPS: [keyof ModelListItem["capabilities"]["ops"], string][] = [
   ["outpaint", "extend an image"],
   ["upscale", "upscale"],
   ["removeBackground", "remove the background"],
+  ["decomposeLayers", "separate an image into layers (separate_layers)"],
 ];
 
 export function modelTools(server: McpServer, ctx: ToolContext): void {
@@ -59,7 +60,7 @@ export function modelTools(server: McpServer, ctx: ToolContext): void {
         model: request.model,
         count: request.batch,
         ...(edit && { op: quote.request.op, edit }),
-        speed: quote.request.speed,
+        speed: speedNameFor(ctx, request.model, quote.request.speed),
         price: priceOf(quote.estimate),
       });
     }),
@@ -81,6 +82,9 @@ function describeModel(ctx: ToolContext, m: ModelListItem, isDefault: boolean) {
     ...(isDefault && { default: true }),
     can: OPS.filter(([op]) => caps.ops[op]).map(([, words]) => words),
     masks: caps.ops.inpaint,
+    ...(caps.marks && { marks: caps.marks.kinds }),
+    ...(caps.layers && { layers: { sizes: caps.layers.sizes, most: caps.layers.maxLayers } }),
+    ...(caps.batch.groupOption && { relatedSet: true }),
     size:
       caps.size.mode === "aspect"
         ? { aspects: caps.size.ratios, default: caps.size.default }
@@ -99,7 +103,7 @@ function describeModel(ctx: ToolContext, m: ModelListItem, isDefault: boolean) {
     references: caps.references.supported ? caps.references.max : 0,
     seeds: caps.seed.supported,
     negativePrompt: caps.negativePrompt,
-    speed: t(`speed.names.${speed}`),
+    speed: speedLabel(m, schema, speed),
     pricePerImage: perImage.confidence === "unknown" ? null : perImage.max,
     price: formatCost(perImage),
   };

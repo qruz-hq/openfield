@@ -55,6 +55,7 @@ export const googleFake: FakeRoute = {
   providerId: "google",
   hosts: ["generativelanguage.googleapis.com"],
   fixtures,
+  reportsServedSpeed: true,
 
   async handle(request, env) {
     const url = new URL(request.url);
