@@ -190,10 +190,11 @@ test("opening a canvas saves nothing, on a screen of any density", async ({ page
     await target.goto(`/canvas/${id}`);
     const card = pane(target).locator('.react-flow__node[data-id="n_card"]');
     await expectImages(card, 1);
-    // The card takes the image's own shape, not the thumbnail's.
+    // The card takes the image's own shape, drawn at whole pixels (flow/adapter.ts): within half a
+    // pixel of 180.16, and saved as it was.
     expect(await card.evaluate((el) => Number.parseFloat((el as HTMLElement).style.height))).toBeCloseTo(
       180.16,
-      2,
+      0,
     );
     await target.waitForTimeout(SETTLE_MS);
     expect(await graphVersion(request, token, id)).toBe(saved);
