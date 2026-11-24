@@ -37,17 +37,32 @@ async function watchApp(page: Page, appOrigin: string) {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Network.enable");
   const urls = new Map<string, string>();
+  const answers = new Map<string, { status: number; headers: string[] }>();
   const seen: { path: string; status: number; cors: boolean }[] = [];
-  cdp.on("Network.requestWillBeSent", (event) => urls.set(event.requestId, event.request.url));
-  cdp.on("Network.responseReceivedExtraInfo", (event) => {
-    const url = new URL(urls.get(event.requestId) ?? "about:blank");
+  // Chrome can send a response's ExtraInfo before or after its request: whichever comes second
+  // records the pair.
+  const record = (id: string) => {
+    const at = urls.get(id);
+    const answer = answers.get(id);
+    if (!at || !answer) return;
+    urls.delete(id);
+    answers.delete(id);
+    const url = new URL(at);
     if (url.origin !== appOrigin) return;
-    const headers = Object.keys(event.headers).map((name) => name.toLowerCase());
     seen.push({
       path: url.pathname,
-      status: event.statusCode,
-      cors: headers.some((name) => name.startsWith("access-control-allow-")),
+      status: answer.status,
+      cors: answer.headers.some((name) => name.startsWith("access-control-allow-")),
     });
+  };
+  cdp.on("Network.requestWillBeSent", (event) => {
+    urls.set(event.requestId, event.request.url);
+    record(event.requestId);
+  });
+  cdp.on("Network.responseReceivedExtraInfo", (event) => {
+    const headers = Object.keys(event.headers).map((name) => name.toLowerCase());
+    answers.set(event.requestId, { status: event.statusCode, headers });
+    record(event.requestId);
   });
   return seen;
 }
