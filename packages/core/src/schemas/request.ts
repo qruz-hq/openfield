@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { type AdapterOp, DIAGNOSTIC_LEVELS, EDIT_OPS, type Op } from "../constants";
 import { HASH_RE } from "../hash";
+import { KEEP_REST_SENSITIVITY } from "../image/keep-rest";
 import { MASK_COMPOSITE_MAX_PX } from "../image/mask";
 import {
   aspectRatioSchema,
@@ -57,6 +58,11 @@ export const maskInputSchema = z.object({
   expandPx: z.int().min(0).max(MASK_COMPOSITE_MAX_PX).optional(),
   /** Soften the mask's edge over this many pixels, outside the expanded mask. */
   featherPx: z.int().min(0).max(MASK_COMPOSITE_MAX_PX).optional(),
+  /**
+   * How readily the model's changes count as real when the rest is put back (core keep-rest.ts):
+   * higher keeps more of them, lower fewer. 0 to 100, 50 by default.
+   */
+  sensitivity: z.int().min(KEEP_REST_SENSITIVITY.min).max(KEEP_REST_SENSITIVITY.max).optional(),
 });
 
 const edgePx = z.int().min(0).max(8192);

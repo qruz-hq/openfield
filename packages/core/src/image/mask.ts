@@ -14,7 +14,12 @@ export const MASK_CHANGE_BELOW = 128;
  * What a masked edit does with the result when the request doesn't say: put the original back
  * outside the mask, after growing the mask by `expandPx` and softening its edge over `featherPx`.
  */
-export const MASK_COMPOSITE_DEFAULTS = { composite: true, expandPx: 4, featherPx: 8 } as const;
+export const MASK_COMPOSITE_DEFAULTS = {
+  composite: true,
+  expandPx: 4,
+  featherPx: 8,
+  sensitivity: 50,
+} as const;
 
 /** The most a request may grow the mask or soften its edge, in pixels. */
 export const MASK_COMPOSITE_MAX_PX = 32;
@@ -30,6 +35,8 @@ export interface CompositeSettings {
   composite: boolean;
   expandPx: number;
   featherPx: number;
+  /** How readily the model's changes count as real (keep-rest.ts KEEP_REST_SENSITIVITY). */
+  sensitivity: number;
 }
 
 /**
@@ -38,13 +45,14 @@ export interface CompositeSettings {
  * the request asks for it; a painted area alone keeps it on.
  */
 export function compositeSettingsOf(
-  mask: Pick<MaskInput, "composite" | "expandPx" | "featherPx"> = {},
+  mask: Pick<MaskInput, "composite" | "expandPx" | "featherPx" | "sensitivity"> = {},
   opts: { marks?: boolean } = {},
 ): CompositeSettings {
   return {
     composite: mask.composite ?? (opts.marks ? false : MASK_COMPOSITE_DEFAULTS.composite),
     expandPx: mask.expandPx ?? MASK_COMPOSITE_DEFAULTS.expandPx,
     featherPx: mask.featherPx ?? MASK_COMPOSITE_DEFAULTS.featherPx,
+    sensitivity: mask.sensitivity ?? MASK_COMPOSITE_DEFAULTS.sensitivity,
   };
 }
 

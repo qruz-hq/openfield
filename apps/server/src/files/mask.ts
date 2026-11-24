@@ -89,7 +89,12 @@ export async function saveMarksMask(
   requireMaskableSize(base, "baseAssetId");
   const sharp = await sharpOrFail();
   if (await isTurned(sharp, deps.ingest.fileOf(base.path))) throw turned("baseAssetId");
-  const area = marksArea(marks, base.width, base.height);
+  // Marks on a reference (image 2 on) say nothing about where the base changes.
+  const area = marksArea(
+    marks.filter((m) => (m.image ?? 1) === 1),
+    base.width,
+    base.height,
+  );
   // Transparent where the marks reach: that part changes.
   const alpha = new Uint8Array(area.length);
   for (let i = 0; i < area.length; i++) alpha[i] = area[i] ? 0 : 255;

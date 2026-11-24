@@ -1,13 +1,24 @@
 import { rmSync, writeFileSync } from "node:fs";
 import { crc32, deflateSync } from "node:zlib";
 import {
+  alignResult,
+  analyzeKeepRest,
   blendPixels,
   compositeSettingsOf,
+  decideKeepRest,
   type EditOpParams,
+  fixesFromRgba,
   isEmptyMask,
+  type KeepRestAnalysis,
+  type KeepRestMode,
+  type KeepRestRecord,
+  type Mark,
+  marksArea,
+  maskOnlyWeights,
   type NormalizedRequest,
+  type PixelImage,
+  shareOfModel,
   UPLOAD_MAX_BYTES,
-  weightsFromAlpha,
 } from "@openfield/core";
 import { type Db, getAsset } from "@openfield/db";
 import type { Logger } from "../log/logger";
@@ -15,12 +26,19 @@ import type { Ingest, StagedFile } from "./ingest";
 import { loadSharp, type Sharp } from "./sharp";
 
 // A masked edit keeps the original outside its mask (§0.9). The model's result is scaled to the
-// base's exact size and laid over the base through the mask, grown by expandPx and softened over
-// featherPx; past that edge every value is copied from the base as it's stored. The composite
-// keeps the base's channels, bit depth and colour profile and is saved as a PNG, so those pixels
-// decode exactly as the server decodes the base. For a JPEG or lossy WebP base that's libvips's
-// decode: other decoders (the macOS webview's ImageIO, say) read the same JPEG a few values apart,
-// so anything comparing before and after should compare against the server's decode.
+// base's exact size, lined up with it, compared with it, and laid over it where it really changed:
+// from the mask, grown by expandPx, into changes that spill out of it and clear changes anywhere
+// (core keep-rest.ts), softened over featherPx. Past that every value is copied from the base as
+// it's stored. When the comparison can't be trusted the mask alone decides, as it always did. The
+// composite keeps the base's channels, bit depth and colour profile and is saved as a PNG, so those
+// pixels decode exactly as the server decodes the base. For a JPEG or lossy WebP base that's
+// libvips's decode: other decoders (the macOS webview's ImageIO, say) read the same JPEG a few
+// values apart, so anything comparing before and after should compare against the server's decode.
+//
+// The model's own result is kept too, hidden with the edit (assets.result_path), so the same can be
+// done again later with other settings for free (services/keep-rest.ts), and so it can be saved as
+// an image of its own. Sketch & point edits without a mask keep it too: the area their marks cover
+// can be put back later.
 
 export interface CompositeDeps {
   db: Db;
@@ -34,15 +52,42 @@ export interface CompositeOutcome {
   /** What to file: the composite, or the model's own result when there's none. */
   staged: StagedFile;
   edit: EditOpParams;
+  /**
+   * The model's own result, to keep hidden with the edit. The same file as `staged` when no
+   * composite was made. The caller owns both: discard each (once) if the edit isn't filed.
+   */
+  result: StagedFile;
 }
 
 type Skip = NonNullable<EditOpParams["composite"]["reason"]>;
 
+/** The settings a kept version is made with. */
+export interface KeepSettings {
+  mode: KeepRestMode;
+  expandPx: number;
+  featherPx: number;
+  sensitivity: number;
+}
+
 /**
- * Lays a masked edit's result over its base. Undefined for anything but a masked image edit. When
- * it makes a composite it discards the result's own file, so `staged` is the caller's no longer.
- * Never throws: a composite that can't be made leaves the result as it came, and the record says
- * the original wasn't put back.
+ * The files a kept version is made from, absolute. `area` is a mask file, marks on the base, or the
+ * whole picture (the model's own result, with only the fix layer putting the original back).
+ */
+export interface KeepFiles {
+  base: string;
+  result: string;
+  area: { mask: string } | { marks: readonly Mark[] } | { everywhere: true };
+  /** A fix layer: an RGBA PNG at the base's size (core fixesFromRgba). */
+  fixes?: Uint8Array;
+}
+
+/** What deciding the area found, for the record. */
+export type Decided = Pick<KeepRestRecord, "lineUp" | "fellBack" | "changed">;
+
+/**
+ * Lays a masked edit's result over its base. Undefined for anything but an image edit with a mask
+ * or marks. Never throws: a composite that can't be made leaves the result as it came, and the
+ * record says the original wasn't put back.
  */
 export async function compositeEdit(
   deps: CompositeDeps,
@@ -50,15 +95,42 @@ export async function compositeEdit(
   staged: StagedFile,
 ): Promise<CompositeOutcome | undefined> {
   const { base, mask } = call;
-  if (!base || !mask || (call.op !== "edit" && call.op !== "inpaint") || !staged.mime.startsWith("image/"))
+  // Only marks on the image being edited (1) say where it changes; others are on references.
+  const onBase = call.marks?.filter((m) => (m.image ?? 1) === 1);
+  const marks = onBase?.length ? onBase : undefined;
+  if (
+    !base ||
+    (!mask && !marks) ||
+    (call.op !== "edit" && call.op !== "inpaint") ||
+    !staged.mime.startsWith("image/")
+  )
     return undefined;
-  const { composite, expandPx, featherPx } = compositeSettingsOf(mask);
-  const record = (applied: boolean, extra: Partial<EditOpParams["composite"]> = {}): EditOpParams => ({
+  const { composite, expandPx, featherPx, sensitivity } = compositeSettingsOf(mask, {
+    marks: Boolean(marks),
+  });
+  const keepRest = (decided: Decided = {}): KeepRestRecord => ({
+    mode: "smart",
+    sensitivity,
+    start: marks ? "marks" : "mask",
+    ...decided,
+    revision: 0,
+    stored: true,
+  });
+  const record = (
+    applied: boolean,
+    extra: Partial<EditOpParams["composite"]> = {},
+    decided?: Decided,
+  ): EditOpParams => ({
     composite: { applied, expandPx, featherPx, ...extra },
     // A mask on an edit (not an inpaint) means the model can't take one and changed it all.
-    ...(call.op === "edit" && { fallback: "whole_image" as const }),
+    ...(mask && call.op === "edit" && { fallback: "whole_image" as const }),
+    keepRest: keepRest(decided),
   });
-  const skip = (reason: Skip): CompositeOutcome => ({ staged, edit: record(false, { reason }) });
+  const skip = (reason: Skip): CompositeOutcome => ({
+    staged,
+    result: staged,
+    edit: record(false, { reason }),
+  });
   if (!composite) return skip("off");
 
   let sharp: Sharp;
@@ -76,21 +148,22 @@ export async function compositeEdit(
     });
     return skip("failed");
   };
-  let made: Composite | "turned";
+  let made: Kept | "turned";
   try {
     // The Trash keeps files where they are, so a base or mask trashed mid-run still reads.
     const baseRow = getAsset(db, base.assetId, { includeDeleted: true });
-    const maskRow = getAsset(db, mask.assetId, { includeDeleted: true });
-    if (!baseRow || !maskRow) throw new Error("The base or its mask is gone");
-    made = await compositeFiles(
+    const maskRow = mask && getAsset(db, mask.assetId, { includeDeleted: true });
+    if (!baseRow || (mask && !maskRow)) throw new Error("The base or its mask is gone");
+    made = await keptVersion(
       sharp,
       ingest,
       {
         base: ingest.fileOf(baseRow.path),
-        mask: ingest.fileOf(maskRow.path),
         result: ingest.fileOf(staged.path),
+        area: maskRow ? { mask: ingest.fileOf(maskRow.path) } : { marks: marks! },
       },
-      { expandPx, featherPx },
+      { mode: "smart", expandPx, featherPx, sensitivity },
+      logger,
     );
   } catch (err) {
     return failed(err);
@@ -110,22 +183,17 @@ export async function compositeEdit(
       bytes: kept.bytes,
     });
   }
-  try {
-    ingest.discard(staged);
-  } catch (err) {
-    // A file that won't delete (Windows holds files a reader still has open) is a leftover, not
-    // a failed run: the composite is made and the job still has to land.
-    logger.warn("Couldn't delete the model's own file after the composite", {
-      jobId: call.jobId,
-      error: err instanceof Error ? err.message : String(err),
-    });
-  }
-  return { staged: kept, edit: record(true, made.resizedFrom && { resizedFrom: made.resizedFrom }) };
+  return {
+    staged: kept,
+    result: staged,
+    edit: record(true, made.resizedFrom && { resizedFrom: made.resizedFrom }, made.decided),
+  };
 }
 
-interface Composite {
+export interface Kept {
   png: Uint8Array<ArrayBuffer>;
   resizedFrom?: { width: number; height: number };
+  decided: Decided;
 }
 
 /** How the base's pixels are laid out, so the composite matches it. */
@@ -139,12 +207,23 @@ interface Layout {
 type Values = Uint8Array | Uint16Array;
 type Pipeline = ReturnType<Sharp>;
 
-async function compositeFiles(
-  sharp: Sharp,
-  ingest: Ingest,
-  files: { base: string; mask: string; result: string },
-  opts: { expandPx: number; featherPx: number },
-): Promise<Composite | "turned"> {
+/** Everything a kept version is made from, read in the base's layout. */
+interface Read {
+  width: number;
+  height: number;
+  layout: Layout;
+  icc: Buffer | undefined;
+  /** The mask's alpha (0 changes), or the area the marks cover. */
+  area: Uint8Array;
+  base: Values;
+  /** The result at the base's size, in the base's layout, plus alpha when it's see-through. */
+  result: Values;
+  seeThrough: boolean;
+  resizedFrom?: { width: number; height: number };
+  fixes?: Uint8Array;
+}
+
+async function readAll(sharp: Sharp, ingest: Ingest, files: KeepFiles): Promise<Read | "turned"> {
   const meta = await sharp(files.base).metadata();
   if (meta.orientation !== undefined && meta.orientation >= 2 && meta.orientation <= 8) return "turned";
   const { width, height } = meta;
@@ -159,9 +238,13 @@ async function compositeFiles(
   };
   const icc = cmyk ? undefined : meta.icc;
 
-  const alpha = await maskAlpha(sharp, files.mask, width, height);
-  if (isEmptyMask(alpha)) throw new Error("The mask marks nothing to change");
-  const weights = weightsFromAlpha(alpha, width, height, opts);
+  const area =
+    "mask" in files.area
+      ? await maskAlpha(sharp, files.area.mask, width, height)
+      : "marks" in files.area
+        ? marksAlpha(files.area.marks, width, height)
+        : new Uint8Array(width * height);
+  if (isEmptyMask(area)) throw new Error("The mask marks nothing to change");
 
   const base = await pixels(
     sharp(files.base, { ignoreIcc: !cmyk, failOn: "truncated" }),
@@ -174,27 +257,231 @@ async function compositeFiles(
   // An opaque base keeps its channels, so a see-through result can't stay see-through: where the
   // result is transparent the base shows instead of whatever colour hides under the transparency.
   const seeThrough = !layout.alpha && resultMeta.hasAlpha;
-  const read = seeThrough ? { ...layout, alpha: true } : layout;
-  let result = await resultPixels(sharp, ingest, files.result, read, width, height, icc);
-  if (seeThrough) result = foldAlpha(result, weights, layout);
-  const channels = (layout.grey ? 1 : 3) + (layout.alpha ? 1 : 0);
-  const blended = blendPixels(base, result, weights, channels, { alpha: layout.alpha });
+  const result = await resultPixels(
+    sharp,
+    ingest,
+    files.result,
+    seeThrough ? { ...layout, alpha: true } : layout,
+    width,
+    height,
+    icc,
+  );
+  const resized = shown.width !== width || shown.height !== height;
+  return {
+    width,
+    height,
+    layout,
+    icc,
+    area,
+    base,
+    result,
+    seeThrough,
+    ...(resized && { resizedFrom: { width: shown.width, height: shown.height } }),
+    ...(files.fixes && { fixes: await fixesAlpha(sharp, files.fixes, width, height) }),
+  };
+}
 
+/**
+ * The last few analyses, by a key the caller makes from what they read (the original's hash, the
+ * stored result and the area), so dragging a slider decides again without comparing again.
+ */
+export class AnalysisCache {
+  readonly #entries = new Map<string, KeepRestAnalysis>();
+  constructor(private readonly size = 4) {}
+
+  get(key: string): KeepRestAnalysis | undefined {
+    const hit = this.#entries.get(key);
+    if (hit) {
+      this.#entries.delete(key);
+      this.#entries.set(key, hit);
+    }
+    return hit;
+  }
+
+  set(key: string, analysis: KeepRestAnalysis): void {
+    this.#entries.delete(key);
+    this.#entries.set(key, analysis);
+    while (this.#entries.size > this.size) this.#entries.delete(this.#entries.keys().next().value!);
+  }
+}
+
+/** Where a kept version may find, and leave, its analysis. */
+export interface Cached {
+  cache: AnalysisCache;
+  key: string;
+}
+
+/** The weights for these settings, and the result moved by the line-up where they take it. */
+function decide(
+  read: Read,
+  settings: KeepSettings,
+  logger?: Logger,
+  cached?: Cached,
+): { weights: Uint8Array; moved: Values; decided: Decided } {
+  const { width, height, layout, area, fixes } = read;
+  const colours = layout.grey ? 1 : 3;
+  const image = (data: Values, alpha: boolean): PixelImage<Values> => ({
+    data,
+    width,
+    height,
+    channels: (colours + (alpha ? 1 : 0)) as PixelImage["channels"],
+  });
+  const resultImage = image(read.result, layout.alpha || read.seeThrough);
+  const maskOnly = (fellBack?: Decided["fellBack"]) => {
+    const weights = maskOnlyWeights(area, width, height, settings, fixes);
+    return {
+      weights,
+      moved: read.result,
+      decided: { ...(fellBack && { fellBack }), changed: shareOfModel(weights) },
+    };
+  };
+  if (settings.mode === "mask") return maskOnly();
+  try {
+    const analysis =
+      cached?.cache.get(cached.key) ??
+      analyzeKeepRest(image(read.base, layout.alpha), resultImage, area, {
+        ...(read.resizedFrom && { sentSize: read.resizedFrom }),
+      });
+    cached?.cache.set(cached.key, analysis);
+    const decision = decideKeepRest(analysis, area, settings, fixes);
+    const lineUp = roundLineUp(analysis.lineUp);
+    // A fallback reads the result where it lies: a line-up that failed is no line-up at all.
+    const moved = decision.fallback
+      ? read.result
+      : alignResult(resultImage, analysis.lineUp, decision.weights);
+    return {
+      weights: decision.weights,
+      moved,
+      decided: {
+        lineUp,
+        ...(decision.fallback && { fellBack: decision.fallback }),
+        changed: round(decision.changed, 4),
+      },
+    };
+  } catch (err) {
+    logger?.warn("Couldn't compare the edit with the original, so the mask alone decides", {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return maskOnly("failed");
+  }
+}
+
+/**
+ * The kept version of an edit for these settings, as the PNG to file. "turned" for a base stored
+ * on its side. Throws when a file can't be read.
+ */
+export async function keptVersion(
+  sharp: Sharp,
+  ingest: Ingest,
+  files: KeepFiles,
+  settings: KeepSettings,
+  logger?: Logger,
+  cached?: Cached,
+): Promise<Kept | "turned"> {
+  const read = await readAll(sharp, ingest, files);
+  if (read === "turned") return "turned";
+  const { width, height, layout, icc } = read;
+  const { weights, moved, decided } = decide(read, settings, logger, cached);
+  const result = read.seeThrough ? foldAlpha(moved, weights, layout) : moved;
+  const channels = (layout.grey ? 1 : 3) + (layout.alpha ? 1 : 0);
+  const blended = blendPixels(read.base, result, weights, channels, { alpha: layout.alpha });
+  const png = await encode(sharp, blended, width, height, channels, layout, icc);
+  return { png, decided, ...(read.resizedFrom && { resizedFrom: read.resizedFrom }) };
+}
+
+/**
+ * The decided area for these settings at the base's size, as a grey PNG: white takes the model,
+ * black keeps the original, grey along the feather. For the Difference view.
+ */
+export async function areaMap(
+  sharp: Sharp,
+  ingest: Ingest,
+  files: KeepFiles,
+  settings: KeepSettings,
+  logger?: Logger,
+  cached?: Cached,
+): Promise<{ png: Uint8Array<ArrayBuffer>; decided: Decided } | "turned"> {
+  const read = await readAll(sharp, ingest, files);
+  if (read === "turned") return "turned";
+  const { weights, decided } = decide(read, settings, logger, cached);
+  const png = await sharp(weights, { raw: { width: read.width, height: read.height, channels: 1 } })
+    .png({ compressionLevel: 6 })
+    .toBuffer();
+  return { png: new Uint8Array(png), decided };
+}
+
+/**
+ * The model's result as the server blends it: upright, stretched to the base's size, in the base's
+ * layout and profile, lossless. The browser's live preview reads these exact values.
+ */
+export async function fittedResult(
+  sharp: Sharp,
+  ingest: Ingest,
+  files: Pick<KeepFiles, "base" | "result">,
+): Promise<Uint8Array<ArrayBuffer>> {
+  const meta = await sharp(files.base).metadata();
+  const cmyk = meta.space === "cmyk";
+  const resultMeta = await sharp(files.result).metadata();
+  const layout: Layout = {
+    grey: !cmyk && meta.channels <= 2,
+    alpha: meta.hasAlpha || resultMeta.hasAlpha,
+    deep: meta.depth === "ushort",
+  };
+  const icc = cmyk ? undefined : meta.icc;
+  const values = await resultPixels(sharp, ingest, files.result, layout, meta.width, meta.height, icc);
+  const channels = (layout.grey ? 1 : 3) + (layout.alpha ? 1 : 0);
+  return encode(sharp, values, meta.width, meta.height, channels, layout, icc);
+}
+
+async function encode(
+  sharp: Sharp,
+  values: Values,
+  width: number,
+  height: number,
+  channels: number,
+  layout: Layout,
+  icc: Buffer | undefined,
+): Promise<Uint8Array<ArrayBuffer>> {
   const space = layout.grey ? (layout.deep ? "grey16" : "b-w") : layout.deep ? "rgb16" : "srgb";
   const png = new Uint8Array(
-    await sharp(blended, { raw: { width, height, channels: channels as 1 | 2 | 3 | 4 } })
+    await sharp(values, { raw: { width, height, channels: channels as 1 | 2 | 3 | 4 } })
       .toColourspace(space)
       // Filtered at full effort: a 4K composite is often half the size, and a smaller file can go
       // back to more models as a base or a reference.
       .png({ adaptiveFiltering: true, compressionLevel: 9 })
       .toBuffer(),
   );
-  const resized = shown.width !== width || shown.height !== height;
-  return {
-    png: icc ? withProfile(png, icc) : png,
-    ...(resized && { resizedFrom: { width: shown.width, height: shown.height } }),
-  };
+  return icc ? withProfile(png, icc) : png;
 }
+
+/** Alpha for the area marks cover on the base, as a mask's: 0 where they reach. */
+function marksAlpha(marks: readonly Mark[], width: number, height: number): Uint8Array {
+  const area = marksArea(marks, width, height);
+  for (let i = 0; i < area.length; i++) area[i] = area[i] ? 0 : 255;
+  return area;
+}
+
+/** A fix layer's values, from its PNG, which must be the base's size. */
+async function fixesAlpha(sharp: Sharp, png: Uint8Array, width: number, height: number): Promise<Uint8Array> {
+  const { data, info } = await sharp(png, { failOn: "truncated" })
+    .ensureAlpha()
+    .toColourspace("srgb")
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  if (info.width !== width || info.height !== height || info.channels !== 4)
+    throw new Error(`The fixes are ${info.width}×${info.height}, the image ${width}×${height}`);
+  return fixesFromRgba(data);
+}
+
+const round = (v: number, places: number) => Math.round(v * 10 ** places) / 10 ** places;
+
+const roundLineUp = (l: { dx: number; dy: number; scaleX: number; scaleY: number; confidence: number }) => ({
+  dx: round(l.dx, 3),
+  dy: round(l.dy, 3),
+  scaleX: round(l.scaleX, 5),
+  scaleY: round(l.scaleY, 5),
+  confidence: round(l.confidence, 3),
+});
 
 /** One alpha value per pixel, read on its own so the mask never sits in memory four times over. */
 async function maskAlpha(sharp: Sharp, file: string, width: number, height: number): Promise<Uint8Array> {

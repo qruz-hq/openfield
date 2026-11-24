@@ -54,13 +54,24 @@ export function toAssetListItem(
     rerun,
     createdAt: row.createdAt,
     ...(trashed && { deletedAt: row.deletedAt! }),
-    thumbUrl: assetThumbUrl(row.id, FEED_THUMB) + (trashed ? "&trash=1" : ""),
-    fileUrl: assetFileUrl(row.id) + (trashed ? "?trash=1" : ""),
+    thumbUrl: assetThumbUrl(row.id, FEED_THUMB) + (trashed ? "&trash=1" : "") + versionOf(row, "&"),
+    fileUrl: assetFileUrl(row.id) + (trashed ? "?trash=1" : "") + versionOf(row, trashed ? "&" : "?"),
     ...(role === "layer" && { layer: { role } }),
     ...(role === "base" && {
       layer: { role, ...(row.jobSetId && layers?.has(row.jobSetId) && { count: layers.get(row.jobSetId)! }) },
     }),
   };
+}
+
+/**
+ * A query part naming the file's version, for an edit whose Keep the rest was adjusted after the
+ * run: its file changed in place, and the file routes are cached for good, so the URL must change
+ * with it. Empty for everything else, so their URLs stay as they always were.
+ */
+export function versionOf(row: Pick<AssetRow, "opParams" | "sha256">, join: "?" | "&"): string {
+  const edit = row.opParams?.edit as { keepRest?: { revision?: unknown } } | undefined;
+  const revision = edit?.keepRest?.revision;
+  return typeof revision === "number" && revision > 0 ? `${join}v=${row.sha256.slice(0, 12)}` : "";
 }
 
 /** Whether a row came from a layer split, as its base or one of its layers. */

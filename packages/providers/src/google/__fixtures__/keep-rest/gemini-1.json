@@ -1,0 +1,62 @@
+{
+  "recorded": "2026-11-17",
+  "note": "One real edit through Openfield (POST /api/masks or marks, then POST /api/edit) on a made-up 1024 x 1024 room, measured again with the final core at full size. Images here are scaled to 256 px; the numbers come from the full-size pair.",
+  "model": "google:gemini-3.1-flash-image",
+  "kind": "mask",
+  "prompt": "A single bright red apple sitting on the table.",
+  "area": {
+    "mask": {
+      "x": 352,
+      "y": 600,
+      "w": 320,
+      "h": 300
+    }
+  },
+  "costUsd": 0.06756,
+  "estimateUsd": 0.06756,
+  "modelSent": {
+    "width": 1024,
+    "height": 1024,
+    "mime": "image/jpeg"
+  },
+  "meanDiffOutsideMask": 8.08,
+  "lineUp": {
+    "dx": 0,
+    "dy": 0,
+    "scaleX": 1,
+    "scaleY": 1,
+    "confidence": 0.997
+  },
+  "noise": {
+    "median": 1.45,
+    "spread": 2.15
+  },
+  "bySensitivity": {
+    "0": {
+      "changed": 0.041,
+      "farFromMaskKept": 0,
+      "fellBack": null
+    },
+    "25": {
+      "changed": 0.117,
+      "farFromMaskKept": 0.049,
+      "fellBack": null
+    },
+    "50": {
+      "changed": 0.329,
+      "farFromMaskKept": 0.244,
+      "fellBack": null
+    },
+    "75": {
+      "changed": 0.33,
+      "farFromMaskKept": 0.245,
+      "fellBack": null
+    },
+    "100": {
+      "changed": 0.331,
+      "farFromMaskKept": 0.246,
+      "fellBack": null
+    }
+  },
+  "analyseMs": 338
+}

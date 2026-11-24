@@ -1,12 +1,19 @@
 import { existsSync, statSync } from "node:fs";
 import { zValidator } from "@hono/zod-validator";
-import { canvasPreviewQuerySchema, idParamSchema, queryFlagSchema, thumbQuerySchema } from "@openfield/core";
+import {
+  canvasPreviewQuerySchema,
+  idParamSchema,
+  keepRestAreaQuerySchema,
+  queryFlagSchema,
+  thumbQuerySchema,
+} from "@openfield/core";
 import { getAsset } from "@openfield/db";
 import { type Context, Hono } from "hono";
 import { z } from "zod";
 import { previewFile } from "../canvas/files";
 import { absolutePath } from "../config/home";
 import type { Env } from "../context";
+import type { Decided } from "../files/composite";
 import { attachment, downloadName } from "../files/names";
 import { stillMime, Thumbs, thumbSourceOf } from "../files/thumbs";
 import { notFound, onInvalid } from "../http/errors";
@@ -69,6 +76,57 @@ export const filesRoutes = new Hono<Env>()
   )
   // A video's poster frame at full size, for the player before it plays. Written once, with the
   // video, so it's as immutable as the video itself.
+  // An edit's stored model result (Keep the rest, §0.9): as the model sent it, or with ?fit=1 at
+  // the original's size, the exact pixels the server blends. Never in the feed; only these read it.
+  .get(
+    "/model-result/:id",
+    zValidator("param", idParamSchema, onInvalid),
+    zValidator("query", z.object({ fit: queryFlagSchema.optional() }), onInvalid),
+    async (c) => {
+      const { keepRest } = c.var.svc;
+      const id = c.req.valid("param").id;
+      const stored = keepRest.resultFile(id);
+      if (!stored || !existsSync(stored.file)) return notFound(c, "That image");
+      if (!c.req.valid("query").fit)
+        return sendFile(c, stored.file, { type: stored.mime, etag: stored.etag, cache: IMMUTABLE });
+      // Made from the original too, which an adjusted edit may itself be, so it's checked each time.
+      const { png, etag } = await keepRest.fitted(id, c.req.header("if-none-match"));
+      const headers = { "content-type": "image/png", "cache-control": "no-cache", etag };
+      if (!png) return new Response(null, { status: 304, headers });
+      return new Response(png, { headers: { ...headers, "content-length": String(png.byteLength) } });
+    },
+  )
+  // The area an edit takes from the model, white to black, for the Difference view. Other settings
+  // than the stored ones come as ?mode, ?sensitivity, ?expandPx and ?featherPx.
+  .get(
+    "/keep-rest-area/:id",
+    zValidator("param", idParamSchema, onInvalid),
+    zValidator("query", keepRestAreaQuerySchema.extend({ v: z.string().optional() }), onInvalid),
+    async (c) => {
+      const { v: _v, ...query } = c.req.valid("query");
+      const id = c.req.valid("param").id;
+      const { png, etag, decided } = await c.var.svc.keepRest.area(id, query, c.req.header("if-none-match"));
+      const headers = {
+        "content-type": "image/png",
+        "cache-control": "no-cache",
+        etag,
+        ...keepRestHeaders(decided),
+      };
+      if (!png) return new Response(null, { status: 304, headers });
+      return new Response(png, { headers: { ...headers, "content-length": String(png.byteLength) } });
+    },
+  )
+  // The fix layer painted on an edit: an RGBA PNG at the original's size.
+  .get(
+    "/keep-rest-fixes/:id",
+    zValidator("param", idParamSchema, onInvalid),
+    zValidator("query", z.object({ v: z.string().optional() }), onInvalid),
+    async (c) => {
+      const fixes = c.var.svc.keepRest.fixesFile(c.req.valid("param").id);
+      if (!fixes || !existsSync(fixes.file)) return notFound(c, "Those fixes");
+      return sendFile(c, fixes.file, { type: "image/png", etag: fixes.etag, cache: "no-cache" });
+    },
+  )
   .get(
     "/poster/:id",
     zValidator("param", idParamSchema, onInvalid),
@@ -146,4 +204,22 @@ async function sendFile(
   }
   headers.set("content-length", String(size));
   return new Response(buffered ? await blob.arrayBuffer() : blob, { status: 200, headers });
+}
+
+/**
+ * What an area map's decision found, for a browser previewing other settings (a Sensitivity drag
+ * can flip a fallback). The etag covers them: the same inputs always decide the same.
+ *   x-keep-rest-fell-back  the fallback reason, or "none"
+ *   x-keep-rest-line-up    "dx,dy,scaleX,scaleY" the result was moved by, or "none" when the mask
+ *                          alone decided (a fallback, or Mode "mask")
+ *   x-keep-rest-changed    the share of the picture taken from the model, 0 to 1
+ */
+function keepRestHeaders(decided: Decided): Record<string, string> {
+  const { lineUp, fellBack, changed } = decided;
+  return {
+    "x-keep-rest-fell-back": fellBack ?? "none",
+    "x-keep-rest-line-up":
+      lineUp && !fellBack ? [lineUp.dx, lineUp.dy, lineUp.scaleX, lineUp.scaleY].join(",") : "none",
+    "x-keep-rest-changed": String(Math.round((changed ?? 0) * 10_000) / 10_000),
+  };
 }

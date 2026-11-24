@@ -6,6 +6,7 @@ export * from "./common";
 export * from "./cost";
 export * from "./errors";
 export * from "./job";
+export * from "./keep-rest";
 export * from "./layers";
 export * from "./library";
 export * from "./live";

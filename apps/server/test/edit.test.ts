@@ -720,7 +720,13 @@ describe("a masked edit's result", () => {
     server = await ready();
     const base = await upload(await texture(1920, 1080));
     const { maskId, made, request } = await editedWith(base, {}, { composite: false });
-    expect(request.mask).toEqual({ assetId: maskId, composite: false, expandPx: 4, featherPx: 8 });
+    expect(request.mask).toEqual({
+      assetId: maskId,
+      composite: false,
+      expandPx: 4,
+      featherPx: 8,
+      sensitivity: 50,
+    });
     expect(made).toMatchObject({
       kind: "edited",
       maskAssetId: maskId,

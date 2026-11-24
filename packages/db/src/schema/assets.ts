@@ -50,6 +50,14 @@ export const assets = sqliteTable(
     durationMs: integer("duration_ms"),
     hasAudio: integer("has_audio", { mode: "boolean" }),
     posterPath: text("poster_path"), // relative to OPENFIELD_HOME, like path
+    // Edits with a mask or marks (0009): the model's own result, kept hidden with the edit so Keep
+    // the rest can be adjusted later for free, and the fix layer painted on it since. Relative to
+    // OPENFIELD_HOME, like path. A result may share its file with path (Keep the rest off) or with
+    // another row (identical bytes), so files are only deleted once no row names them.
+    resultPath: text("result_path"),
+    resultBytes: integer("result_bytes"),
+    fixesPath: text("fixes_path"),
+    fixesBytes: integer("fixes_bytes"),
 
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),

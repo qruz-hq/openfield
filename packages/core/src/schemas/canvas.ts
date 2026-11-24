@@ -174,7 +174,9 @@ export const canvasRunCallSchema = generateRequestSchema
      * An edit's keep-the-rest settings, sent with its mask. The mask itself comes from the item's
      * inputs, like a video's frames.
      */
-    mask: maskInputSchema.pick({ composite: true, expandPx: true, featherPx: true }).optional(),
+    mask: maskInputSchema
+      .pick({ composite: true, expandPx: true, featherPx: true, sensitivity: true })
+      .optional(),
     /** Caption for this call's images, e.g. the prompt line. */
     label: z.string().max(CANVAS_CALL_LABEL_MAX).optional(),
   });
