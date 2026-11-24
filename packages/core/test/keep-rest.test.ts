@@ -510,5 +510,6 @@ describe("speed", () => {
     expect(d.fallback).toBeUndefined();
     expect(t1 - t0).toBeLessThan(3000);
     expect(t2 - t1).toBeLessThan(1500);
-  });
+    // Drawing the two 2K pictures to compare takes longer than comparing them, and isn't timed.
+  }, 30_000);
 });
