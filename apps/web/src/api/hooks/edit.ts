@@ -243,6 +243,10 @@ export function followRun({
   };
 }
 
+/** GET /api/job-sets/:id: a run by id, done or not. */
+export const fetchJobSet = (jobSetId: string): Promise<JobSetWithJobs> =>
+  call(api.api["job-sets"][":id"].$get({ param: { id: jobSetId } }));
+
 /** A recent run by id, from the list the feed reads. An edit is always among the latest. */
 async function fetchRecentJobSet(jobSetId: string): Promise<JobSetWithJobs | undefined> {
   const res = await call(
@@ -343,6 +347,20 @@ export function useEditRun({ onStopFailed }: { onStopFailed?: (error: unknown) =
     resetMutation();
   }, [resetMutation, stops]);
 
+  /** Follows a run made earlier as the one shown, as when an edit is opened again from its image. */
+  const adopt = useCallback(
+    (set: JobSetWithJobs) => {
+      follower.current?.stop();
+      stops.begin();
+      resetMutation();
+      const following = followRun({ onChange: setRun });
+      follower.current = following;
+      following.accept(set);
+      stops.accept(set.jobSet.id);
+    },
+    [resetMutation, stops],
+  );
+
   return {
     run,
     /** Saving the mask or asking for the edit: nothing to follow yet. */
@@ -353,5 +371,6 @@ export function useEditRun({ onStopFailed }: { onStopFailed?: (error: unknown) =
     /** Stops the run, or, while it's still being asked for, as soon as it has an id. */
     stop: stops.stop,
     reset,
+    adopt,
   };
 }
