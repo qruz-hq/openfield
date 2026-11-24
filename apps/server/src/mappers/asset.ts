@@ -69,9 +69,15 @@ export function toAssetListItem(
  * with it. Empty for everything else, so their URLs stay as they always were.
  */
 export function versionOf(row: Pick<AssetRow, "opParams" | "sha256">, join: "?" | "&"): string {
+  const version = fileVersionOf(row);
+  return version ? `${join}v=${version}` : "";
+}
+
+/** The ?v an adjusted edit's URLs carry, or null for an image whose file never changed. */
+export function fileVersionOf(row: Pick<AssetRow, "opParams" | "sha256">): string | null {
   const edit = row.opParams?.edit as { keepRest?: { revision?: unknown } } | undefined;
   const revision = edit?.keepRest?.revision;
-  return typeof revision === "number" && revision > 0 ? `${join}v=${row.sha256.slice(0, 12)}` : "";
+  return typeof revision === "number" && revision > 0 ? row.sha256.slice(0, 12) : null;
 }
 
 /** Whether a row came from a layer split, as its base or one of its layers. */

@@ -861,6 +861,10 @@
             "label": "Make images",
             "rule": "Default: asks above {amount}"
           },
+          "adjust_edits": {
+            "label": "Adjust edits",
+            "rule": "Default: allowed. Free: changes how an edit keeps the rest, or saves the model's own result."
+          },
           "run_canvases": {
             "label": "Run canvases",
             "rule": "Default: asks above {amount}"
@@ -1643,6 +1647,11 @@
           "maskHint": "How strongly the mask shows over the photo.",
           "save": "Save mask"
         },
+        "touchUpWindow": {
+          "title": "Touch up the result",
+          "hint": "Paint where to use the model and where to keep the original. It's free and shows right away.",
+          "apply": "Apply"
+        },
         "marks": "Marks",
         "marksCount": "{count, plural, =0 {No marks yet. Add them to point at what to change.} one {# mark on the input image} other {# marks on the input image}}",
         "mark": "Mark",
@@ -1651,6 +1660,28 @@
           "title": "Mark the image",
           "hint": "Point, box or sketch where the image should change. Say what to do in the prompt.",
           "save": "Save marks"
+        },
+        "keepRest": {
+          "label": "Keep the rest of the image",
+          "on": "Keeps the original wherever the model didn't really change it.",
+          "off": "The model may change other parts too.",
+          "offAfterRun": "Showing the model's own result.",
+          "sketchOn": "Keeps the original wherever the model didn't really change it, starting from your marks.",
+          "sketchOff": "Off, so the change can blend in. Turn on to keep the original wherever the model didn't really change it.",
+          "sensitivity": "Sensitivity",
+          "sensitivityHint": "Higher keeps more of the model's small changes.",
+          "percent": "{value}%",
+          "feather": "Feather",
+          "featherHint": "Softens the edge so the change blends in.",
+          "expand": "Expand",
+          "expandHint": "Grows the mask a little past what you painted.",
+          "px": "{value} px",
+          "maskOnly": "Kept by your mask only. The model's result didn't line up with the original, so only the area you painted changed.",
+          "notStored": "This edit was made before the model's result was kept.",
+          "fixLabel": "Fix spots by hand",
+          "fixHint": "Paint where to use the model or the original.",
+          "touchUp": "Touch up",
+          "free": "Changes here update the result for free. No new generation."
         }
       },
       "variations": {

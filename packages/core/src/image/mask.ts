@@ -1,4 +1,5 @@
 import type { MaskInput } from "../schemas/request";
+import type { KeepRestMode } from "./keep-rest";
 
 // Masks, and the composite that puts a masked edit's untouched pixels back exactly as they were
 // (§0.9). Pure math over raw pixel buffers, so the server, the browser and tests share one rule.
@@ -37,6 +38,8 @@ export interface CompositeSettings {
   featherPx: number;
   /** How readily the model's changes count as real (keep-rest.ts KEEP_REST_SENSITIVITY). */
   sensitivity: number;
+  /** "mask" keeps exactly the mask; absent, the rest is kept the smart way. */
+  mode?: KeepRestMode;
 }
 
 /**
@@ -45,7 +48,7 @@ export interface CompositeSettings {
  * the request asks for it; a painted area alone keeps it on.
  */
 export function compositeSettingsOf(
-  mask: Pick<MaskInput, "composite" | "expandPx" | "featherPx" | "sensitivity"> = {},
+  mask: Pick<MaskInput, "composite" | "expandPx" | "featherPx" | "sensitivity" | "mode"> = {},
   opts: { marks?: boolean } = {},
 ): CompositeSettings {
   return {
@@ -53,6 +56,8 @@ export function compositeSettingsOf(
     expandPx: mask.expandPx ?? MASK_COMPOSITE_DEFAULTS.expandPx,
     featherPx: mask.featherPx ?? MASK_COMPOSITE_DEFAULTS.featherPx,
     sensitivity: mask.sensitivity ?? MASK_COMPOSITE_DEFAULTS.sensitivity,
+    // Only when asked: a request saved before it stays exactly as it was.
+    ...(mask.mode === "mask" && { mode: "mask" as const }),
   };
 }
 

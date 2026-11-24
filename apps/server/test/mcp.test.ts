@@ -170,6 +170,9 @@ describe("the connection", () => {
         "update_folder",
         "view_asset",
         "wait_for",
+        // Keep the rest after an edit
+        "adjust_edit",
+        "save_model_result",
         // Canvases
         "list_canvases",
         "create_canvas",
@@ -399,7 +402,9 @@ describe("editing part of an image", () => {
         composite: true,
         expandPx: 4,
         featherPx: 8,
-        note: "Only the masked area changes: Openfield puts back the original everywhere else.",
+        keepRestMode: "smart",
+        sensitivity: 50,
+        note: "The model edits the masked area. Openfield then keeps the original wherever the model didn't really change it, starting from the mask.",
       },
     });
     const edit = editOf(made.json);
@@ -454,7 +459,7 @@ describe("editing part of an image", () => {
       edit: { wholeImage: true, composite: true, expandPx: 12, featherPx: 0 },
     });
     expect((made.json.edit as unknown as { note: string }).note).toBe(
-      "Nano Banana Pro can't take a mask, so it edits the whole image. Openfield then puts back everything outside the mask, so only the masked area changes.",
+      "Nano Banana Pro can't take a mask, so it edits the whole image. Openfield then keeps the original wherever the model didn't really change it, starting from the mask.",
     );
     const run = getJobSet(s.services.db, made.json.runId as unknown as string)!;
     expect(run.requestJson).toMatchObject({ size: { aspect: "4:3" } });
@@ -470,7 +475,7 @@ describe("editing part of an image", () => {
     });
     expect(imagesOf(raw.json)[0]).toMatchObject({
       keptOutsideMask: false,
-      why: "Composite was off, so this is the model's whole result.",
+      why: "Keep the rest was off, so this is the model's whole result.",
     });
     // The note can be shown to the person in an approval prompt, so it names no settings.
     expect((raw.json.edit as unknown as { note: string }).note).toBe(
@@ -513,7 +518,9 @@ describe("editing part of an image", () => {
       "Paint the area to change first.",
     );
     const noMask = await call(c, "generate_image", { prompt: "x", edit: { image, featherPx: 4 } });
-    expect(noMask.text).toBe("composite, expandPx and featherPx only apply to an edit with a mask.");
+    expect(noMask.text).toBe(
+      "composite, keepRestMode, sensitivity, expandPx and featherPx only apply to an edit with a mask or marks on the image.",
+    );
     // A mask's id, as replies hand it out, is a mask and never an image.
     const priced = await call(c, "estimate", { prompt: "x", edit: { image, mask } });
     const maskId = (priced.json.edit as unknown as { mask: string }).mask;

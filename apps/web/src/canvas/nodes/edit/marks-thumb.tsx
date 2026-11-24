@@ -2,6 +2,7 @@ import { assetThumbUrl, type Mark } from "@openfield/core";
 import { cn } from "@openfield/ui";
 import { useAuthedImage } from "../../../api/hooks/images";
 import { boundsOf, placeAt, type Rect } from "../../../detail/edit/sketch";
+import { useImageVersion } from "../shell/image-versions";
 
 // Canvas / Inspector / Image edit / Sketch & point's Mask thumb (design z21YIbngO8): the image under
 // the overlay fill, as the mask thumb has it, with the node's marks over it in their colours. At
@@ -21,7 +22,11 @@ export function MarksThumb({
   marks: readonly Mark[];
   className?: string;
 }) {
-  const image = useAuthedImage(imageId ? assetThumbUrl(imageId, { h: 200 }) : null);
+  // An edit coming in can be blended again in place: its version keeps this one fresh.
+  const version = useImageVersion(imageId);
+  const image = useAuthedImage(
+    imageId ? `${assetThumbUrl(imageId, { h: 200 })}${version ? `&v=${version}` : ""}` : null,
+  );
   // The same crop as the image's object-cover.
   const scale = dims ? Math.max(SIZE / dims.w, SIZE / dims.h) : 1;
   const frame: Rect = dims

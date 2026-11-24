@@ -124,7 +124,10 @@ function useNodeSketches(nodeId: string): boolean {
  * it opened gets it again, else the node itself (a Paint mask that went once the mask was saved).
  * It also runs when the window unmounts outright (Radix's FocusScope does that on a timeout).
  */
-function useOpenerFocus(nodeId: string): (event: Event) => void {
+export function useOpenerFocus(
+  nodeId: string,
+  which: "maskNodeId" | "touchUpNodeId" = "maskNodeId",
+): (event: Event) => void {
   const store = useCanvasStoreApi();
   const from = useRef<Element | null>(null);
   // Before the window moves focus into itself.
@@ -133,7 +136,7 @@ function useOpenerFocus(nodeId: string): (event: Event) => void {
   }, []);
   return (event) => {
     // The loading frame giving way to the window isn't the window closing.
-    if (store.getState().ui.maskNodeId === nodeId) return;
+    if (store.getState().ui[which] === nodeId) return;
     const el = from.current;
     // The Paint mask on the node's cover goes once it has a mask, but the node can still show it
     // for a moment after a save: the node itself takes focus then, not a button about to go.

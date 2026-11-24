@@ -185,7 +185,7 @@ describe("Ask", () => {
     const made = await call(yes.client, "generate_image", { prompt: "a red door", edit: { image, mask } });
     expect(made.json).toMatchObject({ status: "succeeded", edit: { wholeImage: true } });
     expect(yes.prompts).toEqual([
-      "Cursor wants to edit an image for about $0.14. Nano Banana Pro can't take a mask, so it edits the whole image. Openfield then puts back everything outside the mask, so only the masked area changes. Allow it?",
+      "Cursor wants to edit an image for about $0.14. Nano Banana Pro can't take a mask, so it edits the whole image. Openfield then keeps the original wherever the model didn't really change it, starting from the mask. Allow it?",
     ]);
     await call(yes.client, "generate_image", { prompt: "bluer", count: 2, edit: { image } });
     expect(yes.prompts[1]).toMatch(

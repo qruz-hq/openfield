@@ -320,6 +320,10 @@ test("an Edit node in Sketch & point: marks drawn in the window, listed in its s
     "aria-checked",
     "false",
   );
+  // Before a run, with Keep the rest off (E3SMnl1gU9): the switch alone, no Sensitivity.
+  const block = settings.locator("[data-keep-rest-block]");
+  await expect(block).toHaveAttribute("data-keep-rest-block", "before");
+  await expect(block.locator("[data-keep-rest]")).toHaveCount(0);
 
   // Canvas / Inspector / Image edit / Sketch & point, measured against its nodes.
   const marksCard = settings.locator("div.rounded-14.bg-surface").filter({ hasText: "1 mark on" }).first();
@@ -370,6 +374,32 @@ test("an Edit node in Sketch & point: marks drawn in the window, listed in its s
       { timeout: 20_000 },
     )
     .toBe(1);
+
+  // After the run (bLxbrvpVYa), as if the server kept the model's result: still the switch alone,
+  // then Fix spots by hand and the hint that changes are free. The fake model's answer can't be
+  // compared with the photo, so the state comes from a stub.
+  await page.route("**/api/assets/*/keep-rest", async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      json: {
+        ...(await response.json()),
+        available: true,
+        unavailable: undefined,
+        keep: false,
+        start: "marks",
+      },
+    });
+  });
+  await page.reload();
+  await nodeOf(page, aliases.e!).dblclick({ position: { x: 160, y: 40 } });
+  await expect(block).toHaveAttribute("data-keep-rest-block", "after");
+  await expect(block.locator("[data-keep-rest]")).toHaveCount(0);
+  await expect(settings.getByRole("button", { name: "Touch up" })).toBeVisible();
+  await expect(
+    settings.getByText("Changes here update the result for free. No new generation."),
+  ).toBeVisible();
 });
 
 test("an Edit node's settings switch to Sketch & point: the wired mask goes, references stay home", async ({

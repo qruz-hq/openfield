@@ -3,6 +3,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { useEffect } from "react";
 import { AddNodeMenu } from "../nodes/add-node-menu";
 import { MaskWindow } from "../nodes/edit/mask-window";
+import { TouchUpWindow } from "../nodes/edit/touch-up-window";
 import { NodeInspector } from "../nodes/inspector";
 import { CanvasStoreProvider, useCanvas, useCanvasStoreApi, useReadOnly, useUi } from "../store";
 import { AgentPill, FollowFrame } from "./chrome/agent-pill";
@@ -80,6 +81,7 @@ function EditorSurface({ previewing }: { previewing: boolean }) {
       <ZoomCluster commands={commands} />
       <DrawerHost previewing={previewing} />
       {previewing ? null : <MaskWindowHost />}
+      {previewing ? null : <TouchUpWindowHost />}
       {addMenu && !readOnly ? <AddNodeMenu /> : null}
       <FrameDeleteDialog commands={commands} />
       <DeleteCanvasDialog />
@@ -97,6 +99,18 @@ function MaskWindowHost() {
   return (
     <CanvasStoreProvider store={session.main}>
       <MaskWindow nodeId={nodeId} />
+    </CanvasStoreProvider>
+  );
+}
+
+/** Canvas / Mask window / Touch up, over the live canvas, for the Edit node being touched up. */
+function TouchUpWindowHost() {
+  const session = useSession();
+  const nodeId = useMain((s) => s.ui.touchUpNodeId);
+  if (!nodeId) return null;
+  return (
+    <CanvasStoreProvider store={session.main}>
+      <TouchUpWindow nodeId={nodeId} />
     </CanvasStoreProvider>
   );
 }

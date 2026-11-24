@@ -21,8 +21,10 @@ import { fetchSpentThisMonth } from "../../api/hooks/usage";
 import { useLive } from "../../lib/live";
 import { notify } from "../../lib/notify";
 import { syncBases } from "../nodes/edit/card-media";
+import { useKeepRestSync } from "../nodes/edit/reblend";
 import { cardMedia, exactSize, rememberImageSize } from "../nodes/generate/card-media";
 import { nodeRegistry } from "../nodes/registry";
+import { noteImageVersion } from "../nodes/shell/image-versions";
 import { useCanvas, useCanvasStoreApi } from "../store/context";
 import { analyzeGraph, geometryOnly } from "./analysis";
 import { followBoxes } from "./boxes";
@@ -58,6 +60,8 @@ export function CanvasEngine() {
   const guardRef = useRef<number | null>(null);
   guardRef.current = settings?.spendGuardUsd ?? null;
   const cache = useRef<FingerprintCache>(new Map());
+  // Undo, redo and other tabs keep an Edit node's images in step with how it keeps the rest.
+  useKeepRestSync();
 
   // A fresh engine per canvas. On the way out only the open question is withdrawn: the analysis
   // stays until the next canvas opens, for the card picture that may still be taken (M4-15).
@@ -195,6 +199,8 @@ export function CanvasEngine() {
         const { asset } = event.data;
         rememberImageSize(asset.id, asset.width, asset.height);
       }
+      // An edit blended again in place, here or by an agent: its thumbnails load the new file.
+      if (event.event === "asset.updated") noteImageVersion(event.data.asset);
       if (event.event === "asset.deleted") {
         // Images deleted while the canvas is open turn into placeholders and stay out of runs. A
         // painted mask counts too: its Edit node can't run without it.

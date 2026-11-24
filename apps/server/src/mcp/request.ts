@@ -5,6 +5,7 @@ import {
   type GenerateRequest,
   MARKS_MAX,
   MASK_COMPOSITE_DEFAULTS,
+  type Mark,
   type ModelKey,
   marksSchema,
   maskInputSchema,
@@ -14,6 +15,8 @@ import {
   type SizeSpec,
 } from "@openfield/core";
 import { z } from "zod";
+import { saveMarksMask } from "../files/mask";
+import { ApiFailure } from "../http/errors";
 import { Refusal, type ToolContext } from "./kit";
 import { IMAGE_REF_HINT, MASK_RULE, resolveImage, resolveMask } from "./refs";
 
@@ -79,8 +82,14 @@ export const imageRequestFields = {
         .boolean()
         .optional()
         .describe(
-          "With a mask: put the original back everywhere outside the mask once the model is done, so only that area changes. Default true. False keeps the model's whole result.",
+          "Keep the rest of the image: once the model is done, keep the original wherever the model didn't really change it, starting from the mask (or from the area the marks cover). Default true with a mask, false with marks alone. False keeps the model's whole result.",
         ),
+      keepRestMode: maskInputSchema.shape.mode.describe(
+        '"smart" (default): follow what the model really changed, so changes that spill out of the mask and clear changes elsewhere stay, and grain or colour drift doesn\'t. "mask": keep exactly the mask, grown and softened.',
+      ),
+      sensitivity: maskInputSchema.shape.sensitivity.describe(
+        `"smart" only: 0 to 100, how readily the model's small changes count as real. Higher keeps more of them. Default ${MASK_COMPOSITE_DEFAULTS.sensitivity}.`,
+      ),
       expandPx: maskInputSchema.shape.expandPx.describe(
         `With a mask: grow the area to change by this many pixels before the original is put back. Default ${MASK_COMPOSITE_DEFAULTS.expandPx}.`,
       ),
@@ -148,16 +157,28 @@ export async function buildRequest(ctx: ToolContext, args: ImageRequestArgs): Pr
   const settings = ctx.svc.settings.get();
   const model = pickModel(ctx, args.model);
   const { edit } = args;
-  if (
+  const keeping =
     edit &&
-    !edit.mask &&
-    (edit.composite !== undefined || edit.expandPx !== undefined || edit.featherPx !== undefined)
-  )
-    throw new Refusal("composite, expandPx and featherPx only apply to an edit with a mask.");
+    (edit.composite !== undefined ||
+      edit.keepRestMode !== undefined ||
+      edit.sensitivity !== undefined ||
+      edit.expandPx !== undefined ||
+      edit.featherPx !== undefined);
+  const onBase = edit?.marks?.some((m) => (m.image ?? 1) === 1) ?? false;
+  if (keeping && !edit.mask && !onBase)
+    throw new Refusal(
+      "composite, keepRestMode, sensitivity, expandPx and featherPx only apply to an edit with a mask or marks on the image.",
+    );
   const references = [];
   for (const ref of args.references ?? []) references.push(await resolveImage(ctx, ref));
   const base = edit ? await resolveImage(ctx, edit.image) : undefined;
-  const mask = base && edit?.mask ? await resolveMask(ctx, edit.mask, base) : undefined;
+  // Marks alone keep the rest only when asked; the area they cover is then the mask, saved as the
+  // editor saves it.
+  const marksMask =
+    base && edit?.marks && !edit.mask && onBase && edit.composite === true
+      ? await marksMaskOf(ctx, edit.marks, base.id)
+      : undefined;
+  const mask = base && edit?.mask ? await resolveMask(ctx, edit.mask, base) : marksMask;
   // An edit left to its own shape asks for its image's size, so a mask lines up with the result.
   const aspect = args.aspect ?? (base ? undefined : settings.defaultAspect);
   const size: SizeSpec = args.size
@@ -168,7 +189,8 @@ export async function buildRequest(ctx: ToolContext, args: ImageRequestArgs): Pr
   return {
     idempotencyKey: newId(),
     model,
-    op: base ? (mask ? "inpaint" : "edit") : "generate",
+    // Marks go to the model as they are; their area only keeps the rest afterwards, as on a canvas.
+    op: base ? (mask && !marksMask ? "inpaint" : "edit") : "generate",
     prompt: args.prompt,
     ...(args.negativePrompt && { negativePrompt: args.negativePrompt }),
     size,
@@ -187,10 +209,22 @@ export async function buildRequest(ctx: ToolContext, args: ImageRequestArgs): Pr
         mask: {
           assetId: mask.id,
           ...(edit.composite !== undefined && { composite: edit.composite }),
+          ...(edit.keepRestMode !== undefined && { mode: edit.keepRestMode }),
+          ...(edit.sensitivity !== undefined && { sensitivity: edit.sensitivity }),
           ...(edit.expandPx !== undefined && { expandPx: edit.expandPx }),
           ...(edit.featherPx !== undefined && { featherPx: edit.featherPx }),
         },
       }),
     source: "api",
   };
+}
+
+/** The area marks cover on the image, saved as its mask, or why it can't be. */
+async function marksMaskOf(ctx: ToolContext, marks: Mark[], baseId: string): Promise<{ id: string }> {
+  try {
+    return (await saveMarksMask(ctx.svc, marks, { baseAssetId: baseId })).asset;
+  } catch (err) {
+    if (err instanceof ApiFailure && err.userMessage) throw new Refusal(err.userMessage);
+    throw err;
+  }
 }
