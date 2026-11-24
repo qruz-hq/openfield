@@ -83,7 +83,21 @@ function describeModel(ctx: ToolContext, m: ModelListItem, isDefault: boolean) {
     can: OPS.filter(([op]) => caps.ops[op]).map(([, words]) => words),
     masks: caps.ops.inpaint,
     ...(caps.marks && { marks: caps.marks.kinds }),
-    ...(caps.layers && { layers: { sizes: caps.layers.sizes, most: caps.layers.maxLayers } }),
+    ...(caps.layers && {
+      layers: {
+        sizes: caps.layers.sizes,
+        most: caps.layers.maxLayers,
+        // The most layers is a number separate_layers and a Layers node take (maxLayers).
+        ...(caps.layers.choose && {
+          choose: {
+            min: caps.layers.choose.min,
+            max: caps.layers.maxLayers,
+            default: caps.layers.choose.default,
+          },
+        }),
+        ...(caps.layers.text && { text: true }),
+      },
+    }),
     ...(caps.batch.groupOption && { relatedSet: true }),
     size:
       caps.size.mode === "aspect"

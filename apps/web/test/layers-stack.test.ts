@@ -7,6 +7,7 @@ import {
   layerOf,
   layerPosition,
   moveLayer,
+  pricingOf,
   rowsTopFirst,
   stackCost,
   stackEntries,
@@ -52,6 +53,7 @@ function entry(role: "base" | "layer", zIndex: number, name: string | null, box?
     box: box ?? [0, 0, CANVAS.width, CANVAS.height],
     name,
     description: null,
+    text: null,
   };
 }
 
@@ -204,5 +206,74 @@ describe("drawing and pricing", () => {
     expect(layerInputProblem({ mime: "image/webp", width: 1152, height: 1536 }, model)).toEqual({
       kind: "type",
     });
+  });
+});
+
+describe("the price box", () => {
+  const layers = {
+    sizes: ["auto", "1K", "1.5K", "2K"] as ("auto" | "1K" | "1.5K" | "2K")[],
+    default: "auto" as const,
+    mimeTypes: ["image/png", "image/jpeg"],
+    maxBytes: 30_000_000,
+    minPixels: 262_144,
+    maxPixels: 36_000_000,
+    maxRatio: 16,
+  };
+  const rates = [
+    { tier: "1K" as const, usd: 0.02 },
+    { tier: "1.5K" as const, usd: 0.02 },
+    { tier: "2K" as const, usd: 0.035 },
+  ];
+  const byPixels = [{ maxPixels: 2_601_123, usd: 0.02 }, { usd: 0.035 }];
+  // Seedream 5.5's shape: $0.008 for the image sent in, and a number of layers to choose.
+  const v55 = {
+    ...banana,
+    capabilities: {
+      ...banana.capabilities,
+      ops: { ...banana.capabilities.ops, decomposeLayers: true },
+      layers: { ...layers, maxLayers: 99, choose: { min: 1, default: 16 }, text: true },
+    },
+    price: {
+      kind: "per_image" as const,
+      currency: "USD",
+      pricedAt: "2026-11-17",
+      sourceUrl: "https://docs.byteplus.com/en/docs/ModelArk/1099320",
+      tiers: rates,
+      byPixels,
+      inputImage: { usd: 0.008, freePerCall: 0 },
+      decompose: { tiers: rates, byPixels, outputs: { min: 2, max: 100 } },
+    },
+  };
+  const image = { id: "01IMAGE000000000000000000AA", width: 1024, height: 1024 };
+
+  test("rates leave out the image sent in, which has a row of its own", () => {
+    const pricing = pricingOf(v55, image, "auto")!;
+    expect(pricing.rate).toBe("$0.02");
+    expect(pricing.input).toBe("$0.008");
+    expect(pricing.most).toBe(16);
+    expect([pricing.estimate.min, pricing.estimate.max]).toEqual([0.048, 0.348]);
+  });
+
+  test("the most follows the number asked for, held to the model's range", () => {
+    expect(pricingOf(v55, image, "auto", 40)!.most).toBe(40);
+    expect(pricingOf(v55, image, "auto", 40)!.estimate.max).toBe(0.828);
+    expect(pricingOf(v55, image, "auto", 500)!.most).toBe(99);
+    expect(pricingOf(v55, image, "2K", 1)!.estimate.max).toBe(0.078);
+  });
+
+  test("a model that picks for itself keeps its own most, and no input row when inputs are free", () => {
+    const fixed = {
+      ...v55,
+      capabilities: { ...v55.capabilities, layers: { ...layers, maxLayers: 16 } },
+      price: {
+        ...v55.price,
+        inputImage: { usd: 0.003, freePerCall: 1 },
+        decompose: { ...v55.price.decompose, outputs: { min: 2, max: 17 } },
+      },
+    };
+    const pricing = pricingOf(fixed, image, "auto", 40)!;
+    expect(pricing.most).toBe(16);
+    expect(pricing.input).toBeNull();
+    expect(pricing.rate).toBe("$0.02");
   });
 });

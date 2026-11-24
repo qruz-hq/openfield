@@ -14,6 +14,7 @@ import {
   t,
 } from "@openfield/core";
 import { inOneCall, isGroupRun } from "./batch";
+import { mostLayers } from "./layers";
 import { editSizeFor } from "./size";
 import { pricedOp, priceFor, resolveSpeed, speedOffer } from "./speed";
 import { resolveVideo, videoRate, videoSize, videoSizes, videoTokens } from "./video";
@@ -117,7 +118,7 @@ export function estimate(manifest: ModelManifest, req: EstimateRequest): CostEst
   switch (price.kind) {
     case "per_image":
       if (req.op === "decompose" && price.decompose)
-        return withInputs(manifest, price, req, 1, layersCost(price, req, speedLabel));
+        return withInputs(manifest, price, req, 1, layersCost(manifest, price, req, speedLabel));
       return withInputs(manifest, price, req, count, perImage(manifest, price, req, count, speedLabel));
     case "per_token": {
       const output = perToken(manifest, price, req, count, speedLabel);
@@ -272,9 +273,11 @@ function perImageCost(
 /**
  * A layer separation: the base and each layer are billed as images, and the model
  * decides how many layers there are, so the range runs from a base and one layer to the most it
- * makes. "auto" keeps the image's own size, so it could land at any of the rates.
+ * makes, or the most the person asked for. "auto" keeps the image's own size, so it could land at
+ * any of the rates.
  */
 function layersCost(
+  manifest: ModelManifest,
   price: PerImagePriceModel,
   req: EstimateRequest,
   speedLabel: string | undefined,
@@ -293,14 +296,27 @@ function layersCost(
   const low = Math.min(...amounts);
   const high = Math.max(...amounts);
   const each = [moneyRange(low, high, price.currency), speedLabel].filter(Boolean).join(", ");
+  const { min, max } = layerOutputs(manifest, price, req);
   return {
     currency: price.currency,
-    min: round(low * decompose.outputs.min),
-    max: round(high * decompose.outputs.max),
+    min: round(low * min),
+    max: round(high * max),
     confidence: "estimated",
-    basis: t("cost.layers", { max: decompose.outputs.max - 1, each }),
+    basis: t("cost.layers", { max: max - 1, each }),
     pricedAt: price.pricedAt,
   };
+}
+
+/** How many images a split can bill, base included: from a base and one layer to the most asked for. */
+export function layerOutputs(
+  manifest: ModelManifest,
+  price: PerImagePriceModel,
+  req: Pick<EstimateRequest, "layers">,
+): { min: number; max: number } {
+  const { outputs } = price.decompose!;
+  const most = mostLayers(manifest.capabilities.layers, req.layers?.maxLayers);
+  const max = most === undefined ? outputs.max : Math.min(outputs.max, Math.max(outputs.min, most + 1));
+  return { min: Math.min(outputs.min, max), max };
 }
 
 function perToken(

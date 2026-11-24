@@ -25,6 +25,7 @@ import {
   type VideoResolution,
 } from "@openfield/core";
 import { inOneCall, isGroupRun } from "./manifest/batch";
+import { chosenLayers } from "./manifest/layers";
 import { resolveProviderSettings } from "./manifest/provider-settings";
 import { fitPixels, nearestRatio, placeholderSize, resolveSize } from "./manifest/size";
 import { plannedVideoSize, type ResolvedVideo, resolveVideo, videoSize } from "./manifest/video";
@@ -307,7 +308,14 @@ export async function normalize(
     const asked = req.layers?.size;
     if (asked && !caps.layers.sizes.includes(asked))
       unsupported("layers", t("errors.unsupported_param.reason"));
-    layers = { size: asked && caps.layers.sizes.includes(asked) ? asked : caps.layers.default };
+    const most = chosenLayers(caps.layers, req.layers?.maxLayers);
+    // A model that picks for itself takes no number: say so rather than send one it may refuse.
+    if (req.layers?.maxLayers !== undefined && most === undefined)
+      unsupported("layers.maxLayers", t("errors.unsupported_param.reason"));
+    layers = {
+      size: asked && caps.layers.sizes.includes(asked) ? asked : caps.layers.default,
+      ...(most !== undefined && { maxLayers: most }),
+    };
   } else if (req.layers) {
     unsupported("layers", t("errors.unsupported_param.reason"));
   }

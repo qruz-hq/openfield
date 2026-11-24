@@ -35,6 +35,7 @@ import {
   isTerminalState,
   type JobSetState,
   layerOpParamsSchema,
+  layerTextSummary,
   type ModelManifest,
   newId,
   type ProviderSummary,
@@ -109,8 +110,16 @@ const NODE_OK: readonly CanvasRunNodeState["state"][] = ["done", "cached"];
 function layerOf(opParams: unknown): CanvasOutput["layer"] {
   const parsed = layerOpParamsSchema.safeParse((opParams as { layer?: unknown } | null)?.layer);
   if (!parsed.success) return undefined;
-  const { role, zIndex, name, description } = parsed.data;
-  return { role, zIndex, ...(name && { name }), ...(description && { description }) };
+  const { role, zIndex, name, description, text } = parsed.data;
+  // Only a short form of a text layer's words goes on the canvas; the rest stays on the image.
+  const words = layerTextSummary(text);
+  return {
+    role,
+    zIndex,
+    ...(name && { name }),
+    ...(description && { description }),
+    ...(words && { text: words }),
+  };
 }
 
 /** The base first, then its layers top first; an image from any other run keeps its place. */

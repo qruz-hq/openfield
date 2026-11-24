@@ -8,7 +8,7 @@ import {
   t,
 } from "@openfield/core";
 import type { CanvasNodeResult, CanvasOutput } from "@openfield/core/canvas";
-import { estimate } from "@openfield/providers/manifest";
+import { chosenLayers, estimate } from "@openfield/providers/manifest";
 import { speedOf } from "../../engine/context-base";
 import { imageCount, imagesNow, imagesOf, layerPortId, modelBlocker, planValue } from "../../engine/inputs";
 import type {
@@ -36,9 +36,15 @@ export interface LayersParams {
   prompt: string;
   /** Unset: the model's default. */
   size?: LayerSize;
+  /** The most layers to make, on models that take a number. Unset: the model's default (16). */
+  maxLayers?: number;
 }
 
-/** Design: 320 wide, the image 240 tall, then one 40 tall row per output between 4 px of padding. */
+/**
+ * Design: 320 wide, the image 240 tall, then one 40 tall row per output between 4 px of padding.
+ * The card grows with its rows rather than scrolling them, so each port stays beside its row:
+ * 99 layers and a base come to about 4,250 px.
+ */
 export const LAYERS_WIDTH = 320;
 export const LAYERS_MEDIA_HEIGHT = 240;
 export const LAYERS_ROW_HEIGHT = 40;
@@ -139,11 +145,22 @@ export function layerSizeOf(model: ModelListItem | undefined, size: LayerSize | 
   return size && rules.sizes.includes(size) ? size : rules.default;
 }
 
+/** The most layers a run asks for: only on models that take a number, else nothing. */
+export const layerCountOf = (model: ModelListItem | undefined, maxLayers: number | undefined) =>
+  chosenLayers(model?.capabilities.layers, maxLayers);
+
+/** What a run sends as request.layers. */
+function layerRequestOf(model: ModelListItem | undefined, params: LayersParams) {
+  const most = layerCountOf(model, params.maxLayers);
+  return { size: layerSizeOf(model, params.size), ...(most !== undefined && { maxLayers: most }) };
+}
+
 function fingerprintParams(node: { params: LayersParams }, ctx: EngineContext): FingerprintParams {
   const key = layersModelKeyOf(node.params.model, ctx);
   const model = ctx.model(key);
+  // A number left over from a model that takes one doesn't change a run on one that doesn't.
   return {
-    params: { prompt: node.params.prompt.trim(), size: layerSizeOf(model, node.params.size) },
+    params: { prompt: node.params.prompt.trim(), ...layerRequestOf(model, node.params) },
     model: key,
     manifestVersion: model?.manifestVersion ?? null,
     // The same image and settings split the same way, near enough: never split again for nothing.
@@ -197,7 +214,7 @@ export const layersEngine: NodeEngine<LayersParams> = {
   compile(node, inputs, ctx, fingerprint) {
     const key = layersModelKeyOf(node.params.model, ctx)!;
     const model = ctx.model(key)!;
-    const size = layerSizeOf(model, node.params.size);
+    const layers = layerRequestOf(model, node.params);
     const base = imagesOf(inputs, "image");
     const prompt = node.params.prompt.trim();
     // As POST /api/layers sends it (layersRequest): one call, the image's own shape.
@@ -208,7 +225,7 @@ export const layersEngine: NodeEngine<LayersParams> = {
       size: { kind: "auto" },
       batch: 1,
       seed: null,
-      layers: { size },
+      layers,
     };
     const lone = base.length === 1 && base[0]!.kind === "asset" ? base[0]!.assetId : null;
     const known = lone ? ctx.imageSize?.(lone) : undefined;
@@ -217,7 +234,7 @@ export const layersEngine: NodeEngine<LayersParams> = {
       op: "decompose",
       prompt,
       base: { assetId: lone ?? node.id, role: "base" },
-      layers: { size },
+      layers,
       ...(known && { inputImageSizes: [known] }),
       speed: speedOf(ctx, model, "decompose"),
     });
@@ -250,6 +267,11 @@ const readLayerSize = (value: unknown): LayerSize | undefined =>
     ? (value as LayerSize)
     : undefined;
 
+const readLayerCount = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isInteger(value) && value >= 1 && value <= LAYERS_MAX
+    ? value
+    : undefined;
+
 export const layersSpec: NodeSpec<LayersParams> = {
   type: "image.layers",
   typeVersion: 1,
@@ -276,6 +298,7 @@ export const layersSpec: NodeSpec<LayersParams> = {
     model: readModel(raw.model),
     prompt: readString(raw, "prompt"),
     size: readLayerSize(raw.size),
+    maxLayers: readLayerCount(raw.maxLayers),
   }),
   runnable: true,
   engine: layersEngine,

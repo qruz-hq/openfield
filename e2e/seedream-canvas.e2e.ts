@@ -13,6 +13,7 @@ test.use({ colorScheme: "dark" });
 test.setTimeout(60_000);
 
 const PRO = "byteplus:dola-seedream-5-0-pro-260628";
+const V55 = "byteplus:dola-seedream-5-5-261028";
 
 /** The editor's own pane: the card picture is drawn off screen from the same canvas. */
 const pane = (page: Page) => page.locator(".of-canvas:not(.of-capture)");
@@ -498,4 +499,88 @@ test("an Edit node's settings switch to Sketch & point: the wired mask goes, ref
   await modes.getByRole("radio", { name: "Paint area" }).click();
   await expect.poll(savedNode).toEqual({ mode: null, into: ["image", "input_images"] });
   await expect(handleOf(page, aliases.e!, "target", "mask")).toHaveCount(1);
+});
+
+test("a 5.5 Layers node past 16 layers: a row and a port each, 40 apart, and words on a text layer", async ({
+  page,
+  request,
+}) => {
+  const token = await sessionToken(request);
+  const photo = await makeImage(request, token, unique("a poster"), "1:1");
+  const { id, aliases } = await canvasOf(request, "Many layers", [
+    {
+      op: "add_node",
+      as: "u",
+      type: "image.upload",
+      position: { x: 0, y: 0 },
+      params: { assetIds: [photo] },
+    },
+    {
+      op: "add_node",
+      as: "l",
+      type: "image.layers",
+      position: { x: 400, y: 0 },
+      params: { model: V55, prompt: "#fake-layers:20", maxLayers: 20 },
+    },
+    { op: "connect", source: "u", sourceHandle: "images", target: "l", targetHandle: "image" },
+  ]);
+  await page.goto(`/canvas/${id}`);
+  const layers = nodeOf(page, aliases.l!);
+  await expect(layers).toBeVisible();
+  await actualSize(page);
+  const card = layers.locator(".of-layers");
+  await layers.getByRole("button", { name: /^Run/ }).click();
+
+  // 20 layers and a base: the card grows by a 40 row each rather than scrolling them.
+  const rows = card.locator(".of-layers-row");
+  await expect(rows).toHaveCount(21, { timeout: 20_000 });
+  await expect(layers.getByText("20 layers and a base")).toBeVisible();
+  const zoom = await page.evaluate(() => {
+    const viewport = document.querySelector(".of-canvas:not(.of-capture) .react-flow__viewport");
+    return new DOMMatrix(getComputedStyle(viewport!).transform).a;
+  });
+  expect(Math.round((await card.boundingBox())!.height / zoom)).toBe(240 + 8 + 21 * 40);
+  const outputs = await drawn(card.locator(".of-layers-outputs"));
+  expect(outputs.display).not.toBe("none");
+  expect(Math.round(outputs.h / zoom)).toBe(8 + 21 * 40);
+  // Each port at its row's middle, top first and the base last, keyed by its place in the stack.
+  const ports = [...Array.from({ length: 20 }, (_, i) => `layer-${20 - i}`), "base"];
+  for (const [i, port] of ports.entries()) {
+    expect(await middleBelow(page, handleOf(page, aliases.l!, "source", port), card)).toBeCloseTo(
+      264 + 40 * i,
+      0,
+    );
+    expect(await middleBelow(page, rows.nth(i), card)).toBeCloseTo(264 + 40 * i, 0);
+  }
+
+  // The top layer is text: its words, its colour as a swatch and its font, in place of the description.
+  const top = rows.first();
+  await expect(top.locator(".truncate.font-medium")).toHaveText("Layer 20");
+  const words = top.getByText("\u201cPresented By : Anna Katrina Marchesi\u201d");
+  await expect(words).toBeVisible();
+  expect(await font(words)).toBe("11px 400");
+  await expect(top.getByText("Helvetica Neue", { exact: true })).toBeVisible();
+  const swatch = top.locator("span.rounded-full");
+  expect(await drawn(swatch)).toMatchObject({ w: 8, h: 8, background: "rgb(25, 51, 102)" });
+  await expect(rows.nth(1)).toContainText("Part 19 of the picture");
+
+  // Its settings: Most layers as Generate's Images row, and the price follows it.
+  await layers.dblclick({ position: { x: 160, y: 120 } });
+  const sheet = page.getByRole("complementary", { name: "Layers" });
+  const stepper = sheet.getByRole("group", { name: "Most layers" });
+  await expect(stepper.locator("output")).toHaveText("20");
+  expect(await drawn(stepper)).toMatchObject({ h: 38, radius: "10px" });
+  const row = sheet.getByText("Most layers", { exact: true }).locator("..");
+  expect(await drawn(row)).toMatchObject({ padding: "0px 2px 0px 2px", justify: "space-between" });
+  await expect(sheet.getByText("Up to 20 layers")).toBeVisible();
+  await stepper.getByRole("button", { name: "More layers" }).click();
+  await expect(sheet.getByText("Up to 21 layers")).toBeVisible();
+  await expect
+    .poll(async () => {
+      const { graph } = await api<CanvasDetail>(request, token, "GET", `/api/canvases/${id}`);
+      return graph.nodes.find((n) => n.id === aliases.l)?.params.maxLayers;
+    })
+    .toBe(21);
+  // A new number means a new split: the node no longer reads up to date.
+  await expect(layers.getByText("20 layers and a base")).toHaveCount(0);
 });

@@ -38,13 +38,29 @@ export interface SeedreamSpec {
   group: boolean;
   /** output_format is a parameter (the 5.0 models); 4.5 and 4.0 always answer JPEG. */
   formats: OutputFormat[];
-  /** background: "transparent" (Pro and Flash). */
+  /** background: "transparent" (5.5, Pro and Flash). */
   transparency: boolean;
+  /**
+   * Transparent from words alone or from up to 10 references of any kind (5.5). Pro and Flash need
+   * exactly one PNG that already has transparency.
+   */
+  rgba: boolean;
+  /** background's own default is "auto" (5.5), so Opaque has to be sent; on Pro and Flash it's the default. */
+  sendsOpaque: boolean;
   /** optimize_prompt_options.mode "fast" (Pro and 4.0). */
   fastPrompt: boolean;
-  /** Layer separation and the interactive editing tags (Pro and Flash). */
+  /** Layer separation and the interactive editing tags (5.5, Pro and Flash). */
   layers: boolean;
+  /** The most layers a split makes, besides its base. */
+  maxLayers: number;
+  /**
+   * The person picks the most layers, sent as layer_decomposition_options.max_images (which counts
+   * the base too), and the model reads the words on text layers (5.5).
+   */
+  layerOptions: boolean;
   price: PriceModel;
+  /** When its docs were last read, if not 2026-11-09. */
+  checkedAt?: string;
 }
 
 type Row = [AspectRatio, number, number];
@@ -123,7 +139,9 @@ const SIZE_TABLES: Record<string, Partial<Record<ResolutionTier, Row[]>>> = {
   "4.0": { "1K": V40_1K, "2K": LITE_2K, "4K": ALL_4K },
 };
 
+// 5.5's tutorial gives Pro's tiers and pixel range but no table of its own: Pro's is assumed.
 const TABLE_OF: Record<string, keyof typeof SIZE_TABLES> = {
+  "dola-seedream-5-5-261028": "pro",
   "dola-seedream-5-0-pro-260628": "pro",
   "dola-seedream-5-0-flash-260915": "pro",
   "seedream-5-0-260128": "lite",
@@ -157,7 +175,30 @@ export const SEEDREAM_RATIOS: AspectRatio[] = [
 const PRO_PIXELS: [number, number] = [921_600, 4_624_220];
 const LARGE_PIXELS: [number, number] = [3_686_400, 16_777_216];
 
+/** Layers 5.5 makes when nobody says: Pro's fixed 16, so its price and design stay as they were. */
+export const DEFAULT_CHOSEN_LAYERS = 16;
+
 export const SEEDREAM_SPECS: readonly SeedreamSpec[] = [
+  {
+    modelId: "dola-seedream-5-5-261028",
+    displayName: "Seedream 5.5",
+    description: "Up to 99 layers, with the words on them",
+    tiers: ["1K", "1.5K", "2K"],
+    defaultTier: "1.5K",
+    pixels: PRO_PIXELS,
+    maxInputs: 10,
+    group: false,
+    formats: ["png", "jpeg"],
+    transparency: true,
+    rgba: true,
+    sendsOpaque: true,
+    fastPrompt: false,
+    layers: true,
+    maxLayers: 99,
+    layerOptions: true,
+    price: SEEDREAM_PRICES["dola-seedream-5-5-261028"],
+    checkedAt: "2026-11-17",
+  },
   {
     modelId: "dola-seedream-5-0-pro-260628",
     displayName: "Seedream 5.0 Pro",
@@ -169,8 +210,12 @@ export const SEEDREAM_SPECS: readonly SeedreamSpec[] = [
     group: false,
     formats: ["png", "jpeg"],
     transparency: true,
+    rgba: false,
+    sendsOpaque: false,
     fastPrompt: true,
     layers: true,
+    maxLayers: 16,
+    layerOptions: false,
     price: SEEDREAM_PRICES["dola-seedream-5-0-pro-260628"],
   },
   {
@@ -184,8 +229,12 @@ export const SEEDREAM_SPECS: readonly SeedreamSpec[] = [
     group: false,
     formats: ["png", "jpeg"],
     transparency: true,
+    rgba: false,
+    sendsOpaque: false,
     fastPrompt: false,
     layers: true,
+    maxLayers: 16,
+    layerOptions: false,
     price: SEEDREAM_PRICES["dola-seedream-5-0-flash-260915"],
   },
   {
@@ -200,8 +249,12 @@ export const SEEDREAM_SPECS: readonly SeedreamSpec[] = [
     group: true,
     formats: ["png", "jpeg"],
     transparency: false,
+    rgba: false,
+    sendsOpaque: false,
     fastPrompt: false,
     layers: false,
+    maxLayers: 0,
+    layerOptions: false,
     price: SEEDREAM_PRICES["seedream-5-0-260128"],
   },
   {
@@ -215,8 +268,12 @@ export const SEEDREAM_SPECS: readonly SeedreamSpec[] = [
     group: true,
     formats: ["jpeg"],
     transparency: false,
+    rgba: false,
+    sendsOpaque: false,
     fastPrompt: false,
     layers: false,
+    maxLayers: 0,
+    layerOptions: false,
     price: SEEDREAM_PRICES["seedream-4-5-251128"],
   },
   {
@@ -230,8 +287,12 @@ export const SEEDREAM_SPECS: readonly SeedreamSpec[] = [
     group: true,
     formats: ["jpeg"],
     transparency: false,
+    rgba: false,
+    sendsOpaque: false,
     fastPrompt: true,
     layers: false,
+    maxLayers: 0,
+    layerOptions: false,
     price: SEEDREAM_PRICES["seedream-4-0-250828"],
   },
 ];
@@ -335,8 +396,8 @@ export function seedreamCapabilities(spec: SeedreamSpec): Capabilities {
     output: { formats: spec.formats, default: spec.formats[0]! },
     identity: { nativeCharacterRefs: false, nativeStylePresets: false },
     limits: {
-      // A separation makes up to 17 images in one call.
-      requestTimeoutMs: spec.layers ? 300_000 : 180_000,
+      // A separation makes up to 17 images in one call, or 100 on 5.5.
+      requestTimeoutMs: spec.layers ? (spec.maxLayers > 16 ? 600_000 : 300_000) : 180_000,
       // Not measured: nobody has run these live yet.
       typicalLatencyMs: [10_000, 90_000],
       maxConcurrent: 4,
@@ -369,7 +430,11 @@ export function seedreamCapabilities(spec: SeedreamSpec): Capabilities {
         minPixels: 262_144,
         maxPixels: INPUT_MAX_PIXELS,
         maxRatio: MAX_RATIO,
-        maxLayers: 16,
+        maxLayers: spec.maxLayers,
+        ...(spec.layerOptions && {
+          choose: { min: 1, default: DEFAULT_CHOSEN_LAYERS },
+          text: true,
+        }),
       },
     }),
   };
@@ -390,6 +455,6 @@ export function seedreamManifest(spec: SeedreamSpec): ModelManifest {
     ...(spec.fastPrompt && { speeds: [fastOffer(spec)] }),
     source: "static",
     manifestVersion: "1",
-    fetchedAt: "2026-11-09",
+    fetchedAt: spec.checkedAt ?? "2026-11-09",
   };
 }

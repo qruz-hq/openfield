@@ -31,8 +31,12 @@ interface ImageRules {
   fast: boolean;
   sequential: boolean;
   layers: boolean;
-  /** usage.input_images is reported on 5.0 Pro and Flash only. */
+  /** usage.input_images is reported on 5.5, 5.0 Pro and Flash only. */
   reportsInputs: boolean;
+  /** Transparent from words or any references, with no alpha needed (5.5). */
+  rgba?: boolean;
+  /** layer_decomposition_options: max_images and text_recognition (5.5). */
+  layerOptions?: boolean;
 }
 
 // From "Image generation API" and the 5.0 Pro / Flash tutorial, 2026-11-09.
@@ -49,6 +53,8 @@ const PRO: ImageRules = {
 };
 const LARGE = { pixels: [3_686_400, 16_777_216] as [number, number], maxImages: 14, sequential: true };
 const MODELS: Record<string, ImageRules> = {
+  // From the Dola Seedream 5.5 tutorial, 2026-11-17.
+  "dola-seedream-5-5-261028": { ...PRO, fast: false, rgba: true, layerOptions: true },
   "dola-seedream-5-0-pro-260628": PRO,
   "dola-seedream-5-0-flash-260915": { ...PRO, fast: false },
   "seedream-5-0-260128": {
@@ -87,6 +93,7 @@ const FIELDS = new Set([
   "prompt",
   "image",
   "layer_decomposition",
+  "layer_decomposition_options",
   "size",
   "optimize_prompt_options",
   "output_format",
@@ -175,7 +182,9 @@ async function images(
 
 /**
  * A base and three layers, each cropped to its own box, with sizes a pixel off as the docs show.
- * "#fake-layers:N" in the prompt makes only the first N (1 to 3), as a rerun that finds fewer would.
+ * "#fake-layers:N" in the prompt makes N instead (1 to 99), as a rerun that finds fewer would, but
+ * never more than max_images allows (or 16 without it). With text_recognition, the top layer is a
+ * line of text and carries what it says.
  * "#fake-layers-slow" answers after 3 seconds, long enough for a test to see the split under way.
  */
 async function layers(body: Record<string, unknown>, env: FakeEnv): Promise<Response> {
@@ -183,13 +192,25 @@ async function layers(body: Record<string, unknown>, env: FakeEnv): Promise<Resp
   const tier = String(body.size ?? "auto");
   const edge = tier === "auto" ? 2048 : TIER_EDGE[tier]!;
   const canvas = { width: edge, height: edge };
-  const all: [number, number, number, number][] = [
+  const first: [number, number, number, number][] = [
     [0.1, 0.05, 0.8, 0.2],
     [0.2, 0.35, 0.65, 0.98],
     [0.22, 0.43, 0.78, 1],
   ];
-  const asked = Number(/#fake-layers:(\d)/.exec(String(body.prompt ?? ""))?.[1] ?? all.length);
-  const boxes = all.slice(0, Math.min(all.length, Math.max(1, asked)));
+  const options = body.layer_decomposition_options as
+    | { max_images?: number; text_recognition?: boolean }
+    | undefined;
+  const room = (options?.max_images ?? 17) - 1;
+  const asked = Number(/#fake-layers:(\d+)/.exec(String(body.prompt ?? ""))?.[1] ?? first.length);
+  const count = Math.min(room, Math.max(1, asked));
+  // Past the first three, small tiles on a 10 by 10 grid, so each layer has a box of its own.
+  const boxes = Array.from({ length: count }, (_, i): [number, number, number, number] => {
+    if (i < first.length) return first[i]!;
+    const cell = i - first.length;
+    const [x, y] = [(cell % 10) / 10, Math.floor(cell / 10) / 10];
+    return [x, y, x + 0.09, y + 0.09];
+  });
+  const ocr = options?.text_recognition === true;
   const data: Record<string, unknown>[] = [
     {
       b64_json: Buffer.from(await gradientPng(...fitted(edge, edge, env.maxEdge), env.nextSeed())).toString(
@@ -217,6 +238,8 @@ async function layers(body: Record<string, unknown>, env: FakeEnv): Promise<Resp
       bounding_box: { absolute, normalized: [l, t, r, b].map((v) => Math.round(v * 1000)) },
       name: `Layer ${i + 1}`,
       description: `Part ${i + 1} of the picture`,
+      // The docs' own example: two lines, one style each.
+      ...(ocr && i === boxes.length - 1 && { text_recognition: textOf(absolute, edge) }),
     });
   }
   const tokens = Math.round((edge * edge * 2) / 256);
@@ -226,6 +249,40 @@ async function layers(body: Record<string, unknown>, env: FakeEnv): Promise<Resp
     data,
     usage: { input_images: 1, generated_images: data.length, output_tokens: tokens, total_tokens: tokens },
   });
+}
+
+/** A text layer's words, as 5.5 answers them, in two lines inside the layer's box. */
+function textOf(box: number[], edge: number) {
+  const [l, t, r, b] = box as [number, number, number, number];
+  const mid = Math.round((t + b) / 2);
+  const line = (text: string, top: number, bottom: number, color: string, bold: boolean) => {
+    const absolute = [l, top, r, bottom];
+    return {
+      bounding_box: { absolute, normalized: absolute.map((v) => Math.round((v / edge) * 1000)) },
+      runs: [
+        {
+          text,
+          style: {
+            similar_font_family: "Helvetica Neue",
+            foreground_color: color,
+            bold,
+            italic: false,
+            underline: false,
+            strikethrough: false,
+            shadow: false,
+            translucent: false,
+          },
+        },
+      ],
+    };
+  };
+  return {
+    text: "Presented By :\nAnna Katrina Marchesi",
+    lines: [
+      line("Presented By :", t, mid, "#193366", true),
+      line("Anna Katrina Marchesi", mid, b, "#46597E", false),
+    ],
+  };
 }
 
 /** What data[].size says: the WxH asked for, or a tier's square. */
@@ -289,7 +346,25 @@ function validate(body: Record<string, unknown> | undefined): Response | undefin
   }
   if (inputs.length > rules.maxImages) return bad("image", `At most ${rules.maxImages} images`);
 
+  const split = body.layer_decomposition_options;
+  if (split !== undefined) {
+    if (!layered || !rules.layerOptions)
+      return bad("layer_decomposition_options", `${body.model} doesn't take layer_decomposition_options`);
+    if (typeof split !== "object" || split === null || Array.isArray(split))
+      return bad("layer_decomposition_options", "layer_decomposition_options is an object");
+    const { max_images: most, text_recognition: ocr, ...rest } = split as Record<string, unknown>;
+    const unknown = Object.keys(rest)[0];
+    if (unknown) return bad(`layer_decomposition_options.${unknown}`, `Unknown parameter ${unknown}`);
+    if (most !== undefined && (!Number.isInteger(most) || (most as number) < 2 || (most as number) > 100))
+      return bad("layer_decomposition_options.max_images", "max_images is between 2 and 100");
+    if (ocr !== undefined && typeof ocr !== "boolean")
+      return bad("layer_decomposition_options.text_recognition", "text_recognition is a boolean");
+  }
+
   if (layered) {
+    // "background applies only to image generation": passing it on a separation is an error.
+    if (body.background !== undefined)
+      return bad("background", "background can't be used with layer_decomposition");
     if (inputs.length !== 1 || Array.isArray(image)) return bad("image", "Only one image is supported");
     if (!/^data:image\/(png|jpeg);base64,/.test(inputs[0]!)) return bad("image", "Layers take a png or jpeg");
     if (!["auto", "1K", "1.5K", "2K"].includes(String(body.size ?? "auto")))
@@ -321,9 +396,10 @@ function validate(body: Record<string, unknown> | undefined): Response | undefin
       return bad("background", `${body.model} doesn't take background`);
     if (body.background === "transparent") {
       if (body.output_format === "jpeg") return bad("background", "A transparent background needs png");
+      // 5.5 makes one from words or up to 10 references, none of which need an alpha channel.
       const only = inputs.length === 1 ? inputs[0]! : undefined;
       const bytes = only && Buffer.from(only.slice(only.indexOf(",") + 1), "base64");
-      if (!bytes || !pngHasTransparency(new Uint8Array(bytes)))
+      if (!rules.rgba && (!bytes || !pngHasTransparency(new Uint8Array(bytes))))
         return bad("background", "Exactly one input image with an alpha channel is required");
     }
   }

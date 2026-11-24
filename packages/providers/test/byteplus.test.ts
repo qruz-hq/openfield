@@ -35,7 +35,7 @@ import type { ImageModel, JobUpdate } from "../src/types";
 // the price math against BytePlus's own examples, each error code, and the task lifecycle.
 
 const provider = createByteplusProvider();
-const credentials = { apiKey: "ark-key-3f9a1c7e" };
+const credentials = { apiKey: "test-ark-key" };
 const T0 = Date.parse("2026-09-29T12:00:00.000Z");
 
 const manifest = (modelId: string): ModelManifest => BYTEPLUS_MODELS.find((m) => m.modelId === modelId)!;
@@ -89,7 +89,7 @@ const response = (exchange: RecordedExchange) =>
   });
 
 describe("the BytePlus catalog", () => {
-  test("seven Seedance video models, then five Seedream image models, all parsing strictly", () => {
+  test("seven Seedance video models, then six Seedream image models, all parsing strictly", () => {
     expect(BYTEPLUS_MODELS.map((m) => m.displayName)).toEqual([
       "Seedance 2.5",
       "Seedance 2.0",
@@ -98,6 +98,7 @@ describe("the BytePlus catalog", () => {
       "Seedance 1.5 Pro",
       "Seedance 1.0 Pro",
       "Seedance 1.0 Pro Fast",
+      "Seedream 5.5",
       "Seedream 5.0 Pro",
       "Seedream 5.0 Flash",
       "Seedream 5.0 Lite",

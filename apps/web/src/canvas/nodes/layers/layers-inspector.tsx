@@ -1,6 +1,7 @@
 import { nodeTitle } from "@openfield/canvas/engine/describe";
 import {
   type LayersParams,
+  layerCountOf,
   layerSizeOf,
   layersModelKeyOf,
   layersSpec,
@@ -11,8 +12,8 @@ import { cn, Input, Segmented, SegmentedItem } from "@openfield/ui";
 import { useId } from "react";
 import { useNavigate } from "react-router";
 import { useStore } from "zustand";
-import { LayersModelPicker, PriceRow, pricingOf } from "../../../detail/layers/layers-panel";
-import { layerModels } from "../../../detail/layers/stack";
+import { LayersModelPicker, LayersPriceBox, MostLayersRow } from "../../../detail/layers/layers-panel";
+import { layerModels, pricingOf } from "../../../detail/layers/stack";
 import { useCanvasEngineContext, useNodeAnalysis } from "../../engine/engine-store";
 import { useCanvas, useLocked, useNodeFrame, useReadOnly } from "../../store/context";
 import { cardMedia } from "../generate/card-media";
@@ -22,7 +23,8 @@ import { AssetImage } from "../shell/thumb";
 import { useNodeDisplay, useParsedParams, useRunNode, useSetParams } from "../shell/use-node";
 
 // Canvas / Inspector / Layers (design GCugSMFGGB): the image coming in, what to separate, the model
-// (only models that split), the size, the price box the Layers tab has, then Run. The price box
+// (only models that split), the size, the most layers on models that take a number, the price box
+// the Layers tab has, then Run. The price box
 // gives the rates and the most a split can cost: the model decides how many layers come back.
 
 /** The canvas settings' field labels: 12/500, tertiary. */
@@ -53,8 +55,9 @@ export function LayersInspector({ nodeId }: { nodeId: string }) {
   const model = ctx.model(key);
   const rules = model?.capabilities.layers;
   const size = layerSizeOf(model, params.size);
+  const most = layerCountOf(model, params.maxLayers);
   const pricing =
-    model && image ? pricingOf(model, { id: image, width: dims?.w, height: dims?.h }, size) : null;
+    model && image ? pricingOf(model, { id: image, width: dims?.w, height: dims?.h }, size, most) : null;
   const busy = display.state === "queued" || display.state === "running";
 
   if (!frame) return null;
@@ -131,15 +134,17 @@ export function LayersInspector({ nodeId }: { nodeId: string }) {
           </Segmented>
         </div>
       ) : null}
+      {/* Most layers: as Generate's Images row */}
+      <MostLayersRow
+        model={model}
+        value={most}
+        disabled={readOnly}
+        readOnly={locked}
+        onChange={(maxLayers) => setParams({ maxLayers }, "maxLayers")}
+        className={cn(locked && LOCKED_DIM)}
+      />
       {/* Price */}
-      {pricing ? (
-        <div className={cn("flex w-full flex-col gap-8 rounded-14 bg-surface p-12", locked && LOCKED_DIM)}>
-          <PriceRow label={t("layers.price.base")} value={pricing.rate} />
-          <PriceRow label={t("layers.price.each")} value={pricing.rate} />
-          <PriceRow label={t("layers.price.upTo", { count: pricing.most })} value={pricing.atMost} />
-          <p className="w-full text-caption leading-[1.45] text-text-tertiary">{t("layers.price.note")}</p>
-        </div>
-      ) : null}
+      {pricing ? <LayersPriceBox pricing={pricing} className={cn(locked && LOCKED_DIM)} /> : null}
       <InspectorRun
         estimate={analysis?.estimate ?? null}
         models={[model]}

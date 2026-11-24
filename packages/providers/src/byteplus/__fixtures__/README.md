@@ -43,6 +43,7 @@ Hand-made the same way, from the Image generation API reference and the 5.0 Pro 
 | `group-partial.json` | A related set with its second image replaced by an `error` | the rest saved, that one `content_refused` |
 | `group-short.json` | A related set of 4 that came back with 2 | 2 saved, 2 failed: "made fewer images than you asked for" |
 | `layers.json` | A separation: a 2048×2048 base (`z_index` 0) and three cropped layers with `bounding_box`, `name` and `description` | a base and layers in one stack |
+| `layers-text.json` | A 5.5 separation, from the 5.5 tutorial's poster example (2026-11-17): a base, a text layer with `text_recognition` (two lines, one style run each) and a hand-lettered layer with none, as the docs say artistic text gets | a text layer that keeps its words, font and colour; the other keeps none |
 | `layers-failed.json` | 500 `InternalServiceError` on a separation | `provider_unavailable`, "couldn't separate this image into layers" |
 | `not-open.json` | 404 `ModelNotOpen` | `auth_forbidden`, "Turn on … in BytePlus first" |
 | `ipm-rate-limited.json` | 429 `ModelAccountIpmRateLimitExceeded` (images per minute) | `rate_limited` |

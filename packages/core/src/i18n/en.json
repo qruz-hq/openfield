@@ -414,7 +414,7 @@
     "video": "{seconds}s at {size}",
     "videoAnyShape": "{seconds}s at {resolution}, in the shape the model picks",
     "videoTokens": "{tokens} tokens at {rate} per million",
-    "layers": "A base and 1 to {max} layers, {each} each",
+    "layers": "{max, plural, one {A base and 1 layer, {each} each} other {A base and 1 to # layers, {each} each}}",
     "groupSet": "Up to {count} × {each}, only for the images it makes",
     "upTo": "Up to {cost}"
   },
@@ -1144,9 +1144,10 @@
     "price": {
       "base": "Base image",
       "each": "Each layer",
-      "upTo": "Up to {count} layers",
+      "upTo": "{count, plural, one {Up to # layer} other {Up to # layers}}",
       "atMost": "{cost} at most",
-      "note": "You pay for the layers you get. If it doesn't work, you aren't charged."
+      "note": "You pay for the layers you get. If it doesn't work, you aren't charged.",
+      "input": "The image you're splitting"
     },
     "separate": "Separate layers",
     "tryAgain": "Try again",
@@ -1192,6 +1193,16 @@
       "count": "{count} and a base",
       "open": "Open in Layers",
       "openLayer": "Open {name}"
+    },
+    "most": {
+      "label": "Most layers",
+      "fewer": "Fewer layers",
+      "more": "More layers"
+    },
+    "text": {
+      "quoted": "“{text}”",
+      "words": "Words on this layer: {text}",
+      "style": "{font} · {color}"
     }
   },
   "layerPills": {
@@ -1957,6 +1968,7 @@
         "generatePrompt": "A Generate prompt can be at most {max} characters. This one has {count}.",
         "editPrompt": "An Edit prompt can be at most {max} characters. This one has {count}.",
         "layersPrompt": "What to separate can be at most {max} characters. This one has {count}.",
+        "maxLayers": "Most layers is a whole number from 1 to {max}. This asks for {count}.",
         "takes": "New takes makes {min} to {max} images. This asks for {count}.",
         "prompts": "Variations takes at most {max} prompts. This has {count}.",
         "promptLine": "Each Variations prompt can be at most {max} characters. Prompt {index} has {count}.",
@@ -2252,7 +2264,8 @@
         "notKeptExactly": "Couldn't keep the rest exactly. Try again.",
         "references": "References",
         "referenceCount": "{count, plural, one {# image from your library} other {# images from your library}}",
-        "editAgain": "Edit the original with this mask"
+        "editAgain": "Edit the original with this mask",
+        "editAgainMarks": "Edit the original with these marks"
       },
       "reused": "Loaded the prompt and settings.",
       "copyFailed": "Couldn't copy the image.",
@@ -2283,6 +2296,7 @@
   "edit": {
     "reopen": {
       "back": "Your mask and prompt are back. Change anything, then Generate.",
+      "backMarks": "Your marks and prompt are back. Change anything, then Generate.",
       "maskFailed": "Couldn't load the mask. Your prompt is back, so paint the area to change again."
     },
     "tools": {
@@ -2339,7 +2353,7 @@
       "material": "Material",
       "optional": "Optional",
       "materialPlaceholder": "Brushed steel",
-      "note": "Added to your prompt with this mark.",
+      "note": "The material is added to your prompt. The color only helps you tell marks apart.",
       "marks": "Marks",
       "clearAll": "Clear all",
       "sent": "Sent with your prompt",

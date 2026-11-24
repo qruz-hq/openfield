@@ -16,6 +16,7 @@ import {
   BATCH_MAX,
   CANVAS_EDGE_KINDS,
   GENERATE_PROMPT_MAX,
+  LAYERS_MAX,
   MASK_COMPOSITE_MAX_PX,
   marksSchema,
   t,
@@ -93,6 +94,7 @@ const SETTINGS: Partial<Record<string, Record<string, string>>> = {
       'A model key from list_models that separates layers (layers: true), such as "byteplus:dola-seedream-5-0-pro-260628". Leave out for the default.',
     prompt: "Optional: which parts to separate, in words. Empty lets the model pick the main parts.",
     size: '"auto" (the image\'s own size), "1K", "1.5K" or "2K", as the model lists them.',
+    maxLayers: `The most layers a run makes, besides the base, 1 to ${LAYERS_MAX}, on models with layers.choose in list_models. Default 16. Each layer is billed, so the price goes up with it. Other models ignore it and make up to 16.`,
   },
   "image.variations": {
     strategy:
@@ -109,8 +111,7 @@ const SETTINGS: Partial<Record<string, Record<string, string>>> = {
 };
 
 /** How a Layers node's outputs work, for list_node_types. */
-const LAYERS_OUTPUTS_NOTE =
-  'One output per layer its last run made: "layer-N" is the layer at place N in the stack (a higher N sits on top) and "base" is the base. get_canvas lists the ones it has, with the name the model gave each. Connect by port, as "l.layer-2"; before a run any place can be connected. A run that makes fewer layers keeps the connection, but that port hands on nothing until a run makes that layer again, and what reads it waits.';
+const LAYERS_OUTPUTS_NOTE = `One output per layer its last run made: "layer-N" is the layer at place N in the stack, N from 1 to ${LAYERS_MAX} (a higher N sits on top), and "base" is the base. get_canvas lists the ones it has, with the name the model gave each and, on a text layer, the words on it with their font and colour. Connect by port, as "l.layer-2"; before a run any place can be connected. A run that makes fewer layers keeps the connection, but that port hands on nothing until a run makes that layer again, and what reads it waits.`;
 
 // Edits
 
@@ -553,7 +554,14 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
           ...(p.arity === "multi" && { many: true }),
           ...(p.required && { required: true }),
         })),
-        outputs: specRegistry.ports(spec.type, "out").map((p) => ({ port: p.id, gives: p.type })),
+        // A Layers node has a port per place in the stack: named by pattern, not 100 times over.
+        outputs:
+          spec.type === layersSpec.type
+            ? [
+                { port: `layer-N (N 1 to ${LAYERS_MAX})`, gives: "image" },
+                { port: "base", gives: "image" },
+              ]
+            : specRegistry.ports(spec.type, "out").map((p) => ({ port: p.id, gives: p.type })),
         ...(spec.type === layersSpec.type && { outputsNote: LAYERS_OUTPUTS_NOTE }),
         settings: SETTINGS[spec.type] ?? {},
         defaults: spec.defaults(engine),
@@ -727,7 +735,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
     {
       title: "Give an Edit node its marks",
       description:
-        "Puts an Edit node in Sketch & point and sets its marks, as marking the image in Openfield does: points, boxes, circles, freehand lines and arrows on the image it edits, each with an optional colour, material and note, numbered from 1 in this order. Only for models whose list_models entry has marks. " +
+        "Puts an Edit node in Sketch & point and sets its marks, as marking the image in Openfield does: points, boxes, circles, freehand lines and arrows on the image it edits, each with an optional note, material and colour, numbered from 1 in this order. The colour only sets how the mark shows in Openfield and isn't sent to the model: put a colour change in the note. Only for models whose list_models entry has marks. " +
         "Coordinates are fractions of the image: x and y from 0 at the top left to 1 at the bottom right. Its mask input and reference images are ignored while it sketches: only the image being edited is sent. null clears the marks and keeps Sketch & point.",
       inputSchema: {
         canvas: z.string().describe(canvasField),
@@ -735,7 +743,7 @@ export function canvasTools(server: McpServer, ctx: ToolContext): void {
         marks: marksSchema
           .nullable()
           .describe(
-            'The marks, such as [{"kind":"box","from":{"x":0.1,"y":0.2},"to":{"x":0.4,"y":0.6},"material":"brushed steel"}, {"kind":"point","at":{"x":0.7,"y":0.3},"color":"#C8102E"}]. Marks go on the image being edited: leave "image" out (or 1).',
+            'The marks, such as [{"kind":"box","from":{"x":0.1,"y":0.2},"to":{"x":0.4,"y":0.6},"material":"brushed steel"}, {"kind":"point","at":{"x":0.7,"y":0.3},"note":"make the mug dark red"}]. Marks go on the image being edited: leave "image" out (or 1).',
           ),
         keepRest: z
           .boolean()

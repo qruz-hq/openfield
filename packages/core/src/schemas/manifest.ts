@@ -343,10 +343,21 @@ export const capabilitiesSchema = z.strictObject({
       /** The long side over the short one, at most. */
       maxRatio: z.number().min(1),
       maxLayers: z.int().min(1).max(LAYERS_MAX),
+      /**
+       * Present when the person picks the most layers a split makes, from `min` to maxLayers;
+       * absent, every split may make up to maxLayers.
+       */
+      choose: z.strictObject({ min: z.int().min(1), default: z.int().min(1) }).optional(),
+      /** The model reads the words on text layers and says how they look. */
+      text: z.boolean().optional(),
     })
     .refine((l) => l.sizes.includes(l.default), {
       message: "default must be one of sizes",
       path: ["default"],
+    })
+    .refine((l) => !l.choose || (l.choose.min <= l.choose.default && l.choose.default <= l.maxLayers), {
+      message: "choose.default must be between choose.min and maxLayers",
+      path: ["choose"],
     })
     .optional(),
 });

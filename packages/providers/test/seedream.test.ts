@@ -20,7 +20,7 @@ import notOpen from "../src/byteplus/__fixtures__/seedream/not-open.json";
 import outputFlagged from "../src/byteplus/__fixtures__/seedream/output-flagged.json";
 import quotaExceeded from "../src/byteplus/__fixtures__/seedream/quota-exceeded.json";
 import { mapError } from "../src/byteplus/errors";
-import { colorName, MARK_INKS, promptWithMarks } from "../src/byteplus/marks";
+import { MARK_INKS, promptWithMarks } from "../src/byteplus/marks";
 import { BYTEPLUS_MODELS } from "../src/byteplus/models";
 import { PRO_TIER_PIXELS } from "../src/byteplus/pricing";
 import { seedreamSize, seedreamSpecFor } from "../src/byteplus/seedream";
@@ -265,7 +265,7 @@ describe("marks in the prompt", () => {
         "Keep the light warm",
         "Marked places:\n" +
           "1. Image 1 <point>500 250</point>: Add a red balloon here.\n" +
-          "2. Image 2 <bbox>100 900 800 999</bbox>: Make it navy (#1E3A8A).",
+          "2. Image 2 <bbox>100 900 800 999</bbox>.",
       ].join("\n\n"),
     );
     expect(drawings.size).toBe(0);
@@ -299,10 +299,13 @@ describe("marks in the prompt", () => {
     expect(drawings.get(2)?.map((d) => d.kind)).toEqual(["stroke"]);
   });
 
-  test("a colour is named in words beside its hex", () => {
-    expect(colorName("#FF0000")).toBe("red");
-    expect(colorName("#F5F5F0")).toBe("white");
-    expect(colorName("#2E7D32")).toBe("green");
+  test("a mark's colour is only how it shows, never part of the prompt", () => {
+    const { prompt } = promptWithMarks("", [
+      { kind: "box", from: { x: 0, y: 0 }, to: { x: 0.5, y: 0.5 }, color: "#1F6FEB", material: "oak" },
+      { kind: "circle", from: { x: 0.1, y: 0.1 }, to: { x: 0.3, y: 0.3 }, color: "#3FA34D" },
+    ]);
+    expect(prompt).not.toMatch(/#1F6FEB|#3FA34D|Make it (blue|green)/i);
+    expect(prompt).toContain("Make it look like oak.");
   });
 
   test("the marks reach the body, and composite is off by default with marks", async () => {

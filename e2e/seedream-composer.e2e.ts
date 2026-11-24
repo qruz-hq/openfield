@@ -195,7 +195,7 @@ test("BytePlus's Speed panel: Seedream's words, no prices, and which models alwa
   await expect(fast).toContainText("5.0 Pro and 4.0 only");
   await expect(standard).not.toContainText("only");
   await expect(dialog).not.toContainText("per image");
-  const note = dialog.getByText("Seedream 5.0 Flash, 5.0 Lite, and 4.5 always use Standard.");
+  const note = dialog.getByText("Seedream 5.5, 5.0 Flash, 5.0 Lite, and 4.5 always use Standard.");
   await expect(note).toBeVisible();
 
   // Measured against Ea88MDLWAj and the Fast card's badge, once the dialog has finished opening.
