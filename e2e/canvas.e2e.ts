@@ -1805,7 +1805,9 @@ test("Touch up on an Edit node that ran: brushes in a window, Apply blends it ag
     const apply = window.getByRole("button", { name: "Apply", exact: true });
     await expect(apply).toBeDisabled();
 
-    // Canvas / Mask window / Touch up (i2iySzYlSg), measured.
+    // Canvas / Mask window / Touch up (i2iySzYlSg), measured once it has popped in: mid-way, it's
+    // drawn a little smaller.
+    await window.evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
     const surface = window.locator("[data-touch-up-window]").or(window).first();
     expect(await drawn(surface)).toMatchObject({ w: 1152, gap: "20px", padding: "24px 24px 24px 24px" });
     const toolbar = window.getByRole("toolbar", { name: "Touch up" });
