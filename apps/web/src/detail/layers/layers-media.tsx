@@ -32,6 +32,7 @@ function useHandle(ref: Ref<ImageMediaHandle> | undefined) {
     fit: () => media.current?.fit(),
     toggle: () => media.current?.toggle(),
     cancel: () => false,
+    undoTouch: () => false,
   }));
   return media;
 }

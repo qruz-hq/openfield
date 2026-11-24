@@ -469,7 +469,11 @@ test("Generate runs the painted edit at its price, and the new image comes from 
   await expect(strip.getByRole("button", { name: "Original" })).toBeVisible();
   await expect(strip.getByRole("button", { name: "New image 1" })).toHaveAttribute("aria-pressed", "true");
   await expect(generate).toHaveText(/^Generate again/);
+  // Comparing, Feather changes the new image itself; on the original it's for the next Generate.
+  await expect(panel.getByText("Softens the edge so the change blends in.")).toBeVisible();
+  await strip.getByRole("button", { name: "Original" }).click();
   await expect(panel.getByText("Softens the edge on your next Generate.")).toBeVisible();
+  await strip.getByRole("button", { name: "New image 1" }).click();
 
   // Generate again sends the same mask by its id.
   const again = page.waitForRequest((r) => r.url().endsWith("/api/edit") && r.method() === "POST");
@@ -748,6 +752,19 @@ test("from a feed tile: a box and a stroke, the words, the price, and the new im
   await expect(info.getByText(words, { exact: true })).toBeVisible();
 });
 
+/** Difference after a run: the model's share at a point given as fractions of the image. */
+async function sourceAt(page: Page, fx: number, fy: number): Promise<number> {
+  return page
+    .locator("[data-from-model][data-ready]")
+    .evaluate(
+      (canvas: HTMLCanvasElement, [x, y]) =>
+        canvas
+          .getContext("2d")!
+          .getImageData(Math.floor(canvas.width * x!), Math.floor(canvas.height * y!), 1, 1).data[3]!,
+      [fx, fy],
+    );
+}
+
 /** The Difference view's mark at a point given as fractions of the image: 0 where nothing changed. */
 async function changeAt(page: Page, fx: number, fy: number): Promise<number> {
   return page
@@ -799,14 +816,16 @@ test("the new image is compared with the original, before and after or by what c
   await page.keyboard.press("e");
   await expect(toolbar(page)).toHaveCount(0);
 
-  // Difference: worked out in a worker, marking the painted box and nothing outside it.
+  // Difference: where each part comes from, the model in the painted box and the original outside it,
+  // with the mask's outline.
   await compare.getByRole("radio", { name: "Difference" }).click();
-  await expect(view.getByText("Changed", { exact: true })).toBeVisible();
-  await expect(view.getByText("Same as the original", { exact: true })).toBeVisible();
-  await expect.poll(() => changeAt(page, 0.45, 0.45)).toBeGreaterThan(0);
-  expect(await changeAt(page, 0.1, 0.9)).toBe(0);
-  expect(await changeAt(page, 0.9, 0.1)).toBe(0);
-  expect(page.workers().some((worker) => worker.url().includes("difference"))).toBe(true);
+  await expect(view.getByText("From the model", { exact: true })).toBeVisible();
+  await expect(view.getByText("From the original", { exact: true })).toBeVisible();
+  await expect(view.getByText("Your mask", { exact: true })).toBeVisible();
+  await expect.poll(() => sourceAt(page, 0.45, 0.45)).toBe(255);
+  expect(await sourceAt(page, 0.1, 0.9)).toBe(0);
+  expect(await sourceAt(page, 0.9, 0.1)).toBe(0);
+  await expect(page.locator("[data-start-outline] path")).toHaveAttribute("d", /^M/);
 
   // Edit the mask goes back to painting the original, with the mask and the box still in hand.
   await view.getByRole("button", { name: "Edit the mask" }).click();
@@ -838,7 +857,7 @@ test("a whole-image model says so, Keep the rest can be turned off, and the mont
     await expect(panel.getByRole("button", { name: "Model" })).toContainText("Nano Banana 2 Lite");
     await expect(
       panel.getByText(
-        "Nano Banana 2 Lite redraws the whole image, then everything outside your mask is put back.",
+        "Nano Banana 2 Lite redraws the whole image, then the original is put back wherever it didn't really change.",
       ),
     ).toBeVisible();
 
@@ -1088,4 +1107,190 @@ test("a turned photo the Edit tab can't read ahead is turned away by the server,
   await expect(toolbar(page)).toHaveCSS("opacity", "0.4");
   // The note says it, not a toast.
   await expect(page.getByText(/saved on its side/)).toHaveCount(0);
+});
+
+// Keep the rest after the run (§0.9, design "Keep the rest"): Feather, Expand and touch-up strokes
+// apply in place, and the model's own result saves as its own. Whether a fake result lines up with
+// the original depends on the image drawn, so how it was decided is mocked where a test needs one.
+
+/**
+ * The real keep-rest state with some fields changed, and the area map's headers to match, so the
+ * edit reads as kept by comparing, by the mask alone, or made before results were kept.
+ */
+async function mockKeepRest(page: Page, patch: Record<string, unknown>) {
+  await page.route(/\/api\/assets\/[^/]+\/keep-rest$/, async (route) => {
+    if (route.request().method() !== "GET") return route.fallback();
+    const response = await route.fetch();
+    const state = (await response.json()) as Record<string, unknown>;
+    // Only the edit's own state: the original has none to adjust.
+    const json = state.available || state.unavailable !== "not_an_edit" ? { ...state, ...patch } : state;
+    await route.fulfill({ response, json });
+  });
+  if (!("fellBack" in patch)) return;
+  const lineUp = patch.lineUp as { dx: number; dy: number; scaleX: number; scaleY: number } | null;
+  await page.route(/\/files\/keep-rest-area\//, async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({
+      response,
+      headers: {
+        ...response.headers(),
+        "x-keep-rest-fell-back": (patch.fellBack as string | null) ?? "none",
+        "x-keep-rest-line-up": lineUp
+          ? [lineUp.dx, lineUp.dy, lineUp.scaleX, lineUp.scaleY].join(",")
+          : "none",
+      },
+    });
+  });
+}
+
+// A mocked area map can still be on its way as a test ends.
+test.afterEach(async ({ page }) => {
+  await page.unrouteAll({ behavior: "ignoreErrors" });
+});
+
+const quickKeep = (page: Page) => detail(page).getByRole("switch", { name: "Keep the rest", exact: true });
+const blockKeep = (page: Page) => panelOf(page).getByRole("switch", { name: "Keep the rest of the image" });
+const applyBar = (page: Page) => panelOf(page).getByRole("group", { name: "Previewing, not saved yet." });
+
+async function editedOnce(page: Page, prompt: string) {
+  const made = await editable(page, unique(prompt));
+  await paintAndDescribe(page, "Pale, dried berries");
+  await generateIn(page).click();
+  await expect(panelOf(page).getByText(/^Saved as 1 new image/)).toBeVisible({ timeout: 20_000 });
+  return made;
+}
+
+test("after a run Keep the rest stays live: Feather and a touch up apply in place, off saves the model's own result", async ({
+  page,
+}) => {
+  // Whether the fake result lines up depends on the image drawn; this one is kept by the mask alone.
+  await mockKeepRest(page, { fellBack: "no_match", lineUp: null });
+  const { token } = await editedOnce(page, "kept berries");
+  const panel = panelOf(page);
+  const view = detail(page);
+
+  // The compare bar's quick switch and the block agree; the mask alone decided, so Sensitivity rests.
+  await expect(quickKeep(page)).toBeChecked();
+  await expect(blockKeep(page)).toBeChecked();
+  await expect(
+    panel.getByText("Kept by your mask only: the new image didn't line up with the original."),
+  ).toBeVisible();
+  await expect(panel.getByRole("slider", { name: "Sensitivity" })).toHaveAttribute("data-disabled", "");
+  await expect(panel.getByRole("slider", { name: "Feather" })).not.toHaveAttribute("data-disabled", "");
+  await expect(panel.getByText("Kept with this edit, not in your library.")).toBeVisible();
+  await expect(applyBar(page)).toHaveCount(0);
+  await page.screenshot({ path: "test-results/keep-after-run.png" });
+
+  // A Feather step previews on the image and waits for Apply.
+  const feather = panel.getByRole("slider", { name: "Feather" });
+  await feather.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(applyBar(page)).toBeVisible();
+  await expect(page.locator("[data-keep-preview][data-ready]")).toBeVisible();
+  await page.screenshot({ path: "test-results/keep-changed.png" });
+  const applied = page.waitForRequest(
+    (r) => /\/api\/assets\/[^/]+\/keep-rest$/.test(r.url()) && r.method() === "POST",
+  );
+  const seen: string[] = [];
+  page.on("request", (r) => seen.push(r.url()));
+  await applyBar(page).getByRole("button", { name: "Apply" }).click();
+  const request = await applied;
+  expect(request.postDataJSON()).toEqual({ featherPx: 9 });
+  // The image written in place shows from its new file: the strip's thumb asks for the new version.
+  const { asset } = (await (await request.response())!.json()) as { asset: { thumbUrl: string } };
+  const version = new URL(asset.thumbUrl, "http://x").searchParams.get("v");
+  expect(version).toBeTruthy();
+  await expect.poll(() => seen.some((url) => url.includes(`v=${version}`))).toBe(true);
+  await expect(applyBar(page)).toHaveCount(0);
+  await expect(page.locator("[data-keep-preview]")).toHaveCount(0);
+
+  // Touch up: the sources view, a stroke of "use the original here", Done, then Apply sends the layer.
+  await view.getByRole("button", { name: "Touch up" }).click();
+  const touch = view.getByRole("toolbar", { name: "Touch up" });
+  await expect(touch).toBeVisible();
+  await expect(view.getByText("From the model", { exact: true })).toBeVisible();
+  await expect(view.getByRole("radiogroup", { name: "Compare" })).toHaveCount(0);
+  await touch.getByRole("button", { name: "Use the original here" }).click();
+  const sources = page.locator("[data-sources]");
+  await drag(page, await at(sources, 0.4, 0.4), await at(sources, 0.5, 0.5));
+  await page.screenshot({ path: "test-results/keep-touch.png" });
+  await touch.getByRole("button", { name: "Done" }).click();
+  await expect(applyBar(page)).toBeVisible();
+  const touched = page.waitForRequest(
+    (r) => /\/api\/assets\/[^/]+\/keep-rest$/.test(r.url()) && r.method() === "POST",
+  );
+  await applyBar(page).getByRole("button", { name: "Apply" }).click();
+  const touchedRequest = await touched;
+  expect(touchedRequest.headers()["content-type"]).toMatch(/^multipart\/form-data/);
+  await expect(applyBar(page)).toHaveCount(0);
+  // The server kept the strokes as the edit's fix layer.
+  const state = await api<{ fixesUrl: string | null; featherPx: number }>(
+    page.request,
+    token,
+    "GET",
+    new URL(touchedRequest.url()).pathname,
+  );
+  expect(state).toMatchObject({ featherPx: 9, fixesUrl: expect.stringContaining("/files/keep-rest-fixes/") });
+
+  // Off is only a preview of the model's own result: no Apply, only Save as new image.
+  await quickKeep(page).click();
+  await expect(blockKeep(page)).not.toBeChecked();
+  await expect(panel.getByText("Showing the model's own result.")).toBeVisible();
+  await expect(view.getByText("The model's own result", { exact: true })).toBeVisible();
+  await expect(applyBar(page).getByRole("button", { name: "Apply" })).toHaveCount(0);
+  await page.screenshot({ path: "test-results/keep-off.png" });
+  const saved = page.waitForResponse((r) => r.url().endsWith("/keep-rest/save"));
+  await applyBar(page).getByRole("button", { name: "Save as new image" }).click();
+  expect((await saved).status()).toBe(201);
+  await expect(page.getByText("Saved as a new image.")).toBeVisible();
+  await expect(quickKeep(page)).toBeChecked();
+  await expect(applyBar(page)).toHaveCount(0);
+});
+
+test("a result kept by comparing lets Sensitivity move; an older edit shows how it was made and can't change", async ({
+  page,
+}) => {
+  await mockKeepRest(page, {
+    fellBack: null,
+    lineUp: { dx: 0, dy: 0, scaleX: 1, scaleY: 1, confidence: 0.97 },
+  });
+  await editedOnce(page, "compared berries");
+  const panel = panelOf(page);
+  await expect(blockKeep(page)).toBeChecked();
+  await expect(panel.getByText(/^Kept by your mask only/)).toHaveCount(0);
+  const sensitivity = panel.getByRole("slider", { name: "Sensitivity" });
+  await expect(sensitivity).not.toHaveAttribute("data-disabled", "");
+  await sensitivity.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(panel.getByText("51%")).toBeVisible();
+  await expect(applyBar(page).getByRole("button", { name: "Apply" })).toBeVisible();
+  await applyBar(page).getByRole("button", { name: "Discard" }).click();
+  await expect(panel.getByText("50%")).toBeVisible();
+  await expect(applyBar(page)).toHaveCount(0);
+});
+
+test("an edit that can't be adjusted shows how it was made, with nothing to move", async ({ page }) => {
+  await mockKeepRest(page, {
+    available: false,
+    unavailable: "not_stored",
+    note: "This edit was made before the model's result was kept.",
+    modelResult: null,
+    fixesUrl: null,
+  });
+  await editedOnce(page, "older berries");
+  const panel = panelOf(page);
+  const view = detail(page);
+  await expect(panel.getByText("This edit was made before the model's result was kept.")).toBeVisible();
+  await expect(blockKeep(page)).toBeDisabled();
+  await expect(quickKeep(page)).toBeDisabled();
+  await expect(panel.getByRole("slider", { name: "Feather" })).toHaveAttribute("data-disabled", "");
+  await expect(panel.getByRole("button", { name: "Save as new image" })).toHaveCount(0);
+  await expect(view.getByRole("button", { name: "Touch up" })).toHaveCount(0);
+  await expect(view.getByRole("button", { name: "Edit the mask" })).toBeVisible();
+  // Difference falls back to what changed, worked out in the browser.
+  await view.getByRole("radiogroup", { name: "Compare" }).getByRole("radio", { name: "Difference" }).click();
+  await expect(view.getByText("Changed", { exact: true })).toBeVisible();
+  // Outside the mask nothing changed; inside, what changed depends on the fake image drawn.
+  await expect(page.locator("[data-difference][data-ready]")).toBeVisible();
+  expect(await changeAt(page, 0.1, 0.9)).toBe(0);
 });

@@ -543,13 +543,13 @@ function DetailContent({
     if (edit) {
       const session = useEditSession.getState();
       // While a run goes the mask and its tools rest, as the toolbar shows, and while a new image is
-      // compared there's no toolbar: their keys do nothing.
+      // compared there's no toolbar: their keys do nothing, though ⌘Z takes back a touch-up stroke.
       if (edit.kind === "download") actions.onDownload();
       else if (!runner.busy && !runner.compared) {
         if (edit.kind === "tool") session.setTool(edit.tool);
         else if (edit.kind === "undo") session.undo();
         else if (edit.kind === "redo") session.redo();
-      }
+      } else if (runner.compared && edit.kind === "undo") media.current?.undoTouch();
       event.preventDefault();
       event.stopPropagation();
       return;
@@ -610,10 +610,8 @@ function DetailContent({
       // On the Edit tab Esc first drops what's being drawn, then puts the brush back in hand. Then it
       // leaves the expanded image, then the view (§4.5), asking first if an edit would be lost.
       onEscape={() => {
-        if (editing && !runner.compared) {
-          if (media.current?.cancel()) return true;
-          if (useEditSession.getState().resetTool()) return true;
-        }
+        if (editing && media.current?.cancel()) return true;
+        if (editing && !runner.compared && useEditSession.getState().resetTool()) return true;
         if (!expanded) return false;
         setExpanded(false);
         return true;
