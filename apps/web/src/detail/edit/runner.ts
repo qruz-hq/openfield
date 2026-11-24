@@ -1,4 +1,10 @@
-import { type CostEstimate, editOpParamsSchema, isTerminalState, t } from "@openfield/core";
+import {
+  type CostEstimate,
+  editOpParamsSchema,
+  isTerminalState,
+  type JobSetWithJobs,
+  t,
+} from "@openfield/core";
 import { useQueries } from "@tanstack/react-query";
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { type EditInput, isTurnedPhoto, useEditRun } from "../../api/hooks/edit";
@@ -59,6 +65,11 @@ export interface EditRunner {
   stop: () => void;
   /** Forgets the run, as when another image is shown. */
   reset: () => void;
+  /**
+   * Brings back a run made earlier: its images fill the results strip again, with the original
+   * picked, so the mask or marks are there to change.
+   */
+  adopt: (run: JobSetWithJobs) => void;
   /** The spending limit's dialog, for the view to render. */
   dialog: ReactNode;
 }
@@ -70,6 +81,7 @@ export function useEditRunner(): EditRunner {
     start,
     stop,
     reset: resetRun,
+    adopt: adoptRun,
   } = useEditRun({ onStopFailed: (error) => notifyError(errorMessage(error)) });
   const guard = useSpendGuard();
   const last = useRef<EditRequest | null>(null);
@@ -199,6 +211,17 @@ export function useEditRunner(): EditRunner {
     resetRun();
   }, [resetRun]);
 
+  const adopt = useCallback(
+    (set: JobSetWithJobs) => {
+      last.current = null;
+      inFlight.current = false;
+      setPicked(null);
+      // An image of it put in the Trash since has no place in the strip: it would wait forever.
+      adoptRun({ ...set, jobs: set.jobs.filter((job) => job.status !== "succeeded" || job.assetId) });
+    },
+    [adoptRun],
+  );
+
   const shown = picked === undefined ? done[0] : picked;
   return {
     slots,
@@ -212,6 +235,7 @@ export function useEditRunner(): EditRunner {
     retry,
     stop,
     reset,
+    adopt,
     dialog: guard.dialog,
   };
 }

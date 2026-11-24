@@ -36,7 +36,7 @@ const V55 = "dola-seedream-5-5-261028";
 const PRO = "dola-seedream-5-0-pro-260628";
 
 const provider = createByteplusProvider();
-const credentials = { apiKey: "ark-key-3f9a1c7e" };
+const credentials = { apiKey: "test-ark-key" };
 const manifest = (modelId: string): ModelManifest => BYTEPLUS_MODELS.find((m) => m.modelId === modelId)!;
 const spec = (modelId: string) => seedreamSpecFor(modelId)!;
 

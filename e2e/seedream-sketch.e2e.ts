@@ -249,7 +249,18 @@ test("marks drawn on the image, measured against the design, then sent with the 
   });
   // At 788, as the design places it: 8 above the toolbar.
   expect(hintBox.y).toBe(788);
-  expect(hintBox.w).toBe(483);
+  // It hugs its words, 14 in from each side: 483 wide as the design draws it, give or take the few
+  // pixels Linux sets the same words narrower by.
+  const inset = await hint.evaluate((node) => {
+    const box = node.getBoundingClientRect();
+    const kids = [...node.children].map((c) => c.getBoundingClientRect());
+    return {
+      left: Math.round(Math.min(...kids.map((k) => k.left)) - box.left),
+      right: Math.round(box.right - Math.max(...kids.map((k) => k.right))),
+    };
+  });
+  expect(inset).toEqual({ left: 14, right: 14 });
+  expect(Math.abs(hintBox.w - 483)).toBeLessThanOrEqual(8);
   expect(await font(hint.locator("span"))).toBe("Inter 12px 400");
 
   // Image edit / Marks list / Empty (fVYLRNCACZ).
@@ -303,7 +314,9 @@ test("marks drawn on the image, measured against the design, then sent with the 
   expect(chipBox.x + 11).toBe(Math.round(shown.x + 0.23 * shown.width));
   expect(chipBox.border).toBe("2px solid rgb(233, 227, 216)");
   expect(await font(chip)).toBe("Inter 11px 600");
-  await expect(popover.getByText("Added to your prompt with this mark.")).toBeVisible();
+  await expect(
+    popover.getByText("The material is added to your prompt. The color only helps you tell marks apart."),
+  ).toBeVisible();
   const hex = popover.getByRole("textbox", { name: "Hex color" });
   await expect(hex).toHaveValue("#C8102E");
   expect(await drawn(hex.locator(".."))).toMatchObject({ h: 32, radius: "10px", background: SURFACE });
@@ -352,14 +365,17 @@ test("marks drawn on the image, measured against the design, then sent with the 
     padding: "8px 10px 8px 10px",
     gap: "10px",
   });
-  await expect(marks.getByText("#C8102E · brushed steel", { exact: true })).toBeVisible();
+  // The colour shows in the swatch only: it isn't sent to the model.
+  await expect(marks.getByText("brushed steel", { exact: true })).toBeVisible();
   const preview = marks.getByText("Sent with your prompt").locator("..");
   const previewBox = await drawn(preview);
   expect(previewBox).toMatchObject({ radius: "10px", padding: "10px 12px 10px 12px", gap: "6px" });
   expect(previewBox.border).toMatch(/^1px dashed /);
-  await expect(preview).toContainText("Mark 1 · box · #C8102E · brushed steel");
-  await expect(preview).toContainText("Mark 2 · point · #E8A33D");
-  await expect(preview).toContainText("Mark 3 · sketch · #F5F6F7");
+  await expect(preview.locator("p")).toHaveText([
+    "Mark 1 · box · brushed steel",
+    "Mark 2 · point",
+    "Mark 3 · sketch",
+  ]);
   expect(await font(preview.locator("p").first())).toBe("JetBrains Mono 11px 400");
 
   // Picking a row picks the mark: its row lights and its popover opens on the image.
@@ -458,4 +474,65 @@ test("marks drawn on the image, measured against the design, then sent with the 
   });
   expect(kept.marks).toHaveLength(3);
   await expect(panel.getByText(/^Saved as 1 new image/)).toBeVisible({ timeout: 20_000 });
+});
+
+test("Edit the original with these marks puts back the marks, Sketch & point and the run's images", async ({
+  page,
+}) => {
+  const id = await sketchable(page);
+  const view = detail(page);
+  const panel = panelOf(page);
+  await view.getByRole("radio", { name: "Sketch & point" }).click();
+  const toolbar = view.getByRole("toolbar", { name: "Sketch tools" });
+  await expect(toolbar).toBeVisible();
+
+  // A box and a point, then Generate.
+  await toolbar.getByRole("button", { name: "Box" }).click();
+  await drag(page, await at(page, 0.2, 0.3), await at(page, 0.5, 0.7));
+  await expect(page.getByRole("dialog", { name: "Mark 1 · Box" })).toBeVisible();
+  await closePopover(page);
+  await page.keyboard.press("p");
+  const point = await at(page, 0.7, 0.4);
+  await page.mouse.click(point.x, point.y);
+  await expect(page.getByRole("dialog", { name: "Mark 2 · Point" })).toBeVisible();
+  await closePopover(page);
+  const rows = panel.getByRole("region", { name: "Marks" }).locator("[data-mark-row]");
+  await expect(rows).toHaveCount(2);
+  const words = unique("Turn the vase in mark 1 into oak");
+  const prompt = panel.getByRole("textbox", { name: "What to change" });
+  await prompt.fill(words);
+  await panel.getByRole("button", { name: /^Generate/ }).click();
+  await expect(panel.getByText("Saved as 1 new image. The original stays as it is.")).toBeVisible({
+    timeout: 20_000,
+  });
+
+  // Leave the edit for the new image: its Info offers the marks back.
+  await panel.getByRole("button", { name: "Open new image" }).click();
+  await expect(page).not.toHaveURL(new RegExp(`asset=${id}`));
+  const info = view.getByRole("tabpanel", { name: "Info" });
+  await expect(info.getByRole("button", { name: "Edit the original with this mask" })).toHaveCount(0);
+  await info.getByRole("button", { name: "Edit the original with these marks" }).click();
+
+  // The original on Edit, in Sketch & point, with the marks and the words.
+  await expect(page).toHaveURL(new RegExp(`\\?asset=${id}&tab=edit$`));
+  await expect(
+    page.getByText("Your marks and prompt are back. Change anything, then Generate."),
+  ).toBeVisible();
+  await expect(toolbar).toBeVisible();
+  await expect(rows).toHaveCount(2);
+  await expect(view.locator('[data-mark-chip="2"]').first()).toBeVisible();
+  await expect(prompt).toHaveValue(words);
+
+  // The run that made it is back in the strip, with the original picked so the marks can change.
+  const strip = view.getByRole("group", { name: "New images" });
+  await expect(strip.getByRole("button", { name: "Original" })).toHaveAttribute("aria-pressed", "true");
+  const made = strip.getByRole("button", { name: "New image 1" });
+  await expect(made).toHaveAttribute("aria-pressed", "false");
+  await made.click();
+  await expect(made).toHaveAttribute("aria-pressed", "true");
+  await strip.getByRole("button", { name: "Original" }).click();
+  await expect(rows).toHaveCount(2);
+
+  // Undo has nothing to take back: the marks came back as they were, not drawn one by one.
+  await expect(toolbar.getByRole("button", { name: "Undo" })).toHaveAttribute("aria-disabled", "true");
 });

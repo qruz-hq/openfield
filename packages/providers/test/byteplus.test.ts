@@ -35,7 +35,7 @@ import type { ImageModel, JobUpdate } from "../src/types";
 // the price math against BytePlus's own examples, each error code, and the task lifecycle.
 
 const provider = createByteplusProvider();
-const credentials = { apiKey: "ark-key-3f9a1c7e" };
+const credentials = { apiKey: "test-ark-key" };
 const T0 = Date.parse("2026-09-29T12:00:00.000Z");
 
 const manifest = (modelId: string): ModelManifest => BYTEPLUS_MODELS.find((m) => m.modelId === modelId)!;

@@ -10,7 +10,8 @@ import { kindName, MarkChip } from "./sketch-chrome";
 // canvas shows the same list for an Edit node's marks, without those lines (design PdssD21Csb).
 
 /** "#C8102E · brushed steel": a mark's colour, then its material if it has one. */
-const detailOf = (mark: Mark) => [mark.color, mark.material?.toLocaleLowerCase()].filter(Boolean).join(" · ");
+// The colour is in the swatch beside it, and isn't sent to the model.
+const detailOf = (mark: Mark) => mark.material?.toLocaleLowerCase() ?? "";
 
 /** The Edit session's marks: the Edit tab's panel and the canvas mark window. */
 export function MarksList({ resting, preview = true }: { resting: boolean; preview?: boolean }) {

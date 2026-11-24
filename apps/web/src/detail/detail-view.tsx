@@ -2,6 +2,7 @@ import "./detail.css";
 import {
   type AssetDetailResponse,
   type AssetListItem,
+  type JobSetWithJobs,
   type LibraryQuery,
   type ModelListItem,
   t,
@@ -29,6 +30,7 @@ import {
   useState,
 } from "react";
 import { useNavigate } from "react-router";
+import { fetchJobSet } from "../api/hooks/edit";
 import { useAuthedImage } from "../api/hooks/images";
 import { useRecreateJobSet } from "../api/hooks/job-sets";
 import {
@@ -174,7 +176,9 @@ function DetailContent({
   const leaving = useEditSession((s) => s.leaving !== null);
   // The Edit tab's runs, held here so one carries on while Info is open.
   const runner = useEditRunner();
-  const { reset: resetRunner } = runner;
+  const { reset: resetRunner, adopt: adoptRun } = runner;
+  // Edit again's run, carried over to the original it opens: stepping there forgets the runner's.
+  const restoring = useRef<{ forId: string; run: JobSetWithJobs } | null>(null);
 
   // Generate gives way to Stop and back, the form goes out of reach while a run goes, Edit the mask
   // gives way to the toolbar, and a tool's options bar gives way to another's. Focus on any of them
@@ -194,7 +198,10 @@ function DetailContent({
     const editing = useEditSession.getState().assetId;
     if (editing !== null && editing !== id) useEditSession.getState().end();
     resetRunner();
-  }, [id, resetRunner]);
+    const restore = restoring.current;
+    restoring.current = null;
+    if (restore?.forId === id) adoptRun(restore.run);
+  }, [id, resetRunner, adoptRun]);
   useEffect(() => () => useEditSession.getState().end(), []);
 
   const detail = useAssetDetail(id);
@@ -730,21 +737,29 @@ function DetailContent({
           from
             ? {
                 from,
-                // The original on Edit, with this image's mask, words and settings back (design
-                // Q6PqHq5KHS). It asks first when the edit open here has work in it.
+                // The original on Edit, with this image's mask or marks, words and settings back
+                // (design Q6PqHq5KHS), and the run that made it in the results strip. It asks first
+                // when the edit open here has work in it.
                 onEditAgain: reopened
                   ? () =>
-                      leaveEdit(
-                        () =>
-                          void reopenEdit(reopened).then((painted) => {
-                            seen.current.set(reopened.original.id, listItemOf(reopened.original));
-                            setPending(null);
-                            show(reopened.original.id, "edit");
-                            if (painted) notify(t("edit.reopen.back"), { icon: Brush });
-                            else notifyError(t("edit.reopen.maskFailed"));
-                          }),
-                      )
+                      leaveEdit(() => {
+                        const run = reopened.runId
+                          ? fetchJobSet(reopened.runId).catch(() => null)
+                          : Promise.resolve(null);
+                        void Promise.all([reopenEdit(reopened), run]).then(([painted, made]) => {
+                          seen.current.set(reopened.original.id, listItemOf(reopened.original));
+                          setPending(null);
+                          if (made) restoring.current = { forId: reopened.original.id, run: made };
+                          show(reopened.original.id, "edit");
+                          if (!painted) notifyError(t("edit.reopen.maskFailed"));
+                          else
+                            notify(t(reopened.marks ? "edit.reopen.backMarks" : "edit.reopen.back"), {
+                              icon: Brush,
+                            });
+                        });
+                      })
                   : undefined,
+                marked: reopened?.marks != null,
               }
             : undefined
         }

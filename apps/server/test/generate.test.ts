@@ -8,6 +8,7 @@ import {
   healthResponseSchema,
   jobSetAcceptedSchema,
   jobSetsListResponseSchema,
+  jobSetWithJobsSchema,
   keyStatusSchema,
   keysStatusResponseSchema,
   modelsListResponseSchema,
@@ -79,6 +80,9 @@ describe("generate to asset", () => {
 
     const sets = jobSetsListResponseSchema.parse((await call("/api/job-sets?status=all")).body);
     expect(sets.items[0]!.jobs.every((j) => j.status === "succeeded" && j.assetId)).toBe(true);
+    // One run by id, as the list gives it: the Edit tab's strip when an edit is opened again.
+    const one = jobSetWithJobsSchema.parse((await call(`/api/job-sets/${run.jobSet.id}`)).body);
+    expect(one).toEqual(sets.items[0]!);
 
     const list = assetsListResponseSchema.parse((await call("/api/assets")).body);
     expect(list.items).toHaveLength(2);
@@ -241,6 +245,7 @@ describe("request validation", () => {
   test("unknown ids are a 404, bad cursors a 400", async () => {
     server = await startTestServer();
     expect((await server.request("/api/assets/01K6BQ8A1C4D7E9F0000000000")).status).toBe(404);
+    expect((await server.request("/api/job-sets/01K6BQ8A1C4D7E9F0000000000")).status).toBe(404);
     expect(
       (await server.request("/api/job-sets/01K6BQ8A1C4D7E9F0000000000/cancel", { method: "POST" })).status,
     ).toBe(404);
