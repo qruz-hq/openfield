@@ -47,7 +47,7 @@ const V45 = "seedream-4-5-251128";
 const V40 = "seedream-4-0-250828";
 
 const provider = createByteplusProvider();
-const credentials = { apiKey: "ark-key-3f9a1c7e" };
+const credentials = { apiKey: "test-ark-key" };
 const manifest = (modelId: string): ModelManifest => BYTEPLUS_MODELS.find((m) => m.modelId === modelId)!;
 const spec = (modelId: string) => seedreamSpecFor(modelId)!;
 
