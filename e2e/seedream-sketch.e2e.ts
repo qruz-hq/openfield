@@ -249,7 +249,18 @@ test("marks drawn on the image, measured against the design, then sent with the 
   });
   // At 788, as the design places it: 8 above the toolbar.
   expect(hintBox.y).toBe(788);
-  expect(hintBox.w).toBe(483);
+  // It hugs its words, 14 in from each side: 483 wide as the design draws it, give or take the few
+  // pixels Linux sets the same words narrower by.
+  const inset = await hint.evaluate((node) => {
+    const box = node.getBoundingClientRect();
+    const kids = [...node.children].map((c) => c.getBoundingClientRect());
+    return {
+      left: Math.round(Math.min(...kids.map((k) => k.left)) - box.left),
+      right: Math.round(box.right - Math.max(...kids.map((k) => k.right))),
+    };
+  });
+  expect(inset).toEqual({ left: 14, right: 14 });
+  expect(Math.abs(hintBox.w - 483)).toBeLessThanOrEqual(8);
   expect(await font(hint.locator("span"))).toBe("Inter 12px 400");
 
   // Image edit / Marks list / Empty (fVYLRNCACZ).
