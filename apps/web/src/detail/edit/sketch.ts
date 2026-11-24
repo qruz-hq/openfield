@@ -114,9 +114,9 @@ export function normalHex(text: string): string | null {
   return /^[0-9a-f]{6}$/i.test(hex) ? `#${hex.toUpperCase()}` : null;
 }
 
-/** Image edit / Marks list / Prompt preview: "Mark 1 · box · #C8102E · brushed steel". */
+/** Image edit / Marks list / Prompt preview: "Mark 1 · box · brushed steel". The colour isn't sent. */
 export function previewLine(mark: Mark, name: string, kind: string): string {
-  return [name, kind, mark.color, mark.material].filter(Boolean).join(" · ");
+  return [name, kind, mark.material].filter(Boolean).join(" · ");
 }
 
 /**

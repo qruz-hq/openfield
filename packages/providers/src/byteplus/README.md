@@ -158,7 +158,7 @@ There's no mask or sketch parameter: everything goes in the image and the prompt
 
 - A point becomes `<point>x y</point>` and a box `<bbox>x1 y1 x2 y2</bbox>`, after "Image n", on the editing grid: integers 0 to 999 from the top left, `round(fraction × 1000)` held at 999 (the docs' formula can reach 1000). This is **not** the layer grid below, which runs to 1000; `@openfield/core`'s `image/grid.ts` keeps the two apart.
 - Circles, strokes and arrows have no tag. They're drawn onto a copy of the image they're on, each in its own ink (red, blue, green, ...), turned upright first, for that call only (`AssetSink.drawMarks`, sharp on the server). The prompt names each by its ink and adds "Remove every drawn mark from the result."
-- A mark's note, colour (hex, with the nearest colour word) and material go next to it in words: the API has no field for them.
+- A mark's note and material go next to it in words: the API has no field for them. Its colour is only how Openfield shows the mark and is never sent, since the model would paint the marked thing that colour.
 - Marks add to the prompt: 20 marks with long notes can pass the 600-word guidance. Nothing trims them.
 - A masked edit still works (it's a whole-image edit, then the composite puts the original back outside the mask), but with marks the composite is off by default, since marks don't say where the edit ends.
 
