@@ -159,8 +159,13 @@ const succeeded = (s: Running, jobSetId: string) =>
     return job?.status === "succeeded" ? job : undefined;
   });
 
-/** No key, in any file of the library folder: logs, job log, database, config (§6.11). */
-function expectNoKeys(home: string) {
+/**
+ * No key, in any file of the library folder: logs, job log, database, config (§6.11). Read once
+ * the server has stopped: a running one still renames files out of tmp/ as it saves an image.
+ */
+async function expectNoKeys(s: Running, home: string) {
+  s.proc.kill("SIGTERM");
+  await s.proc.exited;
   const files: string[] = [];
   const walk = (dir: string) => {
     for (const name of readdirSync(dir)) {
@@ -260,7 +265,7 @@ describe("the server process", () => {
     expect(job.rerunAt).not.toBeNull();
     expect(query(home, "SELECT count(*) AS n FROM assets")).toEqual([{ n: 1 }]);
     expect(query(home, "SELECT outcome, rerun FROM usage_log")).toEqual([{ outcome: "succeeded", rerun: 1 }]);
-    expectNoKeys(home);
+    await expectNoKeys(running, home);
   }, 30_000);
 
   test("`bun start`: Ctrl-C to the whole terminal job waits for the image, says so, and exits 0", async () => {
@@ -410,6 +415,6 @@ describe("the server process", () => {
       { ref: sent, resumable: 1 },
     ]);
     expect(query(home, "SELECT outcome, rerun FROM usage_log")).toEqual([{ outcome: "succeeded", rerun: 0 }]);
-    expectNoKeys(home);
+    await expectNoKeys(running, home);
   }, 30_000);
 });
