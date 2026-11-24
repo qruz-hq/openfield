@@ -63,6 +63,11 @@ export const assetListItemSchema = z.object({
   deletedAt: timestampSchema.optional(),
   thumbUrl: z.string(),
   fileUrl: z.string(),
+  /**
+   * Made by a layer split: the base, with how many of its layers are still in the library, or one
+   * of those layers. Absent on everything else.
+   */
+  layer: z.object({ role: z.enum(["base", "layer"]), count: z.int().nonnegative().optional() }).optional(),
 });
 
 export const assetSchema = assetListItemSchema.extend({

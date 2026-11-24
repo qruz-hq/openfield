@@ -36,6 +36,7 @@ import { logoFor } from "../lib/provider";
 import type { LibraryActions } from "./actions";
 import { type DragPayload, useDragSource, useDropState, useIsDragged } from "./drag";
 import { openFolderMenu, useFolderMenuOpen } from "./folder-menu";
+import { LayerPill, LayersBadge } from "./layer-pills";
 import { thumbPath } from "./media";
 import { subtreeOf } from "./sidebar";
 
@@ -101,6 +102,7 @@ export const ImageCard = memo(function ImageCard({
   dragPayload,
 }: ImageCardProps) {
   const image = useAuthedImage(thumbPath(item, rung));
+  const openDetail = useOpenDetail();
   const [hovered, setHovered] = useState(false);
   const isVideo = item.modality === "video";
   const clip = useAuthedVideo(isVideo && hovered ? item.fileUrl : null);
@@ -189,6 +191,17 @@ export const ImageCard = memo(function ImageCard({
         }}
         className="absolute top-12 left-12"
       />
+      {/* Beside the checkbox, centred on it, with the gap the feed's hover gives its own (rU5l6oEks5). */}
+      {item.layer?.role === "base" && item.layer.count ? (
+        <LayersBadge
+          count={item.layer.count}
+          tabIndex={-1}
+          onOpen={() => openDetail(item.id, "layers")}
+          className="absolute top-10 left-47"
+        />
+      ) : item.layer?.role === "layer" ? (
+        <LayerPill className="absolute top-10 left-47" />
+      ) : null}
       {trash ? (
         <div className={cn("absolute right-12 bottom-12 left-12 flex items-center gap-6", chrome)}>
           <Button

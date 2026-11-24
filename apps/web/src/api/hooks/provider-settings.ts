@@ -5,6 +5,7 @@ import {
   type ProviderSettingValues,
   type SpeedId,
   speedName,
+  speedSettingField,
   t,
 } from "@openfield/core";
 import { type AdapterOp, type RunSpeed, runSpeed } from "@openfield/providers/manifest";
@@ -13,6 +14,7 @@ import { useCallback, useMemo } from "react";
 import { notifyError } from "../../lib/notify";
 import { api, call, queryClient, queryKeys } from "../client";
 import { useProviders } from "./keys";
+import { useModels } from "./models";
 
 // Each company's settings (§0.3): its own panels plus Openfield's Limits panel, with every
 // field's current value. They work with or without a key, and each change saves at once.
@@ -55,12 +57,24 @@ export function useRunSpeed(): (model: ModelManifest, op?: AdapterOp) => RunSpee
   );
 }
 
-/** A speed by its company's own name ("Flex"), Openfield's until the settings arrive. */
+/**
+ * A speed by its company's own name ("Flex"). Until the settings arrive, the name a model of that
+ * company gives it, so a run at BytePlus's Fast never reads as Openfield's "Priority".
+ */
 export function useSpeedName(): (providerId: string, speed: SpeedId) => string {
   const all = useAllProviderSettings();
+  const models = useModels().data;
   return useCallback(
-    (providerId: string, speed: SpeedId) => speedName(all.get(providerId)?.schema, speed),
-    [all],
+    (providerId: string, speed: SpeedId) => {
+      const schema = all.get(providerId)?.schema;
+      if (speedSettingField(schema)) return speedName(schema, speed);
+      const offered = models
+        ?.filter((m) => m.providerId === providerId)
+        .flatMap((m) => m.speeds ?? [])
+        .find((o) => o.id === speed && o.label);
+      return offered?.label ?? speedName(schema, speed);
+    },
+    [all, models],
   );
 }
 

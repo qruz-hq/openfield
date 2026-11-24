@@ -1,8 +1,15 @@
-import { MASK_COMPOSITE_DEFAULTS, MASK_COMPOSITE_MAX_PX, type ModelKey } from "@openfield/core";
+import {
+  MARKS_MAX,
+  MASK_COMPOSITE_DEFAULTS,
+  MASK_COMPOSITE_MAX_PX,
+  type Mark,
+  type ModelKey,
+} from "@openfield/core";
 import type { ComposerValues } from "@openfield/providers/manifest";
 import { create } from "zustand";
 import { type ReferenceSlice, referenceSlice } from "../../image/composer/store";
 import { MAX_BRUSH_SIZE, MaskEditor, MIN_BRUSH_SIZE, type Rect } from "./mask";
+import { DEFAULT_MARK_COLOR, DEFAULT_SKETCH_TOOL, type SketchTool } from "./sketch";
 
 // One edit in the detail view's Edit tab (§4.6): the image it's on, the mask painted over it, the
 // tool in hand and what the panel asks for. Its own store, so editing never touches the composer's
@@ -13,6 +20,25 @@ import { MAX_BRUSH_SIZE, MaskEditor, MIN_BRUSH_SIZE, type Rect } from "./mask";
 // changed goes to the paint surface (subscribeMask), which redraws just that part of the overlay.
 
 export type MaskTool = "pan" | "brush" | "eraser" | "lasso" | "rect";
+
+/**
+ * Paint area: a mask says what may change. Sketch & point (models with capabilities.marks): marks
+ * on the image say where, and the prompt says what (design VxRpG1BiE8).
+ */
+export type EditMode = "paint" | "sketch";
+
+/** A tool from either mode's toolbar: the keys pick from both (keys.ts). */
+export type EditTool = MaskTool | SketchTool;
+
+const MASK_TOOLS: readonly string[] = ["pan", "brush", "eraser", "lasso", "rect"] satisfies MaskTool[];
+const SKETCH_TOOLS: readonly string[] = [
+  "pan",
+  "brush",
+  "circle",
+  "box",
+  "arrow",
+  "point",
+] satisfies SketchTool[];
 
 /** What a fresh edit starts on, and what Esc goes back to. */
 export const DEFAULT_TOOL: MaskTool = "brush";
@@ -52,6 +78,7 @@ const NO_MASK: MaskState = { empty: true, changes: false, canUndo: false, canRed
 /** What the last run that saved new images was made from. */
 export interface KeptEdit {
   maskVersion: number;
+  marksVersion: number;
   prompt: string;
   references: readonly string[];
 }
@@ -98,12 +125,48 @@ export interface EditSessionState extends ReferenceSlice {
    * of an edit with a mask or a prompt goes through leaveEdit, which sets it.
    */
   leaving: (() => void) | null;
+  mode: EditMode;
+  sketchTool: SketchTool;
+  /** The colour the next mark is drawn in: the toolbar's swatch. */
+  markColor: string;
+  /** Sketch & point's marks, numbered from 1 in this order. */
+  marks: readonly Mark[];
+  /** The mark picked on the image or in the list: its popover is open and its row lit. */
+  selectedMark: number | null;
+  /** The marks as they were before each change, and after each undo, for Undo and Redo. */
+  marksPast: readonly (readonly Mark[])[];
+  marksFuture: readonly (readonly Mark[])[];
+  /** Goes up whenever the marks change, as `maskVersion` does for the mask. */
+  marksVersion: number;
+  /**
+   * Keep the rest in Sketch & point: off by default, so the change can blend in. On, the marks'
+   * area becomes the mask the original is put back outside of.
+   */
+  sketchComposite: boolean;
 
   /** Starts an edit on an image at its stored size, or keeps the one already open on it. */
   start: (assetId: string, width: number, height: number, initial?: Uint8Array) => void;
   /** Drops the edit and its mask. */
   end: () => void;
-  setTool: (tool: MaskTool) => void;
+  /** Puts a tool in hand, in the mode it belongs to. A paint tool does nothing while sketching. */
+  setTool: (tool: EditTool) => void;
+  /** Esc: the mode's first tool back in hand. False when it already was. */
+  resetTool: () => boolean;
+  setMode: (mode: EditMode) => void;
+  setMarkColor: (color: string) => void;
+  /** Adds a mark and picks it. Past MARKS_MAX it does nothing. */
+  addMark: (mark: Mark) => void;
+  /**
+   * Changes a mark. `record` false leaves Undo where it was, for a material typed letter by letter:
+   * recordMarks then makes the whole word one step.
+   */
+  updateMark: (index: number, patch: Partial<Mark>, record?: boolean) => void;
+  /** Records `before` as the marks Undo goes back to, when they differ from the marks now. */
+  recordMarks: (before: readonly Mark[]) => void;
+  removeMark: (index: number) => void;
+  clearMarks: () => void;
+  selectMark: (index: number | null) => void;
+  setSketchComposite: (composite: boolean) => void;
   setBrushSize: (size: number) => void;
   setHardness: (hardness: number) => void;
   setMaskOpacity: (opacity: number) => void;
@@ -167,6 +230,13 @@ const FRESH = {
   savedMask: null,
   kept: null,
   leaving: null,
+  sketchTool: DEFAULT_SKETCH_TOOL,
+  marks: [],
+  selectedMark: null,
+  marksPast: [],
+  marksFuture: [],
+  marksVersion: 0,
+  sketchComposite: false,
 } satisfies Partial<EditSessionState>;
 
 const clampPx = (px: number) => Math.round(Math.min(MASK_COMPOSITE_MAX_PX, Math.max(0, px)));
@@ -188,8 +258,37 @@ export const useEditSession = create<EditSessionState>()((set, get) => {
     return rect;
   };
 
+  /** Replaces the marks, recording the ones before for Undo. */
+  const commitMarks = (marks: readonly Mark[], selectedMark: number | null) =>
+    set((state) => ({
+      marks,
+      selectedMark,
+      marksPast: [...state.marksPast, state.marks],
+      marksFuture: [],
+      marksVersion: state.marksVersion + 1,
+    }));
+
+  const stepMarks = (back: boolean) =>
+    set((state) => {
+      const from = back ? state.marksPast : state.marksFuture;
+      const marks = from.at(-1);
+      if (!marks) return {};
+      const rest = from.slice(0, -1);
+      const other = back ? state.marksFuture : state.marksPast;
+      return {
+        marks,
+        selectedMark: null,
+        ...(back
+          ? { marksPast: rest, marksFuture: [...other, state.marks] }
+          : { marksFuture: rest, marksPast: [...other, state.marks] }),
+        marksVersion: state.marksVersion + 1,
+      };
+    });
+
   return {
     ...FRESH,
+    mode: "paint",
+    markColor: DEFAULT_MARK_COLOR,
     // Hardness, the overlay's strength, the model and its sizes are the person's taste, so they
     // outlast an edit. Keep the rest starts on again with each one.
     hardness: 80,
@@ -213,7 +312,49 @@ export const useEditSession = create<EditSessionState>()((set, get) => {
       for (const listener of maskListeners) listener(null);
     },
     end: () => set({ ...FRESH, references: [] }),
-    setTool: (tool) => set({ tool }),
+    setTool: (tool) => {
+      if (get().mode === "sketch") {
+        if (SKETCH_TOOLS.includes(tool)) set({ sketchTool: tool as SketchTool });
+      } else if (MASK_TOOLS.includes(tool)) set({ tool: tool as MaskTool });
+    },
+    resetTool: () => {
+      const { mode, tool, sketchTool } = get();
+      if (mode === "sketch" ? sketchTool === DEFAULT_SKETCH_TOOL : tool === DEFAULT_TOOL) return false;
+      set(mode === "sketch" ? { sketchTool: DEFAULT_SKETCH_TOOL } : { tool: DEFAULT_TOOL });
+      return true;
+    },
+    setMode: (mode) => set({ mode, selectedMark: null }),
+    setMarkColor: (markColor) => set({ markColor }),
+    addMark: (mark) => {
+      const { marks } = get();
+      if (marks.length >= MARKS_MAX) return;
+      commitMarks([...marks, mark], marks.length);
+    },
+    updateMark: (index, patch, record = true) => {
+      const { marks, selectedMark } = get();
+      const mark = marks[index];
+      if (!mark) return;
+      const next = marks.map((m, i) => (i === index ? ({ ...m, ...patch } as Mark) : m));
+      if (record) commitMarks(next, selectedMark);
+      else set((state) => ({ marks: next, marksVersion: state.marksVersion + 1 }));
+    },
+    removeMark: (index) => {
+      const { marks } = get();
+      if (!marks[index]) return;
+      commitMarks(
+        marks.filter((_, i) => i !== index),
+        null,
+      );
+    },
+    clearMarks: () => {
+      if (get().marks.length > 0) commitMarks([], null);
+    },
+    recordMarks: (before) =>
+      set((state) =>
+        before === state.marks ? {} : { marksPast: [...state.marksPast, before], marksFuture: [] },
+      ),
+    selectMark: (selectedMark) => set({ selectedMark }),
+    setSketchComposite: (sketchComposite) => set({ sketchComposite }),
     setBrushSize: (brushSize) =>
       set({ brushSize: Math.round(Math.min(MAX_BRUSH_SIZE, Math.max(MIN_BRUSH_SIZE, brushSize))) }),
     setHardness: (hardness) => set({ hardness: Math.round(Math.min(100, Math.max(0, hardness))) }),
@@ -230,8 +371,8 @@ export const useEditSession = create<EditSessionState>()((set, get) => {
     setSavedMask: (assetId, version) => set({ savedMask: { assetId, version } }),
     setKept: (kept) => set({ kept }),
     changeMask,
-    undo: () => void changeMask((editor) => editor.undo()),
-    redo: () => void changeMask((editor) => editor.redo()),
+    undo: () => (get().mode === "sketch" ? stepMarks(true) : void changeMask((editor) => editor.undo())),
+    redo: () => (get().mode === "sketch" ? stepMarks(false) : void changeMask((editor) => editor.redo())),
     invert: () => void changeMask((editor) => editor.apply({ type: "invert" })),
     clear: () => void changeMask((editor) => editor.apply({ type: "clear" })),
   };
@@ -241,16 +382,23 @@ const sameIds = (a: readonly string[], b: readonly string[]) =>
   a.length === b.length && a.every((id, i) => id === b[i]);
 
 /**
- * Something would be lost by leaving: a painted mask, a prompt or a reference that no run has saved
+ * Something would be lost by leaving: a painted mask, marks, a prompt or a reference that no run has saved
  * new images from yet.
  */
 export function editHasWork(state: EditSessionState = useEditSession.getState()): boolean {
   if (state.assetId === null) return false;
-  if (state.mask.empty && state.prompt.trim() === "" && state.references.length === 0) return false;
+  if (
+    state.mask.empty &&
+    state.marks.length === 0 &&
+    state.prompt.trim() === "" &&
+    state.references.length === 0
+  )
+    return false;
   const { kept } = state;
   return !(
     kept &&
     kept.maskVersion === state.maskVersion &&
+    kept.marksVersion === state.marksVersion &&
     kept.prompt === state.prompt &&
     sameIds(kept.references, state.references)
   );

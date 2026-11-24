@@ -34,6 +34,8 @@ export interface SizeFieldsProps {
   resting: boolean;
   /** The size the new image comes out at, under the fields. */
   note?: boolean;
+  /** The aspect ratio locked to the image. Sketch & point's panel leaves it out (design 42o8VYRkhr). */
+  aspect?: boolean;
   /** For the fields' labels, where the surface sets its own (a canvas node's settings). */
   labelClassName?: string;
   onValues: (values: ComposerValues) => void;
@@ -49,6 +51,7 @@ export function SizeFields({
   speed,
   resting,
   note = true,
+  aspect = true,
   labelClassName,
   onValues,
   onBatch,
@@ -153,7 +156,7 @@ export function SizeFields({
         />
       </div>
       {/* Aspect ratio */}
-      <div className="flex w-full items-center justify-between px-2">
+      <div className={cn("flex w-full items-center justify-between px-2", !aspect && "hidden")}>
         <span className="text-small font-medium text-text-primary">{t("edit.size.aspect")}</span>
         <span className="flex items-center gap-6">
           <Lock size={12} aria-hidden className="shrink-0 text-text-tertiary" />

@@ -38,9 +38,12 @@ import {
   ChevronUp,
   Copy,
   Download,
+  Ellipsis,
   Folder as FolderIcon,
   FolderInput,
   Heart,
+  Image as ImageIcon,
+  Pencil,
   PencilLine,
   RefreshCw,
   RotateCcw,
@@ -127,7 +130,16 @@ interface DetailPanelProps {
    * The Info and Edit tabs, and what Edit shows. Left out for what can't be edited here (a video,
    * an image in the trash), which keeps the panel as it was, with no tabs.
    */
-  tabs?: { tab: DetailTab; onTabChange: (tab: DetailTab) => void; edit: ReactNode } | undefined;
+  tabs?:
+    | { tab: DetailTab; onTabChange: (tab: DetailTab) => void; edit: ReactNode; layers?: ReactNode }
+    | undefined;
+  /** LAYERS, after Prompt, on an image that was split into layers. */
+  layersSection?: ReactNode;
+  /**
+   * One layer of a split (design lyJVqwC6sG): LAYERS FROM in Prompt's place, Details down to Model,
+   * Size and Cost, and the layer's own footer.
+   */
+  layer?: { from: ReactNode; format: string; cost?: string; onUseAsReference: () => void } | undefined;
 }
 
 export function DetailPanel({
@@ -150,6 +162,8 @@ export function DetailPanel({
   hidden = false,
   editedFrom,
   tabs,
+  layersSection,
+  layer,
 }: DetailPanelProps) {
   // A photo uploaded as it is has no words to show (design epAPf9QTJL): Details says where it came from.
   const uploadedOnly = asset.kind === "uploaded" && !prompt.trim();
@@ -169,7 +183,9 @@ export function DetailPanel({
     <>
       {/* The blocks scroll when an open prompt is long, so the footer stays put. */}
       <div className="flex min-h-0 w-full flex-1 flex-col gap-12 overflow-y-auto">
-        {editedFrom ? (
+        {layer ? (
+          layer.from
+        ) : editedFrom ? (
           <EditedFromSection
             id={id}
             from={editedFrom.from}
@@ -186,13 +202,15 @@ export function DetailPanel({
             onOpenReference={onOpenReference}
           />
         )}
+        {layersSection}
         <DetailsSection
           asset={asset}
-          folders={folders}
-          speed={speed}
+          folders={layer ? undefined : folders}
+          speed={layer ? null : speed}
           models={models}
           video={video}
-          cost={cost}
+          cost={layer ? layer.cost : cost}
+          format={layer?.format}
         />
         {loadFailed ? (
           <div className="flex w-full items-center justify-between gap-8 px-12">
@@ -205,6 +223,8 @@ export function DetailPanel({
       </div>
       {trashed ? (
         <TrashActions actions={actions} />
+      ) : layer ? (
+        <LayerActions id={id} actions={actions} onUseAsReference={layer.onUseAsReference} />
       ) : (
         <LibraryActions id={id} uploaded={asset.kind === "uploaded"} actions={actions} />
       )}
@@ -230,6 +250,7 @@ export function DetailPanel({
         <TabsList variant="segmented" className="shrink-0">
           <TabsTrigger value="info">{t("assets.detail.tabs.info")}</TabsTrigger>
           <TabsTrigger value="edit">{t("assets.detail.tabs.edit")}</TabsTrigger>
+          {tabs.layers ? <TabsTrigger value="layers">{t("assets.detail.tabs.layers")}</TabsTrigger> : null}
         </TabsList>
         {/* Not tab stops of their own: Tab goes from the tabs straight to the first control. */}
         <TabsContent value="info" tabIndex={-1} className={body}>
@@ -239,6 +260,11 @@ export function DetailPanel({
         <TabsContent value="edit" tabIndex={-1} className={cn(body, "overflow-y-auto")}>
           {tabs.edit}
         </TabsContent>
+        {tabs.layers ? (
+          <TabsContent value="layers" tabIndex={-1} className={cn(body, "overflow-y-auto")}>
+            {tabs.layers}
+          </TabsContent>
+        ) : null}
       </Surface>
     </Tabs>
   );
@@ -249,7 +275,7 @@ export function DetailPanel({
 const COPIED_MS = 1200;
 
 /** Chip / Mini with Copy: puts the prompt on the clipboard, then says Copied for a moment. */
-function CopyChip({ text }: { text: string }) {
+export function CopyChip({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
@@ -341,7 +367,7 @@ function PromptSection({
  * Detail / Reference thumb / Primary and / Default: 54px, radius 8, the first ringed in accent.
  * Without `onOpen` it's only a picture, for a row that has its own Open.
  */
-function ReferenceThumb({
+export function ReferenceThumb({
   asset,
   primary,
   label,
@@ -496,6 +522,7 @@ function DetailsSection({
   models,
   video,
   cost,
+  format,
 }: {
   asset: DetailPanelProps["asset"];
   folders: readonly Folder[] | undefined;
@@ -503,6 +530,8 @@ function DetailsSection({
   models: readonly ModelListItem[] | undefined;
   video?: VideoRequest | undefined;
   cost?: string | undefined;
+  /** A layer's Size row names its file type, and its Details stop at Cost (design lyJVqwC6sG). */
+  format?: string | undefined;
 }) {
   const speedName = useSpeedName();
   const providerId = asset.providerId;
@@ -559,12 +588,16 @@ function DetailsSection({
                   height: asset.height,
                   resolution: video.resolution,
                 })
-              : t("assets.detail.sizeValue", { width: asset.width, height: asset.height })
+              : format
+                ? t("layers.from.size", { width: asset.width, height: asset.height, format })
+                : t("assets.detail.sizeValue", { width: asset.width, height: asset.height })
           }
           mono
         />
         {cost ? <KeyValueRow label={t("assets.detail.cost")} value={cost} mono /> : null}
-        <KeyValueRow label={t("assets.detail.created")} value={formatDateTime(asset.createdAt)} />
+        {format ? null : (
+          <KeyValueRow label={t("assets.detail.created")} value={formatDateTime(asset.createdAt)} />
+        )}
         {folders ? <FoldersRow folders={folders} /> : null}
       </KeyValueList>
     </Surface>
@@ -737,6 +770,75 @@ function LibraryActions({
           label={t("assets.detail.delete")}
           onClick={actions.onDelete}
         />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * A layer's footer (design lyJVqwC6sG, Actions): Edit this layer, Use as reference, then Download,
+ * Favorite, Add to folder and More (Copy image, Delete). A layer has no run of its own to recreate
+ * or reuse.
+ */
+function LayerActions({
+  id,
+  actions,
+  onUseAsReference,
+}: {
+  id: string;
+  actions: DetailActions;
+  onUseAsReference: () => void;
+}) {
+  const [filing, setFiling] = useState(false);
+  const favouriteLabel = actions.favourite ? t("assets.detail.unfavorite") : t("assets.detail.favorite");
+  return (
+    <div className="flex w-full shrink-0 flex-col gap-8">
+      {actions.onEdit ? (
+        <Button icon={Pencil} onClick={actions.onEdit} className="w-full">
+          {t("layers.actions.edit")}
+        </Button>
+      ) : null}
+      <Button variant="secondary" size="l" icon={ImageIcon} onClick={onUseAsReference} className="w-full">
+        {t("layers.actions.reference")}
+      </Button>
+      <div className="flex w-full gap-8">
+        <Button variant="secondary" size="l" icon={Download} onClick={actions.onDownload} className="flex-1">
+          {t("assets.detail.download")}
+        </Button>
+        <Tooltip content={favouriteLabel} shortcut="F">
+          <IconButton
+            variant="secondary"
+            size="44x40"
+            icon={Heart}
+            label={favouriteLabel}
+            aria-pressed={actions.favourite}
+            onClick={actions.onFavourite}
+            className={cn(actions.favourite && "text-accent [&>svg]:fill-current")}
+          />
+        </Tooltip>
+        <AddToFolderPopover ids={[id]} open={filing} onOpenChange={setFiling} side="top" align="end">
+          <IconButton
+            variant="secondary"
+            size="44x40"
+            icon={FolderIcon}
+            label={t("assets.detail.addToFolder")}
+          />
+        </AddToFolderPopover>
+        <Menu>
+          <MenuTrigger asChild>
+            <IconButton variant="secondary" size="44x40" icon={Ellipsis} label={t("assets.card.more")} />
+          </MenuTrigger>
+          <MenuContent align="end" side="top">
+            {actions.onCopyImage ? (
+              <MenuItem icon={Copy} onSelect={actions.onCopyImage}>
+                {t("assets.detail.copyImage")}
+              </MenuItem>
+            ) : null}
+            <MenuItem icon={Trash2} onSelect={actions.onDelete}>
+              {t("assets.detail.delete")}
+            </MenuItem>
+          </MenuContent>
+        </Menu>
       </div>
     </div>
   );

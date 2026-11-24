@@ -1,4 +1,4 @@
-import { type CostEstimate, costParts, formatDate, t, tParts } from "@openfield/core";
+import { type CostEstimate, costParts, formatDate, formatPrice, t, tParts } from "@openfield/core";
 import type { GenerateState } from "@openfield/providers/manifest";
 import { cn, Spinner, Tooltip } from "@openfield/ui";
 import type { ReactNode } from "react";
@@ -20,8 +20,21 @@ export interface GenerateSpeed {
   tip: string;
 }
 
-/** "About" in Inter, "$0.16" in mono, then "· Batch", 4 apart. */
-function Estimate({ estimate, tone, speed }: { estimate: CostEstimate; tone: string; speed?: string }) {
+/**
+ * "About" in Inter, "$0.16" in mono, then "· Batch", 4 apart. A related set reads "Up to $0.14":
+ * it bills only the images that come back, so the most it can cost is the useful number.
+ */
+function Estimate({
+  estimate,
+  tone,
+  speed,
+  upTo,
+}: {
+  estimate: CostEstimate;
+  tone: string;
+  speed?: string;
+  upTo?: boolean;
+}) {
   const cost = costParts(estimate);
   const suffix = speed ? <span key="speed">{t("speed.suffix", { speed })}</span> : null;
   if (cost.kind !== "amount") {
@@ -32,10 +45,11 @@ function Estimate({ estimate, tone, speed }: { estimate: CostEstimate; tone: str
       </span>
     );
   }
-  const parts = tParts<ReactNode>("cost.about", {
+  const most = upTo && cost.range;
+  const parts = tParts<ReactNode>(most ? "cost.upTo" : "cost.about", {
     cost: (
       <span key="amount" className="text-mono-11">
-        {cost.amount}
+        {most ? formatPrice(estimate.max, estimate.currency) : cost.amount}
       </span>
     ),
   });
@@ -78,6 +92,7 @@ export function GenerateButton({
   working,
   batch,
   speed,
+  upTo = false,
   onGenerate,
 }: {
   state: GenerateState;
@@ -87,6 +102,8 @@ export function GenerateButton({
   batch: number;
   /** Absent at Standard. */
   speed?: GenerateSpeed;
+  /** A related set: the price is the most it can come to, not a range. */
+  upTo?: boolean;
   onGenerate: () => void;
 }) {
   if (state.kind === "no-key" && firstRun) {
@@ -136,7 +153,7 @@ export function GenerateButton({
           <span className="text-button-l text-text-tertiary">{t("composer.generate.label")}</span>
           {state.estimate ? (
             <>
-              <Estimate estimate={state.estimate} tone="text-text-tertiary" speed={speed?.name} />
+              <Estimate estimate={state.estimate} tone="text-text-tertiary" speed={speed?.name} upTo={upTo} />
               <FallbackNote speed={speed} tone="text-text-tertiary" />
             </>
           ) : null}
@@ -156,9 +173,9 @@ export function GenerateButton({
       ) : (
         <>
           {state.estimate ? (
-            <Estimate estimate={state.estimate} tone="text-accent-fg" speed={speed?.name} />
+            <Estimate estimate={state.estimate} tone="text-accent-fg" speed={speed?.name} upTo={upTo} />
           ) : null}
-          {range?.kind === "amount" && range.range ? (
+          {range?.kind === "amount" && range.range && !upTo ? (
             <span className="text-micro">{t("feed.tile.images", { count: batch })}</span>
           ) : null}
           <FallbackNote speed={speed} />

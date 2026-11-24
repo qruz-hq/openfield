@@ -5,6 +5,7 @@ import type { AssetListItem } from "@openfield/core";
 import {
   type AssetRow,
   addAssetsToFolder,
+  assetsForJobSets,
   type Db,
   emptyTrash,
   type FeedItem,
@@ -12,6 +13,7 @@ import {
   getAsset,
   getAssets,
   isFavourite,
+  layerCounts,
   type PurgeResult,
   purgeAssets,
   removeAssetsFromFolder,
@@ -75,7 +77,8 @@ export function toListItems(db: Db, rows: readonly FeedItem[]): AssetListItem[] 
     db,
     rows.map((r) => r.jobId),
   );
-  return rows.map((r) => toAssetListItem(r, r.isFavourite, reruns.has(r.jobId ?? "")));
+  const layers = layerCounts(db, rows);
+  return rows.map((r) => toAssetListItem(r, r.isFavourite, reruns.has(r.jobId ?? ""), layers));
 }
 
 const MAX_ANCESTORS = 100;
@@ -98,8 +101,10 @@ export class LibraryService {
 
   /** Delete: to the Trash, keeping folders and favourite (§0.7). Returns the ids it moved. */
   trash(ids: readonly string[]): string[] {
+    const rows = getAssets(this.deps.db, [...new Set(ids)]);
     const changed = softDeleteAssets(this.deps.db, [...new Set(ids)]);
     this.#announceDeleted(changed, false);
+    this.#announceBasesOf(rows);
     return changed;
   }
 
@@ -108,6 +113,7 @@ export class LibraryService {
     const { db } = this.deps;
     const changed = db.transaction((tx) => restoreAssets(tx, ids));
     this.#announceUpdated(changed);
+    this.#announceBasesOf(getAssets(db, changed));
     // Their folders' counts went up again.
     for (const { folderId } of folderMemberships(db, changed)) {
       this.deps.events.publish("folder.updated", { folderId, deleted: false });
@@ -215,6 +221,7 @@ export class LibraryService {
     const changed = result.deleted.map((row) => row.id);
     await this.#removeFiles(result);
     this.#announceDeleted(changed, true);
+    this.#announceBasesOf(result.deleted);
     return { changed, reclaimedBytes: result.reclaimedBytes };
   }
 
@@ -251,6 +258,27 @@ export class LibraryService {
     }
   }
 
+  /**
+   * A layer that leaves or comes back changes its base's layer count, which the feed's badge shows:
+   * asset.updated for the live base of each split these layers came from.
+   */
+  #announceBasesOf(rows: readonly AssetRow[]): void {
+    const runs = [
+      ...new Set(
+        rows.flatMap((r) =>
+          r.jobSetId && (r.opParams?.layer as { role?: unknown } | undefined)?.role === "layer"
+            ? [r.jobSetId]
+            : [],
+        ),
+      ),
+    ];
+    if (runs.length === 0) return;
+    const bases = assetsForJobSets(this.deps.db, runs).filter(
+      (r) => (r.opParams?.layer as { role?: unknown } | undefined)?.role === "base",
+    );
+    this.#announceUpdated(bases.map((r) => r.id));
+  }
+
   /** asset.updated for each of these that is live, as a list item, so other tabs can patch it. */
   #announceUpdated(ids: readonly string[]): void {
     const { db, events } = this.deps;
@@ -260,9 +288,10 @@ export class LibraryService {
         db,
         rows.map((r) => r.jobId),
       );
+      const layers = layerCounts(db, rows);
       for (const row of rows) {
         events.publish("asset.updated", {
-          asset: toAssetListItem(row, isFavourite(db, row.id), reruns.has(row.jobId ?? "")),
+          asset: toAssetListItem(row, isFavourite(db, row.id), reruns.has(row.jobId ?? ""), layers),
         });
       }
     }

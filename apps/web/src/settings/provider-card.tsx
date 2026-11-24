@@ -311,7 +311,7 @@ export function ProviderCard({
             </span>
             <span className="text-caption text-text-tertiary">
               {provider.id === "byteplus"
-                ? t("settings.apiKeys.taglineVideo")
+                ? t("settings.apiKeys.taglineImagesVideo")
                 : t("settings.apiKeys.tagline")}
             </span>
           </div>

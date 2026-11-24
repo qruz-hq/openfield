@@ -15,7 +15,7 @@ import {
   Trash2,
   Undo2,
 } from "lucide-react";
-import type { MouseEvent } from "react";
+import type { MouseEvent, ReactNode } from "react";
 import { isMac } from "../../canvas/editor/shortcuts";
 import { toolShortcut } from "./keys";
 import { BRUSH_SLIDER_STEPS, brushSizeAt, type MaskTool, sliderOfSize, useEditSession } from "./session";
@@ -28,7 +28,7 @@ import { BRUSH_SLIDER_STEPS, brushSizeAt, type MaskTool, sliderOfSize, useEditSe
  * Toolbar buttons keep focus where it was, on the view, so holding Space pans right after a click
  * instead of pressing the button again. Tab still reaches them from the keyboard.
  */
-const keepFocus = (event: MouseEvent) => event.preventDefault();
+export const keepFocus = (event: MouseEvent) => event.preventDefault();
 
 /**
  * Icon button / Tool / 36, dimmed to 40% when it can't do anything yet (design jk02HG1ctk). Off by
@@ -45,7 +45,7 @@ const TOOLS: Record<MaskTool, { icon: LucideIcon; label: MessageKey }> = {
   rect: { icon: SquareDashed, label: "edit.tools.rectangle" },
 };
 
-function ToolButton({
+export function ToolButton({
   icon,
   label,
   shortcut,
@@ -79,12 +79,25 @@ function ToolButton({
   );
 }
 
+/** Image edit / Toolbar's box, shared with Sketch & point's. */
+export const toolbarClass =
+  "absolute bottom-16 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-12 bg-elevated p-4 inset-ring inset-ring-border";
+
 /**
  * Image edit / Toolbar: Pan | Brush, Eraser, Lasso, Rectangle | Invert, Clear | Undo, Redo. It rests
  * at 40% while a run goes or the photo can't take a mask (design DFd2yqIj0C, 6YuF99zpGo). The
- * canvas's mask window places it 12 from its stage's bottom (`className`).
+ * canvas's mask window places it 12 from its stage's bottom (`className`). For a model that reads
+ * marks it starts with the switch to Sketch & point (Image edit / Toolbar / Paint area, DU19ExJcxQ).
  */
-export function EditToolbar({ resting = false, className }: { resting?: boolean; className?: string }) {
+export function EditToolbar({
+  resting = false,
+  modeSwitch,
+  className,
+}: {
+  resting?: boolean;
+  modeSwitch?: ReactNode;
+  className?: string;
+}) {
   const tool = useEditSession((s) => s.tool);
   const mask = useEditSession((s) => s.mask);
   const { setTool, invert, clear, undo, redo } = useEditSession.getState();
@@ -104,12 +117,14 @@ export function EditToolbar({ resting = false, className }: { resting?: boolean;
       role="toolbar"
       aria-label={t("edit.tools.label")}
       inert={resting}
-      className={cn(
-        "absolute bottom-16 left-1/2 flex -translate-x-1/2 items-center gap-2 rounded-12 bg-elevated p-4 inset-ring inset-ring-border",
-        resting && "opacity-40",
-        className,
-      )}
+      className={cn(toolbarClass, resting && "opacity-40", className)}
     >
+      {modeSwitch ? (
+        <>
+          {modeSwitch}
+          <Divider orientation="vertical" size={20} />
+        </>
+      ) : null}
       {pick("pan")}
       <Divider orientation="vertical" size={20} />
       {pick("brush")}
@@ -174,7 +189,7 @@ function OptionSlider({
   );
 }
 
-const optionsBar =
+export const optionsBar =
   "absolute bottom-68 left-1/2 flex h-44 -translate-x-1/2 items-center gap-12 rounded-12 bg-elevated px-14 inset-ring inset-ring-border";
 
 function MaskOpacity() {

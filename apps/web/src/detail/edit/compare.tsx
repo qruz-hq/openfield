@@ -266,7 +266,7 @@ export function DifferenceLegend() {
 }
 
 /** Edit the mask: a Button / Secondary / M where the toolbar was, back to painting the original. */
-export function EditMaskButton({ onClick }: { onClick: () => void }) {
+export function EditMaskButton({ sketch = false, onClick }: { sketch?: boolean; onClick: () => void }) {
   return (
     <Button
       variant="secondary"
@@ -275,7 +275,7 @@ export function EditMaskButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       className="absolute bottom-18 left-1/2 -translate-x-1/2"
     >
-      {t("edit.compare.editMask")}
+      {t(sketch ? "edit.sketch.editMarks" : "edit.compare.editMask")}
     </Button>
   );
 }

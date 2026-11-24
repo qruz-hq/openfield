@@ -18,10 +18,17 @@ const FEED_THUMB = { h: 456 } as const;
 /**
  * `rerun`: the job that made it ran again after a restart (jobs.rerun_at, §0.4). An image in the
  * Trash gets `?trash=1` on its URLs, since the file routes only serve it when asked that way, and
- * its deletedAt, which the Trash groups and pages by.
+ * its deletedAt, which the Trash groups and pages by. `layers` counts the live layers per run
+ * (layerCounts), for a split's base to say how many it has.
  */
-export function toAssetListItem(row: AssetRow, isFavourite: boolean, rerun: boolean): AssetListItem {
+export function toAssetListItem(
+  row: AssetRow,
+  isFavourite: boolean,
+  rerun: boolean,
+  layers?: ReadonlyMap<string, number>,
+): AssetListItem {
   const trashed = row.deletedAt !== null;
+  const role = layerRoleOf(row);
   const video = row.modality === "video";
   return {
     id: row.id,
@@ -49,12 +56,27 @@ export function toAssetListItem(row: AssetRow, isFavourite: boolean, rerun: bool
     ...(trashed && { deletedAt: row.deletedAt! }),
     thumbUrl: assetThumbUrl(row.id, FEED_THUMB) + (trashed ? "&trash=1" : ""),
     fileUrl: assetFileUrl(row.id) + (trashed ? "?trash=1" : ""),
+    ...(role === "layer" && { layer: { role } }),
+    ...(role === "base" && {
+      layer: { role, ...(row.jobSetId && layers?.has(row.jobSetId) && { count: layers.get(row.jobSetId)! }) },
+    }),
   };
 }
 
-export function toAsset(row: AssetRow, isFavourite: boolean, rerun: boolean): Asset {
+/** Whether a row came from a layer split, as its base or one of its layers. */
+function layerRoleOf(row: Pick<AssetRow, "opParams">): "base" | "layer" | undefined {
+  const role = (row.opParams?.layer as { role?: unknown } | undefined)?.role;
+  return role === "base" || role === "layer" ? role : undefined;
+}
+
+export function toAsset(
+  row: AssetRow,
+  isFavourite: boolean,
+  rerun: boolean,
+  layers?: ReadonlyMap<string, number>,
+): Asset {
   return {
-    ...toAssetListItem(row, isFavourite, rerun),
+    ...toAssetListItem(row, isFavourite, rerun, layers),
     bytes: row.bytes,
     seed: row.seed,
     params: row.params,
