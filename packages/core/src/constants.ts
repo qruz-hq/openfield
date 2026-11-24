@@ -450,6 +450,7 @@ export const CANVAS_NODE_TYPES = [
   "image.edit",
   "image.upscale",
   "image.variations",
+  "image.layers",
   "video.generate",
   "preset",
   "note",

@@ -1,3 +1,4 @@
+import type { PortSpec } from "@openfield/canvas/engine/types";
 import type { NodeSpec } from "@openfield/canvas/nodes/registry";
 import { t } from "@openfield/core";
 import { cn } from "@openfield/ui";
@@ -54,6 +55,8 @@ export interface NodeShellProps extends NodeComponentProps {
   fanOut?: number;
   /** Per input port, why it's greyed (the model can't use it). */
   portOff?: Readonly<Record<string, string | null>>;
+  /** This node's own rail, where it differs from its type's (NodeSpec.portsOf). */
+  ports?: readonly PortSpec[];
   /** Double-click opens the settings drawer. */
   inspectable?: boolean;
   /** What the collapsed card says: the model, or a line of text. */
@@ -87,6 +90,7 @@ export function NodeShell({
   changed = false,
   fanOut = 1,
   portOff,
+  ports,
   inspectable = false,
   collapsedMeta,
   collapsedStatus,
@@ -213,7 +217,13 @@ export function NodeShell({
       )}
       {/* Arrow handles first: the data ports sit on top where the two share an edge. */}
       <AnnotationHandles />
-      <PortRails nodeId={id} ports={spec.ports} connectable={!readOnly} off={portOff} collapsed={collapsed} />
+      <PortRails
+        nodeId={id}
+        ports={ports ?? spec.ports}
+        connectable={!readOnly}
+        off={portOff}
+        collapsed={collapsed}
+      />
       {spec.resizable && !collapsed ? <CanvasNodeResizer selected={selected} minSize={spec.minSize} /> : null}
       <NodeMenu
         id={id}

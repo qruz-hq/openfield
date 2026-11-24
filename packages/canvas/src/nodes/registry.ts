@@ -9,7 +9,7 @@ import {
   portFlow,
 } from "../engine/types";
 import { newNodeId } from "../store/graph";
-import type { NodeFrame, Point, Size } from "../store/ops";
+import type { DocSlice, NodeFrame, Point, Size } from "../store/ops";
 
 // The node type registry, without React: one spec per type says everything the engine and the
 // server need, its ports, its params and defaults, its engine half and where it sits in the add-node
@@ -29,6 +29,16 @@ export interface NodeBoxInput {
   params: Readonly<Record<string, unknown>>;
   result: CanvasNodeResult | null;
   ctx: EngineContext;
+  /** Its output ports with a link out of them, where the caller knows its links. */
+  linked?: () => ReadonlySet<string>;
+}
+
+/** What a node's own ports can follow: its saved settings, what it made, and its links. */
+export interface PortNode {
+  params: Readonly<Record<string, unknown>>;
+  result: CanvasNodeResult | null;
+  /** Its output ports with a link out of them, worked out when asked. */
+  linked(): ReadonlySet<string>;
 }
 
 /** Library images' pixel sizes by asset id, as far as they're known. */
@@ -81,9 +91,18 @@ export interface NodeSpec<P extends object = Record<string, unknown>> {
   annotation: boolean;
   /** Every port the type can have, in rail order (inputs top to bottom, then outputs). */
   ports: readonly PortSpec[];
+  /**
+   * One node's rail, in the shape of `ports` (hidden ones included), when it follows the node's
+   * settings or what it made: a Layers node's one output per layer, an Edit node's Mask input
+   * hidden while it sketches. Every port is still one of `ports`, so links and lookups by id work
+   * whatever a node shows.
+   */
+  portsOf?(node: PortNode): readonly PortSpec[];
   defaults(ctx: EngineContext): P;
   /** Reads saved params leniently: fills defaults, drops what it can't use, never throws. */
   parseParams(raw: Readonly<Record<string, unknown>>, ctx: EngineContext): P;
+  /** Settings the node takes that its defaults leave out (an Edit node's Sketch & point ones). */
+  optionalSettings?: readonly string[];
   runnable: boolean;
   /** Data nodes only. */
   engine?: NodeEngine<P>;
@@ -94,12 +113,31 @@ export function defineSpec<P extends object>(spec: NodeSpec<P>): NodeSpec {
   return spec as unknown as NodeSpec;
 }
 
+/** The output ports of a node with a data link out of them. */
+export function linkedPorts(doc: Pick<DocSlice, "edges">, id: string): ReadonlySet<string> {
+  const out = new Set<string>();
+  for (const e of Object.values(doc.edges)) if (e.source === id && e.kind === "data") out.add(e.sourceHandle);
+  return out;
+}
+
+const NO_LINKS: ReadonlySet<string> = new Set();
+
+/** The document fields nodePorts reads. */
+export type PortDoc = Pick<DocSlice, "nodes" | "params" | "results" | "edges">;
+
 /** Specs by type. The web app's registry holds its fuller definitions, and fits wherever this does. */
 export interface NodeRegistry<D extends NodeSpec = NodeSpec> {
   get(type: string): D | undefined;
   all(): readonly D[];
   /** Visible ports of a type, optionally one direction. */
   ports(type: string, direction?: PortSpec["direction"]): readonly PortSpec[];
+  /**
+   * The ports one node shows, in rail order, optionally one direction: its type's visible ports, or
+   * the ones its settings and results call for (NodeSpec.portsOf).
+   */
+  nodePorts(doc: PortDoc, id: string, direction?: PortSpec["direction"]): readonly PortSpec[];
+  /** One node's whole rail to draw, hidden ports included (some keep their slot). */
+  nodeRail(doc: PortDoc, id: string): readonly PortSpec[];
   /** A port by id. Prompt uses "text" for both its input and its output, so pass the direction. */
   port(type: string, portId: string, direction?: PortSpec["direction"]): PortSpec | undefined;
   /**
@@ -128,8 +166,15 @@ export function createNodeRegistry<D extends NodeSpec>(definitions: readonly D[]
 
   const visible = (type: string) => byType.get(type)?.ports.filter((p) => !p.hidden) ?? [];
 
+  /** A new node's ports: a Layers node has no outputs before it runs. */
+  const fresh = (type: string): readonly PortSpec[] => {
+    const def = byType.get(type);
+    if (!def?.portsOf) return visible(type);
+    return def.portsOf({ params: {}, result: null, linked: () => NO_LINKS }).filter((p) => !p.hidden);
+  };
+
   const fittingPort = (type: string, pending: PortMatch): PortSpec | undefined =>
-    visible(type).find((port) =>
+    fresh(type).find((port) =>
       // Dragging from an output looks for an input it can flow into, and the other way round.
       pending.handleType === "source"
         ? port.direction === "in" && portFlow(pending.portType, port.type) !== "no"
@@ -145,10 +190,27 @@ export function createNodeRegistry<D extends NodeSpec>(definitions: readonly D[]
           a.menu!.order - b.menu!.order,
       );
 
+  const nodeRail = (doc: PortDoc, id: string): readonly PortSpec[] => {
+    const node = doc.nodes[id];
+    const def = node && byType.get(node.type);
+    if (!def) return [];
+    return def.portsOf
+      ? def.portsOf({
+          params: doc.params[id] ?? {},
+          result: doc.results[id] ?? null,
+          linked: () => linkedPorts(doc, id),
+        })
+      : def.ports;
+  };
+  const nodePorts = (doc: PortDoc, id: string, direction?: PortSpec["direction"]) =>
+    nodeRail(doc, id).filter((p) => !p.hidden && (!direction || p.direction === direction));
+
   return {
     get: (type) => byType.get(type),
     all: () => [...byType.values()],
     ports: (type, direction) => visible(type).filter((p) => !direction || p.direction === direction),
+    nodePorts,
+    nodeRail,
     port: (type, portId, direction) =>
       byType.get(type)?.ports.find((p) => p.id === portId && (!direction || p.direction === direction)),
     fittingPort,

@@ -2,6 +2,7 @@ import { frameSpec, noteSpec, shapeSpec, textSpec } from "./annotations";
 import { assetsSpec } from "./assets/spec";
 import { editSpec } from "./edit/spec";
 import { generateSpec } from "./generate/spec";
+import { layersSpec } from "./layers/spec";
 import { promptSpec } from "./prompt/spec";
 import { createNodeRegistry, type NodeRegistry, type NodeSpec } from "./registry";
 import { uploadSpec } from "./upload/spec";
@@ -18,6 +19,7 @@ export const DATA_SPECS: readonly NodeSpec<object>[] = [
   generateSpec,
   editSpec,
   variationsSpec,
+  layersSpec,
   videoSpec,
 ] as unknown as readonly NodeSpec<object>[];
 

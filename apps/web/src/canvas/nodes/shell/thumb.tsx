@@ -39,6 +39,7 @@ export function AssetImage({
   className,
   alt = "",
   pane = false,
+  fit = "cover",
 }: {
   assetId: string;
   /** How tall it's drawn, in pane pixels. Picks the thumbnail size. */
@@ -47,6 +48,8 @@ export function AssetImage({
   alt?: string;
   /** Drawn on the pane, inside a node: the zoom counts too. */
   pane?: boolean;
+  /** "contain" shows all of it (a cut-out layer); by default it fills the box. */
+  fit?: "cover" | "contain";
 }) {
   const missing = useAssetMissing(assetId);
   const path = useThumbPath(missing ? null : assetId, height, pane);
@@ -61,7 +64,7 @@ export function AssetImage({
           loading="lazy"
           decoding="async"
           draggable={false}
-          className="size-full object-cover"
+          className={cn("size-full", fit === "contain" ? "object-contain" : "object-cover")}
         />
       ) : null}
     </span>

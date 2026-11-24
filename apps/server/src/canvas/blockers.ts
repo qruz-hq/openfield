@@ -27,6 +27,12 @@ export function blockerMessage(blocker: NodeBlocker, providers: readonly Provide
       return t("composer.areaEditOff", { model: blocker.name });
     case "no_mask":
       return t("canvas.nodes.blocked.noMask");
+    case "marks_unsupported":
+      return t("canvas.nodes.blocked.noMarks");
+    case "layer_input":
+      return blocker.problem === "several"
+        ? t("canvas.nodes.blocked.layersSeveral")
+        : t("layers.tooSmall", { width: blocker.width ?? 0, height: blocker.height ?? 0 });
     case "mask_stale":
       return t(blocker.several ? "canvas.nodes.blocked.maskSeveral" : "canvas.nodes.blocked.maskStale");
     case "no_description":

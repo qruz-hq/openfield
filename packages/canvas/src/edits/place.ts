@@ -1,6 +1,6 @@
 import type { CanvasViewport } from "@openfield/core/canvas";
 import type { EngineContext } from "../engine/types";
-import type { ImageSizes, NodeRegistry } from "../nodes/registry";
+import { type ImageSizes, linkedPorts, type NodeRegistry } from "../nodes/registry";
 import { absolutePosition } from "../store/graph";
 import type { DocSlice, Point, Size } from "../store/ops";
 
@@ -50,7 +50,13 @@ export function nodeSize(doc: DocSlice, specs: NodeRegistry, id: string, source?
   const def = specs.get(frame.type);
   if (def?.imageBox && source) {
     return def.imageBox(
-      { frame, params: doc.params[id] ?? {}, result: doc.results[id] ?? null, ctx: source.ctx },
+      {
+        frame,
+        params: doc.params[id] ?? {},
+        result: doc.results[id] ?? null,
+        ctx: source.ctx,
+        linked: () => linkedPorts(doc, id),
+      },
       source.images ?? {},
     );
   }

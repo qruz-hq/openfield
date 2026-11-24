@@ -102,7 +102,19 @@ export function planFingerprints(doc: DocSlice, registry: NodeRegistry, ctx: Eng
     let ports: string[];
     if (def?.engine) {
       const fp = def.engine.fingerprintParams(node, ctx);
-      ports = def.ports.filter((p) => p.direction === "in").map((p) => p.id);
+      // Ports a node hides or doesn't read for now (an Edit node's Mask input and references while
+      // it sketches) don't count. Ports its type hides for good still do, as they always have.
+      const shown = def.portsOf
+        ? new Set(
+            registry
+              .nodePorts(doc, id, "in")
+              .filter((p) => !p.unused)
+              .map((p) => p.id),
+          )
+        : null;
+      ports = def.ports
+        .filter((p) => p.direction === "in" && (!shown || p.hidden || shown.has(p.id)))
+        .map((p) => p.id);
       // What the node holds itself counts like what comes in, and only while it's used: nothing
       // connected to its port (evaluate.ts). An Edit node's painted mask, not while one is wired in.
       const own = def.engine.inlineInputs?.(node, ctx) ?? {};

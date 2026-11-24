@@ -232,6 +232,29 @@ describe("graph sketch", () => {
     expect(layout.shapes.some((s) => s.kind === "mark")).toBe(true);
   });
 
+  test("an Edit node in Sketch & point leaves out its Mask input", () => {
+    const layout = sketchLayout(
+      [node("e", { type: "image.edit", position: { x: 0, y: 0 }, params: { mode: "sketch" } })],
+      [],
+      box,
+    );
+    expect(layout.shapes.filter((s) => s.kind === "port")).toHaveLength(4);
+  });
+
+  test("a Layers node shows its input and a port for each layer something is linked to", () => {
+    const layout = sketchLayout(
+      [
+        node("l", { type: "image.layers", position: { x: 0, y: 0 } }),
+        node("e", { type: "image.edit", position: { x: 480, y: 0 } }),
+      ],
+      [{ source: "l", sourceHandle: "layer-2", target: "e", targetHandle: "image", kind: "data" }],
+      box,
+    );
+    // Layers: in and layer-2; Edit: four inputs and its output.
+    expect(layout.shapes.filter((s) => s.kind === "port")).toHaveLength(7);
+    expect(layout.shapes.some((s) => s.kind === "edge")).toBe(true);
+  });
+
   test("an empty canvas is only dots", () => {
     expect(sketchLayout([], [], box).shapes).toEqual([]);
   });

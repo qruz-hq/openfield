@@ -140,7 +140,11 @@ export function compileEdits(
       current: Readonly<Record<string, unknown>>,
       patch: Readonly<Record<string, unknown>>,
     ): Record<string, unknown> => {
-      const known = new Set([...Object.keys(spec.defaults(ctx)), ...Object.keys(spec.parseParams({}, ctx))]);
+      const known = new Set([
+        ...Object.keys(spec.defaults(ctx)),
+        ...Object.keys(spec.parseParams({}, ctx)),
+        ...(spec.optionalSettings ?? []),
+      ]);
       const merged: Record<string, unknown> = { ...current };
       for (const [key, value] of Object.entries(patch)) {
         if (!known.has(key)) {
@@ -322,10 +326,29 @@ export function compileEdits(
           if (!isAnnotationHandle(ends.sourceHandle) || !isAnnotationHandle(ends.targetHandle))
             fail("cant_connect", "canvas.edits.badArrow");
         } else {
-          const outs = pick(specs.ports(doc.nodes[source]!.type, "out"), edit.sourceHandle);
-          const ins = pick(specs.ports(doc.nodes[target]!.type, "in"), edit.targetHandle);
+          // A node with an output per layer: any of them by name, even before a run has made it.
+          // Left to the canvas, the choice would be a guess, so it's asked for.
+          const perNode = !!from?.portsOf && specs.ports(doc.nodes[source]!.type, "out").length > 1;
+          const outs = pick(
+            perNode && edit.sourceHandle
+              ? specs.ports(doc.nodes[source]!.type, "out")
+              : specs.nodePorts(doc, source, "out"),
+            edit.sourceHandle,
+          );
+          const ins = pick(specs.nodePorts(doc, target, "in"), edit.targetHandle);
           const fromLabel = labelOf(from, doc.nodes[source]!.type);
           const toLabel = labelOf(into, doc.nodes[target]!.type);
+          if (perNode && !edit.sourceHandle) {
+            // What its last run made, or every place before it has run.
+            const made = specs.nodePorts(doc, source, "out").filter((p) => !p.gone);
+            const all = specs.ports(doc.nodes[source]!.type, "out");
+            fail("cant_connect", "canvas.edits.whichLayer", {
+              node: fromLabel,
+              ports: made.length
+                ? made.map((p) => p.id).join(", ")
+                : `${all.at(-2)!.id} to ${all[0]!.id}, or ${all.at(-1)!.id}`,
+            });
+          }
           if (!outs.ports.length) {
             if (edit.sourceHandle)
               fail("cant_connect", "canvas.edits.noOutput", {

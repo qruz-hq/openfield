@@ -305,7 +305,7 @@ function StatusPill({ id, view, display }: { id: string; view: CardView; display
 }
 
 /** Stop for a run under way, Cancel for one waiting (design GnRxu). Named for its node, like Run. */
-function StopButton({ id, name, cancel }: { id: string; name: string; cancel: boolean }) {
+export function StopButton({ id, name, cancel }: { id: string; name: string; cancel: boolean }) {
   const stop = useCancel(id);
   return (
     <Button
@@ -349,7 +349,15 @@ function Message({
 
 const FIX_ICON: Record<string, LucideIcon | undefined> = { try_again: RefreshCw, edit_prompt: Pencil };
 
-function FailedMessage({ id, model, overImage }: { id: string; model: string | null; overImage: boolean }) {
+export function FailedMessage({
+  id,
+  model,
+  overImage,
+}: {
+  id: string;
+  model: string | null;
+  overImage: boolean;
+}) {
   const { message, action } = useFailureFix(id, model);
   return (
     <CardMessage text={message} overImage={overImage}>
@@ -370,7 +378,7 @@ function FailedMessage({ id, model, overImage }: { id: string; model: string | n
   );
 }
 
-function BlockedMessage({
+export function BlockedMessage({
   id,
   blocker,
   overImage,
@@ -401,7 +409,7 @@ function BlockedMessage({
   );
 }
 
-function CanceledMessage({ id, overImage }: { id: string; overImage: boolean }) {
+export function CanceledMessage({ id, overImage }: { id: string; overImage: boolean }) {
   const run = useRunNode(id);
   return (
     <CardMessage text={t("canvas.nodes.card.charged")} overImage={overImage}>

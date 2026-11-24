@@ -3,6 +3,7 @@ import {
   compileRun,
   type EngineContext,
   fromDocument,
+  imagesOnPort,
   isLocked,
   nodeTitle,
   planFingerprints,
@@ -33,6 +34,7 @@ import {
   generateRequestSchema,
   isTerminalState,
   type JobSetState,
+  layerOpParamsSchema,
   type ModelManifest,
   newId,
   type ProviderSummary,
@@ -75,7 +77,7 @@ import {
 import { editPricing, estimate, pricedOp, resolveProviderSettings } from "@openfield/providers/manifest";
 import type { EventHub } from "../events/hub";
 import type { Ingest } from "../files/ingest";
-import { saveMask } from "../files/mask";
+import { saveMarksMask, saveMask } from "../files/mask";
 import { ApiFailure } from "../http/errors";
 import type { Logger } from "../log/logger";
 import type { Runner } from "../runner/runner";
@@ -102,6 +104,18 @@ const EMIT_INTERVAL_MS = 100;
 /** How long a run waits for companies to answer prices, before those nodes are priced as unknown. */
 const PRICE_WAIT_MS = 4_000;
 const NODE_OK: readonly CanvasRunNodeState["state"][] = ["done", "cached"];
+
+/** Where a separated image sits in its stack, from its opParams, or nothing for any other image. */
+function layerOf(opParams: unknown): CanvasOutput["layer"] {
+  const parsed = layerOpParamsSchema.safeParse((opParams as { layer?: unknown } | null)?.layer);
+  if (!parsed.success) return undefined;
+  const { role, zIndex, name, description } = parsed.data;
+  return { role, zIndex, ...(name && { name }), ...(description && { description }) };
+}
+
+/** The base first, then its layers top first; an image from any other run keeps its place. */
+const stackOrder = (layer: CanvasOutput["layer"]) =>
+  !layer ? 0 : layer.role === "base" ? Number.NEGATIVE_INFINITY : -layer.zIndex;
 const NODE_TERMINAL: readonly CanvasRunNodeState["state"][] = [
   "done",
   "cached",
@@ -159,7 +173,7 @@ interface SetView {
   failed: number;
   firstError: CanvasRunError | null;
   startedAt: string | null;
-  outputs: { assetId: string; costUsd: number | null }[];
+  outputs: { assetId: string; costUsd: number | null; layer?: CanvasOutput["layer"] }[];
 }
 
 interface ActiveRun {
@@ -501,6 +515,9 @@ export class CanvasRunService {
     const rows = getAssets(this.deps.db, [...new Set(assetIds)]).filter((a) => a.fileState === "ok");
     const present = new Set(rows.map((a) => a.id));
     const sizes = new Map(rows.map((a) => [a.id, { width: a.width, height: a.height }]));
+    const separates = new Set(
+      plan.filter((i) => i.calls.some((c) => c.op === "decompose")).map((i) => i.nodeId),
+    );
     for (const item of plan) {
       const upstream = deps.get(item.nodeId)!.map((id) => out.get(id)!);
       // Reusing a result only holds while everything it read is reused too: new images upstream
@@ -531,8 +548,13 @@ export class CanvasRunService {
         out.set(item.nodeId, { skipped: false, blocked, expectedOut: 0, jobs: 0, estimate: freeEstimate() });
         continue;
       }
+      // A Layers node's port carries one image of the several it makes.
       const countOf = (input: CanvasRunPlanItem["inputs"][number]) =>
-        input.values.reduce((sum, v) => sum + (v.kind === "asset" ? 1 : out.get(v.nodeId)!.expectedOut), 0);
+        input.values.reduce(
+          (sum, v) =>
+            sum + (v.kind === "asset" ? 1 : separates.has(v.nodeId) ? 1 : out.get(v.nodeId)!.expectedOut),
+          0,
+        );
       const fanOut = item.inputs
         .filter((input) => input.arity === "single")
         .reduce((product, input) => product * Math.max(1, countOf(input)), 1);
@@ -586,10 +608,12 @@ export class CanvasRunService {
   }
 
   /** The images an item sends to one target (base, mask...), with what earlier nodes made as `made` says. */
-  #inputIds(item: CanvasRunPlanItem, to: string, made: (nodeId: string) => string[]): string[] {
+  #inputIds(item: CanvasRunPlanItem, to: string, made: (nodeId: string, port: string) => string[]): string[] {
     return item.inputs
       .filter((input) => input.to === to)
-      .flatMap((input) => input.values.flatMap((v) => (v.kind === "asset" ? [v.assetId] : made(v.nodeId))));
+      .flatMap((input) =>
+        input.values.flatMap((v) => (v.kind === "asset" ? [v.assetId] : made(v.nodeId, v.port))),
+      );
   }
 
   /**
@@ -638,6 +662,7 @@ export class CanvasRunService {
         inputImages,
         inputImageSizes,
         ...(call.quality && { quality: call.quality }),
+        ...(call.layers && { layers: call.layers }),
         ...edit,
       });
     }
@@ -651,6 +676,7 @@ export class CanvasRunService {
       ...(call.resolution && { resolution: call.resolution }),
       ...(call.quality && { quality: call.quality }),
       ...(call.video && { video: call.video }),
+      ...(call.layers && { layers: call.layers }),
       // A video's "auto" could be any shape; an image's keeps pricing at the model's default.
       ...(call.video && size.kind === "auto" && { size: { aspect: "auto" as const } }),
       ...(size.kind === "aspect" && { size: { aspect: size.ratio } }),
@@ -683,7 +709,7 @@ export class CanvasRunService {
       if (a.skipped) {
         state.state = "cached";
         state.assetIds = [...item.cached!.assetIds];
-        state.outputs = item.cached!.assetIds.map((assetId) => ({ assetId }));
+        state.outputs = this.#cachedOutputs(item.cached!.assetIds);
         state.finishedAt = createdAt;
       } else if (a.blocked) {
         state.state = "blocked";
@@ -776,7 +802,15 @@ export class CanvasRunService {
         run.dirty.add(node.item.nodeId);
         continue;
       }
-      const sent = (to: string) => this.#inputIds(node.item, to, (id) => this.#produced(run, id));
+      // A Layers node that made fewer layers this time hands nothing on the ports it lost, so
+      // whatever reads one of them waits instead of running without its image.
+      if (this.#emptyPort(run, node.item)) {
+        node.launched = true;
+        node.state = { ...node.state, state: "blocked", blocked: "missing_input", total: 0 };
+        run.dirty.add(node.item.nodeId);
+        continue;
+      }
+      const sent = (to: string) => this.#inputIds(node.item, to, (id, port) => this.#produced(run, id, port));
       if (this.#maskStale(sent("base"), sent("mask"))) {
         node.launched = true;
         node.state = { ...node.state, state: "blocked", blocked: "mask_stale", total: 0 };
@@ -813,7 +847,7 @@ export class CanvasRunService {
     const resolved = item.inputs.map((input) => ({
       input,
       assetIds: input.values.flatMap((v) =>
-        v.kind === "asset" ? [v.assetId] : this.#produced(run, v.nodeId),
+        v.kind === "asset" ? [v.assetId] : this.#produced(run, v.nodeId, v.port),
       ),
     }));
     const multi = resolved.filter((r) => r.input.arity === "multi");
@@ -876,9 +910,28 @@ export class CanvasRunService {
     return launches;
   }
 
-  /** Images an upstream item made, in job set order then output order, or its cached ones. */
-  #produced(run: ActiveRun, nodeId: string): string[] {
-    return run.nodes.get(nodeId)?.state.assetIds ?? [];
+  /**
+   * Images an upstream item made on one output port, in job set order then output order, or its
+   * cached ones. Every port but a Layers node's carries all of them.
+   */
+  #produced(run: ActiveRun, nodeId: string, port: string): string[] {
+    return imagesOnPort(run.nodes.get(nodeId)?.state, port);
+  }
+
+  /** An input wired to a port that came back with nothing, though its node made something. */
+  #emptyPort(run: ActiveRun, item: CanvasRunPlanItem): boolean {
+    return item.inputs.some((input) =>
+      input.values.some((v) => v.kind === "node" && this.#produced(run, v.nodeId, v.port).length === 0),
+    );
+  }
+
+  /** A reused result's outputs, with each base and layer's place in its stack read back from the library. */
+  #cachedOutputs(assetIds: readonly string[]): CanvasOutput[] {
+    const rows = new Map(getAssets(this.deps.db, [...assetIds]).map((a) => [a.id, a]));
+    return assetIds.map((assetId) => {
+      const layer = layerOf(rows.get(assetId)?.opParams);
+      return { assetId, ...(layer && { layer }) };
+    });
   }
 
   /** Stop, or this node's own Cancel, was pressed. */
@@ -893,7 +946,8 @@ export class CanvasRunService {
       return;
     }
     try {
-      const request = await this.#withSavedMask(launch.request);
+      const call = run.nodes.get(launch.nodeId)?.item.calls[launch.call];
+      const request = await this.#withSavedMask(launch.request, call?.mask);
       const accepted = await this.deps.runner.createJobSet(request, {
         priority: run.priority,
         canvasRunId: run.id,
@@ -926,8 +980,13 @@ export class CanvasRunService {
    * (white changes). The launch keeps the image it was given, so the node's result names what it
    * read, and the same image saved again for the same base comes back as the same mask.
    */
-  async #withSavedMask(request: GenerateRequest): Promise<GenerateRequest> {
-    const { mask, base } = request;
+  async #withSavedMask(request: GenerateRequest, keep?: CanvasRunCall["mask"]): Promise<GenerateRequest> {
+    const { mask, base, marks } = request;
+    // Sketch & point keeping the rest: the marks' area is the mask, saved as the Edit tab saves it.
+    if (!mask && base && marks?.length && keep?.composite) {
+      const saved = await saveMarksMask(this.deps, marks, { baseAssetId: base.assetId });
+      return { ...request, mask: { ...keep, assetId: saved.asset.id } };
+    }
     if (!mask || !base) return request;
     const row = getAsset(this.deps.db, mask.assetId);
     // A saved mask goes as it is, and one that's gone is the runner's to refuse.
@@ -981,7 +1040,13 @@ export class CanvasRunService {
       startedAt: null,
       outputs: [],
     };
-    const assetOf = new Map(bundle.assets.map((a) => [a.jobId, a]));
+    // A separation files its layers under the base's job, so a job can have several images:
+    // its own (the base) first, then its layers, top first.
+    const assetsOf = new Map<string, typeof bundle.assets>();
+    for (const a of bundle.assets) {
+      if (!a.jobId) continue;
+      assetsOf.set(a.jobId, [...(assetsOf.get(a.jobId) ?? []), a]);
+    }
     for (const job of bundle.jobs) {
       if (job.status !== "pending") view.started = true;
       if (job.startedAt && (!view.startedAt || job.startedAt < view.startedAt))
@@ -995,9 +1060,11 @@ export class CanvasRunService {
             ? { code: "unknown", reason: t("canvas.errors.interrupted") }
             : { code: job.errorCode ?? "unknown", ...(job.errorReason && { reason: job.errorReason }) };
       }
-      const asset = assetOf.get(job.id);
-      if (job.status === "succeeded" && asset)
-        view.outputs.push({ assetId: asset.id, costUsd: asset.costUsd });
+      if (job.status !== "succeeded") continue;
+      const assets = (assetsOf.get(job.id) ?? []).map((a) => ({ a, layer: layerOf(a.opParams) }));
+      assets.sort((x, y) => stackOrder(x.layer) - stackOrder(y.layer));
+      for (const { a, layer } of assets)
+        view.outputs.push({ assetId: a.id, costUsd: a.costUsd, ...(layer && { layer }) });
     }
     run.sets.set(jobSetId, view);
     return view;
@@ -1047,7 +1114,13 @@ export class CanvasRunService {
       failures += view.failed;
       firstError ??= view.firstError;
       for (const output of view.outputs) {
-        outputs.push({ assetId: output.assetId, model: req.model, call: launch.call, source: launch.source });
+        outputs.push({
+          assetId: output.assetId,
+          model: req.model,
+          call: launch.call,
+          source: launch.source,
+          ...(output.layer && { layer: output.layer }),
+        });
         if (output.costUsd !== null) {
           cost += output.costUsd;
           costKnown = true;

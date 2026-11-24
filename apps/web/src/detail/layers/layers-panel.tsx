@@ -82,7 +82,7 @@ export function LayersPanel({ item, tab, onOpen }: LayersPanelProps) {
   return <SplitForm item={item} status={tab.separation?.status} />;
 }
 
-interface Pricing {
+export interface Pricing {
   estimate: CostEstimate;
   /** One image's rate, the base's and each layer's. */
   rate: string;
@@ -91,8 +91,15 @@ interface Pricing {
   atMost: string;
 }
 
-/** What a split of this image costs: the range for the button, the rates for the price box. */
-function pricingOf(model: ModelListItem, image: AssetListItem, size: LayerSize): Pricing | null {
+/**
+ * What a split of this image costs: the range for the button, the rates for the price box. An
+ * image whose size isn't known yet (a canvas input still to be made) is priced over every rate.
+ */
+export function pricingOf(
+  model: ModelListItem,
+  image: Pick<AssetListItem, "id"> & Partial<Pick<AssetListItem, "width" | "height">>,
+  size: LayerSize,
+): Pricing | null {
   const price = priceFor(model, "standard");
   if (price.kind !== "per_image" || !price.decompose) return null;
   const { outputs } = price.decompose;
@@ -101,7 +108,7 @@ function pricingOf(model: ModelListItem, image: AssetListItem, size: LayerSize):
     op: "decompose",
     base: { assetId: image.id, role: "base" },
     layers: { size },
-    inputImageSizes: [{ width: image.width, height: image.height }],
+    ...(image.width && image.height && { inputImageSizes: [{ width: image.width, height: image.height }] }),
     speed: "standard",
   });
   if (cost.confidence === "unknown") return null;
@@ -277,7 +284,7 @@ function SplitForm({
 }
 
 /** Layers Price / Row: the key in 13 secondary, the amount in mono 12. */
-function PriceRow({ label, value }: { label: string; value: string }) {
+export function PriceRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex w-full items-center justify-between">
       <span className="text-small text-text-secondary">{label}</span>
@@ -287,7 +294,7 @@ function PriceRow({ label, value }: { label: string; value: string }) {
 }
 
 /** The Model field's select, opening the list of models that split, beside the panel. */
-function LayersModelPicker({
+export function LayersModelPicker({
   models,
   selected,
   onPick,

@@ -3,7 +3,7 @@ import type { NodeRegistry, NodeSpec } from "../nodes/registry";
 import { feedersOf, incomingEdges, isLocked, topoOrder } from "../store/graph";
 import type { DocSlice } from "../store/ops";
 import { engineNode, isPendingFingerprint } from "./fingerprint";
-import { STANDING_BLOCKERS } from "./inputs";
+import { imagesOnPort, STANDING_BLOCKERS } from "./inputs";
 import type {
   CompiledNode,
   CompileResult,
@@ -127,7 +127,7 @@ export function evaluateGraph(input: EvaluateInput): Evaluation {
       else if (value.kind === "pending") {
         const upstream = nodes.get(value.nodeId);
         if (inPass && !upstream?.upToDate) return null;
-        for (const assetId of upstream?.node.result?.assetIds ?? []) ids.add(assetId);
+        for (const assetId of imagesOnPort(upstream?.node.result, value.port)) ids.add(assetId);
       }
     }
     return [...ids].sort();
@@ -144,8 +144,8 @@ export function evaluateGraph(input: EvaluateInput): Evaluation {
     // What the node holds itself (the Edit node's painted mask) fills a port nothing is connected to.
     const own = def?.engine?.inlineInputs?.(node, ctx);
     const inputs: Record<string, PortValue[]> = {};
-    for (const port of def?.ports ?? []) {
-      if (port.direction !== "in" || port.hidden) continue;
+    // The ports this node shows: an Edit node that sketches has no Mask input to read.
+    for (const port of def ? registry.nodePorts(doc, id, "in") : []) {
       const edges = incomingEdges(doc, id, port.id);
       const values = edges.length
         ? edges.flatMap((edge) => handedOn(edge.source, edge.sourceHandle))
@@ -245,16 +245,19 @@ export function evaluateGraph(input: EvaluateInput): Evaluation {
     // Downstream nodes point at this one; they only need to know how many images to expect, and
     // which it has now (a mask painted on one of them fits only that one).
     const produced = engine.outputs(node, inputs, ctx, true);
-    const current = node.result?.assetIds ?? [];
     evaluation.outputs = Object.fromEntries(
-      Object.entries(produced).map(([port, values]) => [
-        port,
-        values.map((v) =>
-          v.kind === "pending"
-            ? { ...v, current, ...(evaluation.upToDate && { expected: current.length }) }
-            : v,
-        ),
-      ]),
+      Object.entries(produced).map(([port, values]) => {
+        // Port by port: a Layers node hands each layer on through its own output.
+        const current = imagesOnPort(node.result, port);
+        return [
+          port,
+          values.map((v) =>
+            v.kind === "pending"
+              ? { ...v, current, ...(evaluation.upToDate && { expected: current.length }) }
+              : v,
+          ),
+        ];
+      }),
     );
   }
 

@@ -64,6 +64,12 @@ export function blockerCopy(
       );
     case "no_mask":
       return plain(t("canvas.nodes.blocked.noMask"));
+    case "marks_unsupported":
+      return fix("pick_model", t("canvas.nodes.blocked.pickModel"), t("canvas.nodes.blocked.noMarks"));
+    case "layer_input":
+      return blocker.problem === "several"
+        ? plain(t("canvas.nodes.blocked.layersSeveral"))
+        : plain(t("layers.tooSmall", { width: blocker.width ?? 0, height: blocker.height ?? 0 }));
     case "mask_stale":
       // Over several images there's no one image to paint it on again.
       return blocker.several
